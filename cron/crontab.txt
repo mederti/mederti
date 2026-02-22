@@ -1,0 +1,25 @@
+# Mederti scrapers — staggered 30 min from 19:00 UTC (06:00 AEST / UTC+11)
+# To install: bash cron/setup_cron.sh
+# To remove:  crontab -l | grep -v "mederti\|run_all_scrapers" | crontab -
+#
+# Scraper          UTC time   AEST (UTC+11)
+# ─────────────────────────────────────────
+# tga              19:00      06:00
+# fda              19:30      06:30
+# health_canada    20:00      07:00
+# mhra             20:30      07:30
+# ema              21:00      08:00
+# bfarm            21:30      08:30
+# ansm             22:00      09:00
+# aifa             22:30      09:30
+# aemps            23:00      10:00
+
+0  19 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py tga          >> logs/cron.log 2>&1
+30 19 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py fda          >> logs/cron.log 2>&1
+0  20 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py health_canada >> logs/cron.log 2>&1
+30 20 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py mhra         >> logs/cron.log 2>&1
+0  21 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py ema          >> logs/cron.log 2>&1
+30 21 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py bfarm        >> logs/cron.log 2>&1
+0  22 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py ansm         >> logs/cron.log 2>&1
+30 22 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py aifa         >> logs/cron.log 2>&1
+0  23 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py aemps        >> logs/cron.log 2>&1

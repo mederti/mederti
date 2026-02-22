@@ -1,0 +1,30 @@
+# =============================================================================
+# Mederti — Backend Scraper Dependencies
+# =============================================================================
+# Install:  pip install -r backend/requirements.txt
+# Recommended: use a virtualenv or uv
+#   uv venv && source .venv/bin/activate && uv pip install -r backend/requirements.txt
+
+# ── HTTP ─────────────────────────────────────────────────────────────────────
+# httpx is used instead of requests for cleaner timeout/redirect handling
+# and first-class async support when we add async scrapers later.
+httpx>=0.27.0,<1.0.0
+
+# ── Supabase ──────────────────────────────────────────────────────────────────
+# supabase pulls in postgrest-py, gotrue, storage3, realtime as sub-deps.
+supabase>=2.5.0,<3.0.0
+
+# ── Environment ───────────────────────────────────────────────────────────────
+python-dotenv>=1.0.1,<2.0.0
+
+# ── Date parsing ──────────────────────────────────────────────────────────────
+# dateutil handles the mixed DD-MM-YYYY / DD MMM YYYY formats used by TGA
+# and other regulators without manual strptime format wrangling.
+python-dateutil>=2.9.0,<3.0.0
+
+# ── HTML parsing ──────────────────────────────────────────────────────────────
+# Used by MHRA (NHSBSA SSP) scraper and any future scrapers that parse HTML tables.
+# lxml is the fastest parser backend for BeautifulSoup.
+beautifulsoup4>=4.12.0,<5.0.0
+lxml>=5.0.0,<6.0.0
+openpyxl>=3.1.0,<4.0.0

@@ -1,6 +1,31 @@
 "use client";
 
 import { EmailCapture } from "./email-capture";
+import WorldMap from "./world-map";
+
+/* Mock data for the global shortage heatmap */
+const MOCK_MAP_DATA = [
+  { country_code: "AU", country: "Australia",      count: 2847, max_severity: "critical" },
+  { country_code: "US", country: "United States",  count: 3214, max_severity: "critical" },
+  { country_code: "GB", country: "United Kingdom", count: 1893, max_severity: "high" },
+  { country_code: "CA", country: "Canada",         count: 1241, max_severity: "high" },
+  { country_code: "DE", country: "Germany",        count: 987,  max_severity: "medium" },
+  { country_code: "FR", country: "France",         count: 743,  max_severity: "medium" },
+  { country_code: "NZ", country: "New Zealand",    count: 412,  max_severity: "medium" },
+  { country_code: "SG", country: "Singapore",      count: 198,  max_severity: "low" },
+  { country_code: "IE", country: "Ireland",        count: 334,  max_severity: "medium" },
+  { country_code: "NO", country: "Norway",         count: 189,  max_severity: "low" },
+  { country_code: "FI", country: "Finland",        count: 156,  max_severity: "low" },
+  { country_code: "SE", country: "Sweden",         count: 278,  max_severity: "low" },
+  { country_code: "NL", country: "Netherlands",    count: 521,  max_severity: "medium" },
+  { country_code: "CH", country: "Switzerland",    count: 312,  max_severity: "low" },
+  { country_code: "IT", country: "Italy",          count: 634,  max_severity: "medium" },
+  { country_code: "ES", country: "Spain",          count: 487,  max_severity: "medium" },
+  { country_code: "JP", country: "Japan",          count: 823,  max_severity: "high" },
+  { country_code: "IN", country: "India",          count: 1567, max_severity: "high" },
+  { country_code: "BR", country: "Brazil",         count: 891,  max_severity: "high" },
+  { country_code: "ZA", country: "South Africa",   count: 445,  max_severity: "medium" },
+];
 
 function Dot({ color }: { color: "red" | "amber" | "green" }) {
   const bg =
@@ -111,6 +136,66 @@ export default function LandingContent() {
           </div>
         </div>
       </div>
+
+      {/* GLOBAL SHORTAGE HEATMAP */}
+      <section id="global" style={{ padding: "48px 0 64px" }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 10 }}>
+            Global coverage
+          </div>
+          <h2 style={{
+            fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700,
+            lineHeight: 1.15, letterSpacing: "-0.025em",
+            color: "var(--app-text)", margin: "0 auto 12px",
+          }}>
+            Drug shortages are a global problem.
+          </h2>
+          <p style={{ fontSize: 15, color: "var(--app-text-3)", maxWidth: 520, lineHeight: 1.65, margin: "0 auto" }}>
+            We track shortage signals across 20+ countries in real time. Hover to explore.
+          </p>
+        </div>
+
+        <div style={{
+          border: "1px solid var(--app-border)", borderRadius: 14, overflow: "hidden",
+          background: "#fff",
+          boxShadow: "0 4px 24px rgba(15,23,42,0.06)",
+          maxWidth: 1000, margin: "0 auto",
+        }}>
+          <WorldMap byCountry={MOCK_MAP_DATA} />
+
+          {/* Country summary bar */}
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: 0,
+            borderTop: "1px solid var(--app-border)",
+          }}>
+            {[
+              { flag: "\uD83C\uDDE6\uD83C\uDDFA", cc: "AU", count: 2847, sev: "critical" },
+              { flag: "\uD83C\uDDFA\uD83C\uDDF8", cc: "US", count: 3214, sev: "critical" },
+              { flag: "\uD83C\uDDEC\uD83C\uDDE7", cc: "GB", count: 1893, sev: "high" },
+              { flag: "\uD83C\uDDE8\uD83C\uDDE6", cc: "CA", count: 1241, sev: "high" },
+              { flag: "\uD83C\uDDE9\uD83C\uDDEA", cc: "DE", count: 987, sev: "medium" },
+              { flag: "\uD83C\uDDEB\uD83C\uDDF7", cc: "FR", count: 743, sev: "medium" },
+              { flag: "\uD83C\uDDF3\uD83C\uDDFF", cc: "NZ", count: 412, sev: "medium" },
+              { flag: "\uD83C\uDDF8\uD83C\uDDEC", cc: "SG", count: 198, sev: "low" },
+            ].map((c, i) => {
+              const sevColor = c.sev === "critical" ? "var(--crit)" : c.sev === "high" ? "var(--high)" : c.sev === "medium" ? "var(--med)" : "var(--low)";
+              return (
+                <div key={c.cc} style={{
+                  flex: "1 1 0", minWidth: 100,
+                  padding: "14px 16px", textAlign: "center",
+                  borderRight: i < 7 ? "1px solid var(--app-border)" : "none",
+                }}>
+                  <div style={{ fontSize: 16, marginBottom: 4 }}>{c.flag}</div>
+                  <div style={{ fontFamily: "var(--font-dm-mono), monospace", fontSize: 16, fontWeight: 600, color: sevColor }}>
+                    {c.count.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{c.cc}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
       {/* WHO IT'S FOR */}
       <section id="who" style={{ padding: "48px 0 64px" }}>

@@ -2,7 +2,9 @@ import { EmailCapture } from "./components/email-capture";
 import HomeNavClient from "./home/HomeNavClient";
 import HomeSearchClient from "./home/HomeSearchClient";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { api } from "@/lib/api";
+import { createServerClient } from "@/lib/supabase/server";
 
 function Dot({ color }: { color: "red" | "amber" | "green" }) {
   const bg =
@@ -15,6 +17,17 @@ function Dot({ color }: { color: "red" | "amber" | "green" }) {
 export const revalidate = 300; // 5 min ISR
 
 export default async function Home() {
+  // If logged in, redirect to /home
+  try {
+    const supabase = await createServerClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) redirect("/home");
+  } catch (e) {
+    // redirect() throws a special error — re-throw it
+    if (e && typeof e === "object" && "digest" in e) throw e;
+    // Otherwise ignore auth errors and show landing page
+  }
+
   // Fetch live stats for trust bar
   let totalActive = "12,400";
   try {

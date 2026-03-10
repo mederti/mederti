@@ -96,7 +96,7 @@ export default function Home() {
           pointerEvents: "none",
         }} />
 
-        <div style={{ position: "relative", zIndex: 1, maxWidth: 800 }}>
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
           {/* Eyebrow */}
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 8,
@@ -124,7 +124,7 @@ export default function Home() {
 
           <p style={{
             fontSize: 18, fontWeight: 400, color: "var(--app-text-3)", lineHeight: 1.65,
-            maxWidth: 560, marginBottom: 36,
+            maxWidth: 560, marginBottom: 36, margin: "0 auto 36px",
           }}>
             Mederti aggregates pharmaceutical shortage data from{" "}
             <span style={{ color: "var(--app-text-2)", fontWeight: 500 }}>regulatory bodies, manufacturers and clinical networks</span>{" "}
@@ -132,10 +132,12 @@ export default function Home() {
           </p>
 
           {/* SEARCH */}
-          <HeroSearch />
+          <div style={{ maxWidth: 480, margin: "0 auto" }}>
+            <HeroSearch />
+          </div>
 
           {/* EMAIL CAPTURE */}
-          <div id="signup" style={{ marginTop: 48, paddingTop: 40, borderTop: "1px solid var(--app-border)" }}>
+          <div id="signup" style={{ marginTop: 48, paddingTop: 40, borderTop: "1px solid var(--app-border)", maxWidth: 480, margin: "48px auto 0" }}>
             <p style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text-3)", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Get early access
             </p>
@@ -182,6 +184,7 @@ export default function Home() {
         display: "grid", gridTemplateColumns: "repeat(4,1fr)",
         borderBottom: "1px solid var(--app-border)",
         background: "var(--app-bg)",
+        maxWidth: 1200, margin: "0 auto",
       }}>
         {[
           { num: "12,400", label: "Shortage records", sub: "Aggregated from regulatory bodies worldwide" },
@@ -189,9 +192,10 @@ export default function Home() {
           { num: "50+", label: "Data sources", sub: "Regulatory, clinical and supply-side signals" },
           { num: "24h", label: "Refresh cycle", sub: "Every source checked and updated daily" },
         ].map((s, i) => (
-          <div key={s.label} style={{
+          <div key={s.label} className="lp-stat-cell" style={{
             padding: "40px 40px",
             borderRight: i < 3 ? "1px solid var(--app-border)" : "none",
+            textAlign: "center",
           }}>
             <div style={{
               fontSize: 44, fontWeight: 700, lineHeight: 1,
@@ -306,17 +310,18 @@ export default function Home() {
 
       {/* WHO IT'S FOR */}
       <section id="who" style={{ padding: "96px 48px", background: "var(--app-bg)", borderBottom: "1px solid var(--app-border)" }}>
+        <div style={{ textAlign: "center", maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 16 }}>
           Who it&apos;s for
         </div>
-        <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 16, maxWidth: 560 }}>
+        <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 16, maxWidth: 560, margin: "0 auto 16px" }}>
           Every part of the supply chain, served differently.
         </h2>
-        <p style={{ fontSize: 16, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, marginBottom: 56 }}>
+        <p style={{ fontSize: 16, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, marginBottom: 56, margin: "0 auto 56px" }}>
           Three views of the same data — built for how each user actually works.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 1, background: "var(--app-border)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 1, background: "var(--app-border)", maxWidth: 1100, margin: "0 auto" }}>
           {[
             {
               icon: "💊",
@@ -337,7 +342,7 @@ export default function Home() {
               features: ["National supply heatmaps", "AI early warning — 30–90 day forecasts", "Global comparison view", "One-click ministerial briefings"],
             },
           ].map((card) => (
-            <div key={card.title} style={{ background: "#fff", padding: "36px 32px" }}>
+            <div key={card.title} style={{ background: "#fff", padding: "36px 32px", textAlign: "left" }}>
               <div style={{ fontSize: 28, marginBottom: 16 }}>{card.icon}</div>
               <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 10, letterSpacing: "-0.01em" }}>{card.title}</div>
               <div style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.7, marginBottom: 20 }}>{card.desc}</div>
@@ -352,17 +357,19 @@ export default function Home() {
             </div>
           ))}
         </div>
+        </div>
       </section>
 
       {/* HOW IT WORKS */}
       <section id="how" style={{ padding: "96px 48px", background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
+        <div style={{ textAlign: "center", maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 16 }}>
           How it works
         </div>
-        <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 16, maxWidth: 560 }}>
+        <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 16, maxWidth: 560, margin: "0 auto 16px" }}>
           From regulatory source to actionable intelligence.
         </h2>
-        <p style={{ fontSize: 16, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, marginBottom: 64 }}>
+        <p style={{ fontSize: 16, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, marginBottom: 64, margin: "0 auto 64px" }}>
           Fully automated data pipeline with expert human curation on top.
         </p>
 
@@ -389,17 +396,19 @@ export default function Home() {
             </div>
           ))}
         </div>
+        </div>
       </section>
 
       {/* PRICING */}
       <section id="pricing" style={{ padding: "96px 48px", background: "var(--app-bg)", borderBottom: "1px solid var(--app-border)" }}>
+        <div style={{ textAlign: "center", maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 16 }}>
           Pricing
         </div>
-        <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 16, maxWidth: 560 }}>
+        <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 16, maxWidth: 560, margin: "0 auto 16px" }}>
           Start free. Scale when it matters.
         </h2>
-        <p style={{ fontSize: 16, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, marginBottom: 56 }}>
+        <p style={{ fontSize: 16, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, marginBottom: 56, margin: "0 auto 56px" }}>
           Free for individual pharmacists. Institutional pricing for procurement teams and government.
         </p>
 
@@ -501,6 +510,7 @@ export default function Home() {
             </button>
           </div>
         </div>
+        </div>
       </section>
 
       {/* WEEKLY BRIEF */}
@@ -570,11 +580,12 @@ export default function Home() {
       </section>
 
       {/* FOOTER */}
-      <footer style={{
+      <footer className="lp-footer" style={{
         borderTop: "1px solid var(--app-border)",
         padding: "40px 48px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         background: "var(--app-bg)",
+        maxWidth: 1200, margin: "0 auto",
       }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
           Mederti<span style={{ color: "var(--teal)" }}>.</span>
@@ -582,7 +593,7 @@ export default function Home() {
         <div style={{ fontSize: 13, color: "var(--app-text-4)" }}>
           © 2026 Mederti · Global pharmaceutical shortage intelligence
         </div>
-        <div style={{ display: "flex", gap: 24 }}>
+        <div className="lp-footer-links" style={{ display: "flex", gap: 24 }}>
           <a href="/privacy" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Privacy</a>
           <a href="/terms" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Terms</a>
           <a href="mailto:hello@mederti.com" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Contact</a>

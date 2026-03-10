@@ -209,12 +209,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             </>
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <h1 style={{
-                fontSize: 18, fontWeight: 700, color: "#fff",
-                letterSpacing: "-0.02em", margin: 0,
-              }}>
-                Mederti Search
-              </h1>
+              <img src="/logo-white.png" alt="Mederti" style={{ height: 18 }} />
               <button
                 onClick={clearChat}
                 title="New search"

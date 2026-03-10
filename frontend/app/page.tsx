@@ -60,9 +60,7 @@ export default async function Home() {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         maxWidth: 1200, margin: "0 auto",
       }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
-        </div>
+        <img src="/logo-black.png" alt="Mederti" style={{ height: 20 }} />
         <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
           &copy; 2026 Mederti &middot; Global pharmaceutical shortage intelligence
         </div>

@@ -56,10 +56,10 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
       {/* Left: logo + nav links */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, flex: 1, minWidth: 0 }}>
         <Link href="/home" style={{
-          fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em",
-          color: "#fff", textDecoration: "none", marginRight: 12, flexShrink: 0,
+          display: "flex", alignItems: "center",
+          textDecoration: "none", marginRight: 12, flexShrink: 0,
         }}>
-          Mederti
+          <img src="/logo-white.png" alt="Mederti" style={{ height: 22 }} />
         </Link>
 
         <div className="home-nav-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>

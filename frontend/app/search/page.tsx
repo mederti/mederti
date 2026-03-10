@@ -235,38 +235,46 @@ export default function SearchPage() {
         @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
         @media (max-width: 768px) {
           .search-nav { padding: 0 16px !important; }
-          .search-main { padding: 32px 16px !important; }
+          .search-hero { padding: 24px 16px 20px !important; }
+          .search-main { padding: 24px 16px !important; }
         }
       `}</style>
 
       {/* NAV */}
       <nav className="search-nav" style={{
-        height: 60, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)",
-        borderBottom: "1px solid var(--app-border)",
+        height: 56, background: "var(--navy)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 48px", position: "sticky", top: 0, zIndex: 50,
+        padding: "0 24px", position: "sticky", top: 0, zIndex: 50,
       }}>
-        <Link href="/" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "var(--app-text)", textDecoration: "none" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
+        <Link href="/" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "#fff", textDecoration: "none" }}>
+          Mederti<span style={{ color: "var(--teal-l)" }}>.</span>
         </Link>
         <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-          <Link href="/dashboard" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>Dashboard</Link>
+          <Link href="/dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textDecoration: "none" }}>Dashboard</Link>
+          <Link href="/shortages" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textDecoration: "none" }}>Shortages</Link>
+          <Link href="/recalls" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textDecoration: "none" }}>Recalls</Link>
           <Link href="/login" style={{ fontSize: 13, fontWeight: 500, color: "#fff", background: "var(--teal)", padding: "7px 16px", borderRadius: 6, textDecoration: "none" }}>
             Sign in
           </Link>
         </div>
       </nav>
 
-      <main className="search-main" style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px 80px" }}>
-        <div style={{ marginBottom: 32 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 6, marginTop: 0 }}>
-            Drug shortage search
-          </h1>
-          <p style={{ fontSize: 14, color: "var(--app-text-4)", margin: 0 }}>
+      {/* DARK HERO */}
+      <div style={{ background: "var(--navy)" }}>
+        <div className="search-hero" style={{ maxWidth: 760, margin: "0 auto", padding: "32px 24px 28px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: 20 }}>⌕</span>
+            <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", margin: 0 }}>
+              Drug Shortage Search
+            </h1>
+          </div>
+          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", margin: 0 }}>
             6,000+ active shortages across 12 countries · Updated every 6 hours
           </p>
         </div>
+      </div>
 
+      <main className="search-main" style={{ maxWidth: 760, margin: "0 auto", padding: "32px 24px 80px" }}>
         <Suspense fallback={<div style={{ height: 60 }} />}>
           <SearchResults />
         </Suspense>

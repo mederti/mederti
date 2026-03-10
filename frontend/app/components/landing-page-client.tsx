@@ -243,17 +243,17 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             <div style={{
               display: "flex", flexWrap: "wrap", gap: 6,
               padding: "8px 12px 4px",
-              background: "rgba(255,255,255,0.06)",
+              background: "#fff",
               borderRadius: "12px 12px 0 0",
-              border: "1px solid rgba(255,255,255,0.12)",
+              border: "1px solid var(--app-border)",
               borderBottom: "none",
             }}>
               {files.map((f) => (
                 <div key={f.id} style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "4px 8px 4px 10px", borderRadius: 6,
-                  background: "rgba(255,255,255,0.1)",
-                  fontSize: 12, color: "rgba(255,255,255,0.7)",
+                  background: "var(--app-bg)",
+                  fontSize: 12, color: "var(--app-text-3)",
                 }}>
                   {f.preview ? (
                     <img src={f.preview} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: "cover" }} />
@@ -263,7 +263,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
                   </span>
                   <button type="button" onClick={() => removeFile(f.id)} style={{
                     background: "none", border: "none", cursor: "pointer", padding: 2,
-                    color: "rgba(255,255,255,0.4)", display: "flex",
+                    color: "var(--app-text-4)", display: "flex",
                   }}>
                     <X style={{ width: 12, height: 12 }} />
                   </button>
@@ -274,19 +274,21 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
           <div style={{
             display: "flex", alignItems: "center",
-            background: "rgba(255,255,255,0.06)",
-            border: `1.5px solid ${focused ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.12)"}`,
+            background: "#fff",
+            border: `1.5px solid ${focused ? "var(--teal)" : "var(--app-border)"}`,
             borderRadius: files.length > 0 ? "0 0 12px 12px" : 12,
-            boxShadow: focused ? "0 0 0 3px rgba(255,255,255,0.06)" : "none",
+            boxShadow: focused
+              ? "0 0 0 3px rgba(13,148,136,0.12), 0 4px 20px rgba(0,0,0,0.06)"
+              : "0 2px 12px rgba(0,0,0,0.05)",
             transition: "border-color 0.15s, box-shadow 0.15s",
             overflow: "hidden",
           }}>
             {/* Attach */}
             <button type="button" onClick={() => fileRef.current?.click()}
               title="Attach files (CSV, Excel, PDF, images)"
-              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 4px 0 14px", display: "flex", alignItems: "center", color: "rgba(255,255,255,0.4)", transition: "color 0.12s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.7)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.4)"; }}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 4px 0 14px", display: "flex", alignItems: "center", color: "var(--app-text-4)", transition: "color 0.12s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--teal)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--app-text-4)"; }}
             >
               <Paperclip style={{ width: 16, height: 16, strokeWidth: 1.5 }} />
             </button>
@@ -294,9 +296,9 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             {/* Camera / scan */}
             <button type="button" onClick={() => cameraRef.current?.click()}
               title="Scan barcode or take photo of product"
-              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 8px 0 4px", display: "flex", alignItems: "center", color: "rgba(255,255,255,0.4)", transition: "color 0.12s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.7)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.4)"; }}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 8px 0 4px", display: "flex", alignItems: "center", color: "var(--app-text-4)", transition: "color 0.12s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--teal)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--app-text-4)"; }}
             >
               <ScanBarcode style={{ width: 16, height: 16, strokeWidth: 1.5 }} />
             </button>
@@ -316,7 +318,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
               style={{
                 flex: 1, padding: "14px 8px",
                 border: "none", outline: "none",
-                fontSize: 15, color: "#fff",
+                fontSize: 15, color: "var(--app-text)",
                 fontFamily: "var(--font-inter), sans-serif",
                 background: "transparent",
               }}
@@ -325,7 +327,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             {/* Clear */}
             {query && (
               <button type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: "0 6px", display: "flex", alignItems: "center", color: "rgba(255,255,255,0.4)" }}>
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "0 6px", display: "flex", alignItems: "center", color: "var(--app-text-4)" }}>
                 <X style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
               </button>
             )}
@@ -334,9 +336,9 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             <button type="submit" disabled={loading || (!query.trim() && files.length === 0)}
               style={{
                 margin: 5, padding: 8,
-                background: (query.trim() || files.length > 0) ? "var(--teal)" : "rgba(255,255,255,0.08)",
+                background: (query.trim() || files.length > 0) ? "var(--teal)" : "var(--app-bg)",
                 border: "none", borderRadius: 8,
-                color: (query.trim() || files.length > 0) ? "#fff" : "rgba(255,255,255,0.3)",
+                color: (query.trim() || files.length > 0) ? "#fff" : "var(--app-text-4)",
                 cursor: (query.trim() || files.length > 0) ? "pointer" : "default",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 flexShrink: 0, transition: "background 0.12s, color 0.12s",

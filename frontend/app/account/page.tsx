@@ -1,0 +1,383 @@
+"use client";
+
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { createBrowserClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
+
+interface WatchlistRow {
+  id: string;
+  drug_id: string;
+  is_active: boolean;
+  notification_channels: { email: boolean; sms: boolean; webhook: string | null };
+  created_at: string;
+  drugs: { generic_name: string; brand_names: string[] }[] | null;
+}
+
+function NotSignedIn() {
+  return (
+    <div style={{ textAlign: "center", padding: "80px 20px" }}>
+      <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--app-text)", marginBottom: 8, letterSpacing: "-0.02em" }}>
+        Sign in to access your account
+      </h2>
+      <p style={{ fontSize: 14, color: "var(--app-text-3)", marginBottom: 28, lineHeight: 1.65, maxWidth: 360, margin: "0 auto 28px" }}>
+        Your watchlist, alert preferences, and account settings are protected.
+      </p>
+      <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+        <Link href="/login?next=/account" style={{
+          fontSize: 14, fontWeight: 600, padding: "11px 28px",
+          background: "var(--teal)", color: "#fff", borderRadius: 8, textDecoration: "none",
+        }}>
+          Sign in
+        </Link>
+        <Link href="/signup" style={{
+          fontSize: 14, fontWeight: 500, padding: "11px 28px",
+          background: "#fff", color: "var(--app-text-2)", border: "1px solid var(--app-border-2)", borderRadius: 8, textDecoration: "none",
+        }}>
+          Create account
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export default function AccountPage() {
+  const supabase = createBrowserClient();
+  const router = useRouter();
+
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [watchlist, setWatchlist] = useState<WatchlistRow[]>([]);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [activeTab, setActiveTab] = useState<"watchlist" | "settings">("watchlist");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+      if (session?.user) fetchWatchlist(session.user.id);
+    });
+  }, []);
+
+  async function fetchWatchlist(uid: string) {
+    setWatchlistLoading(true);
+    const { data } = await supabase
+      .from("user_watchlists")
+      .select("id, drug_id, is_active, notification_channels, created_at, drugs(generic_name, brand_names)")
+      .eq("user_id", uid)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+    setWatchlist((data ?? []) as WatchlistRow[]);
+    setWatchlistLoading(false);
+  }
+
+  async function removeWatch(id: string) {
+    setRemovingId(id);
+    await supabase.from("user_watchlists").update({ is_active: false }).eq("id", id);
+    setWatchlist(w => w.filter(r => r.id !== id));
+    setRemovingId(null);
+  }
+
+  async function toggleEmailAlert(row: WatchlistRow) {
+    const updated = { ...row.notification_channels, email: !row.notification_channels.email };
+    await supabase.from("user_watchlists").update({ notification_channels: updated }).eq("id", row.id);
+    setWatchlist(w => w.map(r => r.id === row.id ? { ...r, notification_channels: updated } : r));
+  }
+
+  async function signOut() {
+    setSigningOut(true);
+    await supabase.auth.signOut();
+    router.push("/");
+  }
+
+  const inputStyle = {
+    width: "100%", padding: "10px 12px", borderRadius: 8,
+    border: "1px solid var(--app-border)", fontSize: 14,
+    fontFamily: "var(--font-inter), sans-serif",
+    outline: "none", background: "var(--app-bg)", color: "var(--app-text)",
+    boxSizing: "border-box" as const,
+  };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--app-bg)" }}>
+        <div style={{ fontSize: 14, color: "var(--app-text-4)" }}>Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+      <style>{`
+        @media (max-width: 768px) {
+          .account-nav { padding: 0 16px !important; }
+          .account-layout { grid-template-columns: 1fr !important; gap: 0 !important; }
+          .account-sidebar { border-right: none !important; border-bottom: 1px solid var(--app-border) !important; padding: 24px 16px !important; }
+          .account-main { padding: 24px 16px !important; }
+          .account-footer { padding: 24px 16px !important; flex-direction: column !important; gap: 10px !important; text-align: center !important; }
+        }
+      `}</style>
+
+      {/* NAV */}
+      <nav className="account-nav" style={{
+        height: 60, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)",
+        borderBottom: "1px solid var(--app-border)",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 48px", position: "sticky", top: 0, zIndex: 50,
+      }}>
+        <Link href="/" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "var(--app-text)", textDecoration: "none" }}>
+          Mederti<span style={{ color: "var(--teal)" }}>.</span>
+        </Link>
+        <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+          <Link href="/dashboard" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>Dashboard</Link>
+          <Link href="/search" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>Search</Link>
+        </div>
+      </nav>
+
+      {!user ? (
+        <NotSignedIn />
+      ) : (
+        <div className="account-layout" style={{ maxWidth: 900, margin: "0 auto", display: "grid", gridTemplateColumns: "220px 1fr", minHeight: "calc(100vh - 60px)" }}>
+
+          {/* SIDEBAR */}
+          <aside className="account-sidebar" style={{
+            borderRight: "1px solid var(--app-border)",
+            padding: "40px 24px",
+            display: "flex", flexDirection: "column", gap: 4,
+          }}>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: "50%",
+                background: "var(--teal)", color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 18, fontWeight: 700, marginBottom: 12,
+              }}>
+                {(user.email?.[0] ?? "U").toUpperCase()}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", marginBottom: 2 }}>
+                {user.email}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>
+                Member since {new Date(user.created_at).toLocaleDateString("en-AU", { month: "short", year: "numeric" })}
+              </div>
+            </div>
+
+            {(["watchlist", "settings"] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  textAlign: "left", padding: "9px 12px", borderRadius: 7,
+                  fontSize: 13, fontWeight: activeTab === tab ? 600 : 400,
+                  background: activeTab === tab ? "var(--teal-bg)" : "none",
+                  color: activeTab === tab ? "var(--teal)" : "var(--app-text-3)",
+                  border: "none", cursor: "pointer",
+                  fontFamily: "var(--font-inter), sans-serif",
+                  textTransform: "capitalize",
+                }}
+              >
+                {tab === "watchlist" ? `Watchlist (${watchlist.length})` : "Settings"}
+              </button>
+            ))}
+
+            <div style={{ marginTop: "auto", paddingTop: 32 }}>
+              <button
+                onClick={signOut}
+                disabled={signingOut}
+                style={{
+                  width: "100%", padding: "9px 12px", borderRadius: 7,
+                  fontSize: 13, fontWeight: 500, textAlign: "left",
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "var(--app-text-4)",
+                  fontFamily: "var(--font-inter), sans-serif",
+                }}
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
+            </div>
+          </aside>
+
+          {/* MAIN */}
+          <main className="account-main" style={{ padding: "40px 40px" }}>
+
+            {activeTab === "watchlist" && (
+              <div>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--app-text)", marginBottom: 6, marginTop: 0, letterSpacing: "-0.02em" }}>
+                  Watchlist
+                </h2>
+                <p style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 28, marginTop: 0 }}>
+                  You&apos;ll receive email alerts when shortage status changes for watched drugs.
+                </p>
+
+                {watchlistLoading && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[1, 2, 3].map(i => (
+                      <div key={i} style={{ height: 70, background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10 }} />
+                    ))}
+                  </div>
+                )}
+
+                {!watchlistLoading && watchlist.length === 0 && (
+                  <div style={{
+                    background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+                    padding: "48px 32px", textAlign: "center",
+                  }}>
+                    <div style={{ fontSize: 28, marginBottom: 12 }}>🔔</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>No drugs on your watchlist</div>
+                    <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 20 }}>
+                      Search for a drug and click &ldquo;Alert me when available&rdquo; to start tracking.
+                    </div>
+                    <Link href="/search" style={{
+                      fontSize: 13, fontWeight: 600, padding: "9px 20px",
+                      background: "var(--teal)", color: "#fff", borderRadius: 7, textDecoration: "none",
+                    }}>
+                      Search drugs →
+                    </Link>
+                  </div>
+                )}
+
+                {!watchlistLoading && watchlist.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {watchlist.map(row => (
+                      <div key={row.id} style={{
+                        background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10,
+                        padding: "16px 18px", display: "flex", alignItems: "center", gap: 16,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <Link href={`/drugs/${row.drug_id}`} style={{ textDecoration: "none" }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", marginBottom: 2 }}>
+                              {row.drugs?.[0]?.generic_name ?? "Unknown drug"}
+                            </div>
+                          </Link>
+                          {row.drugs?.[0]?.brand_names?.[0] && (
+                            <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>
+                              {row.drugs[0].brand_names.slice(0, 2).join(", ")}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Email toggle */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, color: "var(--app-text-4)" }}>Email</span>
+                          <button
+                            onClick={() => toggleEmailAlert(row)}
+                            style={{
+                              width: 36, height: 20, borderRadius: 10,
+                              background: row.notification_channels.email ? "var(--teal)" : "var(--app-border-2)",
+                              border: "none", cursor: "pointer", position: "relative",
+                              transition: "background 0.15s",
+                            }}
+                          >
+                            <span style={{
+                              position: "absolute", top: 2,
+                              left: row.notification_channels.email ? 18 : 2,
+                              width: 16, height: 16, borderRadius: "50%",
+                              background: "#fff", transition: "left 0.15s",
+                            }} />
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => removeWatch(row.id)}
+                          disabled={removingId === row.id}
+                          style={{
+                            fontSize: 12, color: "var(--app-text-4)", background: "none",
+                            border: "none", cursor: "pointer", padding: "4px 8px",
+                            borderRadius: 5, flexShrink: 0,
+                          }}
+                        >
+                          {removingId === row.id ? "…" : "Remove"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "settings" && (
+              <div>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--app-text)", marginBottom: 24, marginTop: 0, letterSpacing: "-0.02em" }}>
+                  Account settings
+                </h2>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+                  {/* Email */}
+                  <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 16 }}>Email address</div>
+                    <input style={inputStyle} value={user.email ?? ""} readOnly />
+                    <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 8 }}>
+                      To change your email, contact <a href="mailto:hello@mederti.com" style={{ color: "var(--teal)" }}>hello@mederti.com</a>
+                    </div>
+                  </div>
+
+                  {/* Alert preferences */}
+                  <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>Alert preferences</div>
+                    <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 16 }}>
+                      Manage per-drug email alerts from the Watchlist tab. Global settings coming soon.
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {[
+                        ["Status change (active → resolved)", true],
+                        ["New shortage declared (matching watchlist)", true],
+                        ["Severity escalation (high → critical)", true],
+                        ["Weekly shortage digest", false],
+                      ].map(([label, enabled]) => (
+                        <div key={label as string} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--app-bg-2)" }}>
+                          <span style={{ fontSize: 13, color: "var(--app-text-2)" }}>{label}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: enabled ? "var(--teal)" : "var(--app-text-4)", background: enabled ? "var(--teal-bg)" : "var(--app-bg-2)", padding: "2px 8px", borderRadius: 4 }}>
+                            {enabled ? "On" : "Off"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 12 }}>
+                      Granular alert controls available on the Pro tier. <Link href="/pricing" style={{ color: "var(--teal)" }}>See pricing →</Link>
+                    </div>
+                  </div>
+
+                  {/* Danger zone */}
+                  <div style={{ background: "#fff", border: "1px solid var(--crit-b)", borderRadius: 12, padding: "24px 24px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--crit)", marginBottom: 6 }}>Delete account</div>
+                    <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 16, lineHeight: 1.65 }}>
+                      Permanently removes your account, watchlist, and all associated data.
+                      This cannot be undone.
+                    </div>
+                    <a href="mailto:hello@mederti.com?subject=Account%20deletion%20request" style={{
+                      fontSize: 13, fontWeight: 500, padding: "8px 16px",
+                      background: "#fff", border: "1px solid var(--crit-b)", color: "var(--crit)",
+                      borderRadius: 7, textDecoration: "none", display: "inline-block",
+                    }}>
+                      Request account deletion
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      )}
+
+      <footer className="account-footer" style={{
+        borderTop: "1px solid var(--app-border)",
+        padding: "24px 48px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: "var(--app-bg)",
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
+          Mederti<span style={{ color: "var(--teal)" }}>.</span>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>© 2026 Mederti</div>
+        <div style={{ display: "flex", gap: 20 }}>
+          <Link href="/privacy" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Privacy</Link>
+          <Link href="/terms" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Terms</Link>
+        </div>
+      </footer>
+    </div>
+  );
+}

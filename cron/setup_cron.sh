@@ -44,6 +44,21 @@ NEW_ENTRIES="
 0 22 * * *   $(cron_cmd ansm)
 30 22 * * *  $(cron_cmd aifa)
 0 23 * * *   $(cron_cmd aemps)
+30 23 * * *  $(cron_cmd fda_enforcement)
+0 0 * * *    $(cron_cmd hsa)
+30 0 * * *   $(cron_cmd pharmac)
+# Phase 8 scrapers — staggered 15 min apart from 01:00 UTC
+0 1 * * *    $(cron_cmd medsafe)
+15 1 * * *   $(cron_cmd cbg_meb)
+30 1 * * *   $(cron_cmd dkma)
+45 1 * * *   $(cron_cmd fimea)
+0 2 * * *    $(cron_cmd hpra)
+15 2 * * *   $(cron_cmd lakemedelsverket)
+30 2 * * *   $(cron_cmd sukl)
+45 2 * * *   $(cron_cmd ogyei)
+0 3 * * *    $(cron_cmd swissmedic)
+15 3 * * *   $(cron_cmd noma)
+30 3 * * *   $(cron_cmd ages)
 "
 
 # ── Merge with existing crontab (remove old Mederti entries first) ───────────

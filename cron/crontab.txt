@@ -13,13 +13,19 @@
 # ansm             22:00      09:00
 # aifa             22:30      09:30
 # aemps            23:00      10:00
+# fda_enforcement  23:30      10:30  (weekly — override w/ day-of-week if desired)
+# hsa              00:00      11:00
+# pharmac          00:30      11:30
 
-0  19 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py tga          >> logs/cron.log 2>&1
-30 19 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py fda          >> logs/cron.log 2>&1
+0  19 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py tga           >> logs/cron.log 2>&1
+30 19 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py fda           >> logs/cron.log 2>&1
 0  20 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py health_canada >> logs/cron.log 2>&1
-30 20 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py mhra         >> logs/cron.log 2>&1
-0  21 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py ema          >> logs/cron.log 2>&1
-30 21 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py bfarm        >> logs/cron.log 2>&1
-0  22 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py ansm         >> logs/cron.log 2>&1
-30 22 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py aifa         >> logs/cron.log 2>&1
-0  23 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py aemps        >> logs/cron.log 2>&1
+30 20 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py mhra          >> logs/cron.log 2>&1
+0  21 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py ema           >> logs/cron.log 2>&1
+30 21 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py bfarm         >> logs/cron.log 2>&1
+0  22 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py ansm          >> logs/cron.log 2>&1
+30 22 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py aifa          >> logs/cron.log 2>&1
+0  23 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py aemps         >> logs/cron.log 2>&1
+30 23 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py fda_enforcement >> logs/cron.log 2>&1
+0   0 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py hsa           >> logs/cron.log 2>&1
+30  0 * * *  cd /Users/finners/mederti && python3 run_all_scrapers.py pharmac       >> logs/cron.log 2>&1

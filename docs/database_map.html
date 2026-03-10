@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Mederti — Database Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:   #0f172a;
+    --navy2:  #1e293b;
+    --slate:  #334155;
+    --muted:  #64748b;
+    --border: #e2e8f0;
+    --bg:     #f8fafc;
+    --white:  #ffffff;
+    --teal:   #0d9488;
+    --teal2:  #ccfbf1;
+    --red:    #dc2626;
+    --red2:   #fee2e2;
+    --amber:  #d97706;
+    --amber2: #fef3c7;
+    --blue:   #2563eb;
+    --blue2:  #dbeafe;
+    --purple: #7c3aed;
+    --purple2:#ede9fe;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--navy);
+    background: var(--bg);
+    padding: 0;
+  }
+
+  /* ── COVER PAGE ─────────────────────────────────────────────────────────── */
+  .cover {
+    background: var(--navy);
+    color: white;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 64px;
+    page-break-after: always;
+  }
+  .cover-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5eead4;
+    margin-bottom: 20px;
+  }
+  .cover h1 {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 16px;
+  }
+  .cover h1 span { color: #5eead4; }
+  .cover-subtitle {
+    font-size: 18px;
+    color: rgba(255,255,255,0.55);
+    max-width: 520px;
+    margin-bottom: 48px;
+  }
+  .cover-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    max-width: 700px;
+    margin-bottom: 64px;
+  }
+  .cover-stat-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 6px;
+  }
+  .cover-stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #5eead4;
+  }
+  .cover-meta {
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+    margin-top: auto;
+  }
+
+  /* ── PAGE LAYOUT ────────────────────────────────────────────────────────── */
+  .page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 48px 64px;
+  }
+
+  /* ── SECTION HEADERS ────────────────────────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--border);
+    page-break-before: always;
+  }
+  .section-header:first-of-type { page-break-before: avoid; }
+  .section-num {
+    background: var(--navy);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .section-header .tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ── TABLE CARDS ────────────────────────────────────────────────────────── */
+  .table-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 28px;
+    overflow: hidden;
+    break-inside: avoid;
+  }
+  .table-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--navy2);
+  }
+  .table-card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: #5eead4;
+  }
+  .table-card-meta {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+  }
+  .table-card-desc {
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+    padding: 8px 20px 10px;
+    background: var(--navy2);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    font-style: italic;
+  }
+  .table-card-body { padding: 0; }
+
+  /* Column table */
+  .col-table { width: 100%; border-collapse: collapse; }
+  .col-table th {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    background: #f1f5f9;
+    padding: 8px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .col-table td {
+    padding: 7px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+  }
+  .col-table tr:last-child td { border-bottom: none; }
+  .col-table tr:hover td { background: #fafafa; }
+
+  .col-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--navy);
+    white-space: nowrap;
+  }
+  .col-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--blue);
+    white-space: nowrap;
+  }
+  .col-notes { font-size: 12px; color: var(--slate); }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .badge-pk    { background: #fef9c3; color: #92400e; }
+  .badge-fk    { background: var(--blue2); color: var(--blue); }
+  .badge-nn    { background: #f0fdf4; color: #166534; }
+  .badge-bool  { background: var(--purple2); color: var(--purple); }
+  .badge-arr   { background: #fce7f3; color: #9d174d; }
+  .badge-json  { background: #fff7ed; color: #c2410c; }
+  .badge-idx   { background: #f0f9ff; color: #0369a1; }
+  .badge-enum  { background: var(--teal2); color: #0f766e; }
+
+  /* ── INFO GRID ──────────────────────────────────────────────────────────── */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .info-box {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+  .info-box-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .info-box-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .info-box-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ── FK DIAGRAM ─────────────────────────────────────────────────────────── */
+  .fk-diagram {
+    background: var(--navy);
+    border-radius: 10px;
+    padding: 28px 32px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+  }
+  .fk-diagram pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    color: #e2e8f0;
+    white-space: pre;
+  }
+  .fk-diagram pre .hl  { color: #5eead4; }
+  .fk-diagram pre .dim { color: rgba(255,255,255,0.3); }
+
+  /* ── GENERAL TABLES ─────────────────────────────────────────────────────── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .data-table th {
+    background: #f1f5f9;
+    padding: 9px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    padding: 8px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 12px;
+    color: var(--slate);
+    vertical-align: top;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+  /* ── RLS TABLE ──────────────────────────────────────────────────────────── */
+  .rls-pub  { color: #16a34a; font-weight: 600; }
+  .rls-sr   { color: var(--blue); font-weight: 600; }
+  .rls-priv { color: var(--red); font-weight: 600; }
+  .rls-own  { color: var(--amber); font-weight: 600; }
+
+  /* ── TRIGGER SECTION ────────────────────────────────────────────────────── */
+  .trigger-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    break-inside: avoid;
+  }
+  .trigger-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--amber2);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .trigger-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--navy);
+    margin-bottom: 2px;
+  }
+  .trigger-desc { font-size: 12px; color: var(--muted); }
+
+  /* ── PRINT ──────────────────────────────────────────────────────────────── */
+  @media print {
+    body { background: white; }
+    .cover { min-height: 100vh; }
+    .table-card { break-inside: avoid; }
+    .page { padding: 32px 40px; }
+    @page {
+      size: A4;
+      margin: 0;
+    }
+  }
+
+  h3 { font-size: 14px; font-weight: 600; margin: 20px 0 10px; color: var(--navy2); }
+  p  { margin-bottom: 10px; color: var(--slate); }
+  .spacer { height: 40px; }
+  .toc-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px dotted var(--border);
+    font-size: 13px;
+  }
+  .toc-item-num { color: var(--muted); font-size: 12px; margin-right: 8px; }
+  .toc-item-title { color: var(--navy); font-weight: 500; }
+  .toc-item-page { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     COVER
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-eyebrow">Technical Reference — Confidential</div>
+  <h1>Mederti<br><span>Database Map</span></h1>
+  <div class="cover-subtitle">Complete schema reference for the global pharmaceutical shortage intelligence platform.</div>
+
+  <div class="cover-stats">
+    <div>
+      <div class="cover-stat-label">Tables</div>
+      <div class="cover-stat-value">15</div>
+    </div>
+    <div>
+      <div class="cover-stat-label">Data Sources</div>
+      <div class="cover-stat-value">34</div>
+    </div>
+    <div>
+      <div class="cover-stat-label">Shortages</div>
+      <div class="cover-stat-value">6,184</div>
+    </div>
+    <div>
+      <div class="cover-stat-label">Recalls</div>
+      <div class="cover-stat-value">12,864</div>
+    </div>
+  </div>
+
+  <div class="cover-meta">
+    Generated 26 February 2026 &nbsp;·&nbsp; Mederti v1.0 &nbsp;·&nbsp; Supabase / PostgreSQL 15
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PAGE: OVERVIEW
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="section-header" style="page-break-before:avoid;">
+    <div class="section-num">0</div>
+    <h2>Overview</h2>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="info-box-label">Total Tables</div>
+      <div class="info-box-value">15</div>
+      <div class="info-box-sub">Across 8 migrations</div>
+    </div>
+    <div class="info-box">
+      <div class="info-box-label">Extensions</div>
+      <div class="info-box-value">2</div>
+      <div class="info-box-sub">uuid-ossp · pg_trgm</div>
+    </div>
+    <div class="info-box">
+      <div class="info-box-label">Triggers</div>
+      <div class="info-box-value">7</div>
+      <div class="info-box-sub">Search, dedup, updated_at</div>
+    </div>
+    <div class="info-box">
+      <div class="info-box-label">Active Shortages</div>
+      <div class="info-box-value">6,184</div>
+      <div class="info-box-sub">30+ scraper sources</div>
+    </div>
+    <div class="info-box">
+      <div class="info-box-label">Recall Records</div>
+      <div class="info-box-value">12,864</div>
+      <div class="info-box-sub">11 regulatory sources</div>
+    </div>
+    <div class="info-box">
+      <div class="info-box-label">Recall–Shortage Links</div>
+      <div class="info-box-value">40,740</div>
+      <div class="info-box-sub">Intelligence joins</div>
+    </div>
+    <div class="info-box">
+      <div class="info-box-label">Drug Alternatives</div>
+      <div class="info-box-value">574</div>
+      <div class="info-box-sub">Bidirectional pairs</div>
+    </div>
+    <div class="info-box">
+      <div class="info-box-label">Intel Sources</div>
+      <div class="info-box-value">124</div>
+      <div class="info-box-sub">Macro signal registry</div>
+    </div>
+    <div class="info-box">
+      <div class="info-box-label">Countries Covered</div>
+      <div class="info-box-value">13+</div>
+      <div class="info-box-sub">Americas · EU · Asia-Pacific</div>
+    </div>
+  </div>
+
+  <h3>Architecture Layers</h3>
+  <table class="data-table">
+    <thead>
+      <tr><th>Layer</th><th>Tables</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Core Drug Data</strong></td><td class="mono">drugs, manufacturers, drug_alternatives, drug_pricing</td><td>Master registry — one row per generic compound, with pricing and clinical alternatives</td></tr>
+      <tr><td><strong>Shortage Intelligence</strong></td><td class="mono">shortage_events, shortage_status_log, data_sources, raw_scrapes</td><td>Deduplicated shortage signals from 34 regulatory sources</td></tr>
+      <tr><td><strong>Recall Intelligence</strong></td><td class="mono">recalls, recall_shortage_links</td><td>Class I–III recalls linked back to shortage events</td></tr>
+      <tr><td><strong>Macro Intelligence</strong></td><td class="mono">intelligence_sources</td><td>124 macro signal sources (freight, regulatory, procurement, geopolitical)</td></tr>
+      <tr><td><strong>Platform</strong></td><td class="mono">user_watchlists, alert_notifications, email_subscribers, audit_logs</td><td>Auth, alerts, and immutable audit trail</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Foreign Key Graph</h3>
+  <div class="fk-diagram">
+    <pre>
+  drugs ◄────────── shortage_events ──────────► data_sources
+    │                      ▲                          ▲
+    │               shortage_status_log               │
+    │                                                 │
+    ├── drug_alternatives (self-join: drug ↔ drug)    │
+    ├── drug_pricing                                  │
+    │                                          recalls ──────────► data_sources
+    └── user_watchlists ──► alert_notifications ◄─ shortage_events
+                                                       ▲
+                                            recall_shortage_links
+                                                       ▲
+                                                   recalls
+
+  raw_scrapes ──────────────────────────────► data_sources
+  intelligence_sources    (standalone — no foreign keys)
+  email_subscribers       (standalone — no foreign keys)
+  audit_logs              (standalone — no foreign keys)
+    </pre>
+  </div>
+
+  <h3>Migration History</h3>
+  <table class="data-table">
+    <thead>
+      <tr><th>#</th><th>Migration</th><th>What it adds</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>001</td><td class="mono">001_initial_schema.sql</td><td>10 core tables, all indexes, RLS, 20 data_sources rows, utility functions</td></tr>
+      <tr><td>002</td><td class="mono">002_new_data_sources.sql</td><td>3 new data_sources: Pharmac NZ (#21), HSA-SG (#22), FDA-Enforcement (#24)</td></tr>
+      <tr><td>003</td><td class="mono">003_email_subscribers.sql</td><td>email_subscribers table (landing page capture)</td></tr>
+      <tr><td>004</td><td class="mono">004_shortage_status_log.sql</td><td>shortage_status_log table (alert dispatcher polling)</td></tr>
+      <tr><td>005</td><td class="mono">005_fix_email_subscribers_rls.sql</td><td>Tightens email_subscribers RLS to service_role only</td></tr>
+      <tr><td>006</td><td class="mono">006_drug_alternatives_columns.sql</td><td>Adds similarity_score, source, atc_match_level, availability_note to drug_alternatives</td></tr>
+      <tr><td>007</td><td class="mono">007_recalls_schema.sql</td><td>recalls + recall_shortage_links tables, 11 recall data_sources, alert_notifications nullable</td></tr>
+      <tr><td>008</td><td class="mono">008_intelligence_sources.sql</td><td>intelligence_sources standalone table (124 macro sources)</td></tr>
+    </tbody>
+  </table>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION 1: CORE DRUG TABLES
+════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <h2>Core Drug Tables</h2>
+    <span class="tag" style="background:#dbeafe;color:#1d4ed8;">drugs · manufacturers · drug_alternatives · drug_pricing</span>
+  </div>
+
+  <!-- drugs -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">drugs</span>
+      <span class="table-card-meta">Migration 001 &nbsp;·&nbsp; ~500 rows</span>
+    </div>
+    <div class="table-card-desc">Master drug registry. One row per unique generic compound. Powers full-text and trigram fuzzy search.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-pk">PK</span> uuid_generate_v4()</td></tr>
+          <tr><td class="col-name">generic_name</td><td class="col-type">TEXT</td><td class="col-notes"><span class="badge badge-nn">NOT NULL</span> e.g. "Amoxicillin"</td></tr>
+          <tr><td class="col-name">generic_name_normalised</td><td class="col-type">TEXT</td><td class="col-notes">Lowercase slug — maintained by trigger (e.g. "amoxicillin")</td></tr>
+          <tr><td class="col-name">brand_names</td><td class="col-type">TEXT[]</td><td class="col-notes"><span class="badge badge-arr">ARRAY</span> e.g. {Augmentin, Amoxil}</td></tr>
+          <tr><td class="col-name">brand_names_text</td><td class="col-type">TEXT</td><td class="col-notes">Flattened brand string for GIN trigram index — maintained by trigger</td></tr>
+          <tr><td class="col-name">atc_code</td><td class="col-type">TEXT</td><td class="col-notes">WHO ATC code, e.g. J01CA04</td></tr>
+          <tr><td class="col-name">atc_description</td><td class="col-type">TEXT</td><td class="col-notes">Human-readable ATC description</td></tr>
+          <tr><td class="col-name">drug_class</td><td class="col-type">TEXT</td><td class="col-notes">Broad pharmacological class</td></tr>
+          <tr><td class="col-name">dosage_forms</td><td class="col-type">TEXT[]</td><td class="col-notes"><span class="badge badge-arr">ARRAY</span> tablet, capsule, injection…</td></tr>
+          <tr><td class="col-name">strengths</td><td class="col-type">TEXT[]</td><td class="col-notes"><span class="badge badge-arr">ARRAY</span> e.g. {500mg, 875/125mg}</td></tr>
+          <tr><td class="col-name">routes_of_administration</td><td class="col-type">TEXT[]</td><td class="col-notes"><span class="badge badge-arr">ARRAY</span> oral, IV, inhaled…</td></tr>
+          <tr><td class="col-name">therapeutic_category</td><td class="col-type">TEXT</td><td class="col-notes">e.g. "Antibiotics"</td></tr>
+          <tr><td class="col-name">is_controlled_substance</td><td class="col-type">BOOLEAN</td><td class="col-notes"><span class="badge badge-bool">BOOL</span> default FALSE</td></tr>
+          <tr><td class="col-name">controlled_substance_schedule</td><td class="col-type">TEXT</td><td class="col-notes">Schedule II, Class A, S8, etc.</td></tr>
+          <tr><td class="col-name">search_vector</td><td class="col-type">TSVECTOR</td><td class="col-notes">Weighted: A=generic_name, B=brand_names, C=atc+category. GIN indexed.</td></tr>
+          <tr><td class="col-name">created_at / updated_at</td><td class="col-type">TIMESTAMPTZ</td><td class="col-notes">default NOW()</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- manufacturers -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">manufacturers</span>
+      <span class="table-card-meta">Migration 001 &nbsp;·&nbsp; 5 rows (seed)</span>
+    </div>
+    <div class="table-card-desc">Pharmaceutical manufacturers and Marketing Authorisation Holders (MAHs).</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-pk">PK</span></td></tr>
+          <tr><td class="col-name">name</td><td class="col-type">TEXT</td><td class="col-notes"><span class="badge badge-nn">NOT NULL</span> GIN trigram indexed</td></tr>
+          <tr><td class="col-name">country / country_code</td><td class="col-type">TEXT / CHAR(2)</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">website / contact_email</td><td class="col-type">TEXT</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">regulatory_id</td><td class="col-type">TEXT</td><td class="col-notes">FDA establishment registration number</td></tr>
+          <tr><td class="col-name">is_active</td><td class="col-type">BOOLEAN</td><td class="col-notes"><span class="badge badge-bool">BOOL</span> default TRUE</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- drug_alternatives -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">drug_alternatives</span>
+      <span class="table-card-meta">Migrations 001 + 006 &nbsp;·&nbsp; 574 rows</span>
+    </div>
+    <div class="table-card-desc">Clinical therapeutic alternatives for drugs in shortage, with ATC/RxNorm scoring and evidence grading.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">drug_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → drugs</span> ON DELETE CASCADE</td></tr>
+          <tr><td class="col-name">alternative_drug_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → drugs</span> self-join, ≠ drug_id</td></tr>
+          <tr><td class="col-name">relationship_type</td><td class="col-type">TEXT</td><td class="col-notes"><span class="badge badge-enum">ENUM</span> therapeutic_equivalent · pharmacological_alternative · biosimilar · generic · therapeutic_class_alternative</td></tr>
+          <tr><td class="col-name">similarity_score</td><td class="col-type">NUMERIC(4,2)</td><td class="col-notes">0.0–1.0 (added migration 006). Scoring: equiv=0.95, biosimilar=0.90, pharma_alt=0.80, class_alt_L3=0.65, class_alt_L2=0.50</td></tr>
+          <tr><td class="col-name">source</td><td class="col-type">TEXT</td><td class="col-notes">atc · rxnorm · manual (migration 006)</td></tr>
+          <tr><td class="col-name">atc_match_level</td><td class="col-type">INTEGER</td><td class="col-notes">2–5 ATC hierarchy level (migration 006)</td></tr>
+          <tr><td class="col-name">availability_note</td><td class="col-type">TEXT</td><td class="col-notes">migration 006</td></tr>
+          <tr><td class="col-name">clinical_evidence_level</td><td class="col-type">TEXT</td><td class="col-notes">A=RCT · B=Observational · C=Case series · D=Expert opinion · E=Theoretical</td></tr>
+          <tr><td class="col-name">dose_conversion_notes</td><td class="col-type">TEXT</td><td class="col-notes">Guidance when conversion is not 1:1</td></tr>
+          <tr><td class="col-name">requires_monitoring</td><td class="col-type">BOOLEAN</td><td class="col-notes">default FALSE</td></tr>
+          <tr><td class="col-name">is_approved</td><td class="col-type">BOOLEAN</td><td class="col-notes">default FALSE — only approved=TRUE is visible to public</td></tr>
+          <tr><td class="col-name">created_by / verified_by</td><td class="col-type">UUID / TEXT</td><td class="col-notes">auth.uid() + pharmacist credential</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- drug_pricing -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">drug_pricing</span>
+      <span class="table-card-meta">Migration 001 &nbsp;·&nbsp; 0 rows (pipeline not yet built)</span>
+    </div>
+    <div class="table-card-desc">Point-in-time pricing snapshots per drug per country, with trend indicators.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">drug_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → drugs</span></td></tr>
+          <tr><td class="col-name">country / country_code</td><td class="col-type">TEXT / CHAR(2)</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">price_amount / currency</td><td class="col-type">NUMERIC(14,4) / CHAR(3)</td><td class="col-notes">ISO 4217 currency</td></tr>
+          <tr><td class="col-name">price_per</td><td class="col-type">TEXT</td><td class="col-notes">unit · pack · vial · course · gram · ml</td></tr>
+          <tr><td class="col-name">trend_indicator</td><td class="col-type">TEXT</td><td class="col-notes">rising · stable · falling · volatile · unavailable</td></tr>
+          <tr><td class="col-name">trend_percentage</td><td class="col-type">NUMERIC(8,2)</td><td class="col-notes">% change vs prior observation</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION 2: SHORTAGE INTELLIGENCE
+════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <h2>Shortage Intelligence</h2>
+    <span class="tag" style="background:#dcfce7;color:#166534;">shortage_events · data_sources · raw_scrapes · shortage_status_log</span>
+  </div>
+
+  <!-- data_sources -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">data_sources</span>
+      <span class="table-card-meta">Migrations 001 + 002 + 007 &nbsp;·&nbsp; 34 rows</span>
+    </div>
+    <div class="table-card-desc">Official regulatory bodies whose shortage and recall feeds are scraped. All 34 UUIDs follow the pattern 10000000-0000-0000-0000-0000000000XX.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-pk">PK</span> Pattern: …0000000000XX (readable)</td></tr>
+          <tr><td class="col-name">name</td><td class="col-type">TEXT</td><td class="col-notes">UNIQUE — full agency name</td></tr>
+          <tr><td class="col-name">abbreviation</td><td class="col-type">TEXT</td><td class="col-notes">FDA, TGA, EMA, MHRA…</td></tr>
+          <tr><td class="col-name">country / country_code / region</td><td class="col-type">TEXT / CHAR(2) / TEXT</td><td class="col-notes">Region: EU · Americas · Asia-Pacific · Europe · Global</td></tr>
+          <tr><td class="col-name">source_url / api_endpoint</td><td class="col-type">TEXT</td><td class="col-notes">Human-facing page + machine-readable endpoint</td></tr>
+          <tr><td class="col-name">scrape_frequency_hours</td><td class="col-type">INTEGER</td><td class="col-notes">default 24</td></tr>
+          <tr><td class="col-name">reliability_weight</td><td class="col-type">NUMERIC(3,2)</td><td class="col-notes">0.0–1.0 authority weight (FDA=0.98, EMA=0.96, TGA=0.95…)</td></tr>
+          <tr><td class="col-name">is_active</td><td class="col-type">BOOLEAN</td><td class="col-notes">default TRUE</td></tr>
+          <tr><td class="col-name">last_scraped_at</td><td class="col-type">TIMESTAMPTZ</td><td class="col-notes">Updated by scraper on each run</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>34 Seeded Data Sources</h3>
+  <table class="data-table">
+    <thead><tr><th>ID</th><th>Abbreviation</th><th>Country</th><th>Region</th><th>Weight</th><th>Type</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">…001</td><td>FDA</td><td>United States</td><td>Americas</td><td>0.98</td><td>Shortage</td></tr>
+      <tr><td class="mono">…002</td><td>HC</td><td>Canada</td><td>Americas</td><td>0.95</td><td>Shortage</td></tr>
+      <tr><td class="mono">…003</td><td>TGA</td><td>Australia</td><td>Asia-Pacific</td><td>0.95</td><td>Shortage</td></tr>
+      <tr><td class="mono">…004</td><td>Medsafe</td><td>New Zealand</td><td>Asia-Pacific</td><td>0.88</td><td>Shortage</td></tr>
+      <tr><td class="mono">…005</td><td>EMA</td><td>European Union</td><td>EU</td><td>0.96</td><td>Shortage</td></tr>
+      <tr><td class="mono">…006</td><td>MHRA</td><td>United Kingdom</td><td>Europe</td><td>0.95</td><td>Shortage</td></tr>
+      <tr><td class="mono">…007</td><td>ANSM</td><td>France</td><td>EU</td><td>0.92</td><td>Shortage</td></tr>
+      <tr><td class="mono">…008</td><td>BfArM</td><td>Germany</td><td>EU</td><td>0.93</td><td>Shortage</td></tr>
+      <tr><td class="mono">…009</td><td>AIFA</td><td>Italy</td><td>EU</td><td>0.90</td><td>Shortage</td></tr>
+      <tr><td class="mono">…010</td><td>AEMPS</td><td>Spain</td><td>EU</td><td>0.90</td><td>Shortage</td></tr>
+      <tr><td class="mono">…011</td><td>CBG-MEB</td><td>Netherlands</td><td>EU</td><td>0.89</td><td>Shortage</td></tr>
+      <tr><td class="mono">…012</td><td>DKMA</td><td>Denmark</td><td>EU</td><td>0.88</td><td>Shortage</td></tr>
+      <tr><td class="mono">…013</td><td>Fimea</td><td>Finland</td><td>EU</td><td>0.87</td><td>Shortage</td></tr>
+      <tr><td class="mono">…014</td><td>HPRA</td><td>Ireland</td><td>EU</td><td>0.87</td><td>Shortage</td></tr>
+      <tr><td class="mono">…015</td><td>MPA-SE</td><td>Sweden</td><td>EU</td><td>0.89</td><td>Shortage</td></tr>
+      <tr><td class="mono">…016</td><td>SÚKL</td><td>Czech Republic</td><td>EU</td><td>0.83</td><td>Shortage</td></tr>
+      <tr><td class="mono">…017</td><td>OGYÉI</td><td>Hungary</td><td>EU</td><td>0.80</td><td>Shortage</td></tr>
+      <tr><td class="mono">…018</td><td>Swissmedic</td><td>Switzerland</td><td>Europe</td><td>0.91</td><td>Shortage</td></tr>
+      <tr><td class="mono">…019</td><td>NoMA</td><td>Norway</td><td>Europe</td><td>0.88</td><td>Shortage</td></tr>
+      <tr><td class="mono">…020</td><td>AGES</td><td>Austria</td><td>EU</td><td>0.83</td><td>Shortage</td></tr>
+      <tr><td class="mono">…021</td><td>Pharmac</td><td>New Zealand</td><td>Asia-Pacific</td><td>0.90</td><td>Shortage</td></tr>
+      <tr><td class="mono">…022</td><td>HSA-SG</td><td>Singapore</td><td>Asia-Pacific</td><td>0.80</td><td>Shortage</td></tr>
+      <tr><td class="mono">…024</td><td>FDA-FE</td><td>United States</td><td>Americas</td><td>0.85</td><td>Enforcement signal</td></tr>
+      <tr><td class="mono">…025</td><td>FDA-Recalls</td><td>United States</td><td>Americas</td><td>0.97</td><td>Recall</td></tr>
+      <tr><td class="mono">…026</td><td>HC-Recalls</td><td>Canada</td><td>Americas</td><td>0.93</td><td>Recall</td></tr>
+      <tr><td class="mono">…027</td><td>TGA-Recalls</td><td>Australia</td><td>Asia-Pacific</td><td>0.93</td><td>Recall</td></tr>
+      <tr><td class="mono">…028</td><td>EMA-Recalls</td><td>European Union</td><td>EU</td><td>—</td><td>Recall</td></tr>
+      <tr><td class="mono">…029</td><td>MHRA-Recalls</td><td>United Kingdom</td><td>Europe</td><td>—</td><td>Recall</td></tr>
+      <tr><td class="mono">…030</td><td>BfArM-Recalls</td><td>Germany</td><td>EU</td><td>—</td><td>Recall</td></tr>
+      <tr><td class="mono">…031</td><td>ANSM-Recalls</td><td>France</td><td>EU</td><td>—</td><td>Recall</td></tr>
+      <tr><td class="mono">…032</td><td>AIFA-Recalls</td><td>Italy</td><td>EU</td><td>—</td><td>Recall</td></tr>
+      <tr><td class="mono">…033</td><td>AEMPS-Recalls</td><td>Spain</td><td>EU</td><td>—</td><td>Recall</td></tr>
+      <tr><td class="mono">…034</td><td>Medsafe-Recalls</td><td>New Zealand</td><td>Asia-Pacific</td><td>—</td><td>Recall</td></tr>
+      <tr><td class="mono">…035</td><td>HSA-Recalls</td><td>Singapore</td><td>Asia-Pacific</td><td>—</td><td>Recall</td></tr>
+    </tbody>
+  </table>
+
+  <!-- shortage_events -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">shortage_events</span>
+      <span class="table-card-meta">Migration 001 &nbsp;·&nbsp; ~6,184 active rows</span>
+    </div>
+    <div class="table-card-desc">Core operational table. One row per deduplicated shortage signal. The shortage_id is a deterministic MD5 hash enabling idempotent upserts from repeated scrapes.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-pk">PK</span></td></tr>
+          <tr><td class="col-name">shortage_id</td><td class="col-type">TEXT UNIQUE</td><td class="col-notes">MD5(drug_id | source_id | country | start_date) — set by trigger on INSERT</td></tr>
+          <tr><td class="col-name">drug_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → drugs</span> NOT NULL · ON DELETE RESTRICT</td></tr>
+          <tr><td class="col-name">manufacturer_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → manufacturers</span> nullable · ON DELETE SET NULL</td></tr>
+          <tr><td class="col-name">data_source_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → data_sources</span> NOT NULL</td></tr>
+          <tr><td class="col-name">country / country_code</td><td class="col-type">TEXT / CHAR(2)</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">status</td><td class="col-type">TEXT</td><td class="col-notes"><span class="badge badge-enum">ENUM</span> active · resolved · anticipated · stale</td></tr>
+          <tr><td class="col-name">severity</td><td class="col-type">TEXT</td><td class="col-notes"><span class="badge badge-enum">ENUM</span> critical · high · medium · low</td></tr>
+          <tr><td class="col-name">reason_category</td><td class="col-type">TEXT</td><td class="col-notes">manufacturing_issue · supply_chain · demand_surge · regulatory_action · discontinuation · raw_material · distribution · other · unknown</td></tr>
+          <tr><td class="col-name">start_date / end_date</td><td class="col-type">DATE</td><td class="col-notes">end_date ≥ start_date (CHECK constraint)</td></tr>
+          <tr><td class="col-name">estimated_resolution_date</td><td class="col-type">DATE</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">last_verified_at</td><td class="col-type">TIMESTAMPTZ</td><td class="col-notes">Updated each scrape. Used by mark_stale_shortages() — events >7d stale → status='stale'</td></tr>
+          <tr><td class="col-name">raw_data</td><td class="col-type">JSONB</td><td class="col-notes"><span class="badge badge-json">JSONB</span> Original scrape record</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- shortage_status_log -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">shortage_status_log</span>
+      <span class="table-card-meta">Migration 004 &nbsp;·&nbsp; append-only</span>
+    </div>
+    <div class="table-card-desc">Immutable log of every status/severity change. Alert dispatcher polls alert_sent=FALSE rows to trigger watchlist notifications.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">shortage_event_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → shortage_events</span> ON DELETE CASCADE</td></tr>
+          <tr><td class="col-name">drug_id</td><td class="col-type">UUID</td><td class="col-notes">Denormalised for fast alert lookup (no join needed)</td></tr>
+          <tr><td class="col-name">old_status / new_status</td><td class="col-type">TEXT</td><td class="col-notes">Status before and after the change</td></tr>
+          <tr><td class="col-name">old_severity / new_severity</td><td class="col-type">TEXT</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">changed_at</td><td class="col-type">TIMESTAMPTZ</td><td class="col-notes">default NOW()</td></tr>
+          <tr><td class="col-name">alert_sent</td><td class="col-type">BOOLEAN</td><td class="col-notes"><span class="badge badge-bool">BOOL</span> default FALSE — alert dispatcher sets TRUE after dispatch</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- raw_scrapes -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">raw_scrapes</span>
+      <span class="table-card-meta">Migration 001 &nbsp;·&nbsp; service_role only</span>
+    </div>
+    <div class="table-card-desc">Scraper run log. Raw payloads stored before normalisation pipeline. Content hash enables skip-if-unchanged optimisation.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">data_source_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → data_sources</span></td></tr>
+          <tr><td class="col-name">raw_content / raw_data</td><td class="col-type">TEXT / JSONB</td><td class="col-notes">HTML/CSV or JSON response body</td></tr>
+          <tr><td class="col-name">content_hash</td><td class="col-type">TEXT</td><td class="col-notes">MD5 of payload — duplicate hash = no change, skip processing</td></tr>
+          <tr><td class="col-name">status</td><td class="col-type">TEXT</td><td class="col-notes">pending · processing · processed · failed · duplicate</td></tr>
+          <tr><td class="col-name">records_found / records_processed</td><td class="col-type">INTEGER</td><td class="col-notes">Counts logged per run</td></tr>
+          <tr><td class="col-name">processing_started_at / _completed_at</td><td class="col-type">TIMESTAMPTZ</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">scraper_version</td><td class="col-type">TEXT</td><td class="col-notes">semver of scraper that produced this row</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION 3: RECALL INTELLIGENCE
+════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <h2>Recall Intelligence</h2>
+    <span class="tag" style="background:#fee2e2;color:#991b1b;">recalls · recall_shortage_links</span>
+  </div>
+
+  <!-- recalls -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">recalls</span>
+      <span class="table-card-meta">Migration 007 &nbsp;·&nbsp; ~12,864 rows</span>
+    </div>
+    <div class="table-card-desc">Drug recalls from 11 global regulatory sources. Class I recalls are leading indicators of supply disruptions and auto-generate anticipated shortage_events.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-pk">PK</span></td></tr>
+          <tr><td class="col-name">recall_id</td><td class="col-type">TEXT UNIQUE</td><td class="col-notes">MD5(source_id | country | announced_date | recall_ref) dedup key</td></tr>
+          <tr><td class="col-name">drug_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → drugs</span> nullable — unmatched drugs left NULL until linked</td></tr>
+          <tr><td class="col-name">source_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → data_sources</span> NOT NULL</td></tr>
+          <tr><td class="col-name">country_code</td><td class="col-type">CHAR(2)</td><td class="col-notes">NOT NULL</td></tr>
+          <tr><td class="col-name">recall_class</td><td class="col-type">TEXT</td><td class="col-notes"><span class="badge badge-enum">ENUM</span> I · II · III · Unclassified</td></tr>
+          <tr><td class="col-name">recall_type</td><td class="col-type">TEXT</td><td class="col-notes">batch · product_wide · market_withdrawal</td></tr>
+          <tr><td class="col-name">reason / reason_category</td><td class="col-type">TEXT</td><td class="col-notes">contamination · mislabelling · subpotency · packaging · sterility · foreign_matter · other</td></tr>
+          <tr><td class="col-name">lot_numbers</td><td class="col-type">TEXT[]</td><td class="col-notes"><span class="badge badge-arr">ARRAY</span> default {}</td></tr>
+          <tr><td class="col-name">manufacturer / brand_name / generic_name</td><td class="col-type">TEXT</td><td class="col-notes">generic_name NOT NULL</td></tr>
+          <tr><td class="col-name">announced_date</td><td class="col-type">DATE</td><td class="col-notes">NOT NULL — used for resilience score calculation</td></tr>
+          <tr><td class="col-name">status</td><td class="col-type">TEXT</td><td class="col-notes">active · completed · ongoing</td></tr>
+          <tr><td class="col-name">confidence_score</td><td class="col-type">INTEGER</td><td class="col-notes">0–100, default 80</td></tr>
+          <tr><td class="col-name">raw_data</td><td class="col-type">JSONB</td><td class="col-notes"><span class="badge badge-json">JSONB</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- recall_shortage_links -->
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">recall_shortage_links</span>
+      <span class="table-card-meta">Migration 007 &nbsp;·&nbsp; ~40,740 rows</span>
+    </div>
+    <div class="table-card-desc">Intelligence join table connecting recalls to shortage events, with a temporal link type derived by comparing dates.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">recall_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → recalls</span> ON DELETE CASCADE</td></tr>
+          <tr><td class="col-name">shortage_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → shortage_events</span> ON DELETE CASCADE</td></tr>
+          <tr><td class="col-name">link_type</td><td class="col-type">TEXT</td><td class="col-notes">recall_caused_shortage (shortage starts >1d after recall) · concurrent (within 30d) · shortage_preceded_recall (>30d before)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION 4: MACRO INTELLIGENCE
+════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <h2>Macro Intelligence Sources</h2>
+    <span class="tag" style="background:#ede9fe;color:#6d28d9;">intelligence_sources</span>
+  </div>
+
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">intelligence_sources</span>
+      <span class="table-card-meta">Migration 008 &nbsp;·&nbsp; 124 rows &nbsp;·&nbsp; standalone (no FKs)</span>
+    </div>
+    <div class="table-card-desc">Registry of 124 macro intelligence data sources — freight indices, procurement signals, regulatory feeds, manufacturer financial data, geopolitical risk indicators. Completely independent of the shortage data model.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">source_id</td><td class="col-type">TEXT</td><td class="col-notes"><span class="badge badge-pk">PK</span> Slug key, e.g. fda-inspection-database</td></tr>
+          <tr><td class="col-name">name</td><td class="col-type">TEXT</td><td class="col-notes">NOT NULL</td></tr>
+          <tr><td class="col-name">owner_org</td><td class="col-type">TEXT</td><td class="col-notes">Owning organisation</td></tr>
+          <tr><td class="col-name">category / subcategory</td><td class="col-type">TEXT</td><td class="col-notes">procurement · regulatory · macro · logistics · financial…</td></tr>
+          <tr><td class="col-name">geography_coverage</td><td class="col-type">TEXT</td><td class="col-notes">Global · US · EU · Regional</td></tr>
+          <tr><td class="col-name">access_method</td><td class="col-type">TEXT</td><td class="col-notes">api · scrape · download · manual</td></tr>
+          <tr><td class="col-name">auth</td><td class="col-type">TEXT</td><td class="col-notes">none · api_key · login</td></tr>
+          <tr><td class="col-name">raw_data_entrypoints / docs_entrypoint</td><td class="col-type">TEXT</td><td class="col-notes">URLs for data access and documentation</td></tr>
+          <tr><td class="col-name">formats</td><td class="col-type">TEXT</td><td class="col-notes">JSON · CSV · XLSX · XML…</td></tr>
+          <tr><td class="col-name">update_frequency_expected</td><td class="col-type">TEXT</td><td class="col-notes">daily · weekly · monthly…</td></tr>
+          <tr><td class="col-name">recommended_poll_frequency</td><td class="col-type">TEXT</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">change_detection</td><td class="col-type">TEXT</td><td class="col-notes">ETag · hash · diff · manual</td></tr>
+          <tr><td class="col-name">primary_keys</td><td class="col-type">TEXT</td><td class="col-notes">Fields that uniquely identify records</td></tr>
+          <tr><td class="col-name">is_medicines_regulator</td><td class="col-type">BOOLEAN</td><td class="col-notes">default FALSE</td></tr>
+          <tr><td class="col-name">is_government_or_igo</td><td class="col-type">BOOLEAN</td><td class="col-notes">default FALSE</td></tr>
+          <tr><td class="col-name">priority_for_daily_monitoring</td><td class="col-type">TEXT</td><td class="col-notes">high · medium · low</td></tr>
+          <tr><td class="col-name">terms_notes / notes</td><td class="col-type">TEXT</td><td class="col-notes">Usage terms and operational notes</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION 5: PLATFORM TABLES
+════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <h2>Platform Tables</h2>
+    <span class="tag" style="background:#fef3c7;color:#92400e;">user_watchlists · alert_notifications · email_subscribers · audit_logs</span>
+  </div>
+
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">user_watchlists</span>
+      <span class="table-card-meta">Migration 001</span>
+    </div>
+    <div class="table-card-desc">Per-user drug watches with per-channel notification preferences. Users own their rows — RLS enforced via auth.uid().</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">user_id</td><td class="col-type">UUID</td><td class="col-notes">References Supabase Auth (auth.uid()) — NOT a FK</td></tr>
+          <tr><td class="col-name">drug_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → drugs</span> ON DELETE CASCADE</td></tr>
+          <tr><td class="col-name">countries</td><td class="col-type">TEXT[]</td><td class="col-notes"><span class="badge badge-arr">ARRAY</span> empty {} = watch all countries</td></tr>
+          <tr><td class="col-name">notification_channels</td><td class="col-type">JSONB</td><td class="col-notes"><span class="badge badge-json">JSONB</span> {"email": bool, "sms": bool, "webhook": url|null}</td></tr>
+          <tr><td class="col-name">alert_threshold</td><td class="col-type">TEXT</td><td class="col-notes">any · active_only · critical_only</td></tr>
+          <tr><td class="col-name">is_active</td><td class="col-type">BOOLEAN</td><td class="col-notes">default TRUE. UNIQUE(user_id, drug_id)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">alert_notifications</span>
+      <span class="table-card-meta">Migrations 001 + 007</span>
+    </div>
+    <div class="table-card-desc">Dispatch ledger. One row per alert attempt across email, SMS, and webhook channels. shortage_event_id made nullable in migration 007 to support recall alerts.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">watchlist_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → user_watchlists</span> ON DELETE CASCADE</td></tr>
+          <tr><td class="col-name">shortage_event_id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-fk">FK → shortage_events</span> nullable since migration 007</td></tr>
+          <tr><td class="col-name">channel</td><td class="col-type">TEXT</td><td class="col-notes">email · sms · webhook</td></tr>
+          <tr><td class="col-name">recipient</td><td class="col-type">TEXT</td><td class="col-notes">Email address, phone number, or webhook URL</td></tr>
+          <tr><td class="col-name">status</td><td class="col-type">TEXT</td><td class="col-notes">pending · sent · failed · bounced</td></tr>
+          <tr><td class="col-name">sent_at / failed_at</td><td class="col-type">TIMESTAMPTZ</td><td class="col-notes"></td></tr>
+          <tr><td class="col-name">retry_count</td><td class="col-type">INTEGER</td><td class="col-notes">default 0</td></tr>
+          <tr><td class="col-name">payload</td><td class="col-type">JSONB</td><td class="col-notes">Full payload sent to provider (debugging)</td></tr>
+          <tr><td class="col-name">provider_message_id</td><td class="col-type">TEXT</td><td class="col-notes">SendGrid/Twilio message ID</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">email_subscribers</span>
+      <span class="table-card-meta">Migration 003 (RLS fixed in 005)</span>
+    </div>
+    <div class="table-card-desc">Landing page email capture. service_role only — no public access. Inserts via Next.js API route authenticating with service_role key.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">id</td><td class="col-type">UUID</td><td class="col-notes"><span class="badge badge-pk">PK</span> gen_random_uuid()</td></tr>
+          <tr><td class="col-name">email</td><td class="col-type">TEXT UNIQUE</td><td class="col-notes">NOT NULL</td></tr>
+          <tr><td class="col-name">source</td><td class="col-type">TEXT</td><td class="col-notes">default 'landing_page'</td></tr>
+          <tr><td class="col-name">created_at</td><td class="col-type">TIMESTAMPTZ</td><td class="col-notes"></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">audit_logs</span>
+      <span class="table-card-meta">Migration 001 &nbsp;·&nbsp; append-only · service_role only</span>
+    </div>
+    <div class="table-card-desc">Immutable audit trail for all data mutations. Never UPDATE or DELETE rows. Written by mark_stale_shortages() and manually by service operations.</div>
+    <div class="table-card-body">
+      <table class="col-table">
+        <thead><tr><th width="200">Column</th><th width="160">Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">table_name / record_id</td><td class="col-type">TEXT / UUID</td><td class="col-notes">Which table and row was affected</td></tr>
+          <tr><td class="col-name">action</td><td class="col-type">TEXT</td><td class="col-notes">INSERT · UPDATE · DELETE</td></tr>
+          <tr><td class="col-name">old_data / new_data</td><td class="col-type">JSONB</td><td class="col-notes">Before/after snapshots</td></tr>
+          <tr><td class="col-name">changed_by</td><td class="col-type">UUID</td><td class="col-notes">auth.uid()</td></tr>
+          <tr><td class="col-name">changed_by_role</td><td class="col-type">TEXT</td><td class="col-notes">user · admin · system · scraper</td></tr>
+          <tr><td class="col-name">ip_address / user_agent</td><td class="col-type">INET / TEXT</td><td class="col-notes"></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION 6: TRIGGERS & FUNCTIONS
+════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <h2>Triggers &amp; Utility Functions</h2>
+  </div>
+
+  <div class="trigger-card">
+    <div class="trigger-icon">⚡</div>
+    <div>
+      <div class="trigger-name">trg_drugs_search_vector &nbsp;·&nbsp; BEFORE INSERT OR UPDATE ON drugs</div>
+      <div class="trigger-desc">Maintains three columns: generic_name_normalised (lower/trim), brand_names_text (array_to_string), and search_vector (weighted tsvector: A=generic, B=brand, C=atc+category). Runs update_drug_search_vector().</div>
+    </div>
+  </div>
+
+  <div class="trigger-card">
+    <div class="trigger-icon">⚡</div>
+    <div>
+      <div class="trigger-name">trg_shortage_events_id &nbsp;·&nbsp; BEFORE INSERT ON shortage_events</div>
+      <div class="trigger-desc">Computes deterministic MD5 dedup key: MD5(drug_id | data_source_id | country_code | start_date). Only fires if shortage_id is NULL or empty — allows manual override in tests. Runs set_shortage_id().</div>
+    </div>
+  </div>
+
+  <div class="trigger-card">
+    <div class="trigger-icon">⚡</div>
+    <div>
+      <div class="trigger-name">trg_*_updated_at &nbsp;·&nbsp; BEFORE UPDATE (5 tables)</div>
+      <div class="trigger-desc">Shared set_updated_at() function applied to: drugs, manufacturers, shortage_events, recalls, intelligence_sources. Sets updated_at = NOW() on every row update.</div>
+    </div>
+  </div>
+
+  <div class="trigger-card">
+    <div class="trigger-icon">🔧</div>
+    <div>
+      <div class="trigger-name">mark_stale_shortages() &nbsp;·&nbsp; Utility function (SECURITY DEFINER)</div>
+      <div class="trigger-desc">Updates active/anticipated shortage_events where last_verified_at &lt; NOW() - 7 days → status='stale'. Writes audit_log entries for every row changed. Returns row count. Called on a daily cron schedule via Supabase Edge Function scheduler.</div>
+    </div>
+  </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION 7: ROW LEVEL SECURITY
+════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <h2>Row Level Security</h2>
+    <span class="tag" style="background:#f1f5f9;color:#475569;">All 15 tables have RLS enabled</span>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr><th>Table</th><th>SELECT</th><th>INSERT / UPDATE / DELETE</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">drugs</td><td class="rls-pub">Public</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">manufacturers</td><td class="rls-pub">Public</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">data_sources</td><td class="rls-pub">Public</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">shortage_events</td><td class="rls-pub">Public</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">drug_alternatives</td><td class="rls-pub">Public (is_approved=TRUE only)</td><td>Authenticated users can INSERT suggestions; service_role approves</td></tr>
+      <tr><td class="mono">drug_pricing</td><td class="rls-pub">Public</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">recalls</td><td class="rls-pub">Public</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">recall_shortage_links</td><td class="rls-pub">Public</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">intelligence_sources</td><td class="rls-pub">Public</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">user_watchlists</td><td class="rls-own">Own rows only (auth.uid())</td><td class="rls-own">Own rows only + service_role ALL</td></tr>
+      <tr><td class="mono">alert_notifications</td><td class="rls-own">Notifications for own watchlists</td><td class="rls-sr">service_role only</td></tr>
+      <tr><td class="mono">shortage_status_log</td><td class="rls-priv">No RLS policy (service_role default)</td><td class="rls-priv">service_role only</td></tr>
+      <tr><td class="mono">raw_scrapes</td><td class="rls-priv">service_role only</td><td class="rls-priv">service_role only</td></tr>
+      <tr><td class="mono">audit_logs</td><td class="rls-priv">service_role only</td><td class="rls-priv">service_role only</td></tr>
+      <tr><td class="mono">email_subscribers</td><td class="rls-priv">service_role only</td><td class="rls-priv">service_role only (fixed in migration 005)</td></tr>
+    </tbody>
+  </table>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION 8: API SURFACE
+════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-num">8</div>
+    <h2>REST API Surface</h2>
+    <span class="tag" style="background:#dcfce7;color:#166534;">FastAPI &nbsp;·&nbsp; port 8002</span>
+  </div>
+
+  <table class="data-table">
+    <thead><tr><th>Endpoint</th><th>Tables queried</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">GET /health</td><td>—</td><td>Status check</td></tr>
+      <tr><td class="mono">GET /health/data-quality</td><td>shortage_events, data_sources</td><td>Freshness + coverage score (0–100)</td></tr>
+      <tr><td class="mono">GET /search?q=</td><td>drugs</td><td>FTS + trigram fuzzy. Returns drug list.</td></tr>
+      <tr><td class="mono">GET /drugs/{id}</td><td>drugs</td><td>Drug detail</td></tr>
+      <tr><td class="mono">GET /drugs/{id}/shortages</td><td>shortage_events, data_sources</td><td>All shortage events for a drug</td></tr>
+      <tr><td class="mono">GET /drugs/{id}/alternatives</td><td>drug_alternatives, drugs</td><td>Therapeutic alternatives sorted by similarity_score</td></tr>
+      <tr><td class="mono">GET /drugs/{id}/recalls</td><td>recalls, recall_shortage_links</td><td>Recall history + computed resilience score (0–100)</td></tr>
+      <tr><td class="mono">GET /shortages</td><td>shortage_events, drugs, data_sources</td><td>Paginated browse. Filters: country, status, severity</td></tr>
+      <tr><td class="mono">GET /shortages/summary</td><td>shortage_events</td><td>KPI counts: active, critical, by country, by category</td></tr>
+      <tr><td class="mono">GET /recalls</td><td>recalls, drugs, data_sources</td><td>Paginated. Filters: country, recall_class, status, date_from/to</td></tr>
+      <tr><td class="mono">GET /recalls/summary</td><td>recalls</td><td>{total_active, class_i_count, new_this_month, by_country, by_class}</td></tr>
+      <tr><td class="mono">GET /recalls/{id}</td><td>recalls, recall_shortage_links</td><td>Detail + linked shortage IDs</td></tr>
+      <tr><td class="mono">GET /sources</td><td>data_sources</td><td>All active regulatory sources</td></tr>
+      <tr><td class="mono">GET /intelligence-sources</td><td>intelligence_sources</td><td>Filterable by category, priority, access_method, is_government_or_igo</td></tr>
+      <tr><td class="mono">GET /intelligence-sources/summary</td><td>intelligence_sources</td><td>Counts by category, priority, access method</td></tr>
+      <tr><td class="mono">GET /intelligence-sources/{id}</td><td>intelligence_sources</td><td>Single source by slug</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Resilience Score Formula (computed, not stored)</h3>
+  <div style="background:var(--navy2);border-radius:8px;padding:18px 22px;margin-bottom:24px;">
+    <pre style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e2e8f0;line-height:1.8;">score = 100
+score -= count(recalls within last 12 months) × 5
+score -= count(Class I recalls within last 24 months) × 15
+score -= count(Class I recalls that caused/preceded a shortage) × 20
+score = max(0, min(100, score))
+
+Thresholds:  80–100 → green   60–79 → yellow   0–59 → red</pre>
+  </div>
+
+  <div style="height:40px;"></div>
+  <div style="text-align:center;color:var(--muted);font-size:11px;border-top:1px solid var(--border);padding-top:20px;">
+    Mederti Technical Reference &nbsp;·&nbsp; Database Map v1.0 &nbsp;·&nbsp; 26 February 2026 &nbsp;·&nbsp; Confidential
+  </div>
+
+</div>
+</body>
+</html>

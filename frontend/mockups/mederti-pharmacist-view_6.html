@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amoxicillin 500mg — Mederti</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #ffffff;
+  --bg-2:    #f8fafc;
+  --bg-3:    #f1f5f9;
+  --border:  #e2e8f0;
+  --border-2:#cbd5e1;
+  --text:    #0f172a;
+  --text-2:  #334155;
+  --text-3:  #64748b;
+  --text-4:  #94a3b8;
+  --teal:    #0d9488;
+  --teal-l:  #14b8a6;
+  --teal-bg: #f0fdfa;
+  --teal-b:  #ccfbf1;
+  --indigo:  #4f46e5;
+  --ind-bg:  #eef2ff;
+  --ind-b:   #c7d2fe;
+  --crit:    #dc2626;
+  --crit-bg: #fef2f2;
+  --crit-b:  #fecaca;
+  --med:     #ca8a04;
+  --med-bg:  #fefce8;
+  --med-b:   #fde68a;
+  --low:     #16a34a;
+  --low-bg:  #f0fdf4;
+  --low-b:   #bbf7d0;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* NAV */
+nav {
+  position: sticky; top:0; z-index:50;
+  height: 56px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px;
+}
+.nav-left { display:flex; align-items:center; gap:20px; }
+.nav-logo { font-size:16px; font-weight:600; letter-spacing:-0.02em; color:var(--teal); }
+.breadcrumb { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-3); }
+.breadcrumb a { color:var(--text-3); text-decoration:none; }
+.breadcrumb a:hover { color:var(--teal); }
+.breadcrumb-sep { color:var(--border-2); }
+.breadcrumb-current { color:var(--text-2); font-weight:500; }
+.nav-right { display:flex; align-items:center; gap:10px; }
+.nav-user { font-size:13px; color:var(--text-3); }
+.btn-switch {
+  font-size:13px; font-weight:500; padding:7px 14px; border-radius:6px;
+  background:var(--bg-3); border:1px solid var(--border);
+  color:var(--text-2); cursor:pointer; font-family:'Inter', sans-serif; transition:all 0.15s;
+}
+.btn-switch:hover { border-color:var(--border-2); }
+
+/* PAGE */
+.page { max-width:1100px; margin:0 auto; padding:28px 32px 64px; }
+
+/* DRUG HEADER — now includes alert button */
+.drug-header {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 28px;
+  margin-bottom: 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+}
+.drug-meta-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.pill {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:4px 10px; border-radius:5px;
+  font-size:11px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase;
+}
+.pill-dot { width:5px; height:5px; border-radius:50%; background:currentColor; animation:blink 1.6s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.pill-critical { background:var(--crit-bg); color:var(--crit); border:1px solid var(--crit-b); }
+.pill-atc { background:var(--ind-bg); color:var(--indigo); border:1px solid var(--ind-b); font-family:'DM Mono',monospace; font-weight:400; text-transform:none; letter-spacing:0; font-size:11px; }
+.drug-name { font-size:28px; font-weight:700; letter-spacing:-0.025em; color:var(--text); line-height:1.15; margin-bottom:4px; font-family:'Inter', sans-serif; }
+.drug-generic { font-size:14px; color:var(--text-3); margin-bottom:12px; }
+.drug-tags { display:flex; flex-wrap:wrap; gap:6px; }
+.drug-tag { font-size:12px; padding:3px 10px; border-radius:4px; background:var(--bg-3); color:var(--text-3); border:1px solid var(--border); }
+.drug-header-right {
+  display:flex; flex-direction:column; align-items:flex-end; gap:12px; flex-shrink:0; min-width:220px;
+}
+.freshness-row { display:flex; align-items:center; gap:6px; }
+.fresh-dot { width:7px; height:7px; border-radius:50%; background:var(--low); }
+.freshness-text { font-size:12px; color:var(--text-3); }
+.source-count { font-size:12px; color:var(--text-3); }
+.source-count strong { color:var(--teal); }
+
+/* ALERT BUTTON — in header */
+.btn-alert-big {
+  width:100%; padding:13px 18px; background:var(--teal); border:none; border-radius:10px;
+  color:#fff; font-size:15px; font-weight:600; font-family:'Inter', sans-serif;
+  cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  transition:background 0.15s; box-shadow:0 2px 10px rgba(13,148,136,0.2);
+}
+.btn-alert-big:hover { background:var(--teal-l); }
+.btn-alert-sub { text-align:center; font-size:11px; color:var(--text-4); margin-top:6px; }
+
+/* ANSWER ROW — status + ETA side by side */
+.answer-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* STATUS CARD */
+.status-card {
+  background:var(--crit-bg); border:1px solid var(--crit-b);
+  border-radius:12px; padding:22px 24px;
+}
+.status-label {
+  font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;
+  color:var(--crit); margin-bottom:8px; display:flex; align-items:center; gap:6px;
+}
+.status-dot { width:7px; height:7px; border-radius:50%; background:currentColor; animation:blink 1.6s ease-in-out infinite; }
+.status-title { font-size:28px; font-weight:700; letter-spacing:-0.02em; color:var(--text); margin-bottom:4px; font-family:'Inter', sans-serif; }
+.status-sub { font-size:13px; color:var(--text-3); }
+
+/* ETA */
+.eta-card { background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:22px 24px; }
+.eta-label { font-size:11px; color:var(--text-4); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; }
+.eta-date { font-size:28px; font-weight:700; letter-spacing:-0.02em; color:var(--text); line-height:1.1; margin-bottom:4px; font-family:'Inter', sans-serif; }
+.eta-range { font-size:11px; color:var(--text-3); font-family:'DM Mono',monospace; margin-bottom:14px; }
+.eta-divider { height:1px; background:var(--border); margin-bottom:14px; }
+.eta-conf-row { display:flex; align-items:center; justify-content:space-between; }
+.eta-conf-label { font-size:12px; color:var(--text-3); }
+.eta-conf-val { font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:var(--teal); }
+
+/* MAIN TWO COL */
+.two-col { display:grid; grid-template-columns:1fr 320px; gap:20px; align-items:start; }
+.left-col { display:flex; flex-direction:column; gap:16px; }
+
+/* CARD */
+.card { background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.card-header {
+  padding:14px 20px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.card-title { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-3); }
+.card-meta { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; }
+.card-body { padding:18px 20px; }
+
+/* COUNTRY LIST */
+.country-grid { display:flex; flex-direction:column; gap:0; }
+.country-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 2px;
+  border-bottom:1px solid var(--border);
+}
+.country-row:last-child { border-bottom:none; }
+.country-left { display:flex; align-items:center; gap:10px; }
+.country-flag { font-size:18px; line-height:1; width:24px; text-align:center; }
+.country-name { font-size:14px; font-weight:500; color:var(--text); }
+.country-detail { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; margin-left:6px; }
+.avail-indicator { display:flex; align-items:center; gap:6px; }
+.avail-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.avail-dot.red   { background:var(--crit); }
+.avail-dot.amber { background:var(--med); }
+.avail-dot.green { background:var(--low); }
+.avail-text { font-size:13px; font-weight:500; }
+.avail-text.red   { color:var(--crit); }
+.avail-text.amber { color:var(--med); }
+.avail-text.green { color:var(--low); }
+
+/* ALTERNATIVES */
+.alt-list { display:flex; flex-direction:column; gap:8px; }
+.alt-card {
+  background:var(--bg-2); border:1px solid var(--border);
+  border-radius:10px; padding:14px 18px;
+  display:flex; align-items:center; justify-content:space-between;
+  cursor:pointer; transition:border-color 0.15s, background 0.15s;
+}
+.alt-card:hover { border-color:var(--teal); background:var(--teal-bg); }
+.alt-card-name { font-size:15px; font-weight:500; color:var(--text); margin-bottom:2px; }
+.alt-card-form { font-size:12px; color:var(--text-4); font-family:'DM Mono',monospace; }
+.alt-card-right { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0; }
+.alt-avail { font-size:12px; font-weight:500; padding:4px 10px; border-radius:4px; }
+.alt-avail.yes { background:var(--low-bg); color:var(--low); border:1px solid var(--low-b); }
+.alt-avail.lim { background:var(--med-bg); color:var(--med); border:1px solid var(--med-b); }
+.alt-sim { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; }
+
+/* AI */
+.ai-card { border-color:var(--ind-b); }
+.ai-badge { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--indigo); font-weight:500; }
+.ai-text { font-size:14px; line-height:1.75; color:var(--text-2); margin-bottom:14px; }
+.ai-text strong { color:var(--text); font-weight:500; }
+.ai-prompts { display:flex; flex-wrap:wrap; gap:7px; }
+.ai-chip {
+  font-size:12px; padding:6px 12px; border-radius:6px;
+  background:var(--ind-bg); color:var(--indigo); border:1px solid var(--ind-b);
+  cursor:pointer; font-family:'Inter', sans-serif; transition:all 0.15s;
+}
+.ai-chip:hover { background:#e0e7ff; }
+
+/* TIMELINE */
+.timeline { display:flex; flex-direction:column; }
+.tl-item { display:flex; gap:14px; padding-bottom:16px; }
+.tl-item:last-child { padding-bottom:0; }
+.tl-left { display:flex; flex-direction:column; align-items:center; width:18px; flex-shrink:0; }
+.tl-dot { width:9px; height:9px; border-radius:50%; border:2px solid var(--teal); background:var(--bg); flex-shrink:0; margin-top:3px; }
+.tl-dot.filled { background:var(--teal); }
+.tl-line { flex:1; width:1px; background:var(--border); margin-top:3px; }
+.tl-date { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; margin-bottom:2px; }
+.tl-event { font-size:13px; color:var(--text-2); line-height:1.55; }
+.tl-event strong { color:var(--text); font-weight:500; }
+
+/* SOURCES */
+.source-list { display:flex; flex-direction:column; gap:7px; }
+.source-item {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 14px; border-radius:8px; background:var(--bg-2); border:1px solid var(--border);
+}
+.source-left { display:flex; align-items:center; gap:10px; }
+.source-flag { font-size:17px; line-height:1; }
+.source-name { font-size:13px; font-weight:500; color:var(--text); }
+.source-type { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; }
+.source-right { display:flex; align-items:center; gap:8px; }
+.source-age { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; }
+.source-conf { font-size:13px; font-weight:600; color:var(--teal); font-family:'DM Mono',monospace; }
+
+/* RIGHT COL — alternatives + analyst promo, sticky */
+.right-col { display:flex; flex-direction:column; gap:16px; position:sticky; top:76px; }
+
+.analyst-promo {
+  background:var(--bg-3); border:1px solid var(--border); border-radius:10px;
+  padding:16px 18px;
+}
+.analyst-promo-text strong { font-size:13px; font-weight:500; color:var(--text); display:block; margin-bottom:4px; }
+.analyst-promo-text span { font-size:12px; color:var(--text-3); display:block; margin-bottom:14px; }
+.btn-analyst {
+  width:100%; font-size:13px; font-weight:500; padding:9px; border-radius:7px;
+  background:var(--bg); border:1px solid var(--border);
+  color:var(--text-2); cursor:pointer; font-family:'Inter', sans-serif; transition:all 0.15s; text-align:center;
+}
+.btn-analyst:hover { border-color:var(--teal); color:var(--teal); }
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+.drug-header { animation:fadeUp 0.3s ease both; }
+.answer-row  { animation:fadeUp 0.3s 0.05s ease both; }
+.two-col     { animation:fadeUp 0.3s 0.1s ease both; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">Mederti</span>
+    <div class="breadcrumb">
+      <a href="#">Search</a><span class="breadcrumb-sep">›</span>
+      <a href="#">Antibiotics</a><span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-current">Amoxicillin 500mg</span>
+    </div>
+  </div>
+  <div class="nav-right">
+    <span class="nav-user">Sarah Chen · Royal Melbourne Hospital</span>
+    <button class="btn-switch">Analyst view →</button>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- DRUG HEADER — with alert button built in -->
+  <div class="drug-header">
+    <div>
+      <div class="drug-meta-row">
+        <span class="pill pill-critical"><span class="pill-dot"></span>Critical Shortage</span>
+        <span class="pill pill-atc">ATC: J01CA04</span>
+      </div>
+      <div class="drug-name">Amoxicillin 500mg Capsules</div>
+      <div class="drug-generic">amoxicillin trihydrate · oral capsule · 500mg</div>
+      <div class="drug-tags">
+        <span class="drug-tag">Antibiotic</span>
+        <span class="drug-tag">Penicillin</span>
+        <span class="drug-tag">Essential Medicine</span>
+        <span class="drug-tag">Paediatric use</span>
+        <span class="drug-tag">PBS Listed (AU)</span>
+      </div>
+    </div>
+    <div class="drug-header-right">
+      <div class="freshness-row">
+        <div class="fresh-dot"></div>
+        <span class="freshness-text">Updated 3 hours ago · <strong style="color:var(--teal)">6</strong> sources · <strong style="color:var(--teal)">5</strong> countries</span>
+      </div>
+      <button class="btn-alert-big">🔔 Alert me when available</button>
+      <div class="btn-alert-sub">Email or SMS the moment stock returns in your country</div>
+    </div>
+  </div>
+
+  <!-- ANSWER ROW — status + ETA -->
+  <div class="answer-row">
+    <div class="status-card">
+      <div class="status-label"><span class="status-dot"></span>Not available</div>
+      <div class="status-title">Critical shortage</div>
+      <div class="status-sub">API manufacturing disruption · GSK, Sandoz, Arrow</div>
+    </div>
+    <div class="eta-card">
+      <div class="eta-label">When will it be back?</div>
+      <div class="eta-date">Aug – Oct 2026</div>
+      <div class="eta-range">Range: Jun 2026 → Jan 2027</div>
+      <div class="eta-divider"></div>
+      <div class="eta-conf-row">
+        <span class="eta-conf-label">AI prediction confidence</span>
+        <span class="eta-conf-val">72 / 100</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="two-col">
+
+    <div class="left-col">
+
+      <!-- WHERE IS IT -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Where is it available?</span>
+          <span class="card-meta">5 countries checked</span>
+        </div>
+        <div class="card-body">
+          <div class="country-grid">
+            <div class="country-row">
+              <div class="country-left"><span class="country-flag">🇦🇺</span><span class="country-name">Australia</span><span class="country-detail">TGA · 3h ago</span></div>
+              <div class="avail-indicator"><div class="avail-dot red"></div><span class="avail-text red">Not available</span></div>
+            </div>
+            <div class="country-row">
+              <div class="country-left"><span class="country-flag">🇬🇧</span><span class="country-name">United Kingdom</span><span class="country-detail">MHRA · 6h ago</span></div>
+              <div class="avail-indicator"><div class="avail-dot red"></div><span class="avail-text red">Not available</span></div>
+            </div>
+            <div class="country-row">
+              <div class="country-left"><span class="country-flag">🇨🇦</span><span class="country-name">Canada</span><span class="country-detail">Health Canada · 8h ago</span></div>
+              <div class="avail-indicator"><div class="avail-dot amber"></div><span class="avail-text amber">Very limited</span></div>
+            </div>
+            <div class="country-row">
+              <div class="country-left"><span class="country-flag">🇩🇪</span><span class="country-name">Germany</span><span class="country-detail">BfArM · 12h ago</span></div>
+              <div class="avail-indicator"><div class="avail-dot red"></div><span class="avail-text red">Not available</span></div>
+            </div>
+            <div class="country-row">
+              <div class="country-left"><span class="country-flag">🇺🇸</span><span class="country-name">United States</span><span class="country-detail">FDA · 14h ago</span></div>
+              <div class="avail-indicator"><div class="avail-dot amber"></div><span class="avail-text amber">Very limited</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI -->
+      <div class="card ai-card">
+        <div class="card-header">
+          <span class="card-title">AI Insight</span>
+          <div class="ai-badge">✦ GPT-4o · generated now</div>
+        </div>
+        <div class="card-body">
+          <p class="ai-text">
+            This shortage follows a pattern from <strong>3 prior amoxicillin disruptions</strong> (2018, 2021, 2023).
+            <strong>Partial restocking expected May–June 2026</strong> from Aurobindo and Teva.
+            For paediatric patients, the oral suspension (250mg/5ml) is the closest substitute at 78% supply.
+            For adults, <strong>Pen V</strong> is recommended for mild-moderate infections.
+          </p>
+          <div class="ai-prompts">
+            <button class="ai-chip">Substitute for child under 5?</button>
+            <button class="ai-chip">When back in Australia?</button>
+            <button class="ai-chip">Is the suspension also short?</button>
+            <button class="ai-chip">Supplier alternatives?</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIMELINE -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">Shortage Timeline</span></div>
+        <div class="card-body">
+          <div class="timeline">
+            <div class="tl-item"><div class="tl-left"><div class="tl-dot filled"></div><div class="tl-line"></div></div><div><div class="tl-date">22 Feb 2026 · 3h ago</div><div class="tl-event"><strong>TGA</strong> — shortage confirmed, no change to resolution date.</div></div></div>
+            <div class="tl-item"><div class="tl-left"><div class="tl-dot filled"></div><div class="tl-line"></div></div><div><div class="tl-date">14 Jan 2026</div><div class="tl-event"><strong>MHRA</strong> — UK prescribers advised to consider alternatives. NHS issues formulary substitution guidance.</div></div></div>
+            <div class="tl-item"><div class="tl-left"><div class="tl-dot filled"></div><div class="tl-line"></div></div><div><div class="tl-date">3 Dec 2025</div><div class="tl-event"><strong>Health Canada</strong> — escalated from High → Critical following second manufacturing site failure.</div></div></div>
+            <div class="tl-item"><div class="tl-left"><div class="tl-dot"></div></div><div><div class="tl-date">14 Feb 2025</div><div class="tl-event"><strong>TGA</strong> — shortage first reported, ~40% initial supply reduction.</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SOURCES -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">Verified Sources</span><span class="card-meta">cross-checked 3h ago</span></div>
+        <div class="card-body">
+          <div class="source-list">
+            <div class="source-item"><div class="source-left"><span class="source-flag">🇦🇺</span><div><div class="source-name">TGA Australia</div><div class="source-type">tga.gov.au</div></div></div><div class="source-right"><span class="source-age">3h ago</span><span class="source-conf">94</span></div></div>
+            <div class="source-item"><div class="source-left"><span class="source-flag">🇬🇧</span><div><div class="source-name">MHRA UK</div><div class="source-type">mhra.gov.uk</div></div></div><div class="source-right"><span class="source-age">6h ago</span><span class="source-conf">91</span></div></div>
+            <div class="source-item"><div class="source-left"><span class="source-flag">🇨🇦</span><div><div class="source-name">Health Canada</div><div class="source-type">canada.ca</div></div></div><div class="source-right"><span class="source-age">8h ago</span><span class="source-conf">89</span></div></div>
+            <div class="source-item"><div class="source-left"><span class="source-flag">🇪🇺</span><div><div class="source-name">EMA</div><div class="source-type">ema.europa.eu</div></div></div><div class="source-right"><span class="source-age">12h ago</span><span class="source-conf">88</span></div></div>
+            <div class="source-item"><div class="source-left"><span class="source-flag">🇺🇸</span><div><div class="source-name">FDA</div><div class="source-type">fda.gov</div></div></div><div class="source-right"><span class="source-age">14h ago</span><span class="source-conf">76</span></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COL — alternatives sticky at top -->
+    <div class="right-col">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">What can I use instead?</span>
+          <span class="card-meta">5 alternatives</span>
+        </div>
+        <div class="card-body">
+          <div class="alt-list">
+            <div class="alt-card">
+              <div><div class="alt-card-name">Amoxicillin 250mg/5ml Suspension</div><div class="alt-card-form">oral liquid · same active ingredient</div></div>
+              <div class="alt-card-right"><span class="alt-avail yes">Available</span><span class="alt-sim">96% match</span></div>
+            </div>
+            <div class="alt-card">
+              <div><div class="alt-card-name">Co-amoxiclav 500/125mg</div><div class="alt-card-form">oral tablet · broader spectrum</div></div>
+              <div class="alt-card-right"><span class="alt-avail yes">Available</span><span class="alt-sim">82% match</span></div>
+            </div>
+            <div class="alt-card">
+              <div><div class="alt-card-name">Phenoxymethylpenicillin 500mg</div><div class="alt-card-form">oral tablet · Pen V</div></div>
+              <div class="alt-card-right"><span class="alt-avail yes">Available</span><span class="alt-sim">71% match</span></div>
+            </div>
+            <div class="alt-card">
+              <div><div class="alt-card-name">Cefalexin 500mg</div><div class="alt-card-form">oral capsule · cephalosporin</div></div>
+              <div class="alt-card-right"><span class="alt-avail lim">Limited</span><span class="alt-sim">64% match</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="analyst-promo">
+        <div class="analyst-promo-text">
+          <strong>Need the full picture?</strong>
+          <span>Confidence scores, manufacturer data, source audit trail</span>
+        </div>
+        <button class="btn-analyst">Switch to Analyst view →</button>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

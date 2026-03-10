@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Australian Medicine Supply Intelligence — Mederti</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #f8fafc;
+  --bg-2:    #f1f5f9;
+  --bg-3:    #e8edf2;
+  --panel:   #ffffff;
+  --border:  #e2e8f0;
+  --border-2:#cbd5e1;
+  --text:    #0f172a;
+  --text-2:  #334155;
+  --text-3:  #64748b;
+  --text-4:  #94a3b8;
+  --teal:    #0d9488;
+  --teal-l:  #14b8a6;
+  --teal-bg: #f0fdfa;
+  --teal-b:  #99f6e4;
+  --indigo:  #4f46e5;
+  --ind-bg:  #eef2ff;
+  --ind-b:   #c7d2fe;
+  --crit:    #dc2626;
+  --crit-bg: #fef2f2;
+  --crit-b:  #fecaca;
+  --high:    #ea580c;
+  --high-bg: #fff7ed;
+  --high-b:  #fed7aa;
+  --med:     #ca8a04;
+  --med-bg:  #fefce8;
+  --med-b:   #fef08a;
+  --low:     #16a34a;
+  --low-bg:  #f0fdf4;
+  --low-b:   #bbf7d0;
+  --navy:    #0f172a;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* NAV */
+nav {
+  position: sticky; top:0; z-index:100;
+  height: 56px;
+  background: var(--navy);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px;
+}
+.nav-left { display:flex; align-items:center; gap:16px; }
+.nav-logo { font-size:15px; font-weight:600; letter-spacing:-0.02em; color:#fff; }
+.nav-divider { width:1px; height:20px; background:rgba(255,255,255,0.15); }
+.nav-context { font-size:13px; color:rgba(255,255,255,0.5); }
+.nav-context strong { color:rgba(255,255,255,0.85); font-weight:500; }
+.nav-right { display:flex; align-items:center; gap:12px; }
+.nav-date { font-size:12px; color:rgba(255,255,255,0.4); font-family:'DM Mono',monospace; }
+.btn-export {
+  display:flex; align-items:center; gap:6px;
+  background: var(--teal); border:none; color:#fff;
+  padding:7px 14px; border-radius:6px;
+  font-size:13px; font-weight:500; cursor:pointer;
+  font-family:'Inter', sans-serif; transition:background 0.15s;
+}
+.btn-export:hover { background:var(--teal-l); }
+.nav-user {
+  display:flex; align-items:center; gap:8px;
+  font-size:13px; color:rgba(255,255,255,0.6);
+}
+.nav-avatar {
+  width:28px; height:28px; border-radius:50%;
+  background: var(--teal); display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:600; color:#fff;
+}
+
+/* PERIOD TABS */
+.period-bar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.period-tabs { display:flex; gap:0; }
+.period-tab {
+  padding: 14px 20px; font-size:13px; font-weight:500;
+  color:var(--text-3); cursor:pointer; border-bottom:2px solid transparent;
+  transition:all 0.15s;
+}
+.period-tab:hover { color:var(--text); }
+.period-tab.active { color:var(--teal); border-bottom-color:var(--teal); }
+.period-right { display:flex; align-items:center; gap:10px; }
+.filter-chip {
+  font-size:12px; padding:5px 12px; border-radius:6px;
+  background:var(--bg-2); border:1px solid var(--border);
+  color:var(--text-3); cursor:pointer; transition:all 0.15s;
+}
+.filter-chip.active { background:var(--teal-bg); color:var(--teal); border-color:var(--teal-b); }
+
+/* PAGE */
+.page { max-width:1400px; margin:0 auto; padding:24px 28px 64px; }
+
+/* KPI ROW */
+.kpi-row { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px; }
+.kpi-card {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:10px; padding:18px 20px;
+  position:relative; overflow:hidden;
+}
+.kpi-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+}
+.kpi-card.crit::before { background:var(--crit); }
+.kpi-card.high::before { background:var(--high); }
+.kpi-card.med::before  { background:var(--med); }
+.kpi-card.low::before  { background:var(--low); }
+.kpi-card.teal::before { background:var(--teal); }
+.kpi-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-4); margin-bottom:10px; }
+.kpi-value { font-family:'Inter', sans-serif; font-size:36px; font-weight:500; line-height:1; color:var(--text); margin-bottom:6px; }
+.kpi-value.crit { color:var(--crit); }
+.kpi-value.high { color:var(--high); }
+.kpi-value.low  { color:var(--low); }
+.kpi-value.teal { color:var(--teal); }
+.kpi-delta {
+  font-size:12px; display:flex; align-items:center; gap:4px;
+}
+.kpi-delta.up   { color:var(--crit); }
+.kpi-delta.down { color:var(--low); }
+.kpi-delta.flat { color:var(--text-4); }
+.kpi-sub { font-size:11px; color:var(--text-4); margin-top:2px; }
+
+/* TWO WIDE COLUMNS */
+.main-grid { display:grid; grid-template-columns:1fr 380px; gap:18px; margin-bottom:18px; }
+
+/* CARD */
+.card { background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.card-header {
+  padding:14px 20px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.card-title { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-3); }
+.card-meta { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; }
+.card-action { font-size:12px; color:var(--teal); cursor:pointer; font-weight:500; }
+.card-body { padding:18px 20px; }
+
+/* CATEGORY HEATMAP */
+.heatmap-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.heatmap-cell {
+  border-radius:8px; padding:14px 16px; cursor:pointer;
+  transition:transform 0.15s, box-shadow 0.15s;
+  position:relative; overflow:hidden;
+}
+.heatmap-cell:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,0.08); }
+.heatmap-cell.sev-critical { background:var(--crit-bg); border:1px solid var(--crit-b); }
+.heatmap-cell.sev-high     { background:var(--high-bg); border:1px solid var(--high-b); }
+.heatmap-cell.sev-medium   { background:var(--med-bg);  border:1px solid var(--med-b); }
+.heatmap-cell.sev-low      { background:var(--low-bg);  border:1px solid var(--low-b); }
+.heatmap-cell.sev-clear    { background:var(--bg-2);    border:1px solid var(--border); }
+.heatmap-cat { font-size:13px; font-weight:500; color:var(--text); margin-bottom:6px; }
+.heatmap-count { font-family:'DM Mono',monospace; font-size:24px; font-weight:500; line-height:1; margin-bottom:4px; }
+.heatmap-cell.sev-critical .heatmap-count { color:var(--crit); }
+.heatmap-cell.sev-high     .heatmap-count { color:var(--high); }
+.heatmap-cell.sev-medium   .heatmap-count { color:var(--med); }
+.heatmap-cell.sev-low      .heatmap-count { color:var(--low); }
+.heatmap-cell.sev-clear    .heatmap-count { color:var(--text-4); }
+.heatmap-label { font-size:11px; color:var(--text-4); }
+
+/* GANTT / PIPELINE */
+.gantt-list { display:flex; flex-direction:column; gap:0; }
+.gantt-row {
+  display:grid; grid-template-columns:180px 1fr 80px;
+  gap:12px; align-items:center;
+  padding:10px 0; border-bottom:1px solid var(--bg-2);
+}
+.gantt-row:last-child { border-bottom:none; }
+.gantt-drug { font-size:13px; font-weight:500; color:var(--text); }
+.gantt-form { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; }
+.gantt-bar-wrap { position:relative; height:20px; background:var(--bg-2); border-radius:4px; overflow:hidden; }
+.gantt-bar {
+  position:absolute; top:0; bottom:0; border-radius:4px;
+  display:flex; align-items:center; padding:0 8px;
+  font-size:10px; font-weight:500; color:#fff;
+  white-space:nowrap; overflow:hidden;
+}
+.gantt-bar.crit { background:var(--crit); }
+.gantt-bar.high { background:var(--high); }
+.gantt-bar.med  { background:var(--med); }
+.gantt-eta { font-family:'DM Mono',monospace; font-size:11px; color:var(--text-3); text-align:right; white-space:nowrap; }
+
+/* GANTT HEADER */
+.gantt-header {
+  display:grid; grid-template-columns:180px 1fr 80px;
+  gap:12px; padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:4px;
+}
+.gantt-h-months { display:flex; justify-content:space-between; }
+.gantt-h-month { font-size:10px; color:var(--text-4); font-family:'DM Mono',monospace; }
+
+/* EARLY WARNING */
+.warning-list { display:flex; flex-direction:column; gap:8px; }
+.warning-item {
+  display:flex; align-items:flex-start; gap:12px;
+  padding:12px 14px; border-radius:8px; border:1px solid var(--border);
+  background:var(--bg-2); cursor:pointer; transition:border-color 0.15s;
+}
+.warning-item:hover { border-color:var(--border-2); }
+.warning-icon {
+  width:32px; height:32px; border-radius:6px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px;
+}
+.warning-icon.risk-high { background:var(--high-bg); }
+.warning-icon.risk-med  { background:var(--med-bg); }
+.warning-icon.risk-ai   { background:var(--ind-bg); }
+.warning-body { flex:1; }
+.warning-drug { font-size:13px; font-weight:500; color:var(--text); margin-bottom:2px; }
+.warning-reason { font-size:12px; color:var(--text-3); line-height:1.5; }
+.warning-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
+.risk-badge {
+  font-size:10px; font-weight:600; padding:3px 8px; border-radius:4px;
+  text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap;
+}
+.risk-badge.high { background:var(--high-bg); color:var(--high); border:1px solid var(--high-b); }
+.risk-badge.med  { background:var(--med-bg);  color:var(--med);  border:1px solid var(--med-b); }
+.risk-badge.ai   { background:var(--ind-bg);  color:var(--indigo); border:1px solid var(--ind-b); }
+.warning-days { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; }
+
+/* BOTTOM GRID */
+.bottom-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px; }
+
+/* SUPPLY ORIGIN */
+.origin-list { display:flex; flex-direction:column; gap:10px; }
+.origin-row { display:flex; align-items:center; gap:12px; }
+.origin-flag { font-size:18px; flex-shrink:0; }
+.origin-label { font-size:13px; color:var(--text-2); flex:1; }
+.origin-bar-wrap { width:120px; height:6px; background:var(--bg-2); border-radius:3px; overflow:hidden; }
+.origin-bar { height:100%; border-radius:3px; }
+.origin-pct { font-family:'DM Mono',monospace; font-size:12px; color:var(--text); min-width:32px; text-align:right; font-weight:500; }
+.origin-count { font-size:11px; color:var(--text-4); min-width:60px; text-align:right; }
+
+/* GLOBAL COMPARE */
+.compare-list { display:flex; flex-direction:column; gap:8px; }
+.compare-row {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; border-radius:8px;
+  background:var(--bg-2); border:1px solid var(--border);
+}
+.compare-flag { font-size:16px; }
+.compare-country { font-size:13px; font-weight:500; color:var(--text); flex:1; }
+.compare-shared { font-size:12px; color:var(--text-3); font-family:'DM Mono',monospace; }
+.compare-badge {
+  font-size:10px; font-weight:600; padding:3px 7px; border-radius:4px;
+  text-transform:uppercase; letter-spacing:0.04em;
+}
+.compare-badge.global { background:var(--crit-bg); color:var(--crit); border:1px solid var(--crit-b); }
+.compare-badge.shared { background:var(--high-bg); color:var(--high); border:1px solid var(--high-b); }
+.compare-badge.local  { background:var(--low-bg);  color:var(--low);  border:1px solid var(--low-b); }
+
+/* NET FLOW */
+.flow-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 0; border-bottom:1px solid var(--bg-2);
+}
+.flow-row:last-child { border-bottom:none; }
+.flow-week { font-size:12px; color:var(--text-3); font-family:'DM Mono',monospace; }
+.flow-bars { display:flex; align-items:center; gap:6px; flex:1; margin:0 14px; }
+.flow-new { height:8px; border-radius:2px; background:var(--crit); }
+.flow-resolved { height:8px; border-radius:2px; background:var(--low); }
+.flow-net { font-size:12px; font-weight:500; font-family:'DM Mono',monospace; }
+.flow-net.pos { color:var(--crit); }
+.flow-net.neg { color:var(--low); }
+
+/* ACTIVE SHORTAGES TABLE */
+.shortage-table { width:100%; border-collapse:collapse; }
+.shortage-table th {
+  font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em;
+  color:var(--text-4); padding:0 0 10px; text-align:left; border-bottom:1px solid var(--border);
+}
+.shortage-table td { padding:12px 0; border-bottom:1px solid var(--bg-2); vertical-align:middle; }
+.shortage-table tr:last-child td { border-bottom:none; }
+.shortage-table tr:hover td { background:var(--bg-2); }
+.drug-n { font-size:13px; font-weight:500; color:var(--text); }
+.drug-f { font-size:11px; color:var(--text-4); font-family:'DM Mono',monospace; }
+.sev-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+.sev-dot.crit { background:var(--crit); }
+.sev-dot.high { background:var(--high); }
+.sev-dot.med  { background:var(--med); }
+.sev-dot.low  { background:var(--low); }
+.sev-text { font-size:12px; font-weight:500; }
+.sev-text.crit { color:var(--crit); }
+.sev-text.high { color:var(--high); }
+.sev-text.med  { color:var(--med); }
+.origin-chip {
+  font-size:11px; padding:3px 8px; border-radius:4px;
+  background:var(--bg-2); color:var(--text-3); border:1px solid var(--border);
+}
+.global-flag { font-size:11px; color:var(--text-4); }
+.days-badge {
+  font-family:'DM Mono',monospace; font-size:12px; color:var(--text-3);
+}
+
+/* ANIMATIONS */
+@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.kpi-row   { animation:fadeUp 0.3s ease both; }
+.main-grid { animation:fadeUp 0.3s 0.05s ease both; }
+.bottom-grid { animation:fadeUp 0.3s 0.1s ease both; }
+.shortage-card { animation:fadeUp 0.3s 0.12s ease both; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">Mederti</span>
+    <div class="nav-divider"></div>
+    <span class="nav-context"><strong>TGA Australia</strong> — Regulator Intelligence Dashboard</span>
+  </div>
+  <div class="nav-right">
+    <span class="nav-date">22 Feb 2026 · 09:14 AEDT</span>
+    <button class="btn-export">↓ Export briefing PDF</button>
+    <div class="nav-user">
+      <div class="nav-avatar">JW</div>
+      Dr. James Wu
+    </div>
+  </div>
+</nav>
+
+<!-- PERIOD BAR -->
+<div class="period-bar">
+  <div class="period-tabs">
+    <div class="period-tab">Today</div>
+    <div class="period-tab active">This month</div>
+    <div class="period-tab">Next 90 days</div>
+    <div class="period-tab">12-month view</div>
+  </div>
+  <div class="period-right">
+    <span class="filter-chip active">All categories</span>
+    <span class="filter-chip">Antibiotics</span>
+    <span class="filter-chip">Oncology</span>
+    <span class="filter-chip">Cardiovascular</span>
+    <span class="filter-chip">Paediatric</span>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- KPI ROW -->
+  <div class="kpi-row">
+    <div class="kpi-card crit">
+      <div class="kpi-label">Critical Shortages</div>
+      <div class="kpi-value crit">23</div>
+      <div class="kpi-delta up">↑ 4 since last month</div>
+      <div class="kpi-sub">Active in Australia</div>
+    </div>
+    <div class="kpi-card high">
+      <div class="kpi-label">High Severity</div>
+      <div class="kpi-value high">41</div>
+      <div class="kpi-delta up">↑ 7 since last month</div>
+      <div class="kpi-sub">Active in Australia</div>
+    </div>
+    <div class="kpi-card med">
+      <div class="kpi-label">New This Month</div>
+      <div class="kpi-value">18</div>
+      <div class="kpi-delta up">↑ 3 vs Feb 2025</div>
+      <div class="kpi-sub">Declared shortages</div>
+    </div>
+    <div class="kpi-card low">
+      <div class="kpi-label">Resolved This Month</div>
+      <div class="kpi-value low">11</div>
+      <div class="kpi-delta down">↓ Net +7 active</div>
+      <div class="kpi-sub">Shortage closures</div>
+    </div>
+    <div class="kpi-card teal">
+      <div class="kpi-label">AI Early Warnings</div>
+      <div class="kpi-value teal">8</div>
+      <div class="kpi-delta flat">Next 30–60 days</div>
+      <div class="kpi-sub">At-risk drugs flagged</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- CATEGORY HEATMAP -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Therapeutic Category Heatmap</span>
+        <span class="card-meta">Active shortages by ATC class · Feb 2026</span>
+      </div>
+      <div class="card-body">
+        <div class="heatmap-grid">
+          <div class="heatmap-cell sev-critical">
+            <div class="heatmap-cat">Antibiotics</div>
+            <div class="heatmap-count">12</div>
+            <div class="heatmap-label">critical shortages</div>
+          </div>
+          <div class="heatmap-cell sev-high">
+            <div class="heatmap-cat">Oncology</div>
+            <div class="heatmap-count">9</div>
+            <div class="heatmap-label">high severity</div>
+          </div>
+          <div class="heatmap-cell sev-high">
+            <div class="heatmap-cat">Cardiovascular</div>
+            <div class="heatmap-count">7</div>
+            <div class="heatmap-label">high severity</div>
+          </div>
+          <div class="heatmap-cell sev-medium">
+            <div class="heatmap-cat">Mental Health</div>
+            <div class="heatmap-count">6</div>
+            <div class="heatmap-label">medium severity</div>
+          </div>
+          <div class="heatmap-cell sev-medium">
+            <div class="heatmap-cat">Paediatric</div>
+            <div class="heatmap-count">5</div>
+            <div class="heatmap-label">medium severity</div>
+          </div>
+          <div class="heatmap-cell sev-medium">
+            <div class="heatmap-cat">Diabetes</div>
+            <div class="heatmap-count">4</div>
+            <div class="heatmap-label">medium severity</div>
+          </div>
+          <div class="heatmap-cell sev-low">
+            <div class="heatmap-cat">Anaesthesia</div>
+            <div class="heatmap-count">3</div>
+            <div class="heatmap-label">low severity</div>
+          </div>
+          <div class="heatmap-cell sev-low">
+            <div class="heatmap-cat">Neurology</div>
+            <div class="heatmap-count">3</div>
+            <div class="heatmap-label">low severity</div>
+          </div>
+          <div class="heatmap-cell sev-clear">
+            <div class="heatmap-cat">Dermatology</div>
+            <div class="heatmap-count">0</div>
+            <div class="heatmap-label">no active shortages</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EARLY WARNING -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">⚠ Early Warning</span>
+        <span class="card-action">View all 8 →</span>
+      </div>
+      <div class="card-body">
+        <div class="warning-list">
+          <div class="warning-item">
+            <div class="warning-icon risk-high">🏭</div>
+            <div class="warning-body">
+              <div class="warning-drug">Ciprofloxacin 500mg</div>
+              <div class="warning-reason">Aurobindo facility in Hyderabad flagged by FDA inspection (OAI). 3 AU suppliers source from this site.</div>
+            </div>
+            <div class="warning-right">
+              <span class="risk-badge high">High risk</span>
+              <span class="warning-days">~45 days</span>
+            </div>
+          </div>
+          <div class="warning-item">
+            <div class="warning-icon risk-ai">✦</div>
+            <div class="warning-body">
+              <div class="warning-drug">Metformin 500mg</div>
+              <div class="warning-reason">AI pattern match: same API supplier as current metformin 850mg shortage. Historically cascades within 60 days.</div>
+            </div>
+            <div class="warning-right">
+              <span class="risk-badge ai">AI signal</span>
+              <span class="warning-days">~60 days</span>
+            </div>
+          </div>
+          <div class="warning-item">
+            <div class="warning-icon risk-med">📦</div>
+            <div class="warning-body">
+              <div class="warning-drug">Salbutamol inhaler 100mcg</div>
+              <div class="warning-reason">UK and Canada reporting low stock. 2 of 3 AU distributors showing below-threshold inventory signals.</div>
+            </div>
+            <div class="warning-right">
+              <span class="risk-badge med">Med risk</span>
+              <span class="warning-days">~30 days</span>
+            </div>
+          </div>
+          <div class="warning-item">
+            <div class="warning-icon risk-high">🏭</div>
+            <div class="warning-body">
+              <div class="warning-drug">Flucloxacillin 500mg</div>
+              <div class="warning-reason">NMPA China issued manufacturing suspension at Hainan facility — primary API source for 4 generic manufacturers.</div>
+            </div>
+            <div class="warning-right">
+              <span class="risk-badge high">High risk</span>
+              <span class="warning-days">~90 days</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+
+  <!-- PIPELINE / GANTT -->
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-header">
+      <span class="card-title">Shortage Pipeline — Resolution Forecast</span>
+      <span class="card-meta">Feb 2026 → Jan 2027 · AI confidence 68–84%</span>
+    </div>
+    <div class="card-body">
+      <div class="gantt-header">
+        <div></div>
+        <div class="gantt-h-months">
+          <span class="gantt-h-month">Mar</span>
+          <span class="gantt-h-month">Apr</span>
+          <span class="gantt-h-month">May</span>
+          <span class="gantt-h-month">Jun</span>
+          <span class="gantt-h-month">Jul</span>
+          <span class="gantt-h-month">Aug</span>
+          <span class="gantt-h-month">Sep</span>
+          <span class="gantt-h-month">Oct</span>
+          <span class="gantt-h-month">Nov</span>
+          <span class="gantt-h-month">Dec</span>
+          <span class="gantt-h-month">Jan</span>
+        </div>
+        <div></div>
+      </div>
+      <div class="gantt-list">
+        <div class="gantt-row">
+          <div><div class="drug-n">Amoxicillin 500mg</div><div class="drug-f">antibiotic · capsule</div></div>
+          <div class="gantt-bar-wrap">
+            <div class="gantt-bar crit" style="left:0%;width:65%">Critical — Manufacturing disruption</div>
+          </div>
+          <div class="gantt-eta">Aug–Oct 26</div>
+        </div>
+        <div class="gantt-row">
+          <div><div class="drug-n">Metformin 850mg</div><div class="drug-f">diabetes · tablet</div></div>
+          <div class="gantt-bar-wrap">
+            <div class="gantt-bar high" style="left:0%;width:36%">High</div>
+          </div>
+          <div class="gantt-eta">May 26</div>
+        </div>
+        <div class="gantt-row">
+          <div><div class="drug-n">Atorvastatin 40mg</div><div class="drug-f">cardiovascular · tablet</div></div>
+          <div class="gantt-bar-wrap">
+            <div class="gantt-bar high" style="left:9%;width:45%">High — API shortage</div>
+          </div>
+          <div class="gantt-eta">Jul–Aug 26</div>
+        </div>
+        <div class="gantt-row">
+          <div><div class="drug-n">Paracetamol IV 10mg/ml</div><div class="drug-f">analgesic · infusion</div></div>
+          <div class="gantt-bar-wrap">
+            <div class="gantt-bar crit" style="left:0%;width:27%">Critical</div>
+          </div>
+          <div class="gantt-eta">Apr 26</div>
+        </div>
+        <div class="gantt-row">
+          <div><div class="drug-n">Lithium Carbonate 250mg</div><div class="drug-f">mental health · capsule</div></div>
+          <div class="gantt-bar-wrap">
+            <div class="gantt-bar med" style="left:18%;width:55%">Medium</div>
+          </div>
+          <div class="gantt-eta">Sep–Oct 26</div>
+        </div>
+        <div class="gantt-row">
+          <div><div class="drug-n">Cisplatin 1mg/ml</div><div class="drug-f">oncology · injection</div></div>
+          <div class="gantt-bar-wrap">
+            <div class="gantt-bar crit" style="left:0%;width:82%">Critical — No resolution date confirmed</div>
+          </div>
+          <div class="gantt-eta">TBC</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM GRID -->
+  <div class="bottom-grid">
+
+    <!-- SUPPLY ORIGIN -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Shortage Origin — Supply Side</span>
+        <span class="card-meta">By API manufacturer country</span>
+      </div>
+      <div class="card-body">
+        <div class="origin-list">
+          <div class="origin-row">
+            <span class="origin-flag">🇮🇳</span>
+            <span class="origin-label">India</span>
+            <div class="origin-bar-wrap"><div class="origin-bar" style="width:78%;background:var(--crit)"></div></div>
+            <span class="origin-pct">78%</span>
+            <span class="origin-count">18 shortages</span>
+          </div>
+          <div class="origin-row">
+            <span class="origin-flag">🇨🇳</span>
+            <span class="origin-label">China</span>
+            <div class="origin-bar-wrap"><div class="origin-bar" style="width:52%;background:var(--high)"></div></div>
+            <span class="origin-pct">52%</span>
+            <span class="origin-count">12 shortages</span>
+          </div>
+          <div class="origin-row">
+            <span class="origin-flag">🇩🇪</span>
+            <span class="origin-label">Germany</span>
+            <div class="origin-bar-wrap"><div class="origin-bar" style="width:18%;background:var(--med)"></div></div>
+            <span class="origin-pct">18%</span>
+            <span class="origin-count">4 shortages</span>
+          </div>
+          <div class="origin-row">
+            <span class="origin-flag">🇺🇸</span>
+            <span class="origin-label">United States</span>
+            <div class="origin-bar-wrap"><div class="origin-bar" style="width:12%;background:var(--med)"></div></div>
+            <span class="origin-pct">12%</span>
+            <span class="origin-count">3 shortages</span>
+          </div>
+          <div class="origin-row">
+            <span class="origin-flag">🌐</span>
+            <span class="origin-label">Other / Unknown</span>
+            <div class="origin-bar-wrap"><div class="origin-bar" style="width:8%;background:var(--text-4)"></div></div>
+            <span class="origin-pct">8%</span>
+            <span class="origin-count">2 shortages</span>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-3);line-height:1.6;">
+            <strong style="color:var(--crit)">Systemic risk flag:</strong> 13 of 23 critical shortages trace to 2 API facilities in Gujarat, India. A single regulatory action at either site would affect 40%+ of Australia's antibiotic supply.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GLOBAL COMPARISON -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Global Comparison</span>
+        <span class="card-meta">AU shortages vs peer countries</span>
+      </div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:12px;">
+          Of Australia's 23 critical shortages — how many are shared globally vs AU-specific?
+        </div>
+        <div class="compare-list">
+          <div class="compare-row">
+            <span class="compare-flag">🇬🇧</span>
+            <span class="compare-country">United Kingdom</span>
+            <span class="compare-shared">17 shared</span>
+            <span class="compare-badge global">Global</span>
+          </div>
+          <div class="compare-row">
+            <span class="compare-flag">🇨🇦</span>
+            <span class="compare-country">Canada</span>
+            <span class="compare-shared">15 shared</span>
+            <span class="compare-badge global">Global</span>
+          </div>
+          <div class="compare-row">
+            <span class="compare-flag">🇩🇪</span>
+            <span class="compare-country">Germany</span>
+            <span class="compare-shared">14 shared</span>
+            <span class="compare-badge global">Global</span>
+          </div>
+          <div class="compare-row">
+            <span class="compare-flag">🇺🇸</span>
+            <span class="compare-country">United States</span>
+            <span class="compare-shared">11 shared</span>
+            <span class="compare-badge shared">Partial</span>
+          </div>
+          <div class="compare-row">
+            <span class="compare-flag">🇳🇿</span>
+            <span class="compare-country">New Zealand</span>
+            <span class="compare-shared">9 shared</span>
+            <span class="compare-badge shared">Partial</span>
+          </div>
+        </div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-3);">
+            <strong style="color:var(--text)">4 shortages</strong> are Australia-only — likely procurement or TGA regulatory timing issues rather than global supply failures.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NET FLOW -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Weekly Net Flow</span>
+        <span class="card-meta">New vs resolved · last 6 weeks</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:16px;margin-bottom:14px;font-size:12px;">
+          <div style="display:flex;align-items:center;gap:6px;"><div style="width:10px;height:10px;border-radius:2px;background:var(--crit)"></div><span style="color:var(--text-3)">New shortages</span></div>
+          <div style="display:flex;align-items:center;gap:6px;"><div style="width:10px;height:10px;border-radius:2px;background:var(--low)"></div><span style="color:var(--text-3)">Resolved</span></div>
+        </div>
+        <div class="flow-row">
+          <span class="flow-week">12 Jan</span>
+          <div class="flow-bars"><div class="flow-new" style="width:60px"></div><div class="flow-resolved" style="width:40px"></div></div>
+          <span class="flow-net pos">+3</span>
+        </div>
+        <div class="flow-row">
+          <span class="flow-week">19 Jan</span>
+          <div class="flow-bars"><div class="flow-new" style="width:40px"></div><div class="flow-resolved" style="width:50px"></div></div>
+          <span class="flow-net neg">−2</span>
+        </div>
+        <div class="flow-row">
+          <span class="flow-week">26 Jan</span>
+          <div class="flow-bars"><div class="flow-new" style="width:70px"></div><div class="flow-resolved" style="width:30px"></div></div>
+          <span class="flow-net pos">+4</span>
+        </div>
+        <div class="flow-row">
+          <span class="flow-week">2 Feb</span>
+          <div class="flow-bars"><div class="flow-new" style="width:50px"></div><div class="flow-resolved" style="width:45px"></div></div>
+          <span class="flow-net pos">+1</span>
+        </div>
+        <div class="flow-row">
+          <span class="flow-week">9 Feb</span>
+          <div class="flow-bars"><div class="flow-new" style="width:80px"></div><div class="flow-resolved" style="width:35px"></div></div>
+          <span class="flow-net pos">+5</span>
+        </div>
+        <div class="flow-row">
+          <span class="flow-week">16 Feb</span>
+          <div class="flow-bars"><div class="flow-new" style="width:55px"></div><div class="flow-resolved" style="width:55px"></div></div>
+          <span class="flow-net flat">0</span>
+        </div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);">
+          Market is <strong style="color:var(--high)">deteriorating</strong> — net +11 shortages over 6 weeks. Antibiotic category driving 60% of new declarations.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /bottom-grid -->
+
+  <!-- ACTIVE SHORTAGES TABLE -->
+  <div class="card shortage-card" style="margin-top:18px;">
+    <div class="card-header">
+      <span class="card-title">All Active Shortages — Australia</span>
+      <span class="card-meta">64 total · sorted by severity · Feb 2026</span>
+    </div>
+    <div class="card-body">
+      <table class="shortage-table">
+        <thead>
+          <tr>
+            <th>Drug</th>
+            <th>Severity</th>
+            <th>Category</th>
+            <th>Supply origin</th>
+            <th>Also short in</th>
+            <th>Days active</th>
+            <th>Est. resolution</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="drug-n">Amoxicillin 500mg</div><div class="drug-f">oral capsule</div></td>
+            <td><span class="sev-dot crit"></span><span class="sev-text crit">Critical</span></td>
+            <td>Antibiotic</td>
+            <td><span class="origin-chip">🇮🇳 India</span></td>
+            <td><span class="global-flag">🇬🇧 🇨🇦 🇩🇪 🇺🇸</span></td>
+            <td><span class="days-badge">374d</span></td>
+            <td>Aug–Oct 2026</td>
+          </tr>
+          <tr>
+            <td><div class="drug-n">Cisplatin 1mg/ml</div><div class="drug-f">IV infusion</div></td>
+            <td><span class="sev-dot crit"></span><span class="sev-text crit">Critical</span></td>
+            <td>Oncology</td>
+            <td><span class="origin-chip">🇨🇳 China</span></td>
+            <td><span class="global-flag">🇬🇧 🇺🇸 🇩🇪</span></td>
+            <td><span class="days-badge">218d</span></td>
+            <td>TBC</td>
+          </tr>
+          <tr>
+            <td><div class="drug-n">Paracetamol IV 10mg/ml</div><div class="drug-f">IV infusion</div></td>
+            <td><span class="sev-dot crit"></span><span class="sev-text crit">Critical</span></td>
+            <td>Analgesic</td>
+            <td><span class="origin-chip">🇩🇪 Germany</span></td>
+            <td><span class="global-flag">🇬🇧 🇳🇿</span></td>
+            <td><span class="days-badge">61d</span></td>
+            <td>Apr 2026</td>
+          </tr>
+          <tr>
+            <td><div class="drug-n">Atorvastatin 40mg</div><div class="drug-f">oral tablet</div></td>
+            <td><span class="sev-dot high"></span><span class="sev-text high">High</span></td>
+            <td>Cardiovascular</td>
+            <td><span class="origin-chip">🇮🇳 India</span></td>
+            <td><span class="global-flag">🇨🇦 🇬🇧</span></td>
+            <td><span class="days-badge">103d</span></td>
+            <td>Jul–Aug 2026</td>
+          </tr>
+          <tr>
+            <td><div class="drug-n">Metformin 850mg</div><div class="drug-f">oral tablet</div></td>
+            <td><span class="sev-dot high"></span><span class="sev-text high">High</span></td>
+            <td>Diabetes</td>
+            <td><span class="origin-chip">🇮🇳 India</span></td>
+            <td><span class="global-flag">🇨🇦</span></td>
+            <td><span class="days-badge">87d</span></td>
+            <td>May 2026</td>
+          </tr>
+          <tr>
+            <td><div class="drug-n">Lithium Carbonate 250mg</div><div class="drug-f">oral capsule</div></td>
+            <td><span class="sev-dot med"></span><span class="sev-text med">Medium</span></td>
+            <td>Mental Health</td>
+            <td><span class="origin-chip">🇨🇳 China</span></td>
+            <td><span class="global-flag">🇬🇧 🇩🇪 🇺🇸</span></td>
+            <td><span class="days-badge">156d</span></td>
+            <td>Sep–Oct 2026</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:14px;text-align:center;">
+        <span style="font-size:13px;color:var(--teal);cursor:pointer;font-weight:500;">View all 64 active shortages →</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
+
+<style>
+/* CHAT BUTTON */
+.chat-fab {
+  position: fixed; bottom: 28px; right: 28px; z-index: 200;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
+}
+.chat-btn {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--navy); color: #fff;
+  padding: 14px 20px; border-radius: 50px;
+  font-size: 14px; font-weight: 600; font-family: 'Inter', sans-serif;
+  cursor: pointer; border: none;
+  box-shadow: 0 4px 20px rgba(15,23,42,0.3);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.chat-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(15,23,42,0.35); }
+.chat-btn-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--teal); animation: blink 1.6s ease-in-out infinite;
+}
+.chat-nudge {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 16px;
+  font-size: 13px; color: var(--text-2); line-height: 1.5;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  max-width: 260px; text-align: right;
+  animation: fadeUp 0.4s 1s ease both; opacity: 0;
+  animation-fill-mode: forwards;
+}
+.chat-nudge strong { color: var(--text); font-weight: 500; }
+
+/* CHAT DRAWER */
+.chat-drawer {
+  position: fixed; bottom: 0; right: 28px; z-index: 300;
+  width: 380px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -4px 32px rgba(0,0,0,0.12);
+  display: flex; flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  max-height: 520px;
+}
+.chat-drawer.open { transform: translateY(0); }
+.chat-drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--navy); border-radius: 14px 14px 0 0;
+}
+.chat-drawer-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; font-weight: 600; color: #fff;
+}
+.chat-drawer-sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top:1px; }
+.chat-close {
+  background: rgba(255,255,255,0.1); border: none; color: rgba(255,255,255,0.7);
+  width: 28px; height: 28px; border-radius: 6px;
+  cursor: pointer; font-size: 14px; display: flex; align-items:center; justify-content:center;
+  transition: background 0.15s;
+}
+.chat-close:hover { background: rgba(255,255,255,0.2); }
+.chat-messages {
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.chat-msg {
+  max-width: 85%; font-size: 13px; line-height: 1.6; padding: 10px 14px; border-radius: 10px;
+}
+.chat-msg.ai {
+  background: var(--bg-2); color: var(--text-2); border: 1px solid var(--border);
+  align-self: flex-start; border-radius: 4px 10px 10px 10px;
+}
+.chat-msg.user {
+  background: var(--navy); color: #fff;
+  align-self: flex-end; border-radius: 10px 4px 10px 10px;
+}
+.chat-msg.ai strong { color: var(--text); font-weight: 500; }
+.chat-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px 12px; }
+.chat-sug {
+  font-size: 12px; padding: 6px 12px; border-radius: 6px;
+  background: var(--ind-bg); color: var(--indigo); border: 1px solid var(--ind-b);
+  cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.15s; white-space: nowrap;
+}
+.chat-sug:hover { background: #e0e7ff; }
+.chat-input-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.chat-input {
+  flex: 1; padding: 9px 14px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg-2);
+  font-size: 13px; font-family: 'Inter', sans-serif; color: var(--text);
+  outline: none; transition: border-color 0.15s;
+}
+.chat-input:focus { border-color: var(--teal); background: #fff; }
+.chat-send {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: var(--teal); border: none; color: #fff;
+  cursor: pointer; display: flex; align-items:center; justify-content:center;
+  font-size: 15px; transition: background 0.15s; flex-shrink: 0;
+}
+.chat-send:hover { background: var(--teal-l); }
+</style>
+
+<!-- CHAT FAB -->
+<div class="chat-fab" id="chatFab">
+  <div class="chat-nudge">
+    <strong>Ask the data anything</strong><br>
+    "Which shortages resolve before winter?" or "Draft a ministerial briefing"
+  </div>
+  <button class="chat-btn" onclick="openChat()">
+    <div class="chat-btn-dot"></div>
+    Ask Mederti AI
+  </button>
+</div>
+
+<!-- CHAT DRAWER -->
+<div class="chat-drawer" id="chatDrawer">
+  <div class="chat-drawer-header">
+    <div class="chat-drawer-title">
+      <div class="chat-btn-dot"></div>
+      <div>
+        Mederti AI
+        <div class="chat-drawer-sub">Aware of AU market · Feb 2026 · 64 active shortages</div>
+      </div>
+    </div>
+    <button class="chat-close" onclick="closeChat()">✕</button>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-msg ai">
+      I have full visibility of <strong>Australia's current drug supply</strong> — 64 active shortages, early warning signals, global comparisons and historical patterns. What do you need to know?
+    </div>
+  </div>
+  <div class="chat-suggestions">
+    <span class="chat-sug" onclick="sendSug(this)">Which shortages resolve before winter?</span>
+    <span class="chat-sug" onclick="sendSug(this)">Draft a ministerial briefing</span>
+    <span class="chat-sug" onclick="sendSug(this)">What's driving the antibiotic crisis?</span>
+    <span class="chat-sug" onclick="sendSug(this)">India supply risk summary</span>
+  </div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chatInput" placeholder="Ask about the Australian drug supply..." onkeydown="if(event.key==='Enter') sendMsg()">
+    <button class="chat-send" onclick="sendMsg()">↑</button>
+  </div>
+</div>
+
+<script>
+function openChat() {
+  document.getElementById('chatDrawer').classList.add('open');
+  document.getElementById('chatFab').style.display = 'none';
+  setTimeout(() => document.getElementById('chatInput').focus(), 350);
+}
+function closeChat() {
+  document.getElementById('chatDrawer').classList.remove('open');
+  setTimeout(() => document.getElementById('chatFab').style.display = 'flex', 300);
+}
+function sendSug(el) {
+  document.getElementById('chatInput').value = el.textContent;
+  sendMsg();
+}
+const aiReplies = {
+  'Which shortages resolve before winter?': 'Based on current resolution estimates, <strong>4 shortages</strong> are projected to resolve before June 2026: Metformin 850mg (May), Paracetamol IV (Apr), and 2 cardiovascular drugs. Amoxicillin and Cisplatin are unlikely to resolve before Sep–Oct 2026.',
+  'Draft a ministerial briefing': 'Here\'s a draft: <strong>Australia currently faces 23 critical and 41 high-severity medicine shortages</strong>, up 7% from January. Antibiotics are the most affected category (12 critical). The primary driver is API manufacturing disruption in India, affecting 78% of active critical shortages. Early warning signals suggest Ciprofloxacin and Salbutamol may be at risk within 30–60 days.',
+  'What\'s driving the antibiotic crisis?': 'The antibiotic shortage cluster traces primarily to <strong>2 API manufacturing facilities in Gujarat, India</strong>. A compounding issue began in Dec 2025 when a second site failed. Aurobindo and Teva are expected to partially restock May–Jun 2026. 17 of 23 critical antibiotic shortages are shared with the UK and Canada — confirming this is a global supply chain failure, not an AU procurement issue.',
+  'India supply risk summary': '<strong>78% of Australia\'s critical shortages trace back to Indian API manufacturers.</strong> 13 of 23 critical shortages originate from 2 facilities in Gujarat. A regulatory action at either site would affect 40%+ of Australia\'s antibiotic supply. Recommend flagging to TGA supply chain resilience working group.',
+};
+function sendMsg() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const msgs = document.getElementById('chatMessages');
+  msgs.innerHTML += `<div class="chat-msg user">${text}</div>`;
+  input.value = '';
+  msgs.scrollTop = msgs.scrollHeight;
+  setTimeout(() => {
+    const reply = aiReplies[text] || 'I\'m analysing the current shortage data for that query. In the live product this would query the full Mederti database in real time.';
+    msgs.innerHTML += `<div class="chat-msg ai">${reply}</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 800);
+}
+</script>

@@ -300,17 +300,21 @@ class TGAScraper(BaseScraper):
                 patient_impact,
                 mgmt_action_raw,
             )
-            # Prefer free-text fields; fall back to availability note
+            # Prefer free-text fields for reason — availability is a status field,
+            # not a reason, so it is stored in notes instead.
             reason = (
                 patient_impact
                 or (None if si_is_severity_label else shortage_impact)
-                or (f"Availability: {availability}" if availability else None)
+                or None
             )
 
         # ── Notes ─────────────────────────────────────────────────────────────
-        # Combine patient impact + management action into a single notes field,
-        # stripping any residual HTML tags from the raw field.
+        # Combine patient impact + management action + availability into notes.
+        # availability ("Available", "Unavailable", "Currently being sourced…")
+        # is TGA product-level status — informative context, not a shortage reason.
         notes_parts: list[str] = []
+        if availability:
+            notes_parts.append(f"TGA availability: {availability}")
         if patient_impact:
             notes_parts.append(f"Patient impact: {patient_impact}")
         if mgmt_action_raw:

@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mederti — Global Pharmaceutical Shortage Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:    #080f1e;
+  --navy-2:  #0d1729;
+  --navy-3:  #132035;
+  --navy-4:  #1a2a45;
+  --border:  rgba(255,255,255,0.08);
+  --border-2:rgba(255,255,255,0.14);
+  --text:    #f0f4f8;
+  --text-2:  #a8b8cc;
+  --text-3:  #637385;
+  --teal:    #0d9488;
+  --teal-l:  #14b8a6;
+  --teal-bg: rgba(13,148,136,0.12);
+  --teal-b:  rgba(13,148,136,0.3);
+  --crit:    #ef4444;
+  --crit-bg: rgba(239,68,68,0.1);
+  --high:    #f97316;
+  --med:     #eab308;
+  --low:     #22c55e;
+  --gold:    #d4a843;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  background: var(--navy);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* GRAIN OVERLAY */
+body::before {
+  content:'';
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  opacity:0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 200px;
+}
+
+/* NAV */
+nav {
+  position: fixed; top:0; left:0; right:0; z-index:100;
+  height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 48px;
+  background: rgba(8,15,30,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-family: 'Inter', sans-serif;
+  font-size: 20px; font-weight: 700;
+  color: var(--text); letter-spacing: -0.01em;
+}
+.nav-logo span { color: var(--teal); }
+.nav-links { display:flex; align-items:center; gap:32px; }
+.nav-link { font-size:14px; color:var(--text-2); text-decoration:none; transition:color 0.15s; }
+.nav-link:hover { color:var(--text); }
+.nav-cta {
+  font-size:13px; font-weight:500; padding:8px 18px;
+  background: var(--teal); color:#fff; border:none; border-radius:6px;
+  cursor:pointer; font-family:'Inter', sans-serif; transition:background 0.15s;
+  text-decoration:none;
+}
+.nav-cta:hover { background:var(--teal-l); }
+
+/* HERO */
+.hero {
+  min-height: 100vh;
+  display: flex; flex-direction:column; justify-content:center;
+  padding: 120px 48px 80px;
+  position: relative; overflow:hidden;
+}
+.hero-bg {
+  position:absolute; inset:0; z-index:0;
+  background: radial-gradient(ellipse 80% 60% at 60% 40%, rgba(13,148,136,0.07) 0%, transparent 70%),
+              radial-gradient(ellipse 60% 80% at 20% 80%, rgba(13,28,60,0.8) 0%, transparent 60%);
+}
+.hero-grid-lines {
+  position:absolute; inset:0; z-index:0; opacity:0.04;
+  background-image: linear-gradient(var(--border-2) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--border-2) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+.hero-content { position:relative; z-index:1; max-width:780px; }
+.hero-eyebrow {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase;
+  color:var(--teal); margin-bottom:28px;
+  padding:6px 14px; border:1px solid var(--teal-b); border-radius:4px;
+  background:var(--teal-bg);
+}
+.hero-eyebrow-dot { width:6px; height:6px; border-radius:50%; background:var(--teal); animation:blink 1.6s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.hero-h1 {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(42px, 6vw, 72px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 24px;
+}
+.hero-h1 em { color:var(--teal); font-style:normal; }
+.hero-sub {
+  font-size: 18px; font-weight:300; color:var(--text-2); line-height:1.7;
+  max-width:580px; margin-bottom:40px;
+}
+.hero-sub strong { color:var(--text); font-weight:500; }
+
+/* EMAIL CAPTURE */
+.capture-form {
+  display:flex; gap:10px; max-width:480px; margin-bottom:20px;
+}
+.capture-input {
+  flex:1; padding:14px 18px; border-radius:8px;
+  border:1px solid var(--border-2); background:var(--navy-3);
+  color:var(--text); font-size:14px; font-family:'Inter', sans-serif;
+  outline:none; transition:border-color 0.15s;
+}
+.capture-input::placeholder { color:var(--text-3); }
+.capture-input:focus { border-color:var(--teal); }
+.capture-btn {
+  padding:14px 24px; background:var(--teal); border:none; border-radius:8px;
+  color:#fff; font-size:14px; font-weight:600; font-family:'Inter', sans-serif;
+  cursor:pointer; white-space:nowrap; transition:background 0.15s;
+}
+.capture-btn:hover { background:var(--teal-l); }
+.capture-sub { font-size:12px; color:var(--text-3); }
+.capture-sub strong { color:var(--text-2); }
+
+/* LIVE TICKER */
+.ticker-wrap {
+  position:absolute; bottom:0; left:0; right:0; z-index:1;
+  border-top:1px solid var(--border);
+  background:rgba(8,15,30,0.6); backdrop-filter:blur(8px);
+  padding:10px 48px;
+  display:flex; align-items:center; gap:16px; overflow:hidden;
+}
+.ticker-label {
+  font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
+  color:var(--teal); white-space:nowrap; flex-shrink:0;
+  display:flex; align-items:center; gap:6px;
+}
+.ticker-items {
+  display:flex; gap:0; animation:ticker 40s linear infinite;
+  white-space:nowrap;
+}
+@keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+.ticker-item {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:0 24px; font-size:12px; color:var(--text-2);
+  border-right:1px solid var(--border);
+}
+.ticker-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.ticker-dot.red { background:var(--crit); }
+.ticker-dot.amber { background:var(--med); }
+.ticker-dot.green { background:var(--low); }
+
+/* STATS BAND */
+.stats-band {
+  padding: 64px 48px;
+  border-bottom: 1px solid var(--border);
+  display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+  background:var(--border);
+  position:relative; z-index:1;
+}
+.stat-cell {
+  background:var(--navy-2);
+  padding:40px 40px;
+}
+.stat-num {
+  font-family:'Inter', sans-serif;
+  font-size:52px; font-weight:700; line-height:1;
+  color:var(--text); margin-bottom:8px; letter-spacing:-0.02em;
+}
+.stat-num span { color:var(--teal); }
+.stat-label { font-size:13px; color:var(--text-3); line-height:1.5; }
+.stat-label strong { color:var(--text-2); display:block; font-size:14px; margin-bottom:2px; }
+
+/* SECTION */
+.section { padding:96px 48px; position:relative; z-index:1; }
+.section-eyebrow {
+  font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase;
+  color:var(--teal); margin-bottom:16px;
+}
+.section-h2 {
+  font-family:'Inter', sans-serif;
+  font-size:clamp(32px,4vw,48px); font-weight:700;
+  line-height:1.1; letter-spacing:-0.02em;
+  color:var(--text); margin-bottom:20px; max-width:600px;
+}
+.section-sub { font-size:16px; color:var(--text-2); max-width:540px; line-height:1.7; margin-bottom:56px; }
+
+/* FOR WHO */
+.who-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--border); }
+.who-card {
+  background:var(--navy-2);
+  padding:36px 32px;
+  transition:background 0.2s;
+  cursor:default;
+}
+.who-card:hover { background:var(--navy-3); }
+.who-icon { font-size:28px; margin-bottom:16px; }
+.who-title { font-size:17px; font-weight:500; color:var(--text); margin-bottom:10px; }
+.who-desc { font-size:14px; color:var(--text-2); line-height:1.7; }
+.who-features { margin-top:16px; display:flex; flex-direction:column; gap:6px; }
+.who-feature { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-3); }
+.who-feature::before { content:'→'; color:var(--teal); font-size:11px; }
+
+/* PRODUCT PREVIEW */
+.preview-section {
+  padding:0 48px 96px;
+  position:relative; z-index:1;
+}
+.preview-wrap {
+  border:1px solid var(--border-2);
+  border-radius:16px; overflow:hidden;
+  background:var(--navy-3);
+  box-shadow:0 40px 80px rgba(0,0,0,0.5);
+}
+.preview-bar {
+  background:var(--navy-4); padding:14px 20px;
+  display:flex; align-items:center; gap:10px;
+  border-bottom:1px solid var(--border);
+}
+.preview-dot { width:10px; height:10px; border-radius:50%; }
+.preview-url {
+  flex:1; background:var(--navy-3); border:1px solid var(--border);
+  border-radius:5px; padding:5px 12px; font-size:12px; color:var(--text-3);
+  font-family:'DM Mono',monospace; max-width:300px;
+}
+.preview-inner { padding:28px 32px; }
+.preview-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+.preview-kpi {
+  background:var(--navy-2); border:1px solid var(--border);
+  border-radius:8px; padding:16px 18px; position:relative; overflow:hidden;
+}
+.preview-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.preview-kpi.c1::before { background:var(--crit); }
+.preview-kpi.c2::before { background:var(--high); }
+.preview-kpi.c3::before { background:var(--med); }
+.preview-kpi.c4::before { background:var(--teal); }
+.preview-kpi-label { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px; }
+.preview-kpi-val { font-family:'DM Mono',monospace; font-size:28px; font-weight:500; line-height:1; }
+.preview-kpi.c1 .preview-kpi-val { color:var(--crit); }
+.preview-kpi.c2 .preview-kpi-val { color:var(--high); }
+.preview-kpi.c3 .preview-kpi-val { color:var(--med); }
+.preview-kpi.c4 .preview-kpi-val { color:var(--teal); }
+.preview-kpi-delta { font-size:11px; color:var(--text-3); margin-top:4px; }
+.preview-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.preview-card {
+  background:var(--navy-2); border:1px solid var(--border);
+  border-radius:8px; padding:16px 18px;
+}
+.preview-card-title { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:12px; }
+.preview-shortage-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 0; border-bottom:1px solid var(--border);
+}
+.preview-shortage-row:last-child { border-bottom:none; }
+.preview-drug { font-size:12px; color:var(--text); }
+.preview-sev { font-size:10px; font-weight:600; padding:2px 7px; border-radius:3px; }
+.preview-sev.crit { background:var(--crit-bg); color:var(--crit); }
+.preview-sev.high { background:rgba(249,115,22,0.1); color:var(--high); }
+.preview-warning-item { display:flex; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+.preview-warning-item:last-child { border-bottom:none; }
+.preview-warning-icon { font-size:14px; flex-shrink:0; }
+.preview-warning-text { font-size:11px; color:var(--text-2); line-height:1.5; }
+.preview-warning-badge { font-size:9px; font-weight:600; padding:2px 6px; border-radius:3px; background:rgba(249,115,22,0.1); color:var(--high); white-space:nowrap; flex-shrink:0; }
+
+/* HOW IT WORKS */
+.how-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:24px; }
+.how-step { position:relative; }
+.how-num {
+  font-family:'Inter', sans-serif;
+  font-size:48px; font-weight:700; color:var(--border-2);
+  line-height:1; margin-bottom:16px;
+}
+.how-title { font-size:16px; font-weight:500; color:var(--text); margin-bottom:8px; }
+.how-desc { font-size:14px; color:var(--text-2); line-height:1.7; }
+.how-connector {
+  position:absolute; top:24px; right:-12px;
+  color:var(--text-3); font-size:18px;
+}
+
+/* PRICING */
+.pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--border); }
+.pricing-card {
+  background:var(--navy-2); padding:40px 36px;
+  position:relative;
+}
+.pricing-card.featured {
+  background:var(--navy-3);
+  border:1px solid var(--teal-b);
+  margin:-1px;
+}
+.pricing-featured-badge {
+  position:absolute; top:-1px; left:50%; transform:translateX(-50%);
+  font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+  background:var(--teal); color:#fff; padding:4px 14px; border-radius:0 0 6px 6px;
+}
+.pricing-tier { font-size:12px; font-weight:500; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:16px; }
+.pricing-price {
+  font-family:'Inter', sans-serif;
+  font-size:48px; font-weight:700; color:var(--text); line-height:1; margin-bottom:4px;
+}
+.pricing-price span { font-size:18px; color:var(--text-3); font-family:'Inter', sans-serif; font-weight:400; }
+.pricing-sub { font-size:13px; color:var(--text-3); margin-bottom:28px; }
+.pricing-features { display:flex; flex-direction:column; gap:10px; margin-bottom:32px; }
+.pricing-feature { display:flex; align-items:flex-start; gap:10px; font-size:14px; color:var(--text-2); }
+.pricing-check { color:var(--teal); flex-shrink:0; font-size:13px; margin-top:2px; }
+.pricing-btn {
+  width:100%; padding:13px; border-radius:7px;
+  font-size:14px; font-weight:600; font-family:'Inter', sans-serif;
+  cursor:pointer; transition:all 0.15s; text-align:center;
+}
+.pricing-btn.outline { background:transparent; border:1px solid var(--border-2); color:var(--text-2); }
+.pricing-btn.outline:hover { border-color:var(--border-2); color:var(--text); }
+.pricing-btn.primary { background:var(--teal); border:none; color:#fff; }
+.pricing-btn.primary:hover { background:var(--teal-l); }
+.pricing-btn.dark { background:var(--navy-4); border:1px solid var(--border-2); color:var(--text); }
+.pricing-btn.dark:hover { background:var(--navy-3); }
+
+/* WEEKLY BRIEF SIGNUP */
+.brief-section {
+  margin:0 48px;
+  border:1px solid var(--border-2);
+  border-radius:16px;
+  padding:64px;
+  background:var(--navy-3);
+  display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center;
+  position:relative; z-index:1; overflow:hidden;
+  margin-bottom:96px;
+}
+.brief-section::before {
+  content:'';
+  position:absolute; top:-40px; right:-40px;
+  width:300px; height:300px; border-radius:50%;
+  background:radial-gradient(circle, rgba(13,148,136,0.08) 0%, transparent 70%);
+}
+.brief-h2 {
+  font-family:'Inter', sans-serif;
+  font-size:36px; font-weight:700; line-height:1.15;
+  letter-spacing:-0.02em; color:var(--text); margin-bottom:16px;
+}
+.brief-sub { font-size:15px; color:var(--text-2); line-height:1.7; margin-bottom:8px; }
+.brief-meta { font-size:13px; color:var(--text-3); }
+.brief-meta strong { color:var(--teal); }
+.brief-preview {
+  background:var(--navy-2); border:1px solid var(--border);
+  border-radius:10px; overflow:hidden;
+}
+.brief-preview-header {
+  background:var(--navy-4); padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:10px;
+}
+.brief-preview-from { font-size:11px; color:var(--text-3); }
+.brief-preview-from strong { color:var(--text-2); }
+.brief-preview-subject { font-size:13px; font-weight:500; color:var(--text); padding:14px 16px 10px; }
+.brief-preview-body { padding:0 16px 16px; }
+.brief-preview-line { font-size:12px; color:var(--text-3); line-height:1.8; }
+.brief-preview-line strong { color:var(--text-2); }
+.brief-preview-stat {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 0; border-bottom:1px solid var(--border);
+  font-size:12px; color:var(--text-2);
+}
+.brief-preview-stat:last-child { border-bottom:none; }
+
+/* FOOTER */
+footer {
+  border-top:1px solid var(--border);
+  padding:48px;
+  display:flex; align-items:center; justify-content:space-between;
+  position:relative; z-index:1;
+}
+.footer-logo {
+  font-family:'Inter', sans-serif;
+  font-size:18px; font-weight:700; color:var(--text);
+}
+.footer-logo span { color:var(--teal); }
+.footer-text { font-size:13px; color:var(--text-3); }
+.footer-links { display:flex; gap:24px; }
+.footer-link { font-size:13px; color:var(--text-3); text-decoration:none; }
+.footer-link:hover { color:var(--text-2); }
+
+/* ANIMATIONS */
+@keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
+.hero-eyebrow { animation:fadeUp 0.5s ease both; }
+.hero-h1      { animation:fadeUp 0.5s 0.1s ease both; }
+.hero-sub     { animation:fadeUp 0.5s 0.2s ease both; }
+.capture-form { animation:fadeUp 0.5s 0.3s ease both; }
+.capture-sub  { animation:fadeUp 0.5s 0.35s ease both; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Mederti<span>.</span></div>
+  <div class="nav-links">
+    <a href="#how" class="nav-link">How it works</a>
+    <a href="#who" class="nav-link">Who it's for</a>
+    <a href="#pricing" class="nav-link">Pricing</a>
+    <a href="#brief" class="nav-link">Weekly brief</a>
+  </div>
+  <a href="#signup" class="nav-cta">Get early access</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid-lines"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">
+      <div class="hero-eyebrow-dot"></div>
+      Live · 12,400 shortage records · 9 countries
+    </div>
+    <h1 class="hero-h1">
+      The world's drug<br>
+      shortages —<br>
+      <em>in one place.</em>
+    </h1>
+    <p class="hero-sub">
+      Mederti aggregates pharmaceutical shortage data from <strong>regulatory bodies, manufacturers and clinical networks</strong> across 9 countries — updated daily, AI-enriched, expert verified.
+    </p>
+    <div class="capture-form" id="signup">
+      <input class="capture-input" type="email" placeholder="Enter your work email">
+      <button class="capture-btn">Get early access →</button>
+    </div>
+    <p class="capture-sub">Join <strong>pharmacists, procurement managers and regulators</strong> getting early access. Free to start.</p>
+  </div>
+
+  <!-- LIVE TICKER -->
+  <div class="ticker-wrap">
+    <div class="ticker-label"><div class="hero-eyebrow-dot"></div>Live shortages</div>
+    <div class="ticker-items">
+      <div class="ticker-item"><div class="ticker-dot red"></div>Amoxicillin 500mg · AU · Critical</div>
+      <div class="ticker-item"><div class="ticker-dot red"></div>Cisplatin 1mg/ml · AU, UK, DE · Critical</div>
+      <div class="ticker-item"><div class="ticker-dot amber"></div>Metformin 850mg · AU, CA · High</div>
+      <div class="ticker-item"><div class="ticker-dot red"></div>Paracetamol IV 10mg/ml · AU, UK · Critical</div>
+      <div class="ticker-item"><div class="ticker-dot amber"></div>Atorvastatin 40mg · AU · High</div>
+      <div class="ticker-item"><div class="ticker-dot red"></div>Lithium Carbonate 250mg · Global · Critical</div>
+      <div class="ticker-item"><div class="ticker-dot amber"></div>Salbutamol inhaler · AU · Medium</div>
+      <div class="ticker-item"><div class="ticker-dot red"></div>Flucloxacillin 500mg · AU · High risk</div>
+      <!-- duplicate for seamless loop -->
+      <div class="ticker-item"><div class="ticker-dot red"></div>Amoxicillin 500mg · AU · Critical</div>
+      <div class="ticker-item"><div class="ticker-dot red"></div>Cisplatin 1mg/ml · AU, UK, DE · Critical</div>
+      <div class="ticker-item"><div class="ticker-dot amber"></div>Metformin 850mg · AU, CA · High</div>
+      <div class="ticker-item"><div class="ticker-dot red"></div>Paracetamol IV 10mg/ml · AU, UK · Critical</div>
+      <div class="ticker-item"><div class="ticker-dot amber"></div>Atorvastatin 40mg · AU · High</div>
+      <div class="ticker-item"><div class="ticker-dot red"></div>Lithium Carbonate 250mg · Global · Critical</div>
+      <div class="ticker-item"><div class="ticker-dot amber"></div>Salbutamol inhaler · AU · Medium</div>
+      <div class="ticker-item"><div class="ticker-dot red"></div>Flucloxacillin 500mg · AU · High risk</div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS BAND -->
+<div class="stats-band">
+  <div class="stat-cell">
+    <div class="stat-num">12<span>,400</span></div>
+    <div class="stat-label"><strong>Shortage records</strong>Aggregated from regulatory bodies worldwide</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">9</div>
+    <div class="stat-label"><strong>Countries covered</strong>AU, US, UK, CA, DE, FR, IT, ES, EU</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">50<span>+</span></div>
+    <div class="stat-label"><strong>Data sources</strong>Regulatory, clinical and supply-side signals</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">24<span>h</span></div>
+    <div class="stat-label"><strong>Refresh cycle</strong>Every source checked and updated daily</div>
+  </div>
+</div>
+
+<!-- PRODUCT PREVIEW -->
+<div class="preview-section" style="padding-top:96px;">
+  <div style="text-align:center;margin-bottom:40px;">
+    <div class="section-eyebrow" style="display:inline-block;">The platform</div>
+    <h2 class="section-h2" style="margin:12px auto 0;text-align:center;">Built for decisions,<br>not just awareness.</h2>
+  </div>
+  <div class="preview-wrap">
+    <div class="preview-bar">
+      <div class="preview-dot" style="background:#ef4444"></div>
+      <div class="preview-dot" style="background:#f97316"></div>
+      <div class="preview-dot" style="background:#22c55e"></div>
+      <div class="preview-url">app.mederti.com · TGA Australia Dashboard</div>
+    </div>
+    <div class="preview-inner">
+      <div class="preview-kpis">
+        <div class="preview-kpi c1">
+          <div class="preview-kpi-label">Critical shortages</div>
+          <div class="preview-kpi-val">23</div>
+          <div class="preview-kpi-delta">↑ 4 since last month</div>
+        </div>
+        <div class="preview-kpi c2">
+          <div class="preview-kpi-label">High severity</div>
+          <div class="preview-kpi-val">41</div>
+          <div class="preview-kpi-delta">↑ 7 since last month</div>
+        </div>
+        <div class="preview-kpi c3">
+          <div class="preview-kpi-label">New this month</div>
+          <div class="preview-kpi-val">18</div>
+          <div class="preview-kpi-delta">↑ 3 vs Feb 2025</div>
+        </div>
+        <div class="preview-kpi c4">
+          <div class="preview-kpi-label">AI early warnings</div>
+          <div class="preview-kpi-val">8</div>
+          <div class="preview-kpi-delta">Next 30–60 days</div>
+        </div>
+      </div>
+      <div class="preview-row">
+        <div class="preview-card">
+          <div class="preview-card-title">Active critical shortages</div>
+          <div class="preview-shortage-row"><span class="preview-drug">Amoxicillin 500mg</span><span class="preview-sev crit">Critical</span></div>
+          <div class="preview-shortage-row"><span class="preview-drug">Cisplatin 1mg/ml</span><span class="preview-sev crit">Critical</span></div>
+          <div class="preview-shortage-row"><span class="preview-drug">Paracetamol IV 10mg/ml</span><span class="preview-sev crit">Critical</span></div>
+          <div class="preview-shortage-row"><span class="preview-drug">Lithium Carbonate 250mg</span><span class="preview-sev high">High</span></div>
+          <div class="preview-shortage-row"><span class="preview-drug">Atorvastatin 40mg</span><span class="preview-sev high">High</span></div>
+        </div>
+        <div class="preview-card">
+          <div class="preview-card-title">⚠ Early warning signals</div>
+          <div class="preview-warning-item">
+            <span class="preview-warning-icon">🏭</span>
+            <span class="preview-warning-text">Ciprofloxacin 500mg — Aurobindo facility flagged by FDA inspection</span>
+            <span class="preview-warning-badge">HIGH RISK</span>
+          </div>
+          <div class="preview-warning-item">
+            <span class="preview-warning-icon">✦</span>
+            <span class="preview-warning-text">Metformin 500mg — AI pattern match with current 850mg shortage</span>
+            <span class="preview-warning-badge">AI SIGNAL</span>
+          </div>
+          <div class="preview-warning-item">
+            <span class="preview-warning-icon">🏭</span>
+            <span class="preview-warning-text">Flucloxacillin — NMPA China manufacturing suspension flagged</span>
+            <span class="preview-warning-badge">HIGH RISK</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WHO IT'S FOR -->
+<section class="section" id="who">
+  <div class="section-eyebrow">Who it's for</div>
+  <h2 class="section-h2">Every part of the supply chain, served differently.</h2>
+  <p class="section-sub">Three views of the same data — built for how each user actually works.</p>
+  <div class="who-grid">
+    <div class="who-card">
+      <div class="who-icon">💊</div>
+      <div class="who-title">Pharmacists & Clinicians</div>
+      <div class="who-desc">Fast answers at the dispensary counter. Is it available? When is it back? What can I use instead?</div>
+      <div class="who-features">
+        <div class="who-feature">Real-time availability by country</div>
+        <div class="who-feature">AI-matched therapeutic alternatives</div>
+        <div class="who-feature">Alert when stock returns</div>
+        <div class="who-feature">Mobile-optimised interface</div>
+      </div>
+    </div>
+    <div class="who-card">
+      <div class="who-icon">🏥</div>
+      <div class="who-title">Hospital Procurement</div>
+      <div class="who-desc">Comprehensive shortage intelligence with source data, confidence scores and procurement guidance.</div>
+      <div class="who-features">
+        <div class="who-feature">Full source audit trail</div>
+        <div class="who-feature">Manufacturer & supplier data</div>
+        <div class="who-feature">Watchlist & bulk alerts</div>
+        <div class="who-feature">Exportable reports</div>
+      </div>
+    </div>
+    <div class="who-card">
+      <div class="who-icon">🏛</div>
+      <div class="who-title">Regulators & Government</div>
+      <div class="who-desc">Market-wide intelligence. Early warning signals. Policy-ready reporting. Know before the calls come in.</div>
+      <div class="who-features">
+        <div class="who-feature">National supply heatmaps</div>
+        <div class="who-feature">AI early warning — 30–90 day forecasts</div>
+        <div class="who-feature">Global comparison view</div>
+        <div class="who-feature">One-click ministerial briefings</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" style="border-top:1px solid var(--border); background:var(--navy-2);" id="how">
+  <div class="section-eyebrow">How it works</div>
+  <h2 class="section-h2">From regulatory source to actionable intelligence.</h2>
+  <p class="section-sub">Fully automated data pipeline with expert human curation on top.</p>
+  <div class="how-grid">
+    <div class="how-step">
+      <div class="how-num">01</div>
+      <div class="how-title">Collect</div>
+      <div class="how-desc">Daily automated scraping of 50+ regulatory bodies — TGA, FDA, MHRA, EMA, Health Canada and more across 9 countries.</div>
+      <div class="how-connector">→</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">02</div>
+      <div class="how-title">Normalise</div>
+      <div class="how-desc">Raw data is cleaned, deduplicated, classified by severity and cross-referenced across sources to build confidence scores.</div>
+      <div class="how-connector">→</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">03</div>
+      <div class="how-title">Enrich</div>
+      <div class="how-desc">AI layer adds resolution forecasts, therapeutic alternatives, supply-chain origin analysis and early warning signals.</div>
+      <div class="how-connector">→</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">04</div>
+      <div class="how-title">Verify</div>
+      <div class="how-desc">20 years of pharmaceutical supply chain expertise applied as expert commentary and confidence overrides on key shortages.</div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing">
+  <div class="section-eyebrow">Pricing</div>
+  <h2 class="section-h2">Start free. Scale when it matters.</h2>
+  <p class="section-sub">Free for individual pharmacists. Institutional pricing for procurement teams and government.</p>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <div class="pricing-tier">Free</div>
+      <div class="pricing-price">$0<span>/mo</span></div>
+      <div class="pricing-sub">For individual pharmacists and clinicians</div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Drug shortage search</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>5 country availability view</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Basic alternative suggestions</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>3 drug watchlist alerts</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Weekly shortage brief</div>
+      </div>
+      <button class="pricing-btn outline">Get started free</button>
+    </div>
+    <div class="pricing-card featured">
+      <div class="pricing-featured-badge">Most popular</div>
+      <div class="pricing-tier">Pro</div>
+      <div class="pricing-price">$800<span>/mo</span></div>
+      <div class="pricing-sub">Per institution · hospital, pharmacy group or distributor</div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Everything in Free</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Full analyst view with source data</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Unlimited watchlist alerts</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>6-hourly data refresh</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>AI shortage assistant</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Exportable PDF reports</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Expert curator commentary</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Up to 20 team seats</div>
+      </div>
+      <button class="pricing-btn primary">Start free trial</button>
+    </div>
+    <div class="pricing-card">
+      <div class="pricing-tier">Government / Enterprise</div>
+      <div class="pricing-price" style="font-size:36px;">Custom</div>
+      <div class="pricing-sub">For regulators, health ministries and large distributors</div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Everything in Pro</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>National supply dashboard</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>AI early warning system</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Ministerial briefing generator</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Hourly refresh</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>Dedicated data analyst</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>API access</div>
+        <div class="pricing-feature"><span class="pricing-check">✓</span>SLA + compliance docs</div>
+      </div>
+      <button class="pricing-btn dark">Talk to us →</button>
+    </div>
+  </div>
+</section>
+
+<!-- WEEKLY BRIEF SIGNUP -->
+<div class="brief-section" id="brief">
+  <div>
+    <div class="section-eyebrow">Weekly brief</div>
+    <h2 class="brief-h2">The shortage intelligence your inbox has been missing.</h2>
+    <p class="brief-sub">Every Monday — new shortages declared, resolutions expected, supply signals to watch. Written by AI, verified by 20 years of industry expertise.</p>
+    <p class="brief-meta">Free forever · <strong>No credit card</strong> · Unsubscribe anytime</p>
+    <div class="capture-form" style="margin-top:24px;max-width:400px;">
+      <input class="capture-input" type="email" placeholder="your@hospital.com.au">
+      <button class="capture-btn">Subscribe →</button>
+    </div>
+  </div>
+  <div class="brief-preview">
+    <div class="brief-preview-header">
+      <div>
+        <div class="brief-preview-from">From: <strong>Mederti Weekly · intelligence@mederti.com</strong></div>
+        <div class="brief-preview-from" style="margin-top:2px;">Subject: <strong style="color:var(--text)">Week of 17 Feb 2026 — 5 new shortages, antibiotic crisis deepens</strong></div>
+      </div>
+    </div>
+    <div class="brief-preview-body">
+      <div class="brief-preview-line" style="padding:10px 0 12px;border-bottom:1px solid var(--border);">
+        <strong>This week across 9 countries:</strong> 5 new shortages declared · 2 resolved · Antibiotic category now at highest severity since 2023.
+      </div>
+      <div class="brief-preview-stat"><div class="ticker-dot red" style="flex-shrink:0"></div><strong>New critical:</strong>&nbsp;Amoxicillin 500mg escalated in AU + UK</div>
+      <div class="brief-preview-stat"><div class="ticker-dot amber" style="flex-shrink:0"></div><strong>Watch:</strong>&nbsp;Ciprofloxacin — Indian API facility flagged</div>
+      <div class="brief-preview-stat"><div class="ticker-dot green" style="flex-shrink:0"></div><strong>Resolved:</strong>&nbsp;Metoprolol 50mg AU · Pantoprazole IV UK</div>
+      <div class="brief-preview-stat"><div class="ticker-dot amber" style="flex-shrink:0"></div><strong>Expert note:</strong>&nbsp;Aurobindo Gujarat situation worse than reported…</div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Mederti<span>.</span></div>
+  <div class="footer-text">© 2026 Mederti · Global pharmaceutical shortage intelligence</div>
+  <div class="footer-links">
+    <a href="#" class="footer-link">Privacy</a>
+    <a href="#" class="footer-link">Terms</a>
+    <a href="#" class="footer-link">Contact</a>
+    <a href="#" class="footer-link">API</a>
+  </div>
+</footer>
+
+</body>
+</html>

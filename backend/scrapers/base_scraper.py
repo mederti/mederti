@@ -360,12 +360,13 @@ class BaseScraper(ABC):
         For each normalized shortage dict:
           1. Resolve drug_id (find or create)
           2. Compute deterministic shortage_id
-          3. Upsert into shortage_events using ON CONFLICT (shortage_id)
-             → updates last_verified_at and all mutable fields on re-scrape
+          3. Check existing row for status/severity change detection
+          4. Upsert into shortage_events using ON CONFLICT (shortage_id)
+          5. If status or severity changed, log to shortage_status_log
 
-        Returns counts: {"upserted": n, "skipped": n}
+        Returns counts: {"upserted": n, "skipped": n, "status_changes": n}
         """
-        counts = {"upserted": 0, "skipped": 0}
+        counts = {"upserted": 0, "skipped": 0, "status_changes": 0}
 
         for ev in events:
             try:
@@ -384,18 +385,41 @@ class BaseScraper(ABC):
                 start_date = ev.get("start_date") or date.today().isoformat()
                 shortage_id = self._shortage_id(drug_id, start_date)
 
+                # ── Pre-fetch existing row for change detection ───────────────
+                existing_resp = (
+                    self.db.table("shortage_events")
+                    .select("id, status, severity")
+                    .eq("shortage_id", shortage_id)
+                    .limit(1)
+                    .execute()
+                )
+                existing: dict | None = (
+                    existing_resp.data[0] if existing_resp.data else None
+                )
+
+                new_status = ev.get("status", "active")
+
+                # Auto-set end_date when transitioning to resolved
+                end_date = ev.get("end_date")
+                if new_status == "resolved" and not end_date:
+                    # Use existing end_date if already set, otherwise today
+                    if existing and existing.get("end_date"):
+                        end_date = existing["end_date"]
+                    else:
+                        end_date = date.today().isoformat()
+
                 record: dict[str, Any] = {
                     "shortage_id":              shortage_id,
                     "drug_id":                  drug_id,
                     "data_source_id":           self.SOURCE_ID,
                     "country":                  self.COUNTRY,
                     "country_code":             self.COUNTRY_CODE,
-                    "status":                   ev.get("status", "active"),
+                    "status":                   new_status,
                     "severity":                 ev.get("severity"),
                     "reason":                   ev.get("reason"),
                     "reason_category":          ev.get("reason_category"),
                     "start_date":               start_date,
-                    "end_date":                 ev.get("end_date"),
+                    "end_date":                 end_date,
                     "estimated_resolution_date": ev.get("estimated_resolution_date"),
                     "last_verified_at":         datetime.now(timezone.utc).isoformat(),
                     "source_url":               ev.get("source_url", self.BASE_URL),
@@ -409,6 +433,40 @@ class BaseScraper(ABC):
                     .execute()
                 )
                 counts["upserted"] += 1
+
+                # ── Log status/severity changes for alert dispatch ─────────────
+                if existing:
+                    old_status   = existing.get("status")
+                    old_severity = existing.get("severity")
+                    new_severity = record.get("severity")
+
+                    if old_status != new_status or old_severity != new_severity:
+                        try:
+                            self.db.table("shortage_status_log").insert({
+                                "shortage_event_id": existing["id"],
+                                "drug_id":           drug_id,
+                                "old_status":        old_status,
+                                "new_status":        new_status,
+                                "old_severity":      old_severity,
+                                "new_severity":      new_severity,
+                            }).execute()
+                            counts["status_changes"] += 1
+                            self.log.info(
+                                "Status change logged",
+                                extra={
+                                    "drug_id":      drug_id,
+                                    "old_status":   old_status,
+                                    "new_status":   new_status,
+                                    "old_severity": old_severity,
+                                    "new_severity": new_severity,
+                                },
+                            )
+                        except Exception as log_exc:
+                            # Don't fail the upsert if change logging fails
+                            self.log.warning(
+                                "Could not log status change",
+                                extra={"error": str(log_exc), "drug_id": drug_id},
+                            )
 
             except Exception as exc:
                 self.log.error(
@@ -486,6 +544,7 @@ class BaseScraper(ABC):
                 "status":            "success",
                 "records_processed": counts["upserted"],
                 "skipped":           counts["skipped"],
+                "status_changes":    counts.get("status_changes", 0),
             })
 
             # ── 5. Mark raw scrape processed ──────────────────────────────────

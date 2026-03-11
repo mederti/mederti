@@ -8,7 +8,7 @@ import {
   FileSpreadsheet, Image as ImageIcon, Pill, AlertTriangle,
   ExternalLink, ScanBarcode, Loader2, Search, RotateCcw,
 } from "lucide-react";
-import { api, DrugHit } from "@/lib/api";
+import { DrugHit } from "@/lib/api";
 import LandingContent from "./landing-content";
 
 /* ── types ─────────────────────────────────────────────────────── */
@@ -21,11 +21,34 @@ interface AttachedFile {
   preview?: string;
 }
 
+interface ShortageRow {
+  shortage_id: string;
+  generic_name?: string;
+  country?: string;
+  country_code?: string;
+  status: string;
+  severity?: string;
+  reason_category?: string;
+  start_date?: string;
+  estimated_resolution_date?: string;
+  source_name?: string;
+}
+
+interface ShortageSummary {
+  total_active: number;
+  by_severity: Record<string, number>;
+  by_country: Array<{ country_code: string; count: number }>;
+  new_this_month: number;
+  resolved_this_month: number;
+}
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
   drugs?: DrugHit[];
+  shortages?: ShortageRow[];
+  summary?: ShortageSummary;
   files?: AttachedFile[];
   ts: number;
 }
@@ -99,9 +122,9 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
   /* ── submit ──────────────────────────────────────────────── */
 
-  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e?: React.FormEvent, overrideQuery?: string) => {
     e?.preventDefault();
-    const q = query.trim();
+    const q = (overrideQuery ?? query).trim();
     if (!q && files.length === 0) return;
 
     const userMsg: ChatMessage = {
@@ -128,26 +151,60 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
           },
         ]);
       } else {
-        const res = await api.search(q, 6);
-        if (res.results.length > 0) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: uid(), role: "assistant",
-              text: `I found ${res.total} result${res.total !== 1 ? "s" : ""} for "${q}". Here are the top matches:`,
-              drugs: res.results,
-              ts: Date.now(),
-            },
-          ]);
-        } else {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: uid(), role: "assistant",
-              text: `No drugs matched "${q}" in our database. Try searching for a generic drug name like "amoxicillin" or "metformin", or upload a CSV of drug names for bulk lookup.`,
-              ts: Date.now(),
-            },
-          ]);
+        // Build message history for the chat API
+        const chatHistory = [
+          ...messages.map((m) => ({ role: m.role, content: m.text })),
+          { role: "user" as const, content: q },
+        ];
+
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: chatHistory }),
+        });
+
+        if (!res.ok) throw new Error(`Chat API returned ${res.status}`);
+
+        const assistantId = uid();
+        setMessages((prev) => [...prev, { id: assistantId, role: "assistant", text: "", ts: Date.now() }]);
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        if (!reader) throw new Error("No response body");
+
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete SSE lines
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === "text") {
+                setMessages((prev) => prev.map((m) =>
+                  m.id === assistantId ? { ...m, text: m.text + event.content } : m
+                ));
+              } else if (event.type === "drugs") {
+                setMessages((prev) => prev.map((m) =>
+                  m.id === assistantId ? { ...m, drugs: [...(m.drugs ?? []), ...event.data] } : m
+                ));
+              } else if (event.type === "shortages") {
+                setMessages((prev) => prev.map((m) =>
+                  m.id === assistantId ? { ...m, shortages: [...(m.shortages ?? []), ...event.data] } : m
+                ));
+              } else if (event.type === "summary") {
+                setMessages((prev) => prev.map((m) =>
+                  m.id === assistantId ? { ...m, summary: event.data } : m
+                ));
+              }
+            } catch { /* skip malformed SSE lines */ }
+          }
         }
       }
     } catch {
@@ -155,14 +212,14 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
         ...prev,
         {
           id: uid(), role: "assistant",
-          text: "Sorry, I couldn't reach the search API right now. Please try again in a moment.",
+          text: "Sorry, I couldn't reach the AI assistant right now. Please try again in a moment.",
           ts: Date.now(),
         },
       ]);
     } finally {
       setLoading(false);
     }
-  }, [query, files, totalActive]);
+  }, [query, files, totalActive, messages]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
@@ -364,7 +421,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", maxWidth: 860 }}>
             {SUGGESTIONS.map((s) => (
               <button key={s}
-                onClick={() => { setQuery(s); inputRef.current?.focus(); }}
+                onClick={() => { handleSubmit(undefined, s); }}
                 style={{
                   fontSize: 12, padding: "6px 14px", borderRadius: 20,
                   background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
@@ -546,6 +603,79 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
                     })}
                   </div>
                 )}
+
+                {/* Shortage rows */}
+                {msg.shortages && msg.shortages.length > 0 && (
+                  <div style={{ marginTop: 12, borderRadius: 10, border: "1px solid var(--app-border)", overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "var(--app-bg)", borderBottom: "1px solid var(--app-border)" }}>
+                          {["Drug", "Country", "Status", "Severity", "Since"].map((h) => (
+                            <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--app-text-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {msg.shortages.map((s, i) => (
+                          <tr key={s.shortage_id ?? i} style={{ borderBottom: i < msg.shortages!.length - 1 ? "1px solid var(--app-border)" : "none" }}>
+                            <td style={{ padding: "8px 12px", fontWeight: 500, color: "var(--app-text)" }}>{s.generic_name ?? "—"}</td>
+                            <td style={{ padding: "8px 12px", color: "var(--app-text-3)" }}>{s.country_code ?? s.country ?? "—"}</td>
+                            <td style={{ padding: "8px 12px" }}>
+                              <span style={{
+                                fontSize: 11, fontWeight: 500, padding: "2px 7px", borderRadius: 4,
+                                background: s.status === "active" ? "var(--crit-bg)" : s.status === "anticipated" ? "var(--high-bg)" : "var(--app-bg)",
+                                color: s.status === "active" ? "var(--crit)" : s.status === "anticipated" ? "var(--high)" : "var(--app-text-4)",
+                              }}>{s.status}</span>
+                            </td>
+                            <td style={{ padding: "8px 12px" }}>
+                              {s.severity && (
+                                <span style={{
+                                  fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 4,
+                                  background: s.severity === "critical" ? "var(--crit-bg)" : s.severity === "high" ? "var(--high-bg)" : "var(--app-bg)",
+                                  color: s.severity === "critical" ? "var(--crit)" : s.severity === "high" ? "var(--high)" : "var(--app-text-4)",
+                                }}>{s.severity}</span>
+                              )}
+                            </td>
+                            <td style={{ padding: "8px 12px", color: "var(--app-text-4)", fontSize: 12, fontFamily: "var(--font-dm-mono), monospace" }}>
+                              {s.start_date ? new Date(s.start_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "2-digit" }) : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Summary card */}
+                {msg.summary && (
+                  <div style={{
+                    marginTop: 12, padding: 16, borderRadius: 10,
+                    background: "var(--app-bg)", border: "1px solid var(--app-border)",
+                  }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
+                      {[
+                        { label: "Active", value: msg.summary.total_active, color: "var(--crit)" },
+                        { label: "New this month", value: msg.summary.new_this_month, color: "var(--high)" },
+                        { label: "Resolved this month", value: msg.summary.resolved_this_month, color: "#16a34a" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ minWidth: 100 }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: "var(--font-dm-mono), monospace" }}>{value.toLocaleString()}</div>
+                          <div style={{ fontSize: 11, color: "var(--app-text-4)", marginTop: 2 }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {Object.entries(msg.summary.by_severity).filter(([, v]) => v > 0).map(([sev, count]) => (
+                        <span key={sev} style={{
+                          fontSize: 11, fontWeight: 500, padding: "3px 8px", borderRadius: 4,
+                          background: sev === "critical" ? "var(--crit-bg)" : sev === "high" ? "var(--high-bg)" : "var(--app-bg)",
+                          color: sev === "critical" ? "var(--crit)" : sev === "high" ? "var(--high)" : "var(--app-text-3)",
+                          border: `1px solid ${sev === "critical" ? "var(--crit-b)" : sev === "high" ? "var(--high-b)" : "var(--app-border)"}`,
+                        }}>{sev}: {count.toLocaleString()}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -560,7 +690,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
                 fontSize: 14, color: "var(--app-text-4)",
               }}>
                 <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
-                Searching...
+                Thinking...
               </div>
             </div>
           )}

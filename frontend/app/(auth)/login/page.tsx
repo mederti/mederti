@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
+import SiteFooter from "@/app/components/site-footer";
 
 type Tab = "password" | "magic";
 
@@ -54,8 +55,9 @@ function LoginForm() {
   return (
     <div style={{
       minHeight: "100vh", background: "var(--app-bg)",
-      display: "flex", alignItems: "center", justifyContent: "center",
+      display: "flex", flexDirection: "column",
     }}>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{
         width: "100%", maxWidth: 420,
         background: "#fff", border: "1px solid var(--app-border)",
@@ -222,6 +224,8 @@ function LoginForm() {
           </Link>
         </div>
       </div>
+      </div>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter, DM_Mono } from "next/font/google";
-import ThemeProvider from "./components/theme-provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -29,7 +28,7 @@ export default function RootLayout({
     <html lang="en">
       <head />
       <body className={`${inter.variable} ${dmMono.variable} antialiased`}>
-        <ThemeProvider>{children}</ThemeProvider>
+        {children}
       </body>
     </html>
   );

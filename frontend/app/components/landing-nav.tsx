@@ -6,9 +6,8 @@ import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
   Home, Search, MessageSquare, Bell, Bookmark,
-  ChevronDown, Sun, Moon, User, LogOut,
+  ChevronDown, User, LogOut,
 } from "lucide-react";
-import { useTheme } from "@/app/components/theme-provider";
 
 /* ── Nav link sets ── */
 const APP_LINKS = [
@@ -43,8 +42,6 @@ const ICON = { width: 15, height: 15, strokeWidth: 1.5 } as const;
 export default function SiteNav() {
   const pathname = usePathname();
   const supabase = createBrowserClient();
-  const { theme, setTheme } = useTheme();
-
   const [email, setEmail]             = useState<string | null>(null);
   const [initials, setInitials]       = useState("?");
   const [country, setCountry]         = useState(COUNTRIES[0]);
@@ -81,20 +78,19 @@ export default function SiteNav() {
   }
 
   const loggedIn = email !== null;
-  const dark = theme === "dark";
 
-  /* ── Theme-dependent colors (header only) ── */
-  const bg       = dark ? "var(--navy, #080f1e)" : "#ffffff";
-  const border   = dark ? "none" : "1px solid #e2e8f0";
-  const logo     = dark ? "/logo-white.png" : "/logo-black.png";
-  const txt      = dark ? "rgba(255,255,255,0.55)" : "rgba(15,23,42,0.55)";
-  const txtHi    = dark ? "#fff" : "#0f172a";
-  const txtMid   = dark ? "rgba(255,255,255,0.8)" : "#334155";
-  const txtDim   = dark ? "rgba(255,255,255,0.4)" : "rgba(15,23,42,0.35)";
-  const btnBg    = dark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.05)";
-  const btnBd    = dark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.12)";
-  const activeBg = dark ? "rgba(255,255,255,0.1)" : "rgba(13,148,136,0.08)";
-  const hoverBg  = dark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.04)";
+  /* ── Header colors (always dark) ── */
+  const bg       = "var(--navy, #080f1e)";
+  const border   = "none";
+  const logo     = "/logo-white.png";
+  const txt      = "rgba(255,255,255,0.55)";
+  const txtHi    = "#fff";
+  const txtMid   = "rgba(255,255,255,0.8)";
+  const txtDim   = "rgba(255,255,255,0.4)";
+  const btnBg    = "rgba(255,255,255,0.07)";
+  const btnBd    = "rgba(255,255,255,0.12)";
+  const activeBg = "rgba(255,255,255,0.1)";
+  const hoverBg  = "rgba(255,255,255,0.07)";
   const tealIcon = "var(--teal-l)";
 
   return (
@@ -215,24 +211,6 @@ export default function SiteNav() {
             )}
           </div>
 
-          {/* Theme toggle */}
-          <button
-            onClick={() => setTheme(dark ? "light" : "dark")}
-            aria-label="Toggle header theme"
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 34, height: 34, borderRadius: 7,
-              background: btnBg,
-              border: `1px solid ${btnBd}`,
-              cursor: "pointer", color: txtMid,
-              transition: "background 0.15s, border-color 0.15s",
-            }}
-          >
-            {dark
-              ? <Sun style={{ width: 15, height: 15 }} />
-              : <Moon style={{ width: 15, height: 15 }} />}
-          </button>
-
           {/* Auth area */}
           {loggedIn ? (
             <div ref={userRef} style={{ position: "relative" }}>
@@ -240,7 +218,7 @@ export default function SiteNav() {
                 onClick={() => { setShowUser(v => !v); setShowCountry(false); }}
                 style={{
                   width: 32, height: 32, borderRadius: "50%",
-                  background: "var(--teal)", border: dark ? "2px solid rgba(255,255,255,0.2)" : "2px solid rgba(13,148,136,0.3)",
+                  background: "var(--teal)", border: "2px solid rgba(255,255,255,0.2)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer",
                 }}
@@ -287,14 +265,14 @@ export default function SiteNav() {
                 display: "flex", alignItems: "center",
                 padding: "7px 18px", borderRadius: 7,
                 fontSize: 13, fontWeight: 500,
-                color: dark ? "rgba(255,255,255,0.85)" : "#334155",
+                color: "rgba(255,255,255,0.85)",
                 textDecoration: "none",
                 border: `1px solid ${btnBd}`,
                 background: "transparent",
                 transition: "border-color 0.15s, background 0.15s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = dark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.25)";
+                e.currentTarget.style.borderColor = "rgba(255,255,255,0.35)";
                 e.currentTarget.style.background = hoverBg;
               }}
               onMouseLeave={(e) => {

@@ -11,6 +11,17 @@ import {
 import { DrugHit } from "@/lib/api";
 import LandingContent from "./landing-content";
 
+/* Simple markdown to HTML: bold, italic, newlines, bullet lists */
+function renderMd(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul style="margin:6px 0;padding-left:20px">${m}</ul>`)
+    .replace(/\n\n/g, "<br/><br/>")
+    .replace(/\n/g, "<br/>");
+}
+
 /* ── types ─────────────────────────────────────────────────────── */
 
 interface AttachedFile {
@@ -527,7 +538,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
                       ))}
                     </div>
                   )}
-                  {msg.text}
+                  <span dangerouslySetInnerHTML={{ __html: renderMd(msg.text) }} />
                 </div>
 
                 {/* Drug cards */}

@@ -301,56 +301,348 @@ async function executeTool(name: string, input: Record<string, any>): Promise<an
   }
 }
 
-/* ── Fallback (no API key) ──────────────────────────────────── */
+/* ── Conversational fallback (no API key) ──────────────────── */
 
-// Strip common NL phrases to extract a searchable drug name
+const COUNTRY_MAP: Record<string, string> = {
+  australia: "AU", "united states": "US", "united kingdom": "GB", canada: "CA",
+  "new zealand": "NZ", singapore: "SG", germany: "DE", france: "FR",
+  italy: "IT", spain: "ES", switzerland: "CH", norway: "NO", finland: "FI",
+  ireland: "IE", sweden: "SE", netherlands: "NL", japan: "JP", india: "IN",
+  brazil: "BR", "south africa": "ZA",
+};
+const COUNTRY_NAMES: Record<string, string> = {
+  AU: "Australia", US: "the United States", GB: "the United Kingdom", CA: "Canada",
+  NZ: "New Zealand", SG: "Singapore", DE: "Germany", FR: "France",
+  IT: "Italy", ES: "Spain", CH: "Switzerland", NO: "Norway", FI: "Finland",
+  IE: "Ireland", SE: "Sweden", NL: "the Netherlands", JP: "Japan", IN: "India",
+  BR: "Brazil", ZA: "South Africa", EU: "the European Union",
+};
+// Match full country names first (case-insensitive), then uppercase-only ISO codes
+function extractCountry(query: string): string | null {
+  // First try full country names (case-insensitive)
+  const nameRe = new RegExp(`\\b(${Object.keys(COUNTRY_MAP).join("|")})\\b`, "i");
+  const nameMatch = query.match(nameRe);
+  if (nameMatch) return COUNTRY_MAP[nameMatch[0].toLowerCase()] ?? null;
+  // Then try ISO codes (uppercase only to avoid matching "in", "no", etc.)
+  const isoMatch = query.match(/\b(AU|US|GB|CA|NZ|SG|DE|FR|IT|ES|CH|NO|FI|IE|SE|NL|JP|IN|BR|ZA|EU)\b/);
+  if (isoMatch) return isoMatch[0];
+  return null;
+}
 const NL_NOISE = /\b(shortage|shortages|supply|status|alternative|alternatives|to|in|for|of|the|this|month|what|is|are|drug|drugs|critical|current|about|australia|united states|us|uk|canada|germany|france|au|gb|ca|de|fr|nz|sg)\b/gi;
+
 function extractDrugName(query: string): string {
   return query.replace(NL_NOISE, "").replace(/\s+/g, " ").trim();
 }
 
-async function fallbackSearch(query: string): Promise<Response> {
-  // Try the raw query first, then the extracted drug name
-  let result = await executeTool("search_drugs", { query, limit: 6 });
-  const extracted = extractDrugName(query);
-  if (result.results.length === 0 && extracted && extracted !== query) {
-    result = await executeTool("search_drugs", { query: extracted, limit: 6 });
-  }
 
-  // If we found a drug and the query mentions a country, also fetch shortages
-  let shortages: unknown[] = [];
-  const countryMatch = query.match(/\b(AU|US|GB|CA|NZ|SG|DE|FR|IT|ES|CH|NO|FI|IE|SE|NL|JP|IN|BR|ZA|australia|united states|united kingdom|canada|new zealand|singapore|germany|france|italy|spain|switzerland|norway|finland|ireland|sweden|netherlands|japan|india|brazil|south africa)\b/i);
-  if (result.results.length > 0 && countryMatch) {
-    const codeMap: Record<string, string> = {
-      australia: "AU", "united states": "US", "united kingdom": "GB", canada: "CA",
-      "new zealand": "NZ", singapore: "SG", germany: "DE", france: "FR",
-      italy: "IT", spain: "ES", switzerland: "CH", norway: "NO", finland: "FI",
-      ireland: "IE", sweden: "SE", netherlands: "NL", japan: "JP", india: "IN",
-      brazil: "BR", "south africa": "ZA",
-    };
-    const cc = codeMap[countryMatch[0].toLowerCase()] ?? countryMatch[0].toUpperCase();
-    const drugId = result.results[0].drug_id;
-    shortages = await executeTool("get_drug_shortages", { drug_id: drugId, country: cc });
+type Intent = "summary" | "alternatives" | "recalls" | "shortage_country" | "drug_search" | "greeting" | "help";
+
+function classifyIntent(query: string): Intent {
+  const q = query.toLowerCase();
+  if (/^(hi|hello|hey|good morning|good afternoon)\b/.test(q)) return "greeting";
+  if (/\b(how|help|what can you|what do you)\b/.test(q) && !/\b(how many|how is|how are)\b/.test(q)) return "help";
+  if (/\b(summary|overview|how many|total|dashboard|statistics|stats|shortages this month|critical.*shortages|shortages.*critical)\b/.test(q)) return "summary";
+  if (/\b(alternative|alternatives|substitute|replace|instead|switch)\b/.test(q)) return "alternatives";
+  if (/\b(recall|recalls|recalled|safety|withdrawn)\b/.test(q)) return "recalls";
+  if (extractCountry(q) && !/\b(alternative|alternatives)\b/.test(q)) return "shortage_country";
+  return "drug_search";
+}
+
+// Find drug context from previous messages
+function findDrugContext(messages: Array<{ role: string; content: string }>): string | null {
+  for (let i = messages.length - 2; i >= 0; i--) {
+    const text = messages[i].content;
+    const drugMatch = text.match(/\b(amoxicillin|metformin|cisplatin|paracetamol|ibuprofen|atorvastatin|lisinopril|omeprazole|amlodipine|simvastatin|levothyroxine|azithromycin|flucloxacillin|ciprofloxacin|lithium|doxycycline|prednisone|gabapentin|sertraline|clopidogrel|warfarin|diazepam|morphine|fentanyl|oxycodone|insulin|epinephrine|salbutamol|fluticasone|cetirizine)\b/i);
+    if (drugMatch) return drugMatch[0];
   }
+  return null;
+}
+
+function emit(controller: ReadableStreamDefaultController, encoder: TextEncoder, type: string, data: unknown) {
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify(type === "text" ? { type, content: data } : { type, data })}\n\n`));
+}
+
+async function conversationalFallback(
+  messages: Array<{ role: string; content: string }>,
+): Promise<Response> {
+  const query = messages.filter((m) => m.role === "user").pop()?.content ?? "";
+  const intent = classifyIntent(query);
+  const country = extractCountry(query);
+  const cc = country ?? null;
+  const countryName = cc ? (COUNTRY_NAMES[cc] ?? cc) : null;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
-    start(controller) {
-      if (result.results.length > 0) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "drugs", data: result.results })}\n\n`));
-        if (Array.isArray(shortages) && shortages.length > 0) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "shortages", data: shortages.slice(0, 10) })}\n\n`));
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", content: `I found ${result.total} drug${result.total !== 1 ? "s" : ""} matching your search, with ${shortages.length} shortage event${shortages.length !== 1 ? "s" : ""} in the specified country. Click any drug for full details.` })}\n\n`));
-        } else {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", content: `I found ${result.total} result${result.total !== 1 ? "s" : ""} for "${extracted || query}". Click any drug to see full shortage details.` })}\n\n`));
+    async start(controller) {
+      try {
+        switch (intent) {
+          case "greeting": {
+            emit(controller, encoder, "text",
+              "Hello! I'm Mederti, your pharmaceutical shortage intelligence assistant. I can help you:\n\n" +
+              "- Search for any drug and check its shortage status\n" +
+              "- Find therapeutic alternatives when a drug is in short supply\n" +
+              "- Browse shortages by country or severity\n" +
+              "- Get a global shortage summary\n\n" +
+              "Try asking something like \"Is amoxicillin available in Australia?\" or \"What are the alternatives to metformin?\""
+            );
+            break;
+          }
+
+          case "help": {
+            emit(controller, encoder, "text",
+              "Here's what I can help with:\n\n" +
+              "**Drug search** — \"amoxicillin\", \"cisplatin supply status\"\n" +
+              "**Country shortages** — \"shortages in Australia\", \"drug shortages in the US\"\n" +
+              "**Alternatives** — \"alternatives to metformin\", \"what can I use instead of amoxicillin\"\n" +
+              "**Recalls** — \"recalls for cisplatin\", \"drug recalls in the US\"\n" +
+              "**Overview** — \"how many shortages are there\", \"global shortage summary\"\n\n" +
+              "You can also ask follow-up questions — I'll remember which drug we were discussing."
+            );
+            break;
+          }
+
+          case "summary": {
+            const summary = await executeTool("get_shortage_summary", {});
+            emit(controller, encoder, "summary", summary);
+
+            const topCountries = summary.by_country.slice(0, 5)
+              .map((c: { country_code: string; count: number }) => `${COUNTRY_NAMES[c.country_code] ?? c.country_code} (${c.count.toLocaleString()})`)
+              .join(", ");
+
+            emit(controller, encoder, "text",
+              `Here's the current global shortage picture.\n\n` +
+              `There are **${summary.total_active.toLocaleString()} active shortage events** across our database, ` +
+              `including **${summary.by_severity.critical ?? 0} critical** and **${summary.by_severity.high ?? 0} high severity** cases.\n\n` +
+              `The most affected countries are ${topCountries}.\n\n` +
+              `In the last 30 days, **${summary.new_this_month.toLocaleString()} new shortages** were reported and **${summary.resolved_this_month.toLocaleString()} were resolved**.` +
+              (cc ? `\n\nWould you like me to drill down into ${countryName} specifically?` : `\n\nWould you like to explore a specific country or drug?`)
+            );
+            break;
+          }
+
+          case "alternatives": {
+            const drugName = extractDrugName(query) || findDrugContext(messages);
+            if (!drugName) {
+              emit(controller, encoder, "text",
+                "Which drug would you like to find alternatives for? Please mention the generic name, like \"alternatives to amoxicillin\"."
+              );
+              break;
+            }
+
+            const searchResult = await executeTool("search_drugs", { query: drugName, limit: 1 });
+            if (searchResult.results.length === 0) {
+              emit(controller, encoder, "text",
+                `I couldn't find "${drugName}" in our database. Could you check the spelling? Try using the generic name rather than a brand name.`
+              );
+              break;
+            }
+
+            const drug = searchResult.results[0];
+            const alts = await executeTool("get_drug_alternatives", { drug_id: drug.drug_id });
+
+            emit(controller, encoder, "drugs", [drug]);
+
+            if (Array.isArray(alts) && alts.length > 0) {
+              // Search for the alternative drugs to show as cards
+              const altDrugIds = alts.slice(0, 4).map((a: { alternative_drug_id: string }) => a.alternative_drug_id);
+              const altCards = [];
+              for (const altId of altDrugIds) {
+                const d = await executeTool("search_drugs", { query: alts.find((a: { alternative_drug_id: string }) => a.alternative_drug_id === altId)?.alternative_generic_name ?? "", limit: 1 });
+                if (d.results.length > 0) altCards.push(d.results[0]);
+              }
+              if (altCards.length > 0) emit(controller, encoder, "drugs", altCards);
+
+              const altList = alts.slice(0, 5).map((a: { alternative_generic_name: string; relationship_type: string; similarity_score: number }) =>
+                `- **${a.alternative_generic_name}** (${a.relationship_type}, ${Math.round(a.similarity_score * 100)}% similarity)`
+              ).join("\n");
+
+              emit(controller, encoder, "text",
+                `Here are the therapeutic alternatives for **${drug.generic_name}**:\n\n${altList}\n\n` +
+                `These alternatives are based on clinical evidence and therapeutic similarity. ` +
+                `Always consult a healthcare professional before switching medications.`
+              );
+            } else {
+              emit(controller, encoder, "text",
+                `I found **${drug.generic_name}** in our database, but we don't have therapeutic alternatives on file for this drug yet. ` +
+                `You may want to consult a pharmacist or clinical reference for substitution options.`
+              );
+            }
+            break;
+          }
+
+          case "recalls": {
+            const drugName = extractDrugName(query) || findDrugContext(messages);
+            if (drugName) {
+              const searchResult = await executeTool("search_drugs", { query: drugName, limit: 1 });
+              if (searchResult.results.length > 0) {
+                const drug = searchResult.results[0];
+                const recallData = await executeTool("get_drug_recalls", { drug_id: drug.drug_id });
+                emit(controller, encoder, "drugs", [drug]);
+
+                if (recallData.recalls?.length > 0) {
+                  const recent = recallData.recalls.slice(0, 5);
+                  const recallList = recent.map((r: { recall_class: string; country_code: string; announced_date: string; reason_category: string }) =>
+                    `- **Class ${r.recall_class}** (${r.country_code}) — ${r.announced_date} — ${r.reason_category ?? "unspecified reason"}`
+                  ).join("\n");
+
+                  emit(controller, encoder, "text",
+                    `**${drug.generic_name}** has **${recallData.recalls.length} recall${recallData.recalls.length !== 1 ? "s" : ""}** on record, ` +
+                    `with a supply resilience score of **${recallData.resilience_score}/100**.\n\n` +
+                    `Recent recalls:\n${recallList}` +
+                    (recallData.resilience_score < 50 ? `\n\n⚠️ The low resilience score suggests this drug has significant supply chain risk.` : "")
+                  );
+                } else {
+                  emit(controller, encoder, "text",
+                    `Good news — **${drug.generic_name}** has no recalls on record. Its supply resilience score is **${recallData.resilience_score}/100**.`
+                  );
+                }
+                break;
+              }
+            }
+
+            // No specific drug — browse recalls by country
+            const recalls = await executeTool("browse_recalls", { country: cc ?? undefined, page_size: 10 });
+            if (recalls.results?.length > 0) {
+              emit(controller, encoder, "text",
+                `There are **${recalls.total.toLocaleString()} recalls**${countryName ? ` in ${countryName}` : " globally"} in our database.\n\n` +
+                `The most recent involve: ${recalls.results.slice(0, 5).map((r: { generic_name: string; recall_class: string }) => `${r.generic_name} (Class ${r.recall_class})`).join(", ")}.\n\n` +
+                `Would you like to look up recalls for a specific drug?`
+              );
+            } else {
+              emit(controller, encoder, "text", "I couldn't find any matching recalls. Try specifying a drug name or country.");
+            }
+            break;
+          }
+
+          case "shortage_country": {
+            const drugName = extractDrugName(query);
+            if (drugName) {
+              // Drug + country query
+              const searchResult = await executeTool("search_drugs", { query: drugName, limit: 3 });
+              if (searchResult.results.length > 0) {
+                const drug = searchResult.results[0];
+                emit(controller, encoder, "drugs", searchResult.results);
+
+                const shortages = await executeTool("get_drug_shortages", { drug_id: drug.drug_id, country: cc! });
+                if (Array.isArray(shortages) && shortages.length > 0) {
+                  emit(controller, encoder, "shortages", shortages.slice(0, 10));
+
+                  const activeCount = shortages.filter((s: { status: string }) => s.status === "active").length;
+                  const criticalCount = shortages.filter((s: { severity: string }) => s.severity === "critical").length;
+
+                  emit(controller, encoder, "text",
+                    `**${drug.generic_name}** has **${shortages.length} shortage event${shortages.length !== 1 ? "s" : ""}** in ${countryName}` +
+                    (activeCount > 0 ? `, of which **${activeCount} ${activeCount === 1 ? "is" : "are"} currently active**` : ", none currently active") +
+                    (criticalCount > 0 ? ` (including **${criticalCount} critical**)` : "") +
+                    ".\n\n" +
+                    (shortages[0]?.reason_category ? `The primary reason is **${shortages[0].reason_category.replace(/_/g, " ")}**. ` : "") +
+                    (shortages[0]?.source_name ? `Source: ${shortages[0].source_name}.` : "") +
+                    "\n\nWould you like to see alternatives, or check another country?"
+                  );
+                } else {
+                  emit(controller, encoder, "text",
+                    `**${drug.generic_name}** has **no reported shortages** in ${countryName} right now. ` +
+                    `It does have **${drug.active_shortage_count} active shortage${drug.active_shortage_count !== 1 ? "s" : ""}** in other countries.\n\n` +
+                    `Would you like to see the global shortage picture for this drug?`
+                  );
+                }
+                break;
+              }
+            }
+
+            // Country-only query
+            const browseResult = await executeTool("browse_shortages", { country: cc!, status: "active", page_size: 15 });
+            if (browseResult.results?.length > 0) {
+              emit(controller, encoder, "shortages", browseResult.results.slice(0, 10));
+
+              const critCount = browseResult.results.filter((s: { severity: string }) => s.severity === "critical").length;
+              const drugNames = [...new Set(browseResult.results.slice(0, 5).map((s: { generic_name: string }) => s.generic_name))].join(", ");
+
+              emit(controller, encoder, "text",
+                `There are **${browseResult.total.toLocaleString()} active shortages** in ${countryName}` +
+                (critCount > 0 ? `, including **${critCount} critical** in these results` : "") +
+                `.\n\nSome affected drugs: ${drugNames}.\n\n` +
+                `You can ask about a specific drug for more detail, or ask \"what are the alternatives to [drug]?\".`
+              );
+            } else {
+              emit(controller, encoder, "text",
+                `I don't have active shortage data for ${countryName} at the moment. We currently track shortages in 12 countries. ` +
+                `Try asking about Australia, the US, Canada, Germany, Italy, or other major markets.`
+              );
+            }
+            break;
+          }
+
+          case "drug_search":
+          default: {
+            let drugName = extractDrugName(query) || query.trim();
+
+            // Check for follow-up references
+            if (/\b(it|that|this|the same|that drug|this drug)\b/i.test(query)) {
+              const ctx = findDrugContext(messages);
+              if (ctx) drugName = ctx;
+            }
+
+            let result = await executeTool("search_drugs", { query: drugName, limit: 6 });
+            if (result.results.length === 0 && drugName !== query.trim()) {
+              result = await executeTool("search_drugs", { query: query.trim(), limit: 6 });
+            }
+
+            if (result.results.length > 0) {
+              const topDrug = result.results[0];
+              emit(controller, encoder, "drugs", result.results);
+
+              // Also fetch shortages for the top hit
+              const shortages = await executeTool("get_drug_shortages", { drug_id: topDrug.drug_id });
+              const shortageArr = Array.isArray(shortages) ? shortages : [];
+              const activeShortages = shortageArr.filter((s: { status: string }) => s.status === "active");
+
+              if (activeShortages.length > 0) {
+                emit(controller, encoder, "shortages", activeShortages.slice(0, 8));
+
+                const countries = [...new Set(activeShortages.map((s: { country_code: string }) => s.country_code))];
+                const countryList = countries.slice(0, 5).map(c => COUNTRY_NAMES[c] ?? c).join(", ");
+
+                emit(controller, encoder, "text",
+                  `**${topDrug.generic_name}** currently has **${activeShortages.length} active shortage${activeShortages.length !== 1 ? "s" : ""}** ` +
+                  `across ${countries.length} ${countries.length === 1 ? "country" : "countries"}: ${countryList}.\n\n` +
+                  `You can ask me to drill down into a specific country, find alternatives, or check recall history.`
+                );
+              } else if (shortageArr.length > 0) {
+                emit(controller, encoder, "text",
+                  `**${topDrug.generic_name}** has **no active shortages** right now. ` +
+                  `There ${shortageArr.length === 1 ? "is" : "are"} ${shortageArr.length} resolved/historical shortage event${shortageArr.length !== 1 ? "s" : ""} on record.\n\n` +
+                  `Would you like to see alternatives or recall history for this drug?`
+                );
+              } else {
+                emit(controller, encoder, "text",
+                  `**${topDrug.generic_name}** is in our database with **no reported shortages** — supply looks stable.\n\n` +
+                  `I also found ${result.total > 1 ? `${result.total - 1} other matching drug${result.total - 1 !== 1 ? "s" : ""}` : "this as the only match"}. ` +
+                  `Want to know about alternatives or check a specific country?`
+                );
+              }
+            } else {
+              emit(controller, encoder, "text",
+                `I couldn't find "${drugName}" in our database of 7,000+ drugs. A few tips:\n\n` +
+                `- Use the **generic name** (e.g., "paracetamol" not "Panadol")\n` +
+                `- Check the spelling\n` +
+                `- Try a broader term (e.g., "insulin" instead of a specific formulation)\n\n` +
+                `You can also ask me for a global shortage summary or browse shortages by country.`
+              );
+            }
+            break;
+          }
         }
-      } else {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", content: `No drugs matched "${query}" in our database. Try searching for a generic drug name like "amoxicillin" or "metformin".` })}\n\n`));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        emit(controller, encoder, "text", `Sorry, I ran into an issue: ${msg}. Please try again.`);
+      } finally {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+        controller.close();
       }
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
-      controller.close();
     },
   });
+
   return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" } });
 }
 
@@ -365,12 +657,12 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "messages required" }), { status: 400 });
   }
 
-  const lastUserMsg = messages.filter((m) => m.role === "user").pop()?.content ?? "";
-
-  // Fallback if no API key
+  // Conversational fallback if no API key
   if (!process.env.ANTHROPIC_API_KEY) {
-    return fallbackSearch(lastUserMsg);
+    return conversationalFallback(messages);
   }
+
+  const lastUserMsg = messages.filter((m) => m.role === "user").pop()?.content ?? "";
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

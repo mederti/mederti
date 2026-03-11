@@ -16,15 +16,12 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const saved = localStorage.getItem("mederti-theme") as Theme | null;
-    const initial = saved ?? "dark";
-    setThemeState(initial);
-    document.documentElement.classList.toggle("dark", initial === "dark");
+    if (saved) setThemeState(saved);
   }, []);
 
   const setTheme = (t: Theme) => {
     setThemeState(t);
     localStorage.setItem("mederti-theme", t);
-    document.documentElement.classList.toggle("dark", t === "dark");
   };
 
   return (

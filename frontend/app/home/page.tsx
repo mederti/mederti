@@ -285,7 +285,7 @@ export default async function HomePage() {
         <div className="home-grid">
 
           {/* ── Card 1: Active Shortages AU ──────────────────────────────── */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={AlertCircle}
               title="What's short right now — AU"
@@ -328,7 +328,7 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 2: My Watchlist ─────────────────────────────────────── */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={Bookmark}
               title="Drugs you're watching"
@@ -339,7 +339,7 @@ export default async function HomePage() {
 
           {/* ── Card 3: Recent Recalls ───────────────────────────────────── */}
           <div style={{
-            background: "var(--panel)",
+            background: "#fff",
             border: `1px solid ${auRecalls.some(r => r.recall_class === "I") ? "var(--crit-b)" : "var(--app-border)"}`,
             borderRadius: 12, overflow: "hidden",
           }}>
@@ -388,7 +388,7 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 4: Predicted Shortages ──────────────────────────────── */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={TrendingUp}
               title="Get ahead of what's coming"
@@ -430,7 +430,7 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 5: TGA Alerts ───────────────────────────────────────── */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={ShieldAlert}
               title="Regulatory alerts — TGA"
@@ -508,7 +508,7 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 6: Alternatives ─────────────────────────────────────── */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={ArrowLeftRight}
               title="What to dispense instead"
@@ -563,7 +563,7 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 7: Global Coverage (full width) ─────────────────────── */}
-          <div className="home-full" style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div className="home-full" style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={Globe2}
               title="Supply risk by country"
@@ -633,7 +633,7 @@ export default async function HomePage() {
       <nav className="home-bottom-nav" style={{
         display: "none",
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
-        background: "var(--panel)", borderTop: "1px solid var(--app-border)",
+        background: "#fff", borderTop: "1px solid var(--app-border)",
         height: 60,
         alignItems: "stretch",
         boxShadow: "0 -2px 12px rgba(0,0,0,0.06)",

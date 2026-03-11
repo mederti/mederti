@@ -47,7 +47,7 @@ export default function ChatPage() {
 
         {/* Input area */}
         <div style={{
-          background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+          background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
           padding: "20px", marginBottom: 24, maxWidth: 720, margin: "0 auto 24px",
         }}>
           <div style={{ position: "relative" }}>
@@ -112,7 +112,7 @@ export default function ChatPage() {
                     display: "inline-block",
                     padding: "8px 14px",
                     borderRadius: 8,
-                    background: "var(--panel)",
+                    background: "#fff",
                     border: "1px solid var(--app-border)",
                     fontSize: 13,
                     color: "var(--app-text-2)",
@@ -132,7 +132,7 @@ export default function ChatPage() {
         {/* Info panel */}
         <div style={{
           maxWidth: 720, margin: "32px auto 0",
-          background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+          background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
           padding: "20px 24px",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>

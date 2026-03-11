@@ -32,7 +32,7 @@ function DrugCard({ drug, altCounts }: { drug: DrugResult; altCounts: Record<str
   return (
     <Link href={`/drugs/${drug.drug_id}`} style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{
-        background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+        background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
         padding: "20px 24px", cursor: "pointer",
         transition: "border-color 0.15s, box-shadow 0.15s",
       }}
@@ -168,7 +168,7 @@ function SearchResults() {
               width: "100%", padding: "14px 16px 14px 40px", fontSize: 16,
               border: "1px solid var(--app-border-2)", borderRadius: 10,
               fontFamily: "var(--font-inter), sans-serif",
-              outline: "none", background: "var(--panel)", color: "var(--app-text)",
+              outline: "none", background: "#fff", color: "var(--app-text)",
               boxSizing: "border-box",
             }}
             onFocus={e => (e.target.style.borderColor = "var(--teal)")}

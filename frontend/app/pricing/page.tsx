@@ -66,7 +66,7 @@ const FAQS = [
 
 export default function PricingPage() {
   return (
-    <div style={{ background: "var(--panel)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+    <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
       <style>{`
         @media (max-width: 768px) {
           .pricing-hero { padding: 80px 20px 60px !important; }
@@ -100,7 +100,7 @@ export default function PricingPage() {
         <div className="pricing-cards" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, maxWidth: 1000, margin: "0 auto" }}>
 
           {/* Free */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "36px 32px" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 14, padding: "36px 32px" }}>
             <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--app-text-4)", marginBottom: 20 }}>Free</div>
             <div style={{ fontSize: 48, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.03em" }}>
               $0<span style={{ fontSize: 16, color: "var(--app-text-4)", fontWeight: 400, letterSpacing: 0 }}>/mo</span>
@@ -118,7 +118,7 @@ export default function PricingPage() {
             <Link href="/signup" style={{
               display: "block", width: "100%", padding: "12px",
               borderRadius: 8, fontSize: 14, fontWeight: 500, textAlign: "center",
-              background: "var(--panel)", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
+              background: "#fff", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
               textDecoration: "none", boxSizing: "border-box",
             }}>
               Get started free
@@ -163,7 +163,7 @@ export default function PricingPage() {
           </div>
 
           {/* Enterprise */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "36px 32px" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 14, padding: "36px 32px" }}>
             <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--app-text-4)", marginBottom: 20 }}>Enterprise</div>
             <div style={{ fontSize: 36, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>Custom</div>
             <div style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 32, paddingBottom: 32, borderBottom: "1px solid var(--app-border)" }}>
@@ -179,7 +179,7 @@ export default function PricingPage() {
             <Link href="/contact?subject=Enterprise+enquiry" style={{
               display: "block", width: "100%", padding: "12px",
               borderRadius: 8, fontSize: 14, fontWeight: 500, textAlign: "center",
-              background: "var(--panel)", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
+              background: "#fff", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
               textDecoration: "none", boxSizing: "border-box",
             }}>
               Talk to us →

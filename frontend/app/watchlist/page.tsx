@@ -105,7 +105,7 @@ export default function WatchlistPage() {
         {/* Not signed in */}
         {!loading && authed === false && (
           <div style={{
-            background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+            background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
             padding: "64px 24px", textAlign: "center", maxWidth: 460, margin: "0 auto",
           }}>
             <div style={{
@@ -137,7 +137,7 @@ export default function WatchlistPage() {
         {/* Signed in, empty */}
         {!loading && authed === true && items.length === 0 && (
           <div style={{
-            background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+            background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
             padding: "64px 24px", textAlign: "center", maxWidth: 460, margin: "0 auto",
           }}>
             <div style={{
@@ -169,7 +169,7 @@ export default function WatchlistPage() {
         {/* Signed in, has items */}
         {!loading && authed === true && items.length > 0 && (
           <div style={{
-            background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden",
+            background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden",
           }}>
             {/* Header */}
             <div style={{

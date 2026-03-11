@@ -56,7 +56,7 @@ export default function LandingContent() {
 
         <div style={{
           border: "1px solid var(--app-border)", borderRadius: 14, overflow: "hidden",
-          background: "var(--panel)",
+          background: "#fff",
           boxShadow: "0 8px 48px rgba(15,23,42,0.08), 0 2px 8px rgba(15,23,42,0.04)",
           maxWidth: 1000, margin: "0 auto",
         }}>
@@ -70,7 +70,7 @@ export default function LandingContent() {
               <span key={c} style={{ width: 10, height: 10, borderRadius: "50%", background: c, display: "inline-block", opacity: 0.7 }} />
             ))}
             <span style={{
-              flex: 1, background: "var(--panel)", border: "1px solid var(--app-border)",
+              flex: 1, background: "#fff", border: "1px solid var(--app-border)",
               borderRadius: 5, padding: "4px 12px", fontSize: 12, color: "var(--app-text-4)",
               fontFamily: "var(--font-dm-mono), monospace", maxWidth: 280,
             }}>
@@ -157,7 +157,7 @@ export default function LandingContent() {
 
         <div style={{
           border: "1px solid var(--app-border)", borderRadius: 14, overflow: "hidden",
-          background: "var(--panel)",
+          background: "#fff",
           boxShadow: "0 4px 24px rgba(15,23,42,0.06)",
           maxWidth: 1000, margin: "0 auto",
         }}>
@@ -232,7 +232,7 @@ export default function LandingContent() {
               features: ["National supply heatmaps", "AI early warning \u2014 30\u201390 day forecasts", "Global comparison view", "One-click ministerial briefings"],
             },
           ].map((card) => (
-            <div key={card.title} style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "28px 24px" }}>
+            <div key={card.title} style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "28px 24px" }}>
               <div style={{ fontSize: 24, marginBottom: 12 }}>{card.icon}</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 8, letterSpacing: "-0.01em" }}>{card.title}</div>
               <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.65, marginBottom: 16 }}>{card.desc}</div>
@@ -272,7 +272,7 @@ export default function LandingContent() {
           ].map((step, i) => (
             <div key={step.num} className="lp-step-cell" style={{
               padding: "28px 24px",
-              background: "var(--panel)",
+              background: "#fff",
               borderRight: i < 3 ? "1px solid var(--app-border)" : "none",
             }}>
               <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: "var(--teal)", marginBottom: 16 }}>
@@ -301,7 +301,7 @@ export default function LandingContent() {
 
         <div className="lp-pricing-cards" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, maxWidth: 960, margin: "0 auto" }}>
           {/* Free */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px", textAlign: "left" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px", textAlign: "left" }}>
             <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--app-text-4)", marginBottom: 16 }}>Free</div>
             <div style={{ fontSize: 40, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>
               $0<span style={{ fontSize: 16, color: "var(--app-text-4)", fontWeight: 400 }}>/mo</span>
@@ -321,7 +321,7 @@ export default function LandingContent() {
               width: "100%", padding: "11px", borderRadius: 8,
               fontSize: 13, fontWeight: 500, fontFamily: "var(--font-inter), sans-serif",
               cursor: "pointer", textAlign: "center",
-              background: "var(--panel)", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
+              background: "#fff", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
             }}>
               Get started free
             </button>
@@ -369,7 +369,7 @@ export default function LandingContent() {
           </div>
 
           {/* Enterprise */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px", textAlign: "left" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px", textAlign: "left" }}>
             <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--app-text-4)", marginBottom: 16 }}>Enterprise</div>
             <div style={{ fontSize: 34, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>Custom</div>
             <div style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 28, paddingBottom: 28, borderBottom: "1px solid var(--app-border)" }}>
@@ -391,7 +391,7 @@ export default function LandingContent() {
               width: "100%", padding: "11px", borderRadius: 8,
               fontSize: 13, fontWeight: 500, fontFamily: "var(--font-inter), sans-serif",
               cursor: "pointer", textAlign: "center",
-              background: "var(--panel)", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
+              background: "#fff", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
             }}>
               Talk to us {"\u2192"}
             </button>
@@ -428,12 +428,12 @@ export default function LandingContent() {
 
           {/* Email preview */}
           <div style={{
-            background: "var(--panel)", border: "1px solid var(--app-border)",
+            background: "#fff", border: "1px solid var(--app-border)",
             borderRadius: 12, overflow: "hidden",
             boxShadow: "0 4px 24px rgba(15,23,42,0.06)",
           }}>
             <div style={{
-              background: "var(--panel)", padding: "12px 16px",
+              background: "#fff", padding: "12px 16px",
               borderBottom: "1px solid var(--app-border)",
             }}>
               <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>From: <strong style={{ color: "var(--app-text-2)" }}>Mederti Weekly {"\u00B7"} intelligence@mederti.com</strong></div>
@@ -468,7 +468,7 @@ export default function LandingContent() {
       {/* EMAIL CAPTURE */}
       <div id="signup" style={{
         textAlign: "center", padding: "48px 24px",
-        background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+        background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
         marginBottom: 48,
       }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--app-text)", marginBottom: 8, letterSpacing: "-0.02em" }}>

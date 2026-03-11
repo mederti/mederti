@@ -48,7 +48,7 @@ function ContactForm() {
     border: "1px solid var(--app-border)", fontSize: 14,
     fontFamily: "var(--font-inter), sans-serif",
     outline: "none", boxSizing: "border-box" as const,
-    background: "var(--panel)", color: "var(--app-text)",
+    background: "#fff", color: "var(--app-text)",
   };
   const labelStyle = {
     fontSize: 12, fontWeight: 500 as const, color: "var(--app-text-3)",
@@ -129,7 +129,7 @@ function ContactForm() {
 
 export default function ContactPage() {
   return (
-    <div style={{ background: "var(--panel)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+    <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
       <style>{`
         @media (max-width: 768px) {
           .contact-layout { grid-template-columns: 1fr !important; gap: 48px !important; padding: 60px 20px !important; }
@@ -203,7 +203,7 @@ export default function ContactPage() {
         {/* RIGHT — form */}
         <div>
           <div style={{
-            background: "var(--panel)", border: "1px solid var(--app-border)",
+            background: "#fff", border: "1px solid var(--app-border)",
             borderRadius: 14, padding: "40px 36px",
             boxShadow: "0 2px 16px rgba(15,23,42,0.05)",
           }}>

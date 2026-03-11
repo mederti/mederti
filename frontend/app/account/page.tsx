@@ -35,7 +35,7 @@ function NotSignedIn() {
         </Link>
         <Link href="/signup" style={{
           fontSize: 14, fontWeight: 500, padding: "11px 28px",
-          background: "var(--panel)", color: "var(--app-text-2)", border: "1px solid var(--app-border-2)", borderRadius: 8, textDecoration: "none",
+          background: "#fff", color: "var(--app-text-2)", border: "1px solid var(--app-border-2)", borderRadius: 8, textDecoration: "none",
         }}>
           Create account
         </Link>
@@ -202,14 +202,14 @@ export default function AccountPage() {
                 {watchlistLoading && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {[1, 2, 3].map(i => (
-                      <div key={i} style={{ height: 70, background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10 }} />
+                      <div key={i} style={{ height: 70, background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10 }} />
                     ))}
                   </div>
                 )}
 
                 {!watchlistLoading && watchlist.length === 0 && (
                   <div style={{
-                    background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+                    background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
                     padding: "48px 32px", textAlign: "center",
                   }}>
                     <div style={{ fontSize: 28, marginBottom: 12 }}>🔔</div>
@@ -230,7 +230,7 @@ export default function AccountPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {watchlist.map(row => (
                       <div key={row.id} style={{
-                        background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10,
+                        background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10,
                         padding: "16px 18px", display: "flex", alignItems: "center", gap: 16,
                       }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -262,7 +262,7 @@ export default function AccountPage() {
                               position: "absolute", top: 2,
                               left: row.notification_channels.email ? 18 : 2,
                               width: 16, height: 16, borderRadius: "50%",
-                              background: "var(--panel)", transition: "left 0.15s",
+                              background: "#fff", transition: "left 0.15s",
                             }} />
                           </button>
                         </div>
@@ -293,7 +293,7 @@ export default function AccountPage() {
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
                   {/* Email */}
-                  <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
+                  <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 16 }}>Email address</div>
                     <input style={inputStyle} value={user.email ?? ""} readOnly />
                     <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 8 }}>
@@ -302,7 +302,7 @@ export default function AccountPage() {
                   </div>
 
                   {/* Alert preferences */}
-                  <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
+                  <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>Alert preferences</div>
                     <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 16 }}>
                       Manage per-drug email alerts from the Watchlist tab. Global settings coming soon.
@@ -328,7 +328,7 @@ export default function AccountPage() {
                   </div>
 
                   {/* Danger zone */}
-                  <div style={{ background: "var(--panel)", border: "1px solid var(--crit-b)", borderRadius: 12, padding: "24px 24px" }}>
+                  <div style={{ background: "#fff", border: "1px solid var(--crit-b)", borderRadius: 12, padding: "24px 24px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: "var(--crit)", marginBottom: 6 }}>Delete account</div>
                     <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 16, lineHeight: 1.65 }}>
                       Permanently removes your account, watchlist, and all associated data.
@@ -336,7 +336,7 @@ export default function AccountPage() {
                     </div>
                     <a href="mailto:hello@mederti.com?subject=Account%20deletion%20request" style={{
                       fontSize: 13, fontWeight: 500, padding: "8px 16px",
-                      background: "var(--panel)", border: "1px solid var(--crit-b)", color: "var(--crit)",
+                      background: "#fff", border: "1px solid var(--crit-b)", color: "var(--crit)",
                       borderRadius: 7, textDecoration: "none", display: "inline-block",
                     }}>
                       Request account deletion

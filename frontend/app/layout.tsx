@@ -26,10 +26,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem("mederti-theme")==="light")document.documentElement.classList.remove("dark")}catch(e){}` }} />
-      </head>
+    <html lang="en">
+      <head />
       <body className={`${inter.variable} ${dmMono.variable} antialiased`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>

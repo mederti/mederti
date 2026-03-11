@@ -81,11 +81,28 @@ export default function SiteNav() {
   }
 
   const loggedIn = email !== null;
+  const dark = theme === "dark";
+
+  /* ── Theme-dependent colors (header only) ── */
+  const bg       = dark ? "var(--navy, #080f1e)" : "#ffffff";
+  const border   = dark ? "none" : "1px solid #e2e8f0";
+  const logo     = dark ? "/logo-white.png" : "/logo-black.png";
+  const txt      = dark ? "rgba(255,255,255,0.55)" : "rgba(15,23,42,0.55)";
+  const txtHi    = dark ? "#fff" : "#0f172a";
+  const txtMid   = dark ? "rgba(255,255,255,0.8)" : "#334155";
+  const txtDim   = dark ? "rgba(255,255,255,0.4)" : "rgba(15,23,42,0.35)";
+  const btnBg    = dark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.05)";
+  const btnBd    = dark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.12)";
+  const activeBg = dark ? "rgba(255,255,255,0.1)" : "rgba(13,148,136,0.08)";
+  const hoverBg  = dark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.04)";
+  const tealIcon = "var(--teal-l)";
 
   return (
     <nav className="site-nav" style={{
       position: "sticky", top: 0, zIndex: 100,
-      height: 64, background: "var(--navy, #080f1e)",
+      height: 64, background: bg,
+      borderBottom: border,
+      transition: "background 0.2s, border-color 0.2s",
     }}>
       <div style={{
         maxWidth: 1200, margin: "0 auto", height: "100%",
@@ -98,13 +115,12 @@ export default function SiteNav() {
           display: "flex", alignItems: "center",
           textDecoration: "none", flexShrink: 0,
         }}>
-          <img src="/logo-white.png" alt="Mederti" style={{ height: 28 }} />
+          <img src={logo} alt="Mederti" style={{ height: 28, transition: "opacity 0.2s" }} />
         </Link>
 
         {/* ── Center: Nav links ── */}
         <div className="site-nav-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
           {loggedIn ? (
-            /* Authenticated links with icons */
             APP_LINKS.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== "/home" && pathname?.startsWith(href));
               return (
@@ -112,33 +128,32 @@ export default function SiteNav() {
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "7px 12px", borderRadius: 6,
                   fontSize: 13, fontWeight: active ? 500 : 400,
-                  color: active ? "#fff" : "rgba(255,255,255,0.55)",
-                  background: active ? "rgba(255,255,255,0.1)" : "transparent",
+                  color: active ? txtHi : txt,
+                  background: active ? activeBg : "transparent",
                   textDecoration: "none",
                   transition: "color 0.12s, background 0.12s",
                 }}>
-                  <Icon {...ICON} color={active ? "var(--teal-l)" : "rgba(255,255,255,0.4)"} />
+                  <Icon {...ICON} color={active ? tealIcon : txtDim} />
                   <span className="site-nav-label">{label}</span>
                 </Link>
               );
             })
           ) : (
-            /* Guest links (no icons) */
             GUEST_LINKS.map(({ label, href }) => (
               <Link key={label} href={href} style={{
                 display: "flex", alignItems: "center", gap: 4,
                 padding: "7px 14px", borderRadius: 6,
                 fontSize: 14, fontWeight: 430,
-                color: "rgba(255,255,255,0.6)",
+                color: txt,
                 textDecoration: "none",
                 transition: "color 0.15s, background 0.15s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#fff";
-                e.currentTarget.style.background = "rgba(255,255,255,0.07)";
+                e.currentTarget.style.color = txtHi;
+                e.currentTarget.style.background = hoverBg;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = "rgba(255,255,255,0.6)";
+                e.currentTarget.style.color = txt;
                 e.currentTarget.style.background = "transparent";
               }}
               >
@@ -158,23 +173,23 @@ export default function SiteNav() {
               style={{
                 display: "flex", alignItems: "center", gap: 5,
                 padding: "6px 11px", borderRadius: 20,
-                background: "rgba(255,255,255,0.07)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                color: "rgba(255,255,255,0.8)", cursor: "pointer",
+                background: btnBg,
+                border: `1px solid ${btnBd}`,
+                color: txtMid, cursor: "pointer",
                 fontSize: 13, fontWeight: 500,
                 fontFamily: "var(--font-inter), system-ui, sans-serif",
-                transition: "border-color 0.15s",
+                transition: "border-color 0.15s, background 0.15s",
               }}
             >
               <span style={{ fontSize: 14, lineHeight: 1 }}>{country.flag}</span>
               {country.code}
-              <ChevronDown style={{ width: 12, height: 12, color: "rgba(255,255,255,0.4)" }} />
+              <ChevronDown style={{ width: 12, height: 12, color: txtDim }} />
             </button>
 
             {showCountry && (
               <div style={{
                 position: "absolute", top: "calc(100% + 6px)", right: 0,
-                background: "var(--panel)", border: "1px solid var(--app-border)",
+                background: "#fff", border: "1px solid #e2e8f0",
                 borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
                 padding: 4, minWidth: 130, zIndex: 200,
               }}>
@@ -187,7 +202,7 @@ export default function SiteNav() {
                       width: "100%", textAlign: "left",
                       padding: "8px 12px", borderRadius: 6, border: "none",
                       background: c.code === country.code ? "var(--teal-bg)" : "transparent",
-                      color: c.code === country.code ? "var(--teal)" : "var(--app-text-2)",
+                      color: c.code === country.code ? "var(--teal)" : "#334155",
                       fontSize: 13, fontWeight: c.code === country.code ? 500 : 400,
                       cursor: "pointer", fontFamily: "var(--font-inter), system-ui, sans-serif",
                     }}
@@ -202,31 +217,30 @@ export default function SiteNav() {
 
           {/* Theme toggle */}
           <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            aria-label="Toggle dark mode"
+            onClick={() => setTheme(dark ? "light" : "dark")}
+            aria-label="Toggle header theme"
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 34, height: 34, borderRadius: 7,
-              background: "rgba(255,255,255,0.07)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              cursor: "pointer", color: "rgba(255,255,255,0.7)",
-              transition: "background 0.15s",
+              background: btnBg,
+              border: `1px solid ${btnBd}`,
+              cursor: "pointer", color: txtMid,
+              transition: "background 0.15s, border-color 0.15s",
             }}
           >
-            {theme === "dark"
+            {dark
               ? <Sun style={{ width: 15, height: 15 }} />
               : <Moon style={{ width: 15, height: 15 }} />}
           </button>
 
           {/* Auth area */}
           {loggedIn ? (
-            /* User avatar + dropdown */
             <div ref={userRef} style={{ position: "relative" }}>
               <button
                 onClick={() => { setShowUser(v => !v); setShowCountry(false); }}
                 style={{
                   width: 32, height: 32, borderRadius: "50%",
-                  background: "var(--teal)", border: "2px solid rgba(255,255,255,0.2)",
+                  background: "var(--teal)", border: dark ? "2px solid rgba(255,255,255,0.2)" : "2px solid rgba(13,148,136,0.3)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer",
                 }}
@@ -236,20 +250,20 @@ export default function SiteNav() {
               {showUser && (
                 <div style={{
                   position: "absolute", top: "calc(100% + 8px)", right: 0,
-                  background: "var(--panel)", border: "1px solid var(--app-border)",
+                  background: "#fff", border: "1px solid #e2e8f0",
                   borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                   padding: 8, minWidth: 200, zIndex: 200,
                 }}>
-                  <div style={{ padding: "8px 12px 12px", borderBottom: "1px solid var(--app-border)", marginBottom: 6 }}>
-                    <div style={{ fontSize: 12, color: "var(--app-text-4)", marginBottom: 2 }}>Signed in as</div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)", wordBreak: "break-all" }}>{email}</div>
+                  <div style={{ padding: "8px 12px 12px", borderBottom: "1px solid #e2e8f0", marginBottom: 6 }}>
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 2 }}>Signed in as</div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: "#0f172a", wordBreak: "break-all" }}>{email}</div>
                   </div>
                   <Link href="/account" onClick={() => setShowUser(false)} style={{
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "8px 12px", borderRadius: 6,
-                    fontSize: 13, color: "var(--app-text-2)", textDecoration: "none",
+                    fontSize: 13, color: "#334155", textDecoration: "none",
                   }}>
-                    <User {...ICON} color="var(--app-text-3)" />
+                    <User {...ICON} color="#64748b" />
                     Account
                   </Link>
                   <button
@@ -268,23 +282,23 @@ export default function SiteNav() {
               )}
             </div>
           ) : (
-            /* Guest: Log in + CTA */
             <>
               <Link href="/login" style={{
                 display: "flex", alignItems: "center",
                 padding: "7px 18px", borderRadius: 7,
                 fontSize: 13, fontWeight: 500,
-                color: "rgba(255,255,255,0.85)", textDecoration: "none",
-                border: "1px solid rgba(255,255,255,0.2)",
+                color: dark ? "rgba(255,255,255,0.85)" : "#334155",
+                textDecoration: "none",
+                border: `1px solid ${btnBd}`,
                 background: "transparent",
                 transition: "border-color 0.15s, background 0.15s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.35)";
-                e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                e.currentTarget.style.borderColor = dark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.25)";
+                e.currentTarget.style.background = hoverBg;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
+                e.currentTarget.style.borderColor = btnBd;
                 e.currentTarget.style.background = "transparent";
               }}
               >

@@ -181,7 +181,7 @@ export default async function RecallsPage({ searchParams }: Props) {
       {/* Content */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 48px" }}>
         <div style={{
-          background: "var(--panel)",
+          background: "#fff",
           border: "1px solid var(--app-border)",
           borderRadius: 12,
           overflow: "hidden",
@@ -314,7 +314,7 @@ export default async function RecallsPage({ searchParams }: Props) {
                   <Link href={buildUrl(sp, { page: String(page - 1) })} style={{
                     padding: "7px 14px", borderRadius: 7,
                     fontSize: 13, fontWeight: 500,
-                    background: "var(--panel)", border: "1px solid var(--app-border)",
+                    background: "#fff", border: "1px solid var(--app-border)",
                     color: "var(--app-text-2)", textDecoration: "none",
                   }}>Previous</Link>
                 ) : (

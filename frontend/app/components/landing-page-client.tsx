@@ -238,7 +238,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             <div style={{
               display: "flex", flexWrap: "wrap", gap: 6,
               padding: "8px 12px 4px",
-              background: "var(--panel)",
+              background: "#fff",
               borderRadius: "12px 12px 0 0",
               border: "1px solid var(--app-border)",
               borderBottom: "none",
@@ -269,7 +269,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
           <div style={{
             display: "flex", alignItems: "center",
-            background: "var(--panel)",
+            background: "#fff",
             border: `1.5px solid ${focused ? "var(--teal)" : "var(--app-border)"}`,
             borderRadius: files.length > 0 ? "0 0 12px 12px" : 12,
             boxShadow: focused
@@ -488,7 +488,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
                           style={{
                             display: "flex", flexDirection: "column", gap: 6,
                             padding: "14px 16px", borderRadius: 10,
-                            background: "var(--panel)", border: "1px solid var(--app-border)",
+                            background: "#fff", border: "1px solid var(--app-border)",
                             cursor: "pointer", textAlign: "left",
                             transition: "border-color 0.12s, box-shadow 0.12s",
                             fontFamily: "var(--font-inter), sans-serif",
@@ -555,7 +555,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             <div style={{ display: "flex", justifyContent: "flex-start" }}>
               <div style={{
                 padding: "12px 16px", borderRadius: "16px 16px 16px 4px",
-                background: "var(--panel)", border: "1px solid var(--app-border)",
+                background: "#fff", border: "1px solid var(--app-border)",
                 display: "flex", alignItems: "center", gap: 8,
                 fontSize: 14, color: "var(--app-text-4)",
               }}>

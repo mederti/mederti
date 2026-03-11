@@ -60,7 +60,7 @@ export default function AlertsPage() {
         {/* Not signed in */}
         {authed === false && (
           <div style={{
-            background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+            background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
             padding: "64px 24px", textAlign: "center", maxWidth: 460, margin: "0 auto",
           }}>
             <div style={{
@@ -131,7 +131,7 @@ export default function AlertsPage() {
               <Link href="/watchlist" style={{
                 display: "flex", alignItems: "flex-start", gap: 14,
                 padding: "18px 20px",
-                background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+                background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
                 textDecoration: "none", transition: "border-color 0.12s",
               }}
                 className="alert-action-card"
@@ -156,7 +156,7 @@ export default function AlertsPage() {
               <Link href="/account" style={{
                 display: "flex", alignItems: "flex-start", gap: 14,
                 padding: "18px 20px",
-                background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
+                background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
                 textDecoration: "none", transition: "border-color 0.12s",
               }}
                 className="alert-action-card"

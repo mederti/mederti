@@ -125,7 +125,7 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
           {showCountry && (
             <div style={{
               position: "absolute", top: "calc(100% + 6px)", right: 0,
-              background: "var(--panel)", border: "1px solid var(--app-border)",
+              background: "#fff", border: "1px solid var(--app-border)",
               borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
               padding: "4px", minWidth: 100, zIndex: 200,
             }}>
@@ -166,7 +166,7 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
           {showUser && (
             <div style={{
               position: "absolute", top: "calc(100% + 8px)", right: 0,
-              background: "var(--panel)", border: "1px solid var(--app-border)",
+              background: "#fff", border: "1px solid var(--app-border)",
               borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
               padding: 8, minWidth: 200, zIndex: 200,
             }}>

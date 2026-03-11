@@ -247,7 +247,7 @@ export default async function DrugPage({ params }: Props) {
           </div>
 
           {/* ETA */}
-          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
             <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
               When will it be back?
             </div>
@@ -276,7 +276,7 @@ export default async function DrugPage({ params }: Props) {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
             {/* WHERE IS IT */}
-            <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Where is it available?</span>
                 <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
@@ -348,7 +348,7 @@ export default async function DrugPage({ params }: Props) {
             </div>
 
             {/* AI INSIGHT (static) */}
-            <div style={{ background: "var(--panel)", border: "1px solid var(--ind-b)", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ background: "#fff", border: "1px solid var(--ind-b)", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>AI Insight</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--indigo)", fontWeight: 500 }}>
@@ -377,7 +377,7 @@ export default async function DrugPage({ params }: Props) {
 
             {/* TIMELINE */}
             {shortages.length > 0 && (
-              <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)" }}>
                   <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Shortage Timeline</span>
                 </div>
@@ -413,7 +413,7 @@ export default async function DrugPage({ params }: Props) {
 
             {/* RECALLS */}
             {recallData && (recallData.recalls.length > 0 || recallData.resilience_score < 100) && (
-              <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                     Recall History
@@ -495,7 +495,7 @@ export default async function DrugPage({ params }: Props) {
 
             {/* SOURCES */}
             {activeShortages.some((s) => s.source_name || s.source_url) && (
-              <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Verified Sources</span>
                   <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
@@ -542,7 +542,7 @@ export default async function DrugPage({ params }: Props) {
           <div className="drug-right-col" style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 76 }}>
 
             {/* ALTERNATIVES */}
-            <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                   What can I use instead?
@@ -610,7 +610,7 @@ export default async function DrugPage({ params }: Props) {
               </span>
               <Link href="/dashboard" style={{
                 display: "block", width: "100%", fontSize: 13, fontWeight: 500, padding: 9, borderRadius: 7,
-                background: "var(--panel)", border: "1px solid var(--app-border)",
+                background: "#fff", border: "1px solid var(--app-border)",
                 color: "var(--app-text-2)", cursor: "pointer", textAlign: "center", textDecoration: "none",
               }}>
                 Switch to Dashboard view →
@@ -625,7 +625,7 @@ export default async function DrugPage({ params }: Props) {
         borderTop: "1px solid var(--app-border)",
         padding: "20px 32px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "var(--panel)", marginTop: 24,
+        background: "#fff", marginTop: 24,
       }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
           Mederti<span style={{ color: "var(--teal)" }}>.</span>

@@ -49,7 +49,7 @@ const HOW = [
 
 export default function AboutPage() {
   return (
-    <div style={{ background: "var(--panel)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+    <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
       <style>{`
         @media (max-width: 768px) {
           .about-hero { padding: 100px 20px 60px !important; }
@@ -147,7 +147,7 @@ export default function AboutPage() {
           </h2>
           <div className="about-how-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 32 }}>
             {HOW.map((h) => (
-              <div key={h.step} style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px" }}>
+              <div key={h.step} style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "var(--teal)", marginBottom: 16 }}>
                   {h.step}
                 </div>
@@ -214,7 +214,7 @@ export default function AboutPage() {
             </Link>
             <Link href="/dashboard" style={{
               fontSize: 14, fontWeight: 500, padding: "12px 28px",
-              background: "var(--panel)", color: "var(--app-text-2)", border: "1px solid var(--app-border-2)", borderRadius: 8, textDecoration: "none",
+              background: "#fff", color: "var(--app-text-2)", border: "1px solid var(--app-border-2)", borderRadius: 8, textDecoration: "none",
             }}>
               View dashboard →
             </Link>

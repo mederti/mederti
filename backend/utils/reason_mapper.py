@@ -124,6 +124,44 @@ _KEYWORD_MAP: list[tuple[str, str]] = [
     ("mah changed",                "supply_chain"),
     ("agent changed",              "supply_chain"),
     ("regulations related",        "regulatory_action"),
+    # ── Portuguese ──────────────────────────────────────────────────────────
+    ("fabricacao",                 "manufacturing_issue"),
+    ("problema de qualidade",     "manufacturing_issue"),
+    ("materia-prima",             "raw_material"),
+    ("aumento de procura",        "demand_surge"),
+    ("descontinuacao temporaria", "discontinuation"),
+    ("descontinuacao definitiva", "discontinuation"),
+    ("descontinuacao",            "discontinuation"),
+    ("ruptura",                   "supply_chain"),
+    ("importacao",                "distribution"),
+    # ── Polish ──────────────────────────────────────────────────────────────
+    ("brak dostepnosci",          "supply_chain"),
+    ("produkcja",                 "manufacturing_issue"),
+    ("jakosc",                    "manufacturing_issue"),
+    ("surowiec",                  "raw_material"),
+    ("zapotrzebowanie",           "demand_surge"),
+    ("wycofanie",                 "discontinuation"),
+    # ── Greek ───────────────────────────────────────────────────────────────
+    ("elleipsi",                  "supply_chain"),
+    ("paragogi",                  "manufacturing_issue"),
+    ("poiotita",                  "manufacturing_issue"),
+    ("anakleisi",                 "discontinuation"),
+    ("anastoli",                  "regulatory_action"),
+    # ── Turkish ─────────────────────────────────────────────────────────────
+    ("tedarik",                   "supply_chain"),
+    ("uretim",                    "manufacturing_issue"),
+    ("kalite",                    "manufacturing_issue"),
+    ("hammadde",                  "raw_material"),
+    ("talep artisi",              "demand_surge"),
+    ("geri cekme",                "discontinuation"),
+    ("piyasadan cekilme",         "discontinuation"),
+    # ── Malay ───────────────────────────────────────────────────────────────
+    ("pembuatan",                 "manufacturing_issue"),
+    ("bekalan",                   "supply_chain"),
+    ("penarikan",                 "discontinuation"),
+    # ── Arabic (transliterated) ─────────────────────────────────────────────
+    ("naqs",                      "supply_chain"),
+    ("tasni",                     "manufacturing_issue"),
 ]
 
 

@@ -43,6 +43,20 @@ Cron schedule (UTC, staggered from 19:00 UTC = 06:00 AEST/UTC+11):
     TGARecalls  30  5
     FDAMedWatch 45  5
     # ASHP       0  6  (disabled — requires ASHP_API_KEY)
+    # ── Phase 10 — New countries (staggered from 06:00 UTC) ──
+    # Every 12h:  Belgium, Portugal
+    HKDrugOff    0  6
+    IsraelMOH   15  6
+    BelgiumFAMHP 30  6
+    PortInfarmed 45  6
+    PolandMZ      0  7
+    GreeceEOF    15  7
+    ArgANMAT     30  7  (every 48h)
+    TurkeyTITCK  45  7  (every 48h)
+    UAE_MOHAP     0  8  (every 48h)
+    MalaysiaNPRA 15  8  (every 48h)
+    IndiaCDSCO   30  8  (weekly — upstream signal)
+    ChinaNMPA    45  8  (weekly — upstream signal)
 """
 
 from __future__ import annotations
@@ -95,6 +109,20 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "nafdac":          ("backend.scrapers.nafdac_scraper",               "NafdacScraper"),
     # Middle East scrapers
     "sfda":            ("backend.scrapers.sfda_scraper",                 "SFDAScraper"),
+    # Phase 10 — New country scrapers (12 countries)
+    "hk_drugoffice":   ("backend.scrapers.hk_drugoffice_scraper",       "HKDrugOfficeScraper"),
+    "israel_moh":      ("backend.scrapers.israel_moh_scraper",          "IsraelMOHScraper"),
+    "belgium_famhp":   ("backend.scrapers.belgium_famhp_scraper",       "BelgiumFamhpScraper"),
+    "portugal_infarmed":("backend.scrapers.portugal_infarmed_scraper",  "PortugalInfarmedScraper"),
+    "poland_mz":       ("backend.scrapers.poland_mz_scraper",           "PolandMZScraper"),
+    "greece_eof":      ("backend.scrapers.greece_eof_scraper",           "GreeceEOFScraper"),
+    "argentina_anmat": ("backend.scrapers.argentina_anmat_scraper",     "ArgentinaANMATScraper"),
+    "turkey_titck":    ("backend.scrapers.turkey_titck_scraper",        "TurkeyTITCKScraper"),
+    "uae_mohap":       ("backend.scrapers.uae_mohap_scraper",           "UAEMOHAPScraper"),
+    "malaysia_npra":   ("backend.scrapers.malaysia_npra_scraper",       "MalaysiaNPRAScraper"),
+    # Upstream signal scrapers (feed prediction engine, not shortage list)
+    "india_cdsco":     ("backend.scrapers.india_cdsco_scraper",         "IndiaCDSCOScraper"),
+    "china_nmpa":      ("backend.scrapers.china_nmpa_scraper",          "ChinaNMPAScraper"),
     # Licensed supplement scrapers (require API keys)
     "ashp":            ("backend.scrapers.ashp_scraper",                 "ASHPScraper"),
     "tga_recalls":     ("backend.scrapers.tga_recalls_scraper",          "TgaRecallsScraper"),

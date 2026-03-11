@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Mederti",
@@ -112,7 +113,7 @@ export default function PrivacyPage() {
 
       </div>
 
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
@@ -127,28 +128,5 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         {children}
       </p>
     </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer style={{
-      borderTop: "1px solid var(--app-border)",
-      padding: "32px 48px",
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      background: "var(--app-bg)",
-    }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
-        Mederti<span style={{ color: "var(--teal)" }}>.</span>
-      </div>
-      <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-        © 2026 Mederti · Global pharmaceutical shortage intelligence
-      </div>
-      <div style={{ display: "flex", gap: 20 }}>
-        <Link href="/privacy" style={{ fontSize: 13, color: "var(--teal)", textDecoration: "none", fontWeight: 500 }}>Privacy</Link>
-        <Link href="/terms" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Terms</Link>
-        <a href="mailto:hello@mederti.com" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Contact</a>
-      </div>
-    </footer>
   );
 }

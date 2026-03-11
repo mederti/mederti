@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 
 export const metadata: Metadata = {
   title: "About — Mederti",
@@ -66,34 +67,39 @@ export default function AboutPage() {
 
       {/* HERO */}
       <section className="about-hero" style={{ padding: "96px 48px 80px", borderBottom: "1px solid var(--app-border)", background: "var(--app-bg)" }}>
-        <div style={{ maxWidth: 720 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 16 }}>
-            About Mederti
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ maxWidth: 720, margin: "0 auto", textAlign: "center" }}>
+            <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 16 }}>
+              About Mederti
+            </div>
+            <h1 style={{ fontSize: "clamp(32px,5vw,60px)", fontWeight: 700, lineHeight: 1.08, letterSpacing: "-0.03em", color: "var(--app-text)", marginBottom: 24, marginTop: 0 }}>
+              Intelligence at the edge<br />of the supply chain.
+            </h1>
+            <p style={{ fontSize: 18, color: "var(--app-text-3)", lineHeight: 1.7, maxWidth: 600, margin: "0 auto" }}>
+              Mederti was built because pharmaceutical shortages kill people — and most of the
+              information that would help is already public, just scattered across twenty
+              different regulatory websites in twelve languages.
+            </p>
           </div>
-          <h1 style={{ fontSize: "clamp(32px,5vw,60px)", fontWeight: 700, lineHeight: 1.08, letterSpacing: "-0.03em", color: "var(--app-text)", marginBottom: 24, marginTop: 0 }}>
-            Intelligence at the edge<br />of the supply chain.
-          </h1>
-          <p style={{ fontSize: 18, color: "var(--app-text-3)", lineHeight: 1.7, maxWidth: 600, margin: 0 }}>
-            Mederti was built because pharmaceutical shortages kill people — and most of the
-            information that would help is already public, just scattered across twenty
-            different regulatory websites in twelve languages.
-          </p>
         </div>
       </section>
 
       {/* STATS */}
       <section className="about-section" style={{ padding: "0", borderBottom: "1px solid var(--app-border)" }}>
-        <div className="about-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
-          {STATS.map((s, i) => (
-            <div key={s.label} style={{
-              padding: "40px 40px", borderRight: i < 3 ? "1px solid var(--app-border)" : "none",
-            }}>
-              <div style={{ fontSize: 44, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, letterSpacing: "-0.03em", marginBottom: 8 }}>
-                {s.n}
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div className="about-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
+            {STATS.map((s, i) => (
+              <div key={s.label} style={{
+                padding: "40px 40px", borderRight: i < 3 ? "1px solid var(--app-border)" : "none",
+                textAlign: "center",
+              }}>
+                <div style={{ fontSize: 44, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, letterSpacing: "-0.03em", marginBottom: 8 }}>
+                  {s.n}
+                </div>
+                <div style={{ fontSize: 14, color: "var(--app-text-3)" }}>{s.label}</div>
               </div>
-              <div style={{ fontSize: 14, color: "var(--app-text-3)" }}>{s.label}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
@@ -222,31 +228,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <Footer />
+      <SiteFooter />
     </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="about-footer" style={{
-      borderTop: "1px solid var(--app-border)",
-      padding: "32px 48px",
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      background: "var(--app-bg)",
-    }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
-        Mederti<span style={{ color: "var(--teal)" }}>.</span>
-      </div>
-      <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-        © 2026 Mederti · Global pharmaceutical shortage intelligence
-      </div>
-      <div className="about-footer-links" style={{ display: "flex", gap: 20 }}>
-        <Link href="/about" style={{ fontSize: 13, color: "var(--teal)", textDecoration: "none", fontWeight: 500 }}>About</Link>
-        <Link href="/privacy" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Privacy</Link>
-        <Link href="/terms" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Terms</Link>
-        <a href="mailto:hello@mederti.com" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Contact</a>
-      </div>
-    </footer>
   );
 }

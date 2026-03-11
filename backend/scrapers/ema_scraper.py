@@ -307,12 +307,19 @@ class EMAScraper(BaseScraper):
 
         # ── Affected countries ────────────────────────────────────────────────
         raw_countries = get(*self._COUNTRIES_ALIASES)
-        if isinstance(rec.get(next((k for a in self._COUNTRIES_ALIASES
-                                    for k in [a] if k in rec), None), None), list):
-            countries_str = ", ".join(str(c) for c in rec[next(
-                k for a in self._COUNTRIES_ALIASES for k in [a] if k in rec)])
-        else:
+        countries_list: list[str] | None = None
+        # Check if the raw record has a list-type countries field
+        _countries_key = next(
+            (k for a in self._COUNTRIES_ALIASES for k in [a] if k in rec), None
+        )
+        if _countries_key and isinstance(rec.get(_countries_key), list):
+            countries_list = [str(c).strip() for c in rec[_countries_key] if c]
+            countries_str = ", ".join(countries_list)
+        elif raw_countries:
+            countries_list = [c.strip() for c in raw_countries.split(",") if c.strip()]
             countries_str = raw_countries
+        else:
+            countries_str = ""
 
         # ── Severity: EMA shortages are all significant ───────────────────────
         severity = "high" if status == "active" else "low"
@@ -345,6 +352,7 @@ class EMAScraper(BaseScraper):
             "estimated_resolution_date": estimated_resolution,
             "source_url":                source_url,
             "notes":                     notes,
+            "affected_countries":        countries_list,
             "raw_record":                dict(rec),
         }
 

@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import SiteFooter from "@/app/components/site-footer";
 
 interface WatchlistRow {
   id: string;
@@ -349,21 +350,7 @@ export default function AccountPage() {
         </div>
       )}
 
-      <footer className="account-footer" style={{
-        borderTop: "1px solid var(--app-border)",
-        padding: "24px 48px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "var(--app-bg)",
-      }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
-        </div>
-        <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>© 2026 Mederti</div>
-        <div style={{ display: "flex", gap: 20 }}>
-          <Link href="/privacy" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Privacy</Link>
-          <Link href="/terms" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Terms</Link>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

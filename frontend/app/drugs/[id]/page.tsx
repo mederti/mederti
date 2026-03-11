@@ -2,6 +2,7 @@ import { api, DrugDetail, ShortageEvent, Alternative, DrugRecallsResponse } from
 import Link from "next/link";
 import { WatchlistButton } from "@/app/components/watchlist-button";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -621,24 +622,7 @@ export default async function DrugPage({ params }: Props) {
       </div>
 
       {/* FOOTER */}
-      <footer className="drug-footer" style={{
-        borderTop: "1px solid var(--app-border)",
-        padding: "20px 32px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "#fff", marginTop: 24,
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
-        </div>
-        <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-          Shortage data sourced from public regulatory databases. Always verify with authoritative source before clinical use.
-        </div>
-        <div className="drug-footer-links" style={{ display: "flex", gap: 20 }}>
-          <Link href="/privacy" style={{ fontSize: 12, color: "var(--app-text-4)", textDecoration: "none" }}>Privacy</Link>
-          <Link href="/terms" style={{ fontSize: 12, color: "var(--app-text-4)", textDecoration: "none" }}>Terms</Link>
-          <a href="mailto:hello@mederti.com" style={{ fontSize: 12, color: "var(--app-text-4)", textDecoration: "none" }}>Contact</a>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

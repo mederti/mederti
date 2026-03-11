@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 
 export const metadata: Metadata = {
   title: "Pricing — Mederti",
@@ -227,29 +228,7 @@ export default function PricingPage() {
         </Link>
       </section>
 
-      <Footer />
+      <SiteFooter />
     </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="pricing-footer" style={{
-      borderTop: "1px solid var(--app-border)",
-      padding: "32px 48px",
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      background: "var(--app-bg)",
-    }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
-        Mederti<span style={{ color: "var(--teal)" }}>.</span>
-      </div>
-      <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>© 2026 Mederti · Global pharmaceutical shortage intelligence</div>
-      <div className="pricing-footer-links" style={{ display: "flex", gap: 20 }}>
-        <Link href="/about" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>About</Link>
-        <Link href="/privacy" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Privacy</Link>
-        <Link href="/terms" style={{ fontSize: 13, color: "var(--app-text-4)", textDecoration: "none" }}>Terms</Link>
-        <Link href="/pricing" style={{ fontSize: 13, color: "var(--teal)", textDecoration: "none", fontWeight: 500 }}>Pricing</Link>
-      </div>
-    </footer>
   );
 }

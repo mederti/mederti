@@ -59,6 +59,17 @@ NEW_ENTRIES="
 0 3 * * *    $(cron_cmd swissmedic)
 15 3 * * *   $(cron_cmd noma)
 30 3 * * *   $(cron_cmd ages)
+# Phase 9+ / new country scrapers
+45 3 * * *   $(cron_cmd anvisa)
+0 4 * * *    $(cron_cmd pmda)
+15 4 * * *   $(cron_cmd mfds)
+30 4 * * *   $(cron_cmd cofepris)
+45 4 * * *   $(cron_cmd sahpra)
+0 5 * * *    $(cron_cmd nafdac)
+# Middle East scrapers
+15 5 * * *   $(cron_cmd sfda)
+# Licensed supplement scrapers (uncomment when ASHP_API_KEY is set)
+# 0 6 * * *  $(cron_cmd ashp)
 "
 
 # ── Merge with existing crontab (remove old Mederti entries first) ───────────

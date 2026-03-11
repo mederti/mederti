@@ -427,6 +427,14 @@ class BaseScraper(ABC):
                     "notes":                    ev.get("notes"),
                 }
 
+                # ── New optional columns (migration 009) ─────────────
+                if ev.get("affected_countries") is not None:
+                    record["affected_countries"] = ev["affected_countries"]
+                if ev.get("available_alternatives") is not None:
+                    record["available_alternatives"] = ev["available_alternatives"]
+                if ev.get("source_confidence_score") is not None:
+                    record["source_confidence_score"] = ev["source_confidence_score"]
+
                 (
                     self.db.table("shortage_events")
                     .upsert(record, on_conflict="shortage_id")

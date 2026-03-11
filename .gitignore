@@ -29,8 +29,9 @@ var/
 sdist/
 develop-eggs/
 .installed.cfg
-lib/
-lib64/
+# Python lib dirs (not frontend/lib which is needed)
+/lib/
+/lib64/
 *.manifest
 
 # Virtual environments

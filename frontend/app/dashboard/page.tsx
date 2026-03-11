@@ -6,6 +6,7 @@ import WorldMapWrapper from "@/app/components/world-map-wrapper";
 import { fetchNews } from "@/lib/rss";
 import { VideoCard } from "@/app/components/video-embed";
 import { NewsFeed } from "@/app/components/news-feed";
+import SiteFooter from "@/app/components/site-footer";
 
 const COUNTRY_FLAGS: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", CA: "🇨🇦",
@@ -731,24 +732,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* FOOTER */}
-      <footer className="db-footer" style={{
-        borderTop: "1px solid var(--app-border)",
-        padding: "20px 28px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "#fff", marginTop: 0,
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
-        </div>
-        <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-          Data sourced from public regulatory databases. Not for clinical decision-making without verification.
-        </div>
-        <div style={{ display: "flex", gap: 20 }}>
-          <a href="/privacy" style={{ fontSize: 12, color: "var(--app-text-4)", textDecoration: "none" }}>Privacy</a>
-          <a href="/terms" style={{ fontSize: 12, color: "var(--app-text-4)", textDecoration: "none" }}>Terms</a>
-          <a href="mailto:hello@mederti.com" style={{ fontSize: 12, color: "var(--app-text-4)", textDecoration: "none" }}>Contact</a>
-        </div>
-      </footer>
+      <SiteFooter />
 
       {/* CHAT FAB */}
       <div style={{ position: "fixed", bottom: 28, right: 28, zIndex: 200, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12 }}>

@@ -39,8 +39,10 @@ Cron schedule (UTC, staggered from 19:00 UTC = 06:00 AEST/UTC+11):
     COFEPRIS    30  4
     SAHPRA      45  4
     NAFDAC       0  5
-    TGARecalls  15  5
-    FDAMedWatch 30  5
+    SFDA        15  5  (Middle East — Saudi Arabia)
+    TGARecalls  30  5
+    FDAMedWatch 45  5
+    # ASHP       0  6  (disabled — requires ASHP_API_KEY)
 """
 
 from __future__ import annotations
@@ -91,6 +93,10 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "cofepris":        ("backend.scrapers.cofepris_scraper",             "CofeprisseScraper"),
     "sahpra":          ("backend.scrapers.sahpra_scraper",               "SahpraScraper"),
     "nafdac":          ("backend.scrapers.nafdac_scraper",               "NafdacScraper"),
+    # Middle East scrapers
+    "sfda":            ("backend.scrapers.sfda_scraper",                 "SFDAScraper"),
+    # Licensed supplement scrapers (require API keys)
+    "ashp":            ("backend.scrapers.ashp_scraper",                 "ASHPScraper"),
     "tga_recalls":     ("backend.scrapers.tga_recalls_scraper",          "TgaRecallsScraper"),
     "fda_medwatch":    ("backend.scrapers.fda_medwatch_scraper",         "FdaMedwatchScraper"),
     # Recall database scrapers

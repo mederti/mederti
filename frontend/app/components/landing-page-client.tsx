@@ -256,7 +256,8 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
     <>
       {/* ── HERO ─────────────────────────────────────────────── */}
       <div className="lp-hero" style={{
-        background: "var(--navy)",
+        background: "#fff",
+        borderBottom: "1px solid var(--app-border)",
         padding: hasChat ? "24px 24px 20px" : "36px 24px 24px",
         display: "flex", flexDirection: "column", alignItems: "center", gap: hasChat ? 12 : 16,
         transition: "padding 0.3s",
@@ -266,26 +267,26 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
           {!hasChat ? (
             <>
               <h1 style={{
-                fontSize: 42, fontWeight: 700, color: "#fff",
+                fontSize: 42, fontWeight: 700, color: "var(--app-text)",
                 letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 8,
               }}>
                 Find Short-Supply Medicines Globally.
               </h1>
-              <p style={{ fontSize: 15, color: "rgba(255,255,255,0.5)", lineHeight: 1.5 }}>
+              <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.5 }}>
                 Search drugs, upload bulk lists, or scan a barcode. Real-time data from 30 regulatory sources.
               </p>
             </>
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <img src="/logo-white.png" alt="Mederti" style={{ height: 18 }} />
+              <img src="/logo-black.png" alt="Mederti" style={{ height: 18 }} />
               <button
                 onClick={clearChat}
                 title="New search"
                 style={{
-                  background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
+                  background: "var(--app-bg-2)", border: "1px solid var(--app-border)",
                   borderRadius: 6, padding: "4px 10px", cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 5,
-                  color: "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 500,
+                  color: "var(--app-text-3)", fontSize: 11, fontWeight: 500,
                   fontFamily: "var(--font-inter), sans-serif",
                 }}
               >
@@ -413,7 +414,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
           {/* Hint bar */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 16,
-            padding: "8px 0 0", fontSize: 11, color: "rgba(255,255,255,0.3)",
+            padding: "8px 0 0", fontSize: 11, color: "var(--app-text-4)",
           }}>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <Paperclip style={{ width: 10, height: 10 }} /> CSV, Excel, PDF
@@ -435,22 +436,22 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
                 onClick={() => { handleSubmit(undefined, s); }}
                 style={{
                   fontSize: 12, padding: "6px 14px", borderRadius: 20,
-                  background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
-                  color: "rgba(255,255,255,0.55)", cursor: "pointer",
+                  background: "var(--app-bg)", border: "1px solid var(--app-border)",
+                  color: "var(--app-text-3)", cursor: "pointer",
                   fontFamily: "var(--font-inter), sans-serif",
                   transition: "background 0.12s, color 0.12s, border-color 0.12s",
                 }}
                 onMouseEnter={(e) => {
                   const el = e.currentTarget as HTMLElement;
-                  el.style.background = "rgba(255,255,255,0.14)";
-                  el.style.color = "rgba(255,255,255,0.8)";
-                  el.style.borderColor = "rgba(255,255,255,0.3)";
+                  el.style.background = "var(--teal-bg)";
+                  el.style.color = "var(--teal)";
+                  el.style.borderColor = "var(--teal-b)";
                 }}
                 onMouseLeave={(e) => {
                   const el = e.currentTarget as HTMLElement;
-                  el.style.background = "rgba(255,255,255,0.08)";
-                  el.style.color = "rgba(255,255,255,0.55)";
-                  el.style.borderColor = "rgba(255,255,255,0.15)";
+                  el.style.background = "var(--app-bg)";
+                  el.style.color = "var(--app-text-3)";
+                  el.style.borderColor = "var(--app-border)";
                 }}
               >
                 {s}
@@ -473,12 +474,12 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             ].map(({ val, label, href }) => (
               <Link key={label} href={href} style={{
                 display: "flex", alignItems: "center", gap: 6,
-                fontSize: 12, color: "rgba(255,255,255,0.45)",
+                fontSize: 12, color: "var(--app-text-4)",
                 textDecoration: "none",
               }}>
                 <span style={{
                   fontFamily: "var(--font-dm-mono), monospace",
-                  color: "rgba(255,255,255,0.75)", fontWeight: 500,
+                  color: "var(--app-text-2)", fontWeight: 500,
                 }}>{val}</span>
                 {label}
               </Link>
@@ -523,7 +524,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
                         <div key={f.id} style={{
                           display: "flex", alignItems: "center", gap: 6,
                           padding: "6px 10px", borderRadius: 8,
-                          background: msg.role === "user" ? "rgba(255,255,255,0.15)" : "var(--app-bg)",
+                          background: "var(--app-bg)",
                           fontSize: 12,
                         }}>
                           {f.preview ? (

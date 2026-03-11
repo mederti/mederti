@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MessageSquare, Sparkles } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 
 const EXAMPLE_QUESTIONS = [
   "What are the alternatives to amoxicillin in Australia?",
@@ -15,28 +16,30 @@ export default function ChatPage() {
   return (
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)" }}>
 
+      {/* Nav */}
+      <SiteNav />
+
       {/* Hero */}
-      <div style={{ background: "var(--navy)" }}>
-        <SiteNav />
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "48px 24px 44px", textAlign: "center" }}>
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 8,
             padding: "5px 14px", borderRadius: 20,
-            background: "rgba(13,148,136,0.15)", border: "1px solid rgba(13,148,136,0.3)",
+            background: "var(--teal-bg)", border: "1px solid var(--teal-b)",
             marginBottom: 20,
           }}>
-            <Sparkles style={{ width: 13, height: 13, color: "var(--teal-l)" }} strokeWidth={1.8} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--teal-l)", letterSpacing: "0.03em" }}>
+            <Sparkles style={{ width: 13, height: 13, color: "var(--teal)" }} strokeWidth={1.8} />
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--teal)", letterSpacing: "0.03em" }}>
               Coming soon
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 14 }}>
-            <MessageSquare style={{ width: 28, height: 28, color: "var(--teal-l)" }} strokeWidth={1.6} />
-            <h1 style={{ fontSize: 28, fontWeight: 700, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>
+            <MessageSquare style={{ width: 28, height: 28, color: "var(--teal)" }} strokeWidth={1.6} />
+            <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--app-text)", margin: 0, letterSpacing: "-0.02em" }}>
               AI Chat
             </h1>
           </div>
-          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.6)", margin: "0 auto", maxWidth: 520, lineHeight: 1.65 }}>
+          <p style={{ fontSize: 16, color: "var(--app-text-3)", margin: "0 auto", maxWidth: 520, lineHeight: 1.65 }}>
             Ask anything about drug shortages, alternatives, and supply intelligence. Get instant, data-backed answers from across 12 global regulators.
           </p>
         </div>
@@ -169,6 +172,8 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      <SiteFooter />
 
       <style>{`
         .example-chip:hover { border-color: var(--teal-b) !important; color: var(--teal) !important; }

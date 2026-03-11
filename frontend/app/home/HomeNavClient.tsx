@@ -49,7 +49,8 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
   return (
     <nav style={{
       position: "sticky", top: 0, zIndex: 100,
-      height: 56, background: "var(--navy)",
+      height: 56, background: "#fff",
+      borderBottom: "1px solid var(--app-border)",
       display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: "0 24px", gap: 8,
     }}>
@@ -59,7 +60,7 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
           display: "flex", alignItems: "center",
           textDecoration: "none", marginRight: 12, flexShrink: 0,
         }}>
-          <img src="/logo-white.png" alt="Mederti" style={{ height: 22 }} />
+          <img src="/logo-black.png" alt="Mederti" style={{ height: 22 }} />
         </Link>
 
         <div className="home-nav-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -70,12 +71,12 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "7px 10px", borderRadius: 6,
                 fontSize: 13, fontWeight: active ? 500 : 400,
-                color: active ? "#fff" : "rgba(255,255,255,0.5)",
-                background: active ? "rgba(255,255,255,0.1)" : "none",
+                color: active ? "var(--app-text)" : "var(--app-text-3)",
+                background: active ? "var(--teal-bg)" : "none",
                 textDecoration: "none",
                 transition: "color 0.12s, background 0.12s",
               }}>
-                <Icon {...ICON_STYLE} color={active ? "var(--teal-l)" : "rgba(255,255,255,0.4)"} />
+                <Icon {...ICON_STYLE} color={active ? "var(--teal)" : "var(--app-text-4)"} />
                 <span className="home-nav-label">{label}</span>
               </Link>
             );
@@ -93,16 +94,16 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
             style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "6px 10px", borderRadius: 6,
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "rgba(255,255,255,0.8)", cursor: "pointer",
+              background: "var(--app-bg-2)",
+              border: "1px solid var(--app-border)",
+              color: "var(--app-text-2)", cursor: "pointer",
               fontSize: 12, fontWeight: 500,
               fontFamily: "var(--font-inter), sans-serif",
             }}
           >
-            <Globe {...ICON_STYLE} color="rgba(255,255,255,0.5)" />
+            <Globe {...ICON_STYLE} color="var(--app-text-4)" />
             {country}
-            <ChevronDown {...ICON_STYLE} color="rgba(255,255,255,0.4)" />
+            <ChevronDown {...ICON_STYLE} color="var(--app-text-4)" />
           </button>
           {showCountry && (
             <div style={{
@@ -137,7 +138,7 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
             onClick={() => { setShowUser(v => !v); setShowCountry(false); }}
             style={{
               width: 30, height: 30, borderRadius: "50%",
-              background: "var(--teal)", border: "2px solid rgba(255,255,255,0.2)",
+              background: "var(--teal)", border: "2px solid var(--app-border)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 12, fontWeight: 600, color: "#fff",
               cursor: "pointer",

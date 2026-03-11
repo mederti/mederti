@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api, type DrugHit, type ShortageEvent } from "@/lib/api";
@@ -242,16 +243,16 @@ export default function SearchPage() {
 
       <SiteNav />
 
-      {/* DARK HERO */}
-      <div style={{ background: "var(--navy)" }}>
+      {/* Hero */}
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
         <div className="search-hero" style={{ maxWidth: 760, margin: "0 auto", padding: "32px 24px 28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <span style={{ fontSize: 20 }}>⌕</span>
-            <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", margin: 0 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", margin: 0 }}>
               Drug Shortage Search
             </h1>
           </div>
-          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", margin: 0 }}>
+          <p style={{ fontSize: 14, color: "var(--app-text-3)", margin: 0 }}>
             6,000+ active shortages across 12 countries · Updated every 6 hours
           </p>
         </div>
@@ -262,6 +263,8 @@ export default function SearchPage() {
           <SearchResults />
         </Suspense>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

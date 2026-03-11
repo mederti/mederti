@@ -6,6 +6,7 @@ import {
   Home, Search, Bookmark, Activity,
 } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 import HomeSearchClient from "./HomeSearchClient";
 import WatchlistCardClient from "./WatchlistCardClient";
 
@@ -236,19 +237,20 @@ export default async function HomePage() {
 
       {/* ── Hero: search ─────────────────────────────────────────────────── */}
       <div className="home-hero" style={{
-        background: "var(--navy)",
+        background: "#fff",
+        borderBottom: "1px solid var(--app-border)",
         padding: "36px 24px 32px",
         display: "flex", flexDirection: "column", alignItems: "center", gap: 20,
       }}>
         <div style={{ textAlign: "center", maxWidth: 900 }}>
           <h1 style={{
-            fontSize: 42, fontWeight: 700, color: "#fff",
+            fontSize: 42, fontWeight: 700, color: "var(--app-text)",
             letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 10,
             whiteSpace: "nowrap",
           }}>
             Find Short-Supply Medicines Globally.
           </h1>
-          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, maxWidth: 560, margin: "0 auto" }}>
+          <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.6, maxWidth: 560, margin: "0 auto" }}>
             Pharmacists, hospitals, and suppliers use Mederti to track drug shortages, find alternatives, and plan ahead — across 30 regulatory sources in 11 countries.
           </p>
         </div>
@@ -267,12 +269,12 @@ export default async function HomePage() {
           ].map(({ val, label, href }) => (
             <Link key={label} href={href} style={{
               display: "flex", alignItems: "center", gap: 6,
-              fontSize: 12, color: "rgba(255,255,255,0.45)",
+              fontSize: 12, color: "var(--app-text-4)",
               textDecoration: "none",
             }}>
               <span style={{
                 fontFamily: "var(--font-dm-mono), monospace",
-                color: "rgba(255,255,255,0.75)", fontWeight: 500,
+                color: "var(--app-text-2)", fontWeight: 500,
               }}>{val}</span>
               {label}
             </Link>
@@ -628,6 +630,8 @@ export default async function HomePage() {
 
         </div>
       </div>
+
+      <SiteFooter />
 
       {/* ── Mobile sticky bottom nav ─────────────────────────────────────── */}
       <nav className="home-bottom-nav" style={{

@@ -100,13 +100,13 @@ export default async function DrugPage({ params }: Props) {
       {/* NAV */}
       <SiteNav />
 
-      {/* DARK HERO */}
-      <div style={{ background: "var(--navy)" }}>
+      {/* Hero */}
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
         <div className="drug-hero" style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 36px" }}>
 
           {/* Breadcrumb */}
-          <div className="drug-breadcrumb" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "rgba(255,255,255,0.38)", marginBottom: 18 }}>
-            <Link href="/search" style={{ color: "rgba(255,255,255,0.38)", textDecoration: "none" }}>Search</Link>
+          <div className="drug-breadcrumb" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--app-text-4)", marginBottom: 18 }}>
+            <Link href="/search" style={{ color: "var(--app-text-4)", textDecoration: "none" }}>Search</Link>
             <span>›</span>
             {drug.drug_class && (
               <>
@@ -114,7 +114,7 @@ export default async function DrugPage({ params }: Props) {
                 <span>›</span>
               </>
             )}
-            <span style={{ color: "rgba(255,255,255,0.65)" }}>{drug.generic_name}</span>
+            <span style={{ color: "var(--app-text-2)" }}>{drug.generic_name}</span>
           </div>
 
           {/* Drug header row */}
@@ -127,7 +127,7 @@ export default async function DrugPage({ params }: Props) {
                     display: "inline-flex", alignItems: "center", gap: 5,
                     padding: "4px 10px", borderRadius: 5,
                     fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase",
-                    background: "rgba(239,68,68,0.18)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.35)",
+                    background: "var(--crit-bg)", color: "var(--crit)", border: "1px solid var(--crit-b)",
                   }}>
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: "blink 1.6s ease-in-out infinite" }} />
                     Critical Shortage
@@ -138,7 +138,7 @@ export default async function DrugPage({ params }: Props) {
                     display: "inline-flex", alignItems: "center", gap: 5,
                     padding: "4px 10px", borderRadius: 5,
                     fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase",
-                    background: "rgba(185,28,28,0.18)", color: "#fca5a5", border: "1px solid rgba(185,28,28,0.35)",
+                    background: "var(--crit-bg)", color: "var(--crit)", border: "1px solid var(--crit-b)",
                   }}>
                     ⚠ {activeClassIRecalls.length} Class I Recall{activeClassIRecalls.length > 1 ? "s" : ""}
                   </span>
@@ -146,8 +146,8 @@ export default async function DrugPage({ params }: Props) {
                 {drug.atc_code && (
                   <span style={{
                     display: "inline-flex", padding: "4px 10px", borderRadius: 5,
-                    fontSize: 11, background: "rgba(99,102,241,0.18)", color: "#a5b4fc",
-                    border: "1px solid rgba(99,102,241,0.35)",
+                    fontSize: 11, background: "var(--ind-bg)", color: "var(--indigo)",
+                    border: "1px solid var(--ind-b)",
                     fontFamily: "var(--font-dm-mono), monospace",
                   }}>
                     ATC: {drug.atc_code}
@@ -156,39 +156,39 @@ export default async function DrugPage({ params }: Props) {
               </div>
 
               {/* Drug name */}
-              <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.025em", color: "#fff", lineHeight: 1.1, marginBottom: 6 }}>
+              <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.025em", color: "var(--app-text)", lineHeight: 1.1, marginBottom: 6 }}>
                 {drug.generic_name}
                 {drug.strengths?.[0] && (
-                  <span style={{ fontSize: 20, fontWeight: 400, color: "rgba(255,255,255,0.5)", marginLeft: 10 }}>
+                  <span style={{ fontSize: 20, fontWeight: 400, color: "var(--app-text-3)", marginLeft: 10 }}>
                     {drug.strengths[0]}
                   </span>
                 )}
               </div>
 
               {/* Subtitle */}
-              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.48)", marginBottom: 16 }}>
+              <div style={{ fontSize: 14, color: "var(--app-text-3)", marginBottom: 16 }}>
                 {drug.atc_description ?? drug.drug_class ?? "Pharmaceutical"}{drug.routes_of_administration?.[0] && ` · ${drug.routes_of_administration[0]}`}
               </div>
 
               {/* Tag pills */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {drug.drug_class && (
-                  <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.52)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                  <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "var(--app-bg)", color: "var(--app-text-3)", border: "1px solid var(--app-border)" }}>
                     {drug.drug_class}
                   </span>
                 )}
                 {drug.therapeutic_category && (
-                  <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.52)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                  <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "var(--app-bg)", color: "var(--app-text-3)", border: "1px solid var(--app-border)" }}>
                     {drug.therapeutic_category}
                   </span>
                 )}
                 {drug.is_controlled_substance && (
-                  <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.52)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                  <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "var(--app-bg)", color: "var(--app-text-3)", border: "1px solid var(--app-border)" }}>
                     Controlled Substance
                   </span>
                 )}
                 {drug.dosage_forms?.slice(0, 2).map((f) => (
-                  <span key={f} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.52)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                  <span key={f} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "var(--app-bg)", color: "var(--app-text-3)", border: "1px solid var(--app-border)" }}>
                     {f}
                   </span>
                 ))}
@@ -198,9 +198,9 @@ export default async function DrugPage({ params }: Props) {
             {/* Right — shortages count + watchlist */}
             <div className="drug-header-meta" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12, flexShrink: 0, minWidth: 220 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,0.38)", display: "inline-block" }} />
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.42)" }}>
-                  Updated today · <strong style={{ color: "#5eead4" }}>{activeShortages.length}</strong> active shortages
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--app-text-4)", display: "inline-block" }} />
+                <span style={{ fontSize: 12, color: "var(--app-text-3)" }}>
+                  Updated today · <strong style={{ color: "var(--teal)" }}>{activeShortages.length}</strong> active shortages
                 </span>
               </div>
               <WatchlistButton drugId={id} />

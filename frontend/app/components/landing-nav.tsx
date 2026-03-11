@@ -79,19 +79,19 @@ export default function SiteNav() {
 
   const loggedIn = email !== null;
 
-  /* ── Header colors (always dark) ── */
-  const bg       = "var(--navy, #080f1e)";
-  const border   = "none";
-  const logo     = "/logo-white.png";
-  const txt      = "rgba(255,255,255,0.55)";
-  const txtHi    = "#fff";
-  const txtMid   = "rgba(255,255,255,0.8)";
-  const txtDim   = "rgba(255,255,255,0.4)";
-  const btnBg    = "rgba(255,255,255,0.07)";
-  const btnBd    = "rgba(255,255,255,0.12)";
-  const activeBg = "rgba(255,255,255,0.1)";
-  const hoverBg  = "rgba(255,255,255,0.07)";
-  const tealIcon = "var(--teal-l)";
+  /* ── Header colors (light) ── */
+  const bg       = "#fff";
+  const border   = "1px solid var(--app-border)";
+  const logo     = "/logo-black.png";
+  const txt      = "var(--app-text-3)";
+  const txtHi    = "var(--app-text)";
+  const txtMid   = "var(--app-text-2)";
+  const txtDim   = "var(--app-text-4)";
+  const btnBg    = "var(--app-bg-2)";
+  const btnBd    = "var(--app-border)";
+  const activeBg = "var(--teal-bg)";
+  const hoverBg  = "var(--app-bg-2)";
+  const tealIcon = "var(--teal)";
 
   return (
     <nav className="site-nav" style={{
@@ -218,7 +218,7 @@ export default function SiteNav() {
                 onClick={() => { setShowUser(v => !v); setShowCountry(false); }}
                 style={{
                   width: 32, height: 32, borderRadius: "50%",
-                  background: "var(--teal)", border: "2px solid rgba(255,255,255,0.2)",
+                  background: "var(--teal)", border: "2px solid var(--app-border)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer",
                 }}
@@ -265,14 +265,14 @@ export default function SiteNav() {
                 display: "flex", alignItems: "center",
                 padding: "7px 18px", borderRadius: 7,
                 fontSize: 13, fontWeight: 500,
-                color: "rgba(255,255,255,0.85)",
+                color: "var(--app-text-2)",
                 textDecoration: "none",
                 border: `1px solid ${btnBd}`,
                 background: "transparent",
                 transition: "border-color 0.15s, background 0.15s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.35)";
+                e.currentTarget.style.borderColor = "var(--app-border-2)";
                 e.currentTarget.style.background = hoverBg;
               }}
               onMouseLeave={(e) => {

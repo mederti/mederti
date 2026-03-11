@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bookmark, LogIn, Search, Trash2 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 
 interface WatchItem {
   id: string;
@@ -72,15 +73,17 @@ export default function WatchlistPage() {
   return (
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)" }}>
 
+      {/* Nav */}
+      <SiteNav />
+
       {/* Hero */}
-      <div style={{ background: "var(--navy)" }}>
-        <SiteNav />
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px 28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <Bookmark style={{ width: 20, height: 20, color: "var(--teal-l)" }} strokeWidth={1.8} />
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: 0 }}>Watchlist</h1>
+            <Bookmark style={{ width: 20, height: 20, color: "var(--teal)" }} strokeWidth={1.8} />
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--app-text)", margin: 0 }}>Watchlist</h1>
           </div>
-          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", margin: 0 }}>
+          <p style={{ fontSize: 14, color: "var(--app-text-3)", margin: 0 }}>
             Drugs you are monitoring for shortage and recall updates.
           </p>
         </div>
@@ -271,6 +274,8 @@ export default function WatchlistPage() {
           </div>
         )}
       </div>
+
+      <SiteFooter />
 
       <style>{`
         .watchlist-row:hover { background: var(--app-bg) !important; }

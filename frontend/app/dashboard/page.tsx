@@ -748,11 +748,11 @@ export default async function DashboardPage() {
         </div>
         <button style={{
           display: "flex", alignItems: "center", gap: 10,
-          background: "var(--navy)", color: "#fff",
+          background: "var(--teal)", color: "#fff",
           padding: "14px 20px", borderRadius: 50,
           fontSize: 14, fontWeight: 600, fontFamily: "var(--font-inter), sans-serif",
           cursor: "pointer", border: "none",
-          boxShadow: "0 4px 20px rgba(15,23,42,0.3)",
+          boxShadow: "0 4px 20px rgba(13,148,136,0.3)",
         }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--teal)", animation: "blink 1.6s ease-in-out infinite", display: "inline-block" }} />
           Ask Mederti AI

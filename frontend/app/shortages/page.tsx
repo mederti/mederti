@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { api, ShortageListResponse } from "@/lib/api";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 
 interface SearchParams {
   country?: string;
@@ -90,52 +91,54 @@ export default async function ShortagesPage({ searchParams }: Props) {
   return (
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)" }}>
 
+      {/* Nav */}
+      <SiteNav />
+
       {/* Hero */}
-      <div style={{ background: "var(--navy)" }}>
-        <SiteNav />
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px 28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <AlertCircle style={{ width: 20, height: 20, color: "var(--teal-l)" }} strokeWidth={1.8} />
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: 0 }}>Drug Shortages</h1>
+            <AlertCircle style={{ width: 20, height: 20, color: "var(--teal)" }} strokeWidth={1.8} />
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--app-text)", margin: 0 }}>Drug Shortages</h1>
           </div>
-          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", margin: 0 }}>
+          <p style={{ fontSize: 14, color: "var(--app-text-3)", margin: 0 }}>
             {total.toLocaleString()} shortage{total !== 1 ? "s" : ""} across all monitored sources
           </p>
         </div>
       </div>
 
       {/* Filter chips */}
-      <div style={{ background: "var(--navy-2)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "12px 24px", display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center" }}>
 
           {/* Status filters */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>Status</span>
+            <span style={{ fontSize: 11, color: "var(--app-text-4)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>Status</span>
             <Link href={buildUrl(sp, { status: undefined, page: "1" })} style={{
               padding: "4px 10px", borderRadius: 20, fontSize: 12, textDecoration: "none", fontWeight: 500,
-              background: !sp.status ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
-              color: !sp.status ? "#fff" : "rgba(255,255,255,0.5)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: !sp.status ? "var(--teal-bg)" : "var(--app-bg)",
+              color: !sp.status ? "var(--teal)" : "var(--app-text-3)",
+              border: `1px solid ${!sp.status ? "var(--teal-b)" : "var(--app-border)"}`,
             }}>All</Link>
             {STATUSES.map(s => (
               <Link key={s} href={buildUrl(sp, { status: s, page: "1" })} style={{
                 padding: "4px 10px", borderRadius: 20, fontSize: 12, textDecoration: "none", fontWeight: 500,
                 textTransform: "capitalize",
-                background: sp.status === s ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
-                color: sp.status === s ? "#fff" : "rgba(255,255,255,0.5)",
-                border: "1px solid rgba(255,255,255,0.1)",
+                background: sp.status === s ? "var(--teal-bg)" : "var(--app-bg)",
+                color: sp.status === s ? "var(--teal)" : "var(--app-text-3)",
+                border: `1px solid ${sp.status === s ? "var(--teal-b)" : "var(--app-border)"}`,
               }}>{s}</Link>
             ))}
           </div>
 
           {/* Severity filters */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>Severity</span>
+            <span style={{ fontSize: 11, color: "var(--app-text-4)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>Severity</span>
             <Link href={buildUrl(sp, { severity: undefined, page: "1" })} style={{
               padding: "4px 10px", borderRadius: 20, fontSize: 12, textDecoration: "none", fontWeight: 500,
-              background: !sp.severity ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
-              color: !sp.severity ? "#fff" : "rgba(255,255,255,0.5)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: !sp.severity ? "var(--teal-bg)" : "var(--app-bg)",
+              color: !sp.severity ? "var(--teal)" : "var(--app-text-3)",
+              border: `1px solid ${!sp.severity ? "var(--teal-b)" : "var(--app-border)"}`,
             }}>All</Link>
             {SEVERITIES.map(sev => {
               const style = SEV_STYLES[sev];
@@ -144,9 +147,9 @@ export default async function ShortagesPage({ searchParams }: Props) {
                 <Link key={sev} href={buildUrl(sp, { severity: sev, page: "1" })} style={{
                   padding: "4px 10px", borderRadius: 20, fontSize: 12, textDecoration: "none",
                   fontWeight: 500, textTransform: "capitalize",
-                  background: active ? style.bg : "rgba(255,255,255,0.04)",
-                  color: active ? style.color : "rgba(255,255,255,0.5)",
-                  border: `1px solid ${active ? style.bg : "rgba(255,255,255,0.1)"}`,
+                  background: active ? style.bg : "var(--app-bg)",
+                  color: active ? style.color : "var(--app-text-3)",
+                  border: `1px solid ${active ? style.bg : "var(--app-border)"}`,
                 }}>{sev}</Link>
               );
             })}
@@ -287,6 +290,8 @@ export default async function ShortagesPage({ searchParams }: Props) {
           )}
         </div>
       </div>
+
+      <SiteFooter />
 
       <style>{`
         .shortage-row:hover { background: var(--app-bg) !important; }

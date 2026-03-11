@@ -57,7 +57,7 @@ function SignupForm() {
       }}>
         <div style={{
           width: "100%", maxWidth: 420,
-          background: "#fff", border: "1px solid var(--app-border)",
+          background: "var(--panel)", border: "1px solid var(--app-border)",
           borderRadius: 14, padding: "36px 40px", textAlign: "center",
         }}>
           <div style={{ fontSize: 36, marginBottom: 14 }}>✓</div>
@@ -81,7 +81,7 @@ function SignupForm() {
     }}>
       <div style={{
         width: "100%", maxWidth: 420,
-        background: "#fff", border: "1px solid var(--app-border)",
+        background: "var(--panel)", border: "1px solid var(--app-border)",
         borderRadius: 14, padding: "36px 40px",
       }}>
         {/* Logo */}

@@ -5,7 +5,7 @@ import {
   ArrowLeftRight, Globe2, Bell, ChevronRight, ExternalLink,
   Home, Search, Bookmark, Activity,
 } from "lucide-react";
-import HomeNavClient from "./HomeNavClient";
+import SiteNav from "@/app/components/landing-nav";
 import HomeSearchClient from "./HomeSearchClient";
 import WatchlistCardClient from "./WatchlistCardClient";
 
@@ -165,17 +165,17 @@ export default async function HomePage() {
   const PREDICTED = [
     {
       drug: "Ciprofloxacin 500mg",
-      reason: "API supplier in Hyderabad flagged by FDA. Three AU distributors source from this site.",
+      reason: "Likely to hit AU shelves in ~45 days. API supplier flagged by FDA — consider stocking alternatives now.",
       risk: "High risk", riskCls: "high" as const, eta: "~45 days",
     },
     {
       drug: "Metformin 500mg",
-      reason: "Same API supplier as current metformin 850mg shortage. Historically cascades within 60 days.",
+      reason: "Same supply chain as the current 850mg shortage. Hospitals and pharmacies should prepare for dose-adjusted protocols.",
       risk: "AI signal", riskCls: "ai" as const, eta: "~60 days",
     },
     {
       drug: "Salbutamol inhaler 100mcg",
-      reason: "UK and Canada reporting low stock. Two of three distributors below threshold.",
+      reason: "UK and Canada already low. Two of three AU distributors below safety threshold — plan orders early.",
       risk: "Med risk", riskCls: "med" as const, eta: "~30 days",
     },
   ];
@@ -232,7 +232,7 @@ export default async function HomePage() {
       `}</style>
 
       {/* ── Sticky top nav ───────────────────────────────────────────────── */}
-      <HomeNavClient defaultCountry="AU" />
+      <SiteNav />
 
       {/* ── Hero: search ─────────────────────────────────────────────────── */}
       <div className="home-hero" style={{
@@ -243,13 +243,13 @@ export default async function HomePage() {
         <div style={{ textAlign: "center", maxWidth: 900 }}>
           <h1 style={{
             fontSize: 42, fontWeight: 700, color: "#fff",
-            letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 8,
+            letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 10,
             whiteSpace: "nowrap",
           }}>
             Find Short-Supply Medicines Globally.
           </h1>
-          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.5)", lineHeight: 1.5 }}>
-            Real-time shortages, recalls, and alternatives across 30 regulatory sources.
+          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, maxWidth: 560, margin: "0 auto" }}>
+            Pharmacists, hospitals, and suppliers use Mederti to track drug shortages, find alternatives, and plan ahead — across 30 regulatory sources in 11 countries.
           </p>
         </div>
 
@@ -260,10 +260,10 @@ export default async function HomePage() {
           display: "flex", alignItems: "center", gap: 24, flexWrap: "nowrap",
         }}>
           {[
-            { val: (summary?.total_active ?? "…").toLocaleString(), label: "active shortages", href: "/shortages?status=active" },
+            { val: (summary?.total_active ?? "…").toLocaleString(), label: "active shortages tracked", href: "/shortages?status=active" },
             { val: "30",   label: "regulatory sources", href: "/shortages" },
-            { val: "11",   label: "countries",          href: "/shortages" },
-            { val: "live", label: "data feed",          href: "/shortages" },
+            { val: "11",   label: "countries monitored", href: "/shortages" },
+            { val: "live", label: "updated every 30 min", href: "/shortages" },
           ].map(({ val, label, href }) => (
             <Link key={label} href={href} style={{
               display: "flex", alignItems: "center", gap: 6,
@@ -285,16 +285,16 @@ export default async function HomePage() {
         <div className="home-grid">
 
           {/* ── Card 1: Active Shortages AU ──────────────────────────────── */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={AlertCircle}
-              title="Active Shortages — AU"
+              title="What's short right now — AU"
               iconColor="var(--crit)"
-              sub={auTotal ? `${auTotal} total` : undefined}
+              sub={auTotal ? `${auTotal} active` : undefined}
               viewHref="/shortages?country=AU&status=active"
             />
             {auShortages.length === 0 ? (
-              <EmptyState label="No active shortages found for Australia." />
+              <EmptyState label="No active shortages in Australia right now — good news for your supply chain." />
             ) : (
               <div>
                 {auShortages.map(row => {
@@ -328,10 +328,10 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 2: My Watchlist ─────────────────────────────────────── */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={Bookmark}
-              title="My Watchlist"
+              title="Drugs you're watching"
               iconColor="var(--teal)"
             />
             <WatchlistCardClient />
@@ -339,19 +339,19 @@ export default async function HomePage() {
 
           {/* ── Card 3: Recent Recalls ───────────────────────────────────── */}
           <div style={{
-            background: "#fff",
+            background: "var(--panel)",
             border: `1px solid ${auRecalls.some(r => r.recall_class === "I") ? "var(--crit-b)" : "var(--app-border)"}`,
             borderRadius: 12, overflow: "hidden",
           }}>
             <CardHeader
               icon={PackageX}
-              title={recallsAreGlobal ? "Recent Class I Recalls — Global" : "Recent Recalls — AU"}
+              title={recallsAreGlobal ? "Safety recalls to act on — Global" : "Safety recalls to act on — AU"}
               iconColor="var(--crit)"
               sub={recallSummary ? `${recallSummary.class_i_count} Class I active` : undefined}
               viewHref={recallsAreGlobal ? "/recalls?recall_class=I" : "/recalls?country_code=AU"}
             />
             {auRecalls.length === 0 ? (
-              <EmptyState label="No recent recalls found." />
+              <EmptyState label="No active recalls requiring action right now." />
             ) : (
               <div>
                 {auRecalls.map(r => {
@@ -388,12 +388,12 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 4: Predicted Shortages ──────────────────────────────── */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={TrendingUp}
-              title="Predicted Shortages"
+              title="Get ahead of what's coming"
               iconColor="var(--indigo)"
-              sub="AI signals · illustrative"
+              sub="AI early-warning signals"
             />
             <div style={{ display: "flex", flexDirection: "column" }}>
               {PREDICTED.map(p => {
@@ -430,12 +430,12 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 5: TGA Alerts ───────────────────────────────────────── */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={ShieldAlert}
-              title="TGA Alerts — AU"
+              title="Regulatory alerts — TGA"
               iconColor="var(--high)"
-              sub="Therapeutic Goods Administration"
+              sub="Direct from the regulator"
               viewHref="https://www.tga.gov.au/safety/shortages-and-supply-disruptions/medicine-shortages"
             />
             {/* Live shortage rows (critical/high) */}
@@ -508,12 +508,12 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 6: Alternatives ─────────────────────────────────────── */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={ArrowLeftRight}
-              title="Therapeutic Alternatives"
+              title="What to dispense instead"
               iconColor="var(--low)"
-              sub="For drugs in shortage"
+              sub="Clinically-matched alternatives"
               viewHref="/search"
             />
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -563,16 +563,16 @@ export default async function HomePage() {
           </div>
 
           {/* ── Card 7: Global Coverage (full width) ─────────────────────── */}
-          <div className="home-full" style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+          <div className="home-full" style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={Globe2}
-              title="Global Coverage"
+              title="Supply risk by country"
               iconColor="var(--indigo)"
-              sub={summary ? `${summary.total_active.toLocaleString()} active shortages across ${topCountries.length} countries` : undefined}
+              sub={summary ? `${summary.total_active.toLocaleString()} shortages across ${topCountries.length} countries` : undefined}
               viewHref="/shortages"
             />
             {topCountries.length === 0 ? (
-              <EmptyState label="Loading global coverage…" />
+              <EmptyState label="Loading supply intelligence across countries…" />
             ) : (
               <div style={{ padding: "16px 20px" }}>
                 <div style={{
@@ -633,7 +633,7 @@ export default async function HomePage() {
       <nav className="home-bottom-nav" style={{
         display: "none",
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
-        background: "#fff", borderTop: "1px solid var(--app-border)",
+        background: "var(--panel)", borderTop: "1px solid var(--app-border)",
         height: 60,
         alignItems: "stretch",
         boxShadow: "0 -2px 12px rgba(0,0,0,0.06)",

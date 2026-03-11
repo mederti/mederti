@@ -264,7 +264,7 @@ export default function LandingChatClient() {
                           style={{
                             display: "flex", flexDirection: "column", gap: 6,
                             padding: "14px 16px", borderRadius: 10,
-                            background: "#fff", border: "1px solid var(--app-border)",
+                            background: "var(--panel)", border: "1px solid var(--app-border)",
                             cursor: "pointer", textAlign: "left",
                             transition: "border-color 0.12s, box-shadow 0.12s",
                             fontFamily: "var(--font-inter), sans-serif",
@@ -334,7 +334,7 @@ export default function LandingChatClient() {
             <div style={{ display: "flex", justifyContent: "flex-start" }}>
               <div style={{
                 padding: "12px 16px", borderRadius: "16px 16px 16px 4px",
-                background: "#fff", border: "1px solid var(--app-border)",
+                background: "var(--panel)", border: "1px solid var(--app-border)",
                 display: "flex", alignItems: "center", gap: 8,
                 fontSize: 14, color: "var(--app-text-4)",
               }}>

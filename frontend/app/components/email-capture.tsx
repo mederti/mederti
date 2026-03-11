@@ -61,7 +61,7 @@ export function EmailCapture({
           padding: small ? "11px 14px" : "13px 16px",
           borderRadius: 8,
           border: "1px solid var(--app-border-2)",
-          background: "#fff",
+          background: "var(--panel)",
           color: "var(--app-text)",
           fontSize: small ? 13 : 14,
           fontFamily: "var(--font-inter), sans-serif",

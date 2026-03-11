@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, LogIn, Bookmark, Settings } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
-import HomeNavClient from "../home/HomeNavClient";
+import SiteNav from "@/app/components/landing-nav";
 
 const ICON = { width: 15, height: 15, strokeWidth: 1.5 } as const;
 
@@ -29,7 +29,7 @@ export default function AlertsPage() {
 
       {/* Hero */}
       <div style={{ background: "var(--navy)" }}>
-        <HomeNavClient defaultCountry="AU" />
+        <SiteNav />
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px 28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <Bell style={{ width: 20, height: 20, color: "var(--teal-l)" }} strokeWidth={1.8} />
@@ -60,7 +60,7 @@ export default function AlertsPage() {
         {/* Not signed in */}
         {authed === false && (
           <div style={{
-            background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+            background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
             padding: "64px 24px", textAlign: "center", maxWidth: 460, margin: "0 auto",
           }}>
             <div style={{
@@ -131,7 +131,7 @@ export default function AlertsPage() {
               <Link href="/watchlist" style={{
                 display: "flex", alignItems: "flex-start", gap: 14,
                 padding: "18px 20px",
-                background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+                background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
                 textDecoration: "none", transition: "border-color 0.12s",
               }}
                 className="alert-action-card"
@@ -156,7 +156,7 @@ export default function AlertsPage() {
               <Link href="/account" style={{
                 display: "flex", alignItems: "flex-start", gap: 14,
                 padding: "18px 20px",
-                background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+                background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
                 textDecoration: "none", transition: "border-color 0.12s",
               }}
                 className="alert-action-card"

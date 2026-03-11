@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import SiteNav from "@/app/components/landing-nav";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Mederti",
@@ -8,22 +9,9 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+    <div style={{ background: "var(--panel)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
 
-      {/* NAV */}
-      <nav style={{
-        height: 60, background: "#fff", borderBottom: "1px solid var(--app-border)",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 48px", position: "sticky", top: 0, zIndex: 50,
-      }}>
-        <Link href="/" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "var(--app-text)", textDecoration: "none" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
-        </Link>
-        <div style={{ display: "flex", gap: 24 }}>
-          <Link href="/terms" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>Terms</Link>
-          <Link href="/dashboard" style={{ fontSize: 13, color: "var(--teal)", textDecoration: "none", fontWeight: 500 }}>Dashboard →</Link>
-        </div>
-      </nav>
+      <SiteNav />
 
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px 80px" }}>
 

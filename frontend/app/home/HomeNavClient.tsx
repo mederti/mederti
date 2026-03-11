@@ -6,8 +6,9 @@ import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
   Home, Search, MessageSquare, Bell, Bookmark,
-  Globe, ChevronDown, User, LogOut,
+  Globe, ChevronDown, User, LogOut, Sun, Moon,
 } from "lucide-react";
+import { useTheme } from "@/app/components/theme-provider";
 
 const NAV_LINKS = [
   { href: "/home",      label: "Home",      icon: Home },
@@ -28,6 +29,7 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
   const [country, setCountry]     = useState(defaultCountry);
   const [showCountry, setShowCountry] = useState(false);
   const [showUser, setShowUser]   = useState(false);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -83,8 +85,24 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
         </div>
       </div>
 
-      {/* Right: country selector + user */}
+      {/* Right: theme toggle + country selector + user */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+
+        {/* Theme toggle */}
+        <button
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          aria-label="Toggle dark mode"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 32, height: 32, borderRadius: 6,
+            background: "rgba(255,255,255,0.08)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            cursor: "pointer", color: "rgba(255,255,255,0.7)",
+            transition: "background 0.15s",
+          }}
+        >
+          {theme === "dark" ? <Sun {...ICON_STYLE} /> : <Moon {...ICON_STYLE} />}
+        </button>
 
         {/* Country selector */}
         <div style={{ position: "relative" }}>
@@ -107,7 +125,7 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
           {showCountry && (
             <div style={{
               position: "absolute", top: "calc(100% + 6px)", right: 0,
-              background: "#fff", border: "1px solid var(--app-border)",
+              background: "var(--panel)", border: "1px solid var(--app-border)",
               borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
               padding: "4px", minWidth: 100, zIndex: 200,
             }}>
@@ -148,7 +166,7 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
           {showUser && (
             <div style={{
               position: "absolute", top: "calc(100% + 8px)", right: 0,
-              background: "#fff", border: "1px solid var(--app-border)",
+              background: "var(--panel)", border: "1px solid var(--app-border)",
               borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
               padding: 8, minWidth: 200, zIndex: 200,
             }}>

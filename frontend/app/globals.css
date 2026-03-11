@@ -167,6 +167,31 @@
   --app-text-4:   #94a3b8;
 }
 
+/* Mederti dark mode overrides */
+.dark {
+  --panel:        #111827;
+  --app-bg:       #0b1120;
+  --app-bg-2:     #111827;
+  --app-border:   rgba(255,255,255,0.1);
+  --app-border-2: rgba(255,255,255,0.18);
+  --app-text:     #f0f4f8;
+  --app-text-2:   #cbd5e1;
+  --app-text-3:   #94a3b8;
+  --app-text-4:   #64748b;
+  --crit-bg:      rgba(220,38,38,0.15);
+  --crit-b:       rgba(220,38,38,0.35);
+  --high-bg:      rgba(234,88,12,0.15);
+  --high-b:       rgba(234,88,12,0.35);
+  --med-bg:       rgba(202,138,4,0.15);
+  --med-b:        rgba(202,138,4,0.35);
+  --low-bg:       rgba(22,163,74,0.15);
+  --low-b:        rgba(22,163,74,0.35);
+  --ind-bg:       rgba(79,70,229,0.15);
+  --ind-b:        rgba(79,70,229,0.35);
+  --teal-bg:      rgba(13,148,136,0.18);
+  --teal-b:       rgba(13,148,136,0.4);
+}
+
 /* Keyframes */
 @keyframes blink {
   0%, 100% { opacity: 1; }

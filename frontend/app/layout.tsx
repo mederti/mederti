@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, DM_Mono } from "next/font/google";
+import ThemeProvider from "./components/theme-provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -25,9 +26,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem("mederti-theme")==="light")document.documentElement.classList.remove("dark")}catch(e){}` }} />
+      </head>
       <body className={`${inter.variable} ${dmMono.variable} antialiased`}>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

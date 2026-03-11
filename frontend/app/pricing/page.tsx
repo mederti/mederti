@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import SiteNav from "@/app/components/landing-nav";
 
 export const metadata: Metadata = {
   title: "Pricing — Mederti",
@@ -65,10 +66,9 @@ const FAQS = [
 
 export default function PricingPage() {
   return (
-    <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+    <div style={{ background: "var(--panel)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
       <style>{`
         @media (max-width: 768px) {
-          .pricing-nav { padding: 0 20px !important; }
           .pricing-hero { padding: 80px 20px 60px !important; }
           .pricing-section { padding: 60px 20px !important; }
           .pricing-cards { grid-template-columns: 1fr !important; max-width: 420px !important; }
@@ -78,24 +78,7 @@ export default function PricingPage() {
         }
       `}</style>
 
-      {/* NAV */}
-      <nav className="pricing-nav" style={{
-        height: 60, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)",
-        borderBottom: "1px solid var(--app-border)",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 48px", position: "sticky", top: 0, zIndex: 50,
-      }}>
-        <Link href="/" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "var(--app-text)", textDecoration: "none" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
-        </Link>
-        <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-          <Link href="/about" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>About</Link>
-          <Link href="/contact" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>Contact</Link>
-          <Link href="/dashboard" style={{ fontSize: 13, fontWeight: 500, color: "#fff", background: "var(--teal)", padding: "7px 16px", borderRadius: 6, textDecoration: "none" }}>
-            Dashboard →
-          </Link>
-        </div>
-      </nav>
+      <SiteNav />
 
       {/* HERO */}
       <section className="pricing-hero" style={{ padding: "96px 48px 80px", background: "var(--app-bg)", borderBottom: "1px solid var(--app-border)" }}>
@@ -117,7 +100,7 @@ export default function PricingPage() {
         <div className="pricing-cards" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, maxWidth: 1000, margin: "0 auto" }}>
 
           {/* Free */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 14, padding: "36px 32px" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "36px 32px" }}>
             <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--app-text-4)", marginBottom: 20 }}>Free</div>
             <div style={{ fontSize: 48, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.03em" }}>
               $0<span style={{ fontSize: 16, color: "var(--app-text-4)", fontWeight: 400, letterSpacing: 0 }}>/mo</span>
@@ -135,7 +118,7 @@ export default function PricingPage() {
             <Link href="/signup" style={{
               display: "block", width: "100%", padding: "12px",
               borderRadius: 8, fontSize: 14, fontWeight: 500, textAlign: "center",
-              background: "#fff", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
+              background: "var(--panel)", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
               textDecoration: "none", boxSizing: "border-box",
             }}>
               Get started free
@@ -180,7 +163,7 @@ export default function PricingPage() {
           </div>
 
           {/* Enterprise */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 14, padding: "36px 32px" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "36px 32px" }}>
             <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--app-text-4)", marginBottom: 20 }}>Enterprise</div>
             <div style={{ fontSize: 36, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>Custom</div>
             <div style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 32, paddingBottom: 32, borderBottom: "1px solid var(--app-border)" }}>
@@ -196,7 +179,7 @@ export default function PricingPage() {
             <Link href="/contact?subject=Enterprise+enquiry" style={{
               display: "block", width: "100%", padding: "12px",
               borderRadius: 8, fontSize: 14, fontWeight: 500, textAlign: "center",
-              background: "#fff", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
+              background: "var(--panel)", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
               textDecoration: "none", boxSizing: "border-box",
             }}>
               Talk to us →

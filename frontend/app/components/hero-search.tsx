@@ -87,7 +87,7 @@ export function HeroSearch() {
       <form onSubmit={handleSubmit}>
         <div style={{
           display: "flex", alignItems: "center",
-          background: "#fff",
+          background: "var(--panel)",
           border: "1.5px solid var(--app-border-2)",
           borderRadius: 12,
           boxShadow: open
@@ -145,7 +145,7 @@ export function HeroSearch() {
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 200,
-          background: "#fff",
+          background: "var(--panel)",
           border: "1px solid var(--app-border)",
           borderRadius: 10,
           boxShadow: "0 8px 32px rgba(15,23,42,0.12)",
@@ -225,7 +225,7 @@ export function HeroSearch() {
               onClick={() => { setQuery(s); inputRef.current?.focus(); }}
               style={{
                 fontSize: 12, padding: "5px 12px", borderRadius: 6,
-                background: "#fff", border: "1px solid var(--app-border)",
+                background: "var(--panel)", border: "1px solid var(--app-border)",
                 color: "var(--app-text-3)", cursor: "pointer",
                 fontFamily: "var(--font-inter), sans-serif",
               }}

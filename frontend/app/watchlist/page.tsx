@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Bookmark, LogIn, Search, Trash2 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
-import HomeNavClient from "../home/HomeNavClient";
+import SiteNav from "@/app/components/landing-nav";
 
 interface WatchItem {
   id: string;
@@ -74,7 +74,7 @@ export default function WatchlistPage() {
 
       {/* Hero */}
       <div style={{ background: "var(--navy)" }}>
-        <HomeNavClient defaultCountry="AU" />
+        <SiteNav />
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px 28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <Bookmark style={{ width: 20, height: 20, color: "var(--teal-l)" }} strokeWidth={1.8} />
@@ -105,7 +105,7 @@ export default function WatchlistPage() {
         {/* Not signed in */}
         {!loading && authed === false && (
           <div style={{
-            background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+            background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
             padding: "64px 24px", textAlign: "center", maxWidth: 460, margin: "0 auto",
           }}>
             <div style={{
@@ -137,7 +137,7 @@ export default function WatchlistPage() {
         {/* Signed in, empty */}
         {!loading && authed === true && items.length === 0 && (
           <div style={{
-            background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+            background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
             padding: "64px 24px", textAlign: "center", maxWidth: 460, margin: "0 auto",
           }}>
             <div style={{
@@ -169,7 +169,7 @@ export default function WatchlistPage() {
         {/* Signed in, has items */}
         {!loading && authed === true && items.length > 0 && (
           <div style={{
-            background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden",
+            background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden",
           }}>
             {/* Header */}
             <div style={{

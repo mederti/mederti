@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SiteNav from "@/app/components/landing-nav";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -47,7 +48,7 @@ function ContactForm() {
     border: "1px solid var(--app-border)", fontSize: 14,
     fontFamily: "var(--font-inter), sans-serif",
     outline: "none", boxSizing: "border-box" as const,
-    background: "#fff", color: "var(--app-text)",
+    background: "var(--panel)", color: "var(--app-text)",
   };
   const labelStyle = {
     fontSize: 12, fontWeight: 500 as const, color: "var(--app-text-3)",
@@ -128,10 +129,9 @@ function ContactForm() {
 
 export default function ContactPage() {
   return (
-    <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+    <div style={{ background: "var(--panel)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
       <style>{`
         @media (max-width: 768px) {
-          .contact-nav { padding: 0 20px !important; }
           .contact-layout { grid-template-columns: 1fr !important; gap: 48px !important; padding: 60px 20px !important; }
           .contact-form-row { grid-template-columns: 1fr !important; }
           .contact-footer { padding: 24px 20px !important; flex-direction: column !important; gap: 12px !important; text-align: center !important; }
@@ -139,24 +139,7 @@ export default function ContactPage() {
         }
       `}</style>
 
-      {/* NAV */}
-      <nav className="contact-nav" style={{
-        height: 60, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)",
-        borderBottom: "1px solid var(--app-border)",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 48px", position: "sticky", top: 0, zIndex: 50,
-      }}>
-        <Link href="/" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "var(--app-text)", textDecoration: "none" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
-        </Link>
-        <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-          <Link href="/about" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>About</Link>
-          <Link href="/pricing" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>Pricing</Link>
-          <Link href="/dashboard" style={{ fontSize: 13, fontWeight: 500, color: "#fff", background: "var(--teal)", padding: "7px 16px", borderRadius: 6, textDecoration: "none" }}>
-            Dashboard →
-          </Link>
-        </div>
-      </nav>
+      <SiteNav />
 
       <div className="contact-layout" style={{
         maxWidth: 1000, margin: "0 auto", padding: "80px 48px",
@@ -220,7 +203,7 @@ export default function ContactPage() {
         {/* RIGHT — form */}
         <div>
           <div style={{
-            background: "#fff", border: "1px solid var(--app-border)",
+            background: "var(--panel)", border: "1px solid var(--app-border)",
             borderRadius: 14, padding: "40px 36px",
             boxShadow: "0 2px 16px rgba(15,23,42,0.05)",
           }}>

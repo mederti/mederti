@@ -1,7 +1,7 @@
 import { api, DrugDetail, ShortageEvent, Alternative, DrugRecallsResponse } from "@/lib/api";
 import Link from "next/link";
 import { WatchlistButton } from "@/app/components/watchlist-button";
-import HomeNavClient from "../../home/HomeNavClient";
+import SiteNav from "@/app/components/landing-nav";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -58,6 +58,8 @@ export default async function DrugPage({ params }: Props) {
     const wi = order.indexOf(worst.toLowerCase());
     return si >= 0 && si < wi ? (s.severity ?? worst) : worst;
   }, "low");
+  const affectedCountries = new Set(activeShortages.map((s) => s.country_code));
+  const affectedCount = affectedCountries.size;
 
   // Any active shortage — even "low" — should not show green (green = fully available)
   const statusTheme = activeShortages.length > 0
@@ -95,7 +97,7 @@ export default async function DrugPage({ params }: Props) {
       `}</style>
 
       {/* NAV */}
-      <HomeNavClient />
+      <SiteNav />
 
       {/* DARK HERO */}
       <div style={{ background: "var(--navy)" }}>
@@ -221,10 +223,16 @@ export default async function DrugPage({ params }: Props) {
               color: statusTheme.color, marginBottom: 8, display: "flex", alignItems: "center", gap: 6,
             }}>
               <SevDot severity={worstSeverity} />
-              {activeShortages.length > 0 ? "Not available" : "Available"}
+              {activeShortages.length > 0
+                ? (affectedCount === 1
+                  ? `Shortage in ${activeShortages[0]?.country ?? "1 country"}`
+                  : `Shortage in ${affectedCount} countries`)
+                : "Available"}
             </div>
             <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 4 }}>
-              {activeShortages.length > 0 ? (worstSeverity.charAt(0).toUpperCase() + worstSeverity.slice(1)) + " shortage" : "In supply"}
+              {activeShortages.length > 0
+                ? (worstSeverity.charAt(0).toUpperCase() + worstSeverity.slice(1)) + " shortage"
+                : "In supply"}
             </div>
             <div style={{ fontSize: 13, color: "var(--app-text-3)" }}>
               {(() => {
@@ -239,14 +247,14 @@ export default async function DrugPage({ params }: Props) {
           </div>
 
           {/* ETA */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
             <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
               When will it be back?
             </div>
             <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", lineHeight: 1.1, marginBottom: 4 }}>
               {activeShortages[0]?.estimated_resolution_date
                 ? new Date(activeShortages[0].estimated_resolution_date).toLocaleDateString("en-AU", { month: "short", year: "numeric" })
-                : activeShortages.length > 0 ? "TBC" : "Available now"}
+                : activeShortages.length > 0 ? "TBC" : "In supply"}
             </div>
             <div style={{ fontSize: 11, color: "var(--app-text-3)", fontFamily: "var(--font-dm-mono), monospace", marginBottom: 14 }}>
               {activeShortages[0]?.start_date
@@ -268,7 +276,7 @@ export default async function DrugPage({ params }: Props) {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
             {/* WHERE IS IT */}
-            <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Where is it available?</span>
                 <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
@@ -340,7 +348,7 @@ export default async function DrugPage({ params }: Props) {
             </div>
 
             {/* AI INSIGHT (static) */}
-            <div style={{ background: "#fff", border: "1px solid var(--ind-b)", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ background: "var(--panel)", border: "1px solid var(--ind-b)", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>AI Insight</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--indigo)", fontWeight: 500 }}>
@@ -369,7 +377,7 @@ export default async function DrugPage({ params }: Props) {
 
             {/* TIMELINE */}
             {shortages.length > 0 && (
-              <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)" }}>
                   <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Shortage Timeline</span>
                 </div>
@@ -405,7 +413,7 @@ export default async function DrugPage({ params }: Props) {
 
             {/* RECALLS */}
             {recallData && (recallData.recalls.length > 0 || recallData.resilience_score < 100) && (
-              <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                     Recall History
@@ -487,7 +495,7 @@ export default async function DrugPage({ params }: Props) {
 
             {/* SOURCES */}
             {activeShortages.some((s) => s.source_name || s.source_url) && (
-              <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Verified Sources</span>
                   <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
@@ -534,7 +542,7 @@ export default async function DrugPage({ params }: Props) {
           <div className="drug-right-col" style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 76 }}>
 
             {/* ALTERNATIVES */}
-            <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                   What can I use instead?
@@ -602,7 +610,7 @@ export default async function DrugPage({ params }: Props) {
               </span>
               <Link href="/dashboard" style={{
                 display: "block", width: "100%", fontSize: 13, fontWeight: 500, padding: 9, borderRadius: 7,
-                background: "#fff", border: "1px solid var(--app-border)",
+                background: "var(--panel)", border: "1px solid var(--app-border)",
                 color: "var(--app-text-2)", cursor: "pointer", textAlign: "center", textDecoration: "none",
               }}>
                 Switch to Dashboard view →
@@ -617,7 +625,7 @@ export default async function DrugPage({ params }: Props) {
         borderTop: "1px solid var(--app-border)",
         padding: "20px 32px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "#fff", marginTop: 24,
+        background: "var(--panel)", marginTop: 24,
       }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
           Mederti<span style={{ color: "var(--teal)" }}>.</span>

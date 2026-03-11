@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SiteNav from "@/app/components/landing-nav";
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api, type DrugHit, type ShortageEvent } from "@/lib/api";
@@ -31,7 +32,7 @@ function DrugCard({ drug, altCounts }: { drug: DrugResult; altCounts: Record<str
   return (
     <Link href={`/drugs/${drug.drug_id}`} style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{
-        background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+        background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12,
         padding: "20px 24px", cursor: "pointer",
         transition: "border-color 0.15s, box-shadow 0.15s",
       }}
@@ -167,7 +168,7 @@ function SearchResults() {
               width: "100%", padding: "14px 16px 14px 40px", fontSize: 16,
               border: "1px solid var(--app-border-2)", borderRadius: 10,
               fontFamily: "var(--font-inter), sans-serif",
-              outline: "none", background: "#fff", color: "var(--app-text)",
+              outline: "none", background: "var(--panel)", color: "var(--app-text)",
               boxSizing: "border-box",
             }}
             onFocus={e => (e.target.style.borderColor = "var(--teal)")}
@@ -234,30 +235,12 @@ export default function SearchPage() {
       <style>{`
         @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
         @media (max-width: 768px) {
-          .search-nav { padding: 0 16px !important; }
           .search-hero { padding: 24px 16px 20px !important; }
           .search-main { padding: 24px 16px !important; }
         }
       `}</style>
 
-      {/* NAV */}
-      <nav className="search-nav" style={{
-        height: 56, background: "var(--navy)",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 24px", position: "sticky", top: 0, zIndex: 50,
-      }}>
-        <Link href="/" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "#fff", textDecoration: "none" }}>
-          Mederti<span style={{ color: "var(--teal-l)" }}>.</span>
-        </Link>
-        <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-          <Link href="/dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textDecoration: "none" }}>Dashboard</Link>
-          <Link href="/shortages" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textDecoration: "none" }}>Shortages</Link>
-          <Link href="/recalls" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textDecoration: "none" }}>Recalls</Link>
-          <Link href="/login" style={{ fontSize: 13, fontWeight: 500, color: "#fff", background: "var(--teal)", padding: "7px 16px", borderRadius: 6, textDecoration: "none" }}>
-            Sign in
-          </Link>
-        </div>
-      </nav>
+      <SiteNav />
 
       {/* DARK HERO */}
       <div style={{ background: "var(--navy)" }}>

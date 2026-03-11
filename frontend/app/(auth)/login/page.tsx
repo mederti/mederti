@@ -58,7 +58,7 @@ function LoginForm() {
     }}>
       <div style={{
         width: "100%", maxWidth: 420,
-        background: "#fff", border: "1px solid var(--app-border)",
+        background: "var(--panel)", border: "1px solid var(--app-border)",
         borderRadius: 14, padding: "36px 40px",
       }}>
         {/* Logo */}

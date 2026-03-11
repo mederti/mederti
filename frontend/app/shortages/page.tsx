@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { api, ShortageListResponse } from "@/lib/api";
-import HomeNavClient from "../home/HomeNavClient";
+import SiteNav from "@/app/components/landing-nav";
 
 interface SearchParams {
   country?: string;
@@ -92,7 +92,7 @@ export default async function ShortagesPage({ searchParams }: Props) {
 
       {/* Hero */}
       <div style={{ background: "var(--navy)" }}>
-        <HomeNavClient defaultCountry="AU" />
+        <SiteNav />
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px 28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <AlertCircle style={{ width: 20, height: 20, color: "var(--teal-l)" }} strokeWidth={1.8} />
@@ -157,7 +157,7 @@ export default async function ShortagesPage({ searchParams }: Props) {
       {/* Content */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 48px" }}>
         <div style={{
-          background: "#fff",
+          background: "var(--panel)",
           border: "1px solid var(--app-border)",
           borderRadius: 12,
           overflow: "hidden",
@@ -256,7 +256,7 @@ export default async function ShortagesPage({ searchParams }: Props) {
                   <Link href={buildUrl(sp, { page: String(page - 1) })} style={{
                     padding: "7px 14px", borderRadius: 7,
                     fontSize: 13, fontWeight: 500,
-                    background: "#fff", border: "1px solid var(--app-border)",
+                    background: "var(--panel)", border: "1px solid var(--app-border)",
                     color: "var(--app-text-2)", textDecoration: "none",
                   }}>Previous</Link>
                 ) : (

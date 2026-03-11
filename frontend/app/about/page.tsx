@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import SiteNav from "@/app/components/landing-nav";
 
 export const metadata: Metadata = {
   title: "About — Mederti",
@@ -48,10 +49,9 @@ const HOW = [
 
 export default function AboutPage() {
   return (
-    <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+    <div style={{ background: "var(--panel)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
       <style>{`
         @media (max-width: 768px) {
-          .about-nav { padding: 0 20px !important; }
           .about-hero { padding: 100px 20px 60px !important; }
           .about-section { padding: 60px 20px !important; }
           .about-how-grid { grid-template-columns: 1fr !important; }
@@ -62,23 +62,7 @@ export default function AboutPage() {
         }
       `}</style>
 
-      {/* NAV */}
-      <nav className="about-nav" style={{
-        height: 60, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)",
-        borderBottom: "1px solid var(--app-border)",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 48px", position: "sticky", top: 0, zIndex: 50,
-      }}>
-        <Link href="/" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "var(--app-text)", textDecoration: "none" }}>
-          Mederti<span style={{ color: "var(--teal)" }}>.</span>
-        </Link>
-        <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-          <Link href="/contact" style={{ fontSize: 13, color: "var(--app-text-3)", textDecoration: "none" }}>Contact</Link>
-          <Link href="/dashboard" style={{ fontSize: 13, fontWeight: 500, color: "#fff", background: "var(--teal)", padding: "7px 16px", borderRadius: 6, textDecoration: "none" }}>
-            Dashboard →
-          </Link>
-        </div>
-      </nav>
+      <SiteNav />
 
       {/* HERO */}
       <section className="about-hero" style={{ padding: "96px 48px 80px", borderBottom: "1px solid var(--app-border)", background: "var(--app-bg)" }}>
@@ -163,7 +147,7 @@ export default function AboutPage() {
           </h2>
           <div className="about-how-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 32 }}>
             {HOW.map((h) => (
-              <div key={h.step} style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px" }}>
+              <div key={h.step} style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "var(--teal)", marginBottom: 16 }}>
                   {h.step}
                 </div>
@@ -230,7 +214,7 @@ export default function AboutPage() {
             </Link>
             <Link href="/dashboard" style={{
               fontSize: 14, fontWeight: 500, padding: "12px 28px",
-              background: "#fff", color: "var(--app-text-2)", border: "1px solid var(--app-border-2)", borderRadius: 8, textDecoration: "none",
+              background: "var(--panel)", color: "var(--app-text-2)", border: "1px solid var(--app-border-2)", borderRadius: 8, textDecoration: "none",
             }}>
               View dashboard →
             </Link>

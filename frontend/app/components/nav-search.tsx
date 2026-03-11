@@ -134,7 +134,7 @@ export function NavSearch() {
       {open && results.length > 0 && (
         <div style={{
           position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 500,
-          background: "#fff",
+          background: "var(--panel)",
           border: "1px solid var(--app-border)",
           borderRadius: 10,
           boxShadow: "0 8px 32px rgba(15,23,42,0.12)",

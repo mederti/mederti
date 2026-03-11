@@ -20,7 +20,7 @@ export default function HomeSearchClient() {
     <form onSubmit={handleSearch} style={{ position: "relative", maxWidth: 860, width: "100%" }}>
       <div style={{
         display: "flex", alignItems: "center",
-        background: "#fff",
+        background: "var(--panel)",
         border: `1.5px solid ${focused ? "var(--teal)" : "var(--app-border)"}`,
         borderRadius: 12,
         boxShadow: focused

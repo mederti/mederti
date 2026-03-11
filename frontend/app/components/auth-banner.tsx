@@ -51,7 +51,7 @@ export function AuthBanner() {
           href="/login?next=/dashboard"
           style={{
             fontSize: 13, fontWeight: 600, padding: "6px 14px", borderRadius: 6,
-            background: "#fff", color: "var(--teal)", textDecoration: "none",
+            background: "var(--panel)", color: "var(--teal)", textDecoration: "none",
           }}
         >
           Sign in

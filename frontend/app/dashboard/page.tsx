@@ -1,5 +1,6 @@
 import { api, ShortageRow, SummaryResponse, RecallSummaryResponse, RecallRow } from "@/lib/api";
 import Link from "next/link";
+import SiteNav from "@/app/components/landing-nav";
 import { AuthBanner } from "@/app/components/auth-banner";
 import WorldMapWrapper from "@/app/components/world-map-wrapper";
 import { fetchNews } from "@/lib/rss";
@@ -131,10 +132,6 @@ export default async function DashboardPage() {
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)", fontSize: 14 }}>
       <style>{`
         @media (max-width: 768px) {
-          .db-nav { padding: 0 16px !important; }
-          .db-nav-subtitle { display: none !important; }
-          .db-nav-actions { gap: 6px !important; }
-          .db-nav-export { display: none !important; }
           .db-period-bar { padding: 0 16px !important; overflow-x: auto !important; }
           .db-period-chips { display: none !important; }
           .db-content { padding: 16px 16px 48px !important; }
@@ -150,54 +147,14 @@ export default async function DashboardPage() {
         }
       `}</style>
 
-      {/* NAV */}
-      <nav className="db-nav" style={{
-        position: "sticky", top: 0, zIndex: 100,
-        height: 56, background: "var(--navy)",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 28px",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <Link href="/" style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.02em", color: "#fff", textDecoration: "none" }}>
-            Mederti
-          </Link>
-          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.15)" }} />
-          <span className="db-nav-subtitle" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
-            <strong style={{ color: "rgba(255,255,255,0.85)", fontWeight: 500 }}>Global Supply Intelligence</strong>
-            {" — Regulator Dashboard"}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-            {now.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })} · {now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-          <button className="db-nav-export" style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--teal)", border: "none", color: "#fff",
-            padding: "7px 14px", borderRadius: 6,
-            fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "var(--font-inter), sans-serif",
-          }}>
-            ↓ Export PDF
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "rgba(255,255,255,0.6)" }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: "var(--teal)", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 11, fontWeight: 600, color: "#fff",
-            }}>
-              A
-            </div>
-            Analyst
-          </div>
-        </div>
-      </nav>
+      <SiteNav />
 
       {/* AUTH BANNER — client component, shown only to unauthenticated users */}
       <AuthBanner />
 
       {/* PERIOD BAR */}
       <div className="db-period-bar" style={{
-        background: "#fff", borderBottom: "1px solid var(--app-border)",
+        background: "var(--panel)", borderBottom: "1px solid var(--app-border)",
         padding: "0 28px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
@@ -243,7 +200,7 @@ export default async function DashboardPage() {
             const topColor = kpi.cls === "crit" ? "var(--crit)" : kpi.cls === "high" ? "var(--high)" : kpi.cls === "med" ? "var(--med)" : kpi.cls === "low" ? "var(--low)" : kpi.cls === "recall" ? "#b91c1c" : "var(--teal)";
             return (
               <div key={kpi.label} style={{
-                background: "#fff", border: "1px solid var(--app-border)",
+                background: "var(--panel)", border: "1px solid var(--app-border)",
                 borderRadius: 10, padding: "18px 20px", position: "relative", overflow: "hidden",
               }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: topColor }} />
@@ -266,7 +223,7 @@ export default async function DashboardPage() {
         <div className="db-main-grid" style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 18, marginBottom: 18 }}>
 
           {/* HEATMAP */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                 Therapeutic Category Heatmap
@@ -306,7 +263,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* EARLY WARNING — illustrative */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>⚠ Early Warning</span>
               <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>Illustrative analytics</span>
@@ -361,7 +318,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* PIPELINE / GANTT — live data from top critical/high active shortages */}
-        <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
+        <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
               Shortage Pipeline — Resolution Forecast
@@ -426,7 +383,7 @@ export default async function DashboardPage() {
 
         {/* RECENT CLASS I RECALLS */}
         {recentRecalls.length > 0 && (
-          <div style={{ background: "#fff", border: "1px solid #fecaca", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
+          <div style={{ background: "var(--panel)", border: "1px solid #fecaca", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid #fecaca", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fef2f2" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "#b91c1c" }}>
                 ⚠ Recent Class I Recalls
@@ -484,7 +441,7 @@ export default async function DashboardPage() {
 
         {/* WORLD MAP HEATMAP */}
         {summary?.by_country && summary.by_country.length > 0 && (
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                 Global Shortage Map
@@ -523,7 +480,7 @@ export default async function DashboardPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 18, marginBottom: 18 }}>
 
           {/* NEWS FEED */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                 Latest Regulatory News
@@ -546,7 +503,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* VIDEO PANEL */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                 ▶ Featured Videos
@@ -566,7 +523,7 @@ export default async function DashboardPage() {
         <div className="db-shortage-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 18 }}>
 
           {/* SUPPLY ORIGIN — illustrative */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Shortage Origin — Supply Side</span>
               <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>Illustrative analytics</span>
@@ -602,7 +559,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* GLOBAL COMPARISON */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Global Comparison</span>
               <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>Shortages vs peer countries</span>
@@ -648,7 +605,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* NET FLOW — illustrative */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Weekly Net Flow</span>
               <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>Illustrative analytics</span>
@@ -694,7 +651,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* ACTIVE SHORTAGES TABLE */}
-        <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden", marginTop: 18 }}>
+        <div style={{ background: "var(--panel)", border: "1px solid var(--app-border)", borderRadius: 10, overflow: "hidden", marginTop: 18 }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
               All Active Shortages
@@ -778,7 +735,7 @@ export default async function DashboardPage() {
         borderTop: "1px solid var(--app-border)",
         padding: "20px 28px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "#fff", marginTop: 0,
+        background: "var(--panel)", marginTop: 0,
       }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", letterSpacing: "-0.02em" }}>
           Mederti<span style={{ color: "var(--teal)" }}>.</span>
@@ -796,7 +753,7 @@ export default async function DashboardPage() {
       {/* CHAT FAB */}
       <div style={{ position: "fixed", bottom: 28, right: 28, zIndex: 200, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12 }}>
         <div style={{
-          background: "#fff", border: "1px solid var(--app-border)",
+          background: "var(--panel)", border: "1px solid var(--app-border)",
           borderRadius: 12, padding: "12px 16px",
           fontSize: 13, color: "var(--app-text-2)", lineHeight: 1.5,
           boxShadow: "0 4px 16px rgba(0,0,0,0.08)",

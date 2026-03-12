@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { ShieldAlert } from "lucide-react";
 
@@ -65,84 +65,91 @@ interface WatchItem {
 export default function CriticalWatchlist() {
   const [items, setItems] = useState<WatchItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createBrowserClient();
-
-  const load = useCallback(async () => {
-    // Query drug_availability for any products matching watchlist names
-    const results: WatchItem[] = [];
-
-    // Batch query: get all non-available drug_availability rows
-    // joined with drug_products to get product names
-    const { data: availData } = await supabase
-      .from("drug_availability")
-      .select("product_id, country, status, severity, drug_products(product_name)")
-      .neq("status", "available");
-
-    // Also check shortage_events via drugs table
-    const { data: shortageData } = await supabase
-      .from("shortage_events")
-      .select("drug_id, country_code, severity, drugs(generic_name)")
-      .eq("status", "active");
-
-    for (const name of WATCHLIST) {
-      const terms = SEARCH_TERMS[name] ?? [name.toLowerCase()];
-
-      // Check drug_availability
-      const matchedAvail = (availData ?? []).filter((a) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pName = ((a as any).drug_products?.product_name ?? "").toLowerCase();
-        return terms.some((t) => pName.includes(t));
-      });
-
-      // Check shortage_events
-      const matchedShortages = (shortageData ?? []).filter((s) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const gName = ((s as any).drugs?.generic_name ?? "").toLowerCase();
-        return terms.some((t) => gName.includes(t));
-      });
-
-      // Determine worst status
-      const sevOrder = ["critical", "high", "medium", "low"];
-      let worstSev = "available";
-      let worstStatus = "available";
-      const countries = new Set<string>();
-
-      for (const a of matchedAvail) {
-        const sev = (a.severity ?? a.status ?? "").toLowerCase();
-        countries.add(a.country);
-        if (sevOrder.indexOf(sev) >= 0 && (sevOrder.indexOf(sev) < sevOrder.indexOf(worstSev) || worstSev === "available")) {
-          worstSev = sev;
-          worstStatus = a.status;
-        } else if (worstSev === "available" && a.status !== "available") {
-          worstSev = a.status.toLowerCase();
-          worstStatus = a.status;
-        }
-      }
-
-      for (const s of matchedShortages) {
-        const sev = (s.severity ?? "").toLowerCase();
-        countries.add(s.country_code ?? "");
-        if (sevOrder.indexOf(sev) >= 0 && (sevOrder.indexOf(sev) < sevOrder.indexOf(worstSev) || worstSev === "available")) {
-          worstSev = sev;
-          worstStatus = "active";
-        }
-      }
-
-      results.push({
-        name,
-        worstStatus,
-        worstSeverity: worstSev,
-        countriesAffected: countries.size,
-      });
-    }
-
-    setItems(results);
-    setLoading(false);
-  }, [supabase]);
+  const sbRef = useRef(createBrowserClient());
 
   useEffect(() => {
+    let cancelled = false;
+    const supabase = sbRef.current;
+
+    async function load() {
+      try {
+        const results: WatchItem[] = [];
+
+        const { data: availData, error: availErr } = await supabase
+          .from("drug_availability")
+          .select("product_id, country, status, severity, drug_products(product_name)")
+          .neq("status", "available");
+
+        const { data: shortageData, error: shortErr } = await supabase
+          .from("shortage_events")
+          .select("drug_id, country_code, severity, drugs(generic_name)")
+          .eq("status", "active");
+
+        console.log("[CriticalWatchlist] availData:", availData?.length, "error:", availErr);
+        console.log("[CriticalWatchlist] shortageData:", shortageData?.length, "error:", shortErr);
+
+        for (const name of WATCHLIST) {
+          const terms = SEARCH_TERMS[name] ?? [name.toLowerCase()];
+
+          const matchedAvail = (availData ?? []).filter((a) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pName = ((a as any).drug_products?.product_name ?? "").toLowerCase();
+            return terms.some((t) => pName.includes(t));
+          });
+
+          const matchedShortages = (shortageData ?? []).filter((s) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const gName = ((s as any).drugs?.generic_name ?? "").toLowerCase();
+            return terms.some((t) => gName.includes(t));
+          });
+
+          const sevOrder = ["critical", "high", "medium", "low"];
+          let worstSev = "available";
+          let worstStatus = "available";
+          const countries = new Set<string>();
+
+          for (const a of matchedAvail) {
+            const sev = (a.severity ?? a.status ?? "").toLowerCase();
+            countries.add(a.country);
+            if (sevOrder.indexOf(sev) >= 0 && (sevOrder.indexOf(sev) < sevOrder.indexOf(worstSev) || worstSev === "available")) {
+              worstSev = sev;
+              worstStatus = a.status;
+            } else if (worstSev === "available" && a.status !== "available") {
+              worstSev = a.status.toLowerCase();
+              worstStatus = a.status;
+            }
+          }
+
+          for (const s of matchedShortages) {
+            const sev = (s.severity ?? "").toLowerCase();
+            countries.add(s.country_code ?? "");
+            if (sevOrder.indexOf(sev) >= 0 && (sevOrder.indexOf(sev) < sevOrder.indexOf(worstSev) || worstSev === "available")) {
+              worstSev = sev;
+              worstStatus = "active";
+            }
+          }
+
+          results.push({
+            name,
+            worstStatus,
+            worstSeverity: worstSev,
+            countriesAffected: countries.size,
+          });
+        }
+
+        if (!cancelled) {
+          setItems(results);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("[CriticalWatchlist] load error:", err);
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     load();
-  }, [load]);
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div

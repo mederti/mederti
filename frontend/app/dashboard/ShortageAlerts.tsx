@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Bell } from "lucide-react";
@@ -72,46 +72,56 @@ function timeAgo(iso: string) {
 export default function ShortageAlerts() {
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createBrowserClient();
-
-  const load = useCallback(async () => {
-    const h48 = new Date(
-      Date.now() - 48 * 60 * 60 * 1000
-    ).toISOString();
-
-    const { data } = await supabase
-      .from("shortage_events")
-      .select(
-        "shortage_id, drug_id, severity, country_code, updated_at, drugs(generic_name), data_sources(name)"
-      )
-      .gte("updated_at", h48)
-      .in("status", ["active", "anticipated"])
-      .order("severity", { ascending: true })
-      .order("updated_at", { ascending: false })
-      .limit(20);
-
-    if (data) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setAlerts(
-        (data as any[]).map((r) => ({
-          shortage_id: r.shortage_id,
-          drug_id: r.drug_id,
-          drug_name: r.drugs?.generic_name ?? "Unknown drug",
-          severity: (r.severity ?? "low").toLowerCase(),
-          country_code: r.country_code ?? "",
-          source_name: r.data_sources?.name ?? "—",
-          updated_at: r.updated_at,
-        }))
-      );
-    }
-    setLoading(false);
-  }, [supabase]);
+  const sbRef = useRef(createBrowserClient());
 
   useEffect(() => {
+    let cancelled = false;
+    const supabase = sbRef.current;
+
+    async function load() {
+      try {
+        const h48 = new Date(
+          Date.now() - 48 * 60 * 60 * 1000
+        ).toISOString();
+
+        const { data, error } = await supabase
+          .from("shortage_events")
+          .select(
+            "shortage_id, drug_id, severity, country_code, updated_at, drugs(generic_name), data_sources(name)"
+          )
+          .gte("updated_at", h48)
+          .in("status", ["active", "anticipated"])
+          .order("severity", { ascending: true })
+          .order("updated_at", { ascending: false })
+          .limit(20);
+
+        console.log("[ShortageAlerts] data:", data?.length, "error:", error);
+
+        if (!cancelled && data) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setAlerts(
+            (data as any[]).map((r) => ({
+              shortage_id: r.shortage_id,
+              drug_id: r.drug_id,
+              drug_name: r.drugs?.generic_name ?? "Unknown drug",
+              severity: (r.severity ?? "low").toLowerCase(),
+              country_code: r.country_code ?? "",
+              source_name: r.data_sources?.name ?? "—",
+              updated_at: r.updated_at,
+            }))
+          );
+        }
+        if (!cancelled) setLoading(false);
+      } catch (err) {
+        console.error("[ShortageAlerts] load error:", err);
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     load();
     const iv = setInterval(load, 5 * 60 * 1000);
-    return () => clearInterval(iv);
-  }, [load]);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
 
   return (
     <div

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Search, X, Loader2 } from "lucide-react";
@@ -43,109 +43,7 @@ export default function MedicineSearch() {
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const supabase = createBrowserClient();
-
-  const search = useCallback(
-    async (q: string) => {
-      if (q.length < 2) {
-        setResults([]);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-
-      const term = `%${q.toLowerCase()}%`;
-
-      // Search both tables in parallel
-      const [drugsRes, productsRes] = await Promise.allSettled([
-        supabase
-          .from("drugs")
-          .select("id, generic_name, brand_names")
-          .ilike("generic_name", term)
-          .limit(8),
-        supabase
-          .from("drug_products")
-          .select("id, product_name, trade_name, country, source")
-          .ilike("product_name", term)
-          .limit(8),
-      ]);
-
-      const combined: DrugResult[] = [];
-
-      // Process drugs table results
-      if (drugsRes.status === "fulfilled" && drugsRes.value.data) {
-        // For each drug, also fetch active shortages
-        const drugIds = drugsRes.value.data.map((d) => d.id);
-        const { data: shortages } =
-          drugIds.length > 0
-            ? await supabase
-                .from("shortage_events")
-                .select("drug_id, country_code, status, severity")
-                .in("drug_id", drugIds)
-                .eq("status", "active")
-            : { data: [] };
-
-        for (const d of drugsRes.value.data) {
-          const drugShortages = (shortages ?? []).filter(
-            (s) => s.drug_id === d.id
-          );
-          combined.push({
-            id: d.id,
-            name: d.generic_name,
-            source: "drugs",
-            brands: d.brand_names ?? [],
-            availability: drugShortages.map((s) => ({
-              country: s.country_code ?? "",
-              status: s.status,
-              severity: s.severity,
-            })),
-          });
-        }
-      }
-
-      // Process drug_products table results
-      if (productsRes.status === "fulfilled" && productsRes.value.data) {
-        const productIds = productsRes.value.data.map((p) => p.id);
-        const { data: avail } =
-          productIds.length > 0
-            ? await supabase
-                .from("drug_availability")
-                .select("product_id, country, status, severity")
-                .in("product_id", productIds)
-                .neq("status", "available")
-            : { data: [] };
-
-        for (const p of productsRes.value.data) {
-          // Avoid duplicates if already found in drugs
-          if (
-            combined.some(
-              (c) =>
-                c.name.toLowerCase() === p.product_name.toLowerCase()
-            )
-          )
-            continue;
-          const prodAvail = (avail ?? []).filter(
-            (a) => a.product_id === p.id
-          );
-          combined.push({
-            id: p.id,
-            name: p.product_name,
-            source: "drug_products",
-            brands: p.trade_name ? [p.trade_name] : [],
-            availability: prodAvail.map((a) => ({
-              country: a.country ?? "",
-              status: a.status,
-              severity: a.severity,
-            })),
-          });
-        }
-      }
-
-      setResults(combined.slice(0, 10));
-      setLoading(false);
-    },
-    [supabase]
-  );
+  const sbRef = useRef(createBrowserClient());
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -153,11 +51,110 @@ export default function MedicineSearch() {
       setResults([]);
       return;
     }
-    debounceRef.current = setTimeout(() => search(query), 300);
+    debounceRef.current = setTimeout(() => {
+      const supabase = sbRef.current;
+
+      async function search() {
+        try {
+          setLoading(true);
+          const term = `%${query.toLowerCase()}%`;
+
+          const [drugsRes, productsRes] = await Promise.allSettled([
+            supabase
+              .from("drugs")
+              .select("id, generic_name, brand_names")
+              .ilike("generic_name", term)
+              .limit(8),
+            supabase
+              .from("drug_products")
+              .select("id, product_name, trade_name, country, source")
+              .ilike("product_name", term)
+              .limit(8),
+          ]);
+
+          console.log("[MedicineSearch] drugsRes:", drugsRes, "productsRes:", productsRes);
+
+          const combined: DrugResult[] = [];
+
+          if (drugsRes.status === "fulfilled" && drugsRes.value.data) {
+            const drugIds = drugsRes.value.data.map((d) => d.id);
+            const { data: shortages } =
+              drugIds.length > 0
+                ? await supabase
+                    .from("shortage_events")
+                    .select("drug_id, country_code, status, severity")
+                    .in("drug_id", drugIds)
+                    .eq("status", "active")
+                : { data: [] };
+
+            for (const d of drugsRes.value.data) {
+              const drugShortages = (shortages ?? []).filter(
+                (s) => s.drug_id === d.id
+              );
+              combined.push({
+                id: d.id,
+                name: d.generic_name,
+                source: "drugs",
+                brands: d.brand_names ?? [],
+                availability: drugShortages.map((s) => ({
+                  country: s.country_code ?? "",
+                  status: s.status,
+                  severity: s.severity,
+                })),
+              });
+            }
+          }
+
+          if (productsRes.status === "fulfilled" && productsRes.value.data) {
+            const productIds = productsRes.value.data.map((p) => p.id);
+            const { data: avail } =
+              productIds.length > 0
+                ? await supabase
+                    .from("drug_availability")
+                    .select("product_id, country, status, severity")
+                    .in("product_id", productIds)
+                    .neq("status", "available")
+                : { data: [] };
+
+            for (const p of productsRes.value.data) {
+              if (
+                combined.some(
+                  (c) =>
+                    c.name.toLowerCase() === p.product_name.toLowerCase()
+                )
+              )
+                continue;
+              const prodAvail = (avail ?? []).filter(
+                (a) => a.product_id === p.id
+              );
+              combined.push({
+                id: p.id,
+                name: p.product_name,
+                source: "drug_products",
+                brands: p.trade_name ? [p.trade_name] : [],
+                availability: prodAvail.map((a) => ({
+                  country: a.country ?? "",
+                  status: a.status,
+                  severity: a.severity,
+                })),
+              });
+            }
+          }
+
+          setResults(combined.slice(0, 10));
+          setLoading(false);
+        } catch (err) {
+          console.error("[MedicineSearch] search error:", err);
+          setLoading(false);
+        }
+      }
+
+      search();
+    }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, search]);
+  }, [query]);
 
   return (
     <div

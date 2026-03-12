@@ -424,6 +424,9 @@ export default async function DrugPage({ params }: Props) {
     return ai - bi;
   });
 
+  // Ensure user's country always appears in the list
+  const userCountryInList = countries.some((c) => c.countryCode === userCountry);
+
   /* ── Render ── */
   return (
     <div style={{ background: "var(--app-bg-2)", minHeight: "100vh", color: "var(--app-text)" }}>
@@ -549,30 +552,12 @@ export default async function DrugPage({ params }: Props) {
                 <strong style={{ color: "var(--teal)" }}>{affectedCountries.size}</strong> countr{affectedCountries.size !== 1 ? "ies" : "y"}
               </span>
             </div>
-            <WatchlistButton drugId={id} />
+            <WatchlistButton drugId={id} hasShortage={!!userShortage} />
           </div>
         </div>
       </div>
 
       <div className="drug-page" style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 64px" }}>
-
-        {/* ═══ YOUR COUNTRY STATUS ═══ */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "12px 18px", borderRadius: 10, marginBottom: 20,
-          background: userShortage ? "var(--high-bg)" : "var(--low-bg)",
-          border: `1px solid ${userShortage ? "var(--high-b)" : "var(--low-b)"}`,
-        }}>
-          <span style={{ fontSize: 20 }}>{FLAGS[userCountry] ?? ""}</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>
-            {userCountryName[userCountry] ?? userCountry}
-          </span>
-          <span style={{ fontSize: 13, color: userShortage ? "var(--high)" : "var(--low)", fontWeight: 500 }}>
-            {userShortage
-              ? `${(userShortage as { severity?: string }).severity ?? "Active"} shortage`
-              : "No shortage reported"}
-          </span>
-        </div>
 
         {/* ═══ ANSWER ROW — Status + ETA ═══ */}
         <div className="drug-answer-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
@@ -646,37 +631,56 @@ export default async function DrugPage({ params }: Props) {
                 </span>
               </div>
               <div style={{ padding: "18px 20px" }}>
-                {countries.length === 0 ? (
-                  <p style={{ fontSize: 14, color: "var(--app-text-3)" }}>No active shortages reported.</p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {countries.map((g, i) => {
-                      const sc = sevColor(g.severity);
-                      const availText = g.severity === "critical" ? "Not available" : g.severity === "high" ? "Very limited" : g.severity === "medium" ? "Limited" : "Available";
-                      return (
-                        <div key={g.countryCode} style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "10px 2px",
-                          borderBottom: i < countries.length - 1 ? "1px solid var(--app-border)" : "none",
-                        }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ fontSize: 18, lineHeight: 1, width: 24, textAlign: "center" }}>
-                              {FLAGS[g.countryCode] ?? "🌐"}
-                            </span>
-                            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--app-text)" }}>{g.country}</span>
-                            <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace", marginLeft: 6 }}>
-                              {g.source}{g.lastUpdated ? ` · ${timeAgo(g.lastUpdated)}` : ""}
-                            </span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: sc.color, display: "inline-block", flexShrink: 0 }} />
-                            <span style={{ fontSize: 13, fontWeight: 500, color: sc.color }}>{availText}</span>
-                          </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {/* User's country — always shown first */}
+                  {!userCountryInList && (
+                    <div style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "10px 2px",
+                      borderBottom: countries.length > 0 ? "1px solid var(--app-border)" : "none",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 18, lineHeight: 1, width: 24, textAlign: "center" }}>
+                          {FLAGS[userCountry] ?? "🌐"}
+                        </span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>
+                          {userCountryName[userCountry] ?? userCountry}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--low)", display: "inline-block", flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--low)" }}>No shortage</span>
+                      </div>
+                    </div>
+                  )}
+                  {countries.map((g, i) => {
+                    const sc = sevColor(g.severity);
+                    const isUser = g.countryCode === userCountry;
+                    const availText = g.severity === "critical" ? "Not available" : g.severity === "high" ? "Very limited" : g.severity === "medium" ? "Limited" : "Available";
+                    return (
+                      <div key={g.countryCode} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "10px 2px",
+                        borderBottom: i < countries.length - 1 ? "1px solid var(--app-border)" : "none",
+                        ...(isUser ? { order: -1 } : {}),
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 18, lineHeight: 1, width: 24, textAlign: "center" }}>
+                            {FLAGS[g.countryCode] ?? "🌐"}
+                          </span>
+                          <span style={{ fontSize: 14, fontWeight: isUser ? 600 : 500, color: "var(--app-text)" }}>{g.country}</span>
+                          <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace", marginLeft: 6 }}>
+                            {g.source}{g.lastUpdated ? ` · ${timeAgo(g.lastUpdated)}` : ""}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: sc.color, display: "inline-block", flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, fontWeight: 500, color: sc.color }}>{availText}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

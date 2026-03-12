@@ -6,6 +6,7 @@ import { createBrowserClient } from "@/lib/supabase/client";
 
 interface WatchlistButtonProps {
   drugId: string;
+  hasShortage?: boolean;
 }
 
 /**
@@ -13,7 +14,7 @@ interface WatchlistButtonProps {
  * - If unauthenticated: redirects to /login?next=/drugs/{id}
  * - If authenticated: toggles a user_watchlists row for this drug via Supabase RLS
  */
-export function WatchlistButton({ drugId }: WatchlistButtonProps) {
+export function WatchlistButton({ drugId, hasShortage = true }: WatchlistButtonProps) {
   const router = useRouter();
   const supabase = createBrowserClient();
 
@@ -94,7 +95,7 @@ export function WatchlistButton({ drugId }: WatchlistButtonProps) {
     ? "Loading…"
     : isWatching
     ? "✓ Watching"
-    : "🔔 Alert me when available";
+    : hasShortage ? "🔔 Alert me when available" : "🔔 Watch for changes";
 
   const isActive = isWatching && !loading;
 

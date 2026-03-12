@@ -44,7 +44,16 @@ export default function SiteNav() {
   const supabase = createBrowserClient();
   const [email, setEmail]             = useState<string | null>(null);
   const [initials, setInitials]       = useState("?");
-  const [country, setCountry]         = useState(COUNTRIES[0]);
+  const [country, setCountry]         = useState(() => {
+    if (typeof document !== "undefined") {
+      const match = document.cookie.match(/(?:^|; )mederti-country=([A-Z]{2})/);
+      if (match) {
+        const found = COUNTRIES.find((c) => c.code === match[1]);
+        if (found) return found;
+      }
+    }
+    return COUNTRIES[0];
+  });
   const [showCountry, setShowCountry] = useState(false);
   const [showUser, setShowUser]       = useState(false);
 
@@ -192,7 +201,7 @@ export default function SiteNav() {
                 {COUNTRIES.map(c => (
                   <button
                     key={c.code}
-                    onClick={() => { setCountry(c); setShowCountry(false); }}
+                    onClick={() => { setCountry(c); setShowCountry(false); document.cookie = `mederti-country=${c.code};path=/;max-age=${60*60*24*365}`; }}
                     style={{
                       display: "flex", alignItems: "center", gap: 8,
                       width: "100%", textAlign: "left",

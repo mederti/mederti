@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { WatchlistButton } from "@/app/components/watchlist-button";
 import SiteNav from "@/app/components/landing-nav";
@@ -234,6 +235,17 @@ export default async function DrugPage({ params }: Props) {
 
   // Most recent update
   const latestUpdate = shortages[0]?.updated_at ?? shortages[0]?.last_verified_at;
+
+  // User's country from cookie
+  const cookieStore = await cookies();
+  const userCountry = cookieStore.get("mederti-country")?.value ?? "AU";
+  const userCountryName: Record<string, string> = {
+    AU: "Australia", US: "United States", GB: "United Kingdom", CA: "Canada",
+    NZ: "New Zealand", SG: "Singapore", DE: "Germany", FR: "France",
+  };
+  const userShortage = activeShortages.find(
+    (s: { country_code: string }) => s.country_code?.toUpperCase() === userCountry
+  );
 
   /* ── Build Supply Timeline ── */
   const timeline: TimelineEntry[] = [];
@@ -543,6 +555,24 @@ export default async function DrugPage({ params }: Props) {
       </div>
 
       <div className="drug-page" style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 64px" }}>
+
+        {/* ═══ YOUR COUNTRY STATUS ═══ */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "12px 18px", borderRadius: 10, marginBottom: 20,
+          background: userShortage ? "var(--high-bg)" : "var(--low-bg)",
+          border: `1px solid ${userShortage ? "var(--high-b)" : "var(--low-b)"}`,
+        }}>
+          <span style={{ fontSize: 20 }}>{FLAGS[userCountry] ?? ""}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>
+            {userCountryName[userCountry] ?? userCountry}
+          </span>
+          <span style={{ fontSize: 13, color: userShortage ? "var(--high)" : "var(--low)", fontWeight: 500 }}>
+            {userShortage
+              ? `${(userShortage as { severity?: string }).severity ?? "Active"} shortage`
+              : "No shortage reported"}
+          </span>
+        </div>
 
         {/* ═══ ANSWER ROW — Status + ETA ═══ */}
         <div className="drug-answer-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>

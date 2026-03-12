@@ -25,7 +25,13 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
 
   const [email, setEmail]         = useState<string | null>(null);
   const [initials, setInitials]   = useState("?");
-  const [country, setCountry]     = useState(defaultCountry);
+  const [country, setCountry]     = useState(() => {
+    if (typeof document !== "undefined") {
+      const match = document.cookie.match(/(?:^|; )mederti-country=([A-Z]{2})/);
+      if (match) return match[1];
+    }
+    return defaultCountry;
+  });
   const [showCountry, setShowCountry] = useState(false);
   const [showUser, setShowUser]   = useState(false);
 
@@ -115,7 +121,7 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
               {COUNTRIES.map(c => (
                 <button
                   key={c}
-                  onClick={() => { setCountry(c); setShowCountry(false); }}
+                  onClick={() => { setCountry(c); setShowCountry(false); document.cookie = `mederti-country=${c};path=/;max-age=${60*60*24*365}`; }}
                   style={{
                     display: "block", width: "100%", textAlign: "left",
                     padding: "8px 12px", borderRadius: 6, border: "none",

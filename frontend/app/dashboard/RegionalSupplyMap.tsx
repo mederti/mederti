@@ -37,15 +37,15 @@ const FLAGS: Record<string, string> = {
 /* ── Country centre coordinates [longitude, latitude] ── */
 const COUNTRY_CENTERS: Record<string, [number, number]> = {
   AU: [134, -25], AT: [14.5, 47.5], BE: [4.5, 50.8], BR: [-51, -10],
-  CA: [-106, 56], CL: [-71, -35], CN: [104, 35], CO: [-74, 4],
-  HR: [16, 45.2], CZ: [15.5, 49.8], DK: [10, 56], FI: [26, 64],
+  CA: [-96, 45], CL: [-71, -35], CN: [104, 35], CO: [-74, 4],
+  HR: [16, 45.2], CZ: [15.5, 49.8], DK: [10, 54], FI: [26, 58],
   FR: [2.5, 46.5], DE: [10.5, 51.2], GR: [22, 39], HU: [19.5, 47.2],
   IN: [79, 21], IE: [-8, 53.5], IL: [35, 31.5], IT: [12.5, 42.5],
   JP: [138, 36], KR: [128, 36], MX: [-102, 23.5], NL: [5.3, 52.2],
-  NZ: [174, -41], NG: [8, 10], NO: [10, 62], PL: [20, 52],
+  NZ: [174, -41], NG: [8, 10], NO: [10, 58], PL: [20, 52],
   PT: [-8.2, 39.5], PR: [-66.5, 18.2], SG: [104, 1.4], ZA: [25, -29],
-  ES: [-3.7, 40.4], SE: [16, 62], CH: [8.2, 46.8], TR: [35.2, 39],
-  UA: [31.2, 48.4], GB: [-2, 54], US: [-98, 39], UY: [-56, -33],
+  ES: [-3.7, 40.4], SE: [16, 58], CH: [8.2, 46.8], TR: [35.2, 39],
+  UA: [31.2, 48.4], GB: [-2, 52], US: [-98, 39], UY: [-56, -33],
   VE: [-67, 8],
 };
 
@@ -93,7 +93,7 @@ function getTealStroke(count: number, maxCount: number): string {
 }
 
 const MIN_R = 4;
-const MAX_R = 26;
+const MAX_R = 22;
 
 function getBubbleRadius(count: number, maxCount: number): number {
   if (count === 0 || maxCount === 0) return MIN_R;
@@ -103,8 +103,8 @@ function getBubbleRadius(count: number, maxCount: number): number {
 /* ── Pulse animation CSS (injected once) ── */
 const PULSE_CSS = `
 @keyframes mederti-pulse {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50% { opacity: 0.2; transform: scale(1.6); }
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.15; transform: scale(1.35); }
 }
 `;
 
@@ -292,12 +292,12 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
         </div>
       ) : (
         <div
-          style={{ position: "relative", padding: "12px 20px 0" }}
+          style={{ position: "relative", padding: "12px 20px 0", overflow: "hidden" }}
           onMouseMove={handleMouseMove}
         >
           <ComposableMap
             projectionConfig={{ scale: 147, center: [10, 10] }}
-            style={{ width: "100%", height: "auto", maxHeight: 400 }}
+            style={{ width: "100%", height: "auto", overflow: "hidden" }}
           >
             {/* Base map — neutral gray, no interactivity */}
             <Geographies geography={GEO_URL}>

@@ -69,6 +69,27 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+const SEV_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+function abbreviateSource(name: string): string {
+  if (name.includes("Food and Drug")) return "FDA";
+  if (name.includes("Therapeutic Goods")) return "TGA";
+  if (name.includes("European Medicines")) return "EMA";
+  if (name.includes("Healthcare products") || name.includes("MHRA")) return "MHRA";
+  if (name.includes("Health Canada")) return "Health Canada";
+  if (name.includes("Bundesinstitut") || name.includes("BfArM")) return "BfArM";
+  if (name.includes("sécurité du médicament") || name.includes("ANSM")) return "ANSM";
+  if (name.includes("Italiana del Farmaco") || name.includes("AIFA")) return "AIFA";
+  if (name.includes("Española") || name.includes("AEMPS")) return "AEMPS";
+  if (name.includes("Health Products Regulatory") || name.includes("HPRA")) return "HPRA";
+  if (name.includes("Finnish Medicines") || name.includes("Fimea")) return "Fimea";
+  if (name.includes("Norwegian") || name.includes("NoMA")) return "NoMA";
+  if (name.includes("Swissmedic")) return "Swissmedic";
+  if (name.includes("Pharmac")) return "Pharmac";
+  if (name.includes("Medsafe")) return "Medsafe";
+  return name.length > 16 ? name.slice(0, 15) + "…" : name;
+}
+
 export default function ShortageAlerts() {
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,17 +117,26 @@ export default function ShortageAlerts() {
 
         if (data) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setAlerts(
-            (data as any[]).map((r) => ({
-              shortage_id: r.shortage_id,
-              drug_id: r.drug_id,
-              drug_name: r.drugs?.generic_name ?? "Unknown drug",
-              severity: (r.severity ?? "low").toLowerCase(),
-              country_code: r.country_code ?? "",
-              source_name: r.data_sources?.name ?? "—",
-              updated_at: r.updated_at,
-            }))
-          );
+          const all = (data as any[]).map((r) => ({
+            shortage_id: r.shortage_id,
+            drug_id: r.drug_id,
+            drug_name: r.drugs?.generic_name ?? "Unknown drug",
+            severity: (r.severity ?? "low").toLowerCase(),
+            country_code: r.country_code ?? "",
+            source_name: abbreviateSource(r.data_sources?.name ?? "—"),
+            updated_at: r.updated_at,
+          }));
+
+          // Deduplicate by drug_name — keep the highest severity entry
+          const seen = new Map<string, AlertRow>();
+          for (const a of all) {
+            const key = a.drug_name;
+            const existing = seen.get(key);
+            if (!existing || (SEV_ORDER[a.severity] ?? 9) < (SEV_ORDER[existing.severity] ?? 9)) {
+              seen.set(key, a);
+            }
+          }
+          setAlerts(Array.from(seen.values()));
         }
       } catch (err) {
         console.error("[ShortageAlerts] load error:", err);

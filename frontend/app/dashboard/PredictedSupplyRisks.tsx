@@ -41,6 +41,7 @@ function riskStyle(level: string) {
 export default function PredictedSupplyRisks() {
   const [items, setItems] = useState<RiskItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const sbRef = useRef(createBrowserClient());
 
   useEffect(() => {
@@ -54,26 +55,26 @@ export default function PredictedSupplyRisks() {
 
         /* ── 3 parallel queries ── */
         const [activeRes, velocityRes, logRes] = await Promise.allSettled([
-          /* 1. All active shortage events — country spread + severity */
+          /* 1. Active shortage events — country spread + severity */
           supabase
             .from("shortage_events")
             .select("drug_id, country_code, severity, drugs(generic_name)")
             .eq("status", "active")
-            .limit(9000),
+            .limit(5000),
 
-          /* 2. Events created in last 60 days — velocity (last 30d vs prior 30d) */
+          /* 2. Recently UPDATED events — velocity (last 30d vs prior 30d) */
           supabase
             .from("shortage_events")
-            .select("drug_id, created_at")
-            .gte("created_at", d60)
-            .limit(9000),
+            .select("drug_id, updated_at")
+            .gte("updated_at", d60)
+            .limit(5000),
 
-          /* 3. Status-change log in last 60 days — escalation trajectory + history */
+          /* 3. Status-change log — escalation trajectory + history */
           supabase
             .from("shortage_status_log")
             .select("drug_id, old_severity, new_severity")
             .gte("changed_at", d30)
-            .limit(6000),
+            .limit(5000),
         ]);
 
         const activeData =
@@ -83,7 +84,12 @@ export default function PredictedSupplyRisks() {
         const logData =
           logRes.status === "fulfilled" ? (logRes.value.data ?? []) : [];
 
-        if (activeData.length === 0) return;
+        console.log("[PSR] active:", activeData.length, "velocity:", velocityData.length, "log:", logData.length);
+
+        if (activeData.length === 0) {
+          setError("No active shortage data available");
+          return;
+        }
 
         /* ── Aggregate by drug_id ── */
         const drugMap = new Map<
@@ -92,6 +98,7 @@ export default function PredictedSupplyRisks() {
             name: string;
             countries: Set<string>;
             maxSev: number;
+            activeCount: number;
             last30: number;
             prior30: number;
             escalations: number;
@@ -111,6 +118,7 @@ export default function PredictedSupplyRisks() {
               name,
               countries: new Set(),
               maxSev: 0,
+              activeCount: 0,
               last30: 0,
               prior30: 0,
               escalations: 0,
@@ -118,15 +126,16 @@ export default function PredictedSupplyRisks() {
             });
           }
           const d = drugMap.get(did)!;
+          d.activeCount++;
           if (e.country_code) d.countries.add(e.country_code);
           d.maxSev = Math.max(d.maxSev, SEV_RANK[e.severity] ?? 0);
         }
 
-        // Velocity from recent events
+        // Velocity from recently updated events
         for (const e of velocityData) {
           const d = drugMap.get(e.drug_id);
           if (!d) continue;
-          const t = new Date(e.created_at).getTime();
+          const t = new Date(e.updated_at).getTime();
           if (t >= d30ms) d.last30++;
           else d.prior30++;
         }
@@ -145,32 +154,32 @@ export default function PredictedSupplyRisks() {
         const scored: RiskItem[] = [];
 
         for (const [drugId, d] of drugMap) {
-          // 1. Velocity (0-30): acceleration of shortage reports
+          // 1. Velocity (0-30): acceleration of updated shortage reports
           let v = 0;
           if (d.prior30 > 0) {
             const accel = d.last30 - d.prior30;
-            v = accel * 5 + Math.min(d.last30, 8) * 2;
+            v = accel * 4 + Math.min(d.last30, 10) * 2;
           } else if (d.last30 > 0) {
-            v = d.last30 * 6; // new activity with no prior history
+            v = d.last30 * 5;
           }
           const velocityScore = Math.max(0, Math.min(30, v));
 
           // 2. Multi-country spread (0-25)
-          const spreadScore = Math.min(25, d.countries.size * 6);
+          const spreadScore = Math.min(25, d.countries.size * 7);
 
-          // 3. Historical pattern (0-25): status-log transitions indicate volatility
-          const historyScore = Math.min(25, d.logEntries * 2);
+          // 3. Historical pattern (0-20): status-log transitions = supply volatility
+          const historyScore = Math.min(20, d.logEntries * 3);
 
-          // 4. Severity trajectory (0-20): escalations + current severity level
+          // 4. Severity trajectory (0-25): escalations + current severity level
           const trajectoryScore = Math.min(
-            20,
-            d.escalations * 8 + d.maxSev * 3
+            25,
+            d.escalations * 8 + d.maxSev * 4
           );
 
           const total = velocityScore + spreadScore + historyScore + trajectoryScore;
 
-          // Exclude low-confidence scores
-          if (total < 25) continue;
+          // Exclude drugs with insufficient signal
+          if (total < 15) continue;
 
           // Dominant signal
           const signals = [
@@ -183,7 +192,7 @@ export default function PredictedSupplyRisks() {
 
           const riskScore = Math.min(100, total);
           const riskLevel: RiskItem["riskLevel"] =
-            riskScore >= 70 ? "HIGH RISK" : riskScore >= 45 ? "ELEVATED" : "WATCH";
+            riskScore >= 65 ? "HIGH RISK" : riskScore >= 40 ? "ELEVATED" : "WATCH";
 
           scored.push({
             drugId,
@@ -197,9 +206,11 @@ export default function PredictedSupplyRisks() {
         }
 
         scored.sort((a, b) => b.riskScore - a.riskScore);
+        console.log("[PSR] scored:", scored.length, "top:", scored[0]?.riskScore);
         setItems(scored.slice(0, 10));
       } catch (err) {
         console.error("[PredictedSupplyRisks] load error:", err);
+        setError("Failed to analyse shortage patterns");
       } finally {
         setLoading(false);
       }
@@ -310,6 +321,17 @@ export default function PredictedSupplyRisks() {
           }}
         >
           Analysing shortage patterns…
+        </div>
+      ) : error ? (
+        <div
+          style={{
+            padding: "48px 20px",
+            textAlign: "center",
+            color: "#ea580c",
+            fontSize: 13,
+          }}
+        >
+          {error}
         </div>
       ) : items.length === 0 ? (
         <div

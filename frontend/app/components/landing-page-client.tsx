@@ -104,13 +104,22 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
   const fileRef     = useRef<HTMLInputElement>(null);
   const cameraRef   = useRef<HTMLInputElement>(null);
   const chatEndRef  = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const hasChat = messages.length > 0;
 
-  // scroll to bottom on new messages
+  // scroll to bottom on new messages (within the messages container)
   useEffect(() => {
-    if (hasChat) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (hasChat && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
   }, [messages, hasChat]);
+
+  // lock body scroll when chat is active
+  useEffect(() => {
+    document.body.style.overflow = hasChat ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [hasChat]);
 
   /* ── file handling ───────────────────────────────────────── */
 
@@ -277,184 +286,160 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
   return (
     <>
       {/* ── HERO ─────────────────────────────────────────────── */}
-      <div className="lp-hero" style={{
-        background: "#fff",
-        borderBottom: "1px solid var(--app-border)",
-        padding: hasChat ? "24px 24px 20px" : "36px 24px 24px",
-        display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: hasChat ? undefined : "center",
-        gap: hasChat ? 12 : 16,
-        transition: "padding 0.3s, min-height 0.3s",
-        ...(!hasChat ? { minHeight: "calc(100vh - 64px)" } : {}),
-      }}>
-        {/* Title — compact when chatting */}
-        <div style={{ textAlign: "center", maxWidth: 900 }}>
-          {!hasChat ? (
-            <>
-              <h1 style={{
-                fontSize: 42, fontWeight: 700, color: "var(--app-text)",
-                letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 8,
-              }}>
-                Find Short-Supply Medicines Globally.
-              </h1>
-              <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.5 }}>
-                Search drugs, upload bulk lists, or scan a barcode. Real-time data from 30 regulatory sources.
-              </p>
-            </>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <img src="/logo-black.png" alt="Mederti" style={{ height: 18 }} />
-              <button
-                onClick={clearChat}
-                title="New search"
-                style={{
-                  background: "var(--app-bg-2)", border: "1px solid var(--app-border)",
-                  borderRadius: 6, padding: "4px 10px", cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 5,
-                  color: "var(--app-text-3)", fontSize: 11, fontWeight: 500,
-                  fontFamily: "var(--font-inter), sans-serif",
-                }}
-              >
-                <RotateCcw style={{ width: 11, height: 11 }} />
-                New
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* ── Input bar ──────────────────────────────────────── */}
-        <form
-          onSubmit={handleSubmit}
-          style={{ maxWidth: 860, width: "100%", padding: "0" }}
-        >
-          {/* Attached file chips */}
-          {files.length > 0 && (
-            <div style={{
-              display: "flex", flexWrap: "wrap", gap: 6,
-              padding: "8px 12px 4px",
-              background: "#fff",
-              borderRadius: "12px 12px 0 0",
-              border: "1px solid var(--app-border)",
-              borderBottom: "none",
+      {!hasChat && (
+        <div className="lp-hero" style={{
+          background: "#fff",
+          borderBottom: "1px solid var(--app-border)",
+          padding: "36px 24px 24px",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center",
+          gap: 16,
+          minHeight: "calc(100vh - 64px)",
+        }}>
+          <div style={{ textAlign: "center", maxWidth: 900 }}>
+            <h1 style={{
+              fontSize: 42, fontWeight: 700, color: "var(--app-text)",
+              letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 8,
             }}>
-              {files.map((f) => (
-                <div key={f.id} style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "4px 8px 4px 10px", borderRadius: 6,
-                  background: "var(--app-bg)",
-                  fontSize: 12, color: "var(--app-text-3)",
-                }}>
-                  {f.preview ? (
-                    <img src={f.preview} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: "cover" }} />
-                  ) : fileIcon(f.type)}
-                  <span style={{ maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {f.name}
-                  </span>
-                  <button type="button" onClick={() => removeFile(f.id)} style={{
-                    background: "none", border: "none", cursor: "pointer", padding: 2,
-                    color: "var(--app-text-4)", display: "flex",
+              Find Short-Supply Medicines Globally.
+            </h1>
+            <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.5 }}>
+              Search drugs, upload bulk lists, or scan a barcode. Real-time data from 30 regulatory sources.
+            </p>
+          </div>
+
+          {/* ── Input bar ──────────────────────────────────────── */}
+          <form
+            onSubmit={handleSubmit}
+            style={{ maxWidth: 860, width: "100%", padding: "0" }}
+          >
+            {/* Attached file chips */}
+            {files.length > 0 && (
+              <div style={{
+                display: "flex", flexWrap: "wrap", gap: 6,
+                padding: "8px 12px 4px",
+                background: "#fff",
+                borderRadius: "12px 12px 0 0",
+                border: "1px solid var(--app-border)",
+                borderBottom: "none",
+              }}>
+                {files.map((f) => (
+                  <div key={f.id} style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "4px 8px 4px 10px", borderRadius: 6,
+                    background: "var(--app-bg)",
+                    fontSize: 12, color: "var(--app-text-3)",
                   }}>
-                    <X style={{ width: 12, height: 12 }} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div style={{
-            display: "flex", alignItems: "center",
-            background: "#fff",
-            border: `1.5px solid ${focused ? "var(--teal)" : "var(--app-border)"}`,
-            borderRadius: files.length > 0 ? "0 0 12px 12px" : 12,
-            boxShadow: focused
-              ? "0 0 0 3px rgba(13,148,136,0.12), 0 4px 20px rgba(0,0,0,0.06)"
-              : "0 2px 12px rgba(0,0,0,0.05)",
-            transition: "border-color 0.15s, box-shadow 0.15s",
-            overflow: "hidden",
-          }}>
-            {/* Attach */}
-            <button type="button" onClick={() => fileRef.current?.click()}
-              title="Attach files (CSV, Excel, PDF, images)"
-              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 4px 0 14px", display: "flex", alignItems: "center", color: "var(--app-text-4)", transition: "color 0.12s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--teal)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--app-text-4)"; }}
-            >
-              <Paperclip style={{ width: 16, height: 16, strokeWidth: 1.5 }} />
-            </button>
-
-            {/* Camera / scan */}
-            <button type="button" onClick={() => cameraRef.current?.click()}
-              title="Scan barcode or take photo of product"
-              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 8px 0 4px", display: "flex", alignItems: "center", color: "var(--app-text-4)", transition: "color 0.12s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--teal)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--app-text-4)"; }}
-            >
-              <ScanBarcode style={{ width: 16, height: 16, strokeWidth: 1.5 }} />
-            </button>
-
-            {/* Text input */}
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              placeholder={hasChat ? "Ask a follow-up..." : "Search drugs, upload a file, or scan a barcode..."}
-              autoComplete="off"
-              spellCheck={false}
-              style={{
-                flex: 1, padding: "14px 8px",
-                border: "none", outline: "none",
-                fontSize: 15, color: "var(--app-text)",
-                fontFamily: "var(--font-inter), sans-serif",
-                background: "transparent",
-              }}
-            />
-
-            {/* Clear */}
-            {query && (
-              <button type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: "0 6px", display: "flex", alignItems: "center", color: "var(--app-text-4)" }}>
-                <X style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
-              </button>
+                    {f.preview ? (
+                      <img src={f.preview} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: "cover" }} />
+                    ) : fileIcon(f.type)}
+                    <span style={{ maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {f.name}
+                    </span>
+                    <button type="button" onClick={() => removeFile(f.id)} style={{
+                      background: "none", border: "none", cursor: "pointer", padding: 2,
+                      color: "var(--app-text-4)", display: "flex",
+                    }}>
+                      <X style={{ width: 12, height: 12 }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
 
-            {/* Submit */}
-            <button type="submit" disabled={loading || (!query.trim() && files.length === 0)}
-              style={{
-                margin: 5, padding: 8,
-                background: (query.trim() || files.length > 0) ? "var(--teal)" : "var(--app-bg)",
-                border: "none", borderRadius: 8,
-                color: (query.trim() || files.length > 0) ? "#fff" : "var(--app-text-4)",
-                cursor: (query.trim() || files.length > 0) ? "pointer" : "default",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, transition: "background 0.12s, color 0.12s",
-              }}>
-              <ArrowUp style={{ width: 18, height: 18, strokeWidth: 2 }} />
-            </button>
-          </div>
+            <div style={{
+              display: "flex", alignItems: "center",
+              background: "#fff",
+              border: `1.5px solid ${focused ? "var(--teal)" : "var(--app-border)"}`,
+              borderRadius: files.length > 0 ? "0 0 12px 12px" : 12,
+              boxShadow: focused
+                ? "0 0 0 3px rgba(13,148,136,0.12), 0 4px 20px rgba(0,0,0,0.06)"
+                : "0 2px 12px rgba(0,0,0,0.05)",
+              transition: "border-color 0.15s, box-shadow 0.15s",
+              overflow: "hidden",
+            }}>
+              {/* Attach */}
+              <button type="button" onClick={() => fileRef.current?.click()}
+                title="Attach files (CSV, Excel, PDF, images)"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "0 4px 0 14px", display: "flex", alignItems: "center", color: "var(--app-text-4)", transition: "color 0.12s" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--teal)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--app-text-4)"; }}
+              >
+                <Paperclip style={{ width: 16, height: 16, strokeWidth: 1.5 }} />
+              </button>
 
-          {/* Hint bar */}
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 16,
-            padding: "8px 0 0", fontSize: 11, color: "var(--app-text-4)",
-          }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <Paperclip style={{ width: 10, height: 10 }} /> CSV, Excel, PDF
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <Camera style={{ width: 10, height: 10 }} /> Photo or barcode
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <Search style={{ width: 10, height: 10 }} /> Drug search
-            </span>
-          </div>
-        </form>
+              {/* Camera / scan */}
+              <button type="button" onClick={() => cameraRef.current?.click()}
+                title="Scan barcode or take photo of product"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "0 8px 0 4px", display: "flex", alignItems: "center", color: "var(--app-text-4)", transition: "color 0.12s" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--teal)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--app-text-4)"; }}
+              >
+                <ScanBarcode style={{ width: 16, height: 16, strokeWidth: 1.5 }} />
+              </button>
 
-        {/* Suggestion pills — only when no chat */}
-        {!hasChat && (
+              {/* Text input */}
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                placeholder="Search drugs, upload a file, or scan a barcode..."
+                autoComplete="off"
+                spellCheck={false}
+                style={{
+                  flex: 1, padding: "14px 8px",
+                  border: "none", outline: "none",
+                  fontSize: 15, color: "var(--app-text)",
+                  fontFamily: "var(--font-inter), sans-serif",
+                  background: "transparent",
+                }}
+              />
+
+              {/* Clear */}
+              {query && (
+                <button type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: "0 6px", display: "flex", alignItems: "center", color: "var(--app-text-4)" }}>
+                  <X style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
+                </button>
+              )}
+
+              {/* Submit */}
+              <button type="submit" disabled={loading || (!query.trim() && files.length === 0)}
+                style={{
+                  margin: 5, padding: 8,
+                  background: (query.trim() || files.length > 0) ? "var(--teal)" : "var(--app-bg)",
+                  border: "none", borderRadius: 8,
+                  color: (query.trim() || files.length > 0) ? "#fff" : "var(--app-text-4)",
+                  cursor: (query.trim() || files.length > 0) ? "pointer" : "default",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, transition: "background 0.12s, color 0.12s",
+                }}>
+                <ArrowUp style={{ width: 18, height: 18, strokeWidth: 2 }} />
+              </button>
+            </div>
+
+            {/* Hint bar */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 16,
+              padding: "8px 0 0", fontSize: 11, color: "var(--app-text-4)",
+            }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Paperclip style={{ width: 10, height: 10 }} /> CSV, Excel, PDF
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Camera style={{ width: 10, height: 10 }} /> Photo or barcode
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Search style={{ width: 10, height: 10 }} /> Drug search
+              </span>
+            </div>
+          </form>
+
+          {/* Suggestion pills */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", maxWidth: 860 }}>
             {SUGGESTIONS.map((s) => (
               <button key={s}
@@ -483,10 +468,8 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
               </button>
             ))}
           </div>
-        )}
 
-        {/* Trust bar — only when no chat */}
-        {!hasChat && (
+          {/* Trust bar */}
           <div className="lp-trust-bar" style={{
             display: "flex", alignItems: "center", gap: 24, flexWrap: "nowrap",
             marginTop: 4,
@@ -510,20 +493,52 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
               </Link>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── CONTENT AREA ─────────────────────────────────────── */}
       {bulkFile ? (
         <BulkUpload file={bulkFile} onClose={() => { setBulkFile(null); clearChat(); }} />
       ) : hasChat ? (
-        /* Chat messages */
+        /* Chat mode — full-height flex layout with bottom input */
         <div style={{
-          maxWidth: 860, width: "100%", margin: "0 auto",
-          padding: "24px 24px 48px",
-          display: "flex", flexDirection: "column", gap: 20,
-          minHeight: 300,
+          display: "flex", flexDirection: "column",
+          height: "calc(100vh - 64px)",
         }}>
+          {/* Chat header */}
+          <div style={{
+            background: "#fff",
+            borderBottom: "1px solid var(--app-border)",
+            padding: "14px 24px",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+            flexShrink: 0,
+          }}>
+            <img src="/logo-black.png" alt="Mederti" style={{ height: 18 }} />
+            <button
+              onClick={clearChat}
+              title="New search"
+              style={{
+                background: "var(--app-bg-2)", border: "1px solid var(--app-border)",
+                borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 5,
+                color: "var(--app-text-3)", fontSize: 11, fontWeight: 500,
+                fontFamily: "var(--font-inter), sans-serif",
+              }}
+            >
+              <RotateCcw style={{ width: 11, height: 11 }} />
+              New
+            </button>
+          </div>
+
+          {/* Messages — scrollable */}
+          <div ref={chatScrollRef} style={{
+            flex: 1, overflowY: "auto",
+            padding: "24px 24px 16px",
+          }}>
+            <div style={{
+              maxWidth: 860, width: "100%", margin: "0 auto",
+              display: "flex", flexDirection: "column", gap: 20,
+            }}>
           {messages.map((msg) => (
             <div key={msg.id} style={{
               display: "flex",
@@ -734,7 +749,122 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
             </div>
           )}
 
-          <div ref={chatEndRef} />
+            <div ref={chatEndRef} />
+            </div>
+          </div>
+
+          {/* Bottom input bar */}
+          <div style={{
+            flexShrink: 0,
+            background: "#fff",
+            borderTop: "1px solid var(--app-border)",
+            padding: "12px 24px 16px",
+          }}>
+            <form
+              onSubmit={handleSubmit}
+              style={{ maxWidth: 860, width: "100%", margin: "0 auto" }}
+            >
+              {/* Attached file chips */}
+              {files.length > 0 && (
+                <div style={{
+                  display: "flex", flexWrap: "wrap", gap: 6,
+                  padding: "8px 12px 4px",
+                  background: "#fff",
+                  borderRadius: "12px 12px 0 0",
+                  border: "1px solid var(--app-border)",
+                  borderBottom: "none",
+                }}>
+                  {files.map((f) => (
+                    <div key={f.id} style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "4px 8px 4px 10px", borderRadius: 6,
+                      background: "var(--app-bg)",
+                      fontSize: 12, color: "var(--app-text-3)",
+                    }}>
+                      {f.preview ? (
+                        <img src={f.preview} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: "cover" }} />
+                      ) : fileIcon(f.type)}
+                      <span style={{ maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {f.name}
+                      </span>
+                      <button type="button" onClick={() => removeFile(f.id)} style={{
+                        background: "none", border: "none", cursor: "pointer", padding: 2,
+                        color: "var(--app-text-4)", display: "flex",
+                      }}>
+                        <X style={{ width: 12, height: 12 }} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{
+                display: "flex", alignItems: "center",
+                background: "#fff",
+                border: `1.5px solid ${focused ? "var(--teal)" : "var(--app-border)"}`,
+                borderRadius: files.length > 0 ? "0 0 12px 12px" : 12,
+                boxShadow: focused
+                  ? "0 0 0 3px rgba(13,148,136,0.12), 0 4px 20px rgba(0,0,0,0.06)"
+                  : "0 2px 12px rgba(0,0,0,0.05)",
+                transition: "border-color 0.15s, box-shadow 0.15s",
+                overflow: "hidden",
+              }}>
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  title="Attach files (CSV, Excel, PDF, images)"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: "0 4px 0 14px", display: "flex", alignItems: "center", color: "var(--app-text-4)", transition: "color 0.12s" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--teal)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--app-text-4)"; }}
+                >
+                  <Paperclip style={{ width: 16, height: 16, strokeWidth: 1.5 }} />
+                </button>
+                <button type="button" onClick={() => cameraRef.current?.click()}
+                  title="Scan barcode or take photo of product"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: "0 8px 0 4px", display: "flex", alignItems: "center", color: "var(--app-text-4)", transition: "color 0.12s" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--teal)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--app-text-4)"; }}
+                >
+                  <ScanBarcode style={{ width: 16, height: 16, strokeWidth: 1.5 }} />
+                </button>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  placeholder="Ask a follow-up..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  style={{
+                    flex: 1, padding: "14px 8px",
+                    border: "none", outline: "none",
+                    fontSize: 15, color: "var(--app-text)",
+                    fontFamily: "var(--font-inter), sans-serif",
+                    background: "transparent",
+                  }}
+                />
+                {query && (
+                  <button type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "0 6px", display: "flex", alignItems: "center", color: "var(--app-text-4)" }}>
+                    <X style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
+                  </button>
+                )}
+                <button type="submit" disabled={loading || (!query.trim() && files.length === 0)}
+                  style={{
+                    margin: 5, padding: 8,
+                    background: (query.trim() || files.length > 0) ? "var(--teal)" : "var(--app-bg)",
+                    border: "none", borderRadius: 8,
+                    color: (query.trim() || files.length > 0) ? "#fff" : "var(--app-text-4)",
+                    cursor: (query.trim() || files.length > 0) ? "pointer" : "default",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0, transition: "background 0.12s, color 0.12s",
+                  }}>
+                  <ArrowUp style={{ width: 18, height: 18, strokeWidth: 2 }} />
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       ) : (
         /* Marketing content */

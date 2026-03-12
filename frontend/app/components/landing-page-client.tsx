@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { DrugHit } from "@/lib/api";
 import LandingContent from "./landing-content";
+import BulkUpload from "./bulk-upload";
 
 /* Simple markdown to HTML: bold, italic, newlines, bullet lists */
 function renderMd(text: string): string {
@@ -95,6 +96,8 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
   const [query, setQuery]       = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [files, setFiles]       = useState<AttachedFile[]>([]);
+  const [rawFiles, setRawFiles] = useState<File[]>([]);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [loading, setLoading]   = useState(false);
   const [focused, setFocused]   = useState(false);
   const inputRef    = useRef<HTMLInputElement>(null);
@@ -113,7 +116,9 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
-    Array.from(fileList).forEach((f) => {
+    const newRaw = Array.from(fileList);
+    setRawFiles((prev) => [...prev, ...newRaw]);
+    newRaw.forEach((f) => {
       const af: AttachedFile = { id: uid(), name: f.name, type: f.type, size: f.size };
       if (f.type.startsWith("image/")) {
         const reader = new FileReader();
@@ -128,7 +133,11 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
   }
 
   function removeFile(id: string) {
+    const removed = files.find((f) => f.id === id);
     setFiles((prev) => prev.filter((f) => f.id !== id));
+    if (removed) {
+      setRawFiles((prev) => prev.filter((f) => f.name !== removed.name));
+    }
   }
 
   /* ── submit ──────────────────────────────────────────────── */
@@ -151,6 +160,17 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
     try {
       if (userMsg.files && userMsg.files.length > 0 && !q) {
+        // Check for spreadsheet files → enter bulk upload mode
+        const spreadsheetFile = rawFiles.find((f) =>
+          /\.(csv|tsv|xlsx|xls)$/i.test(f.name)
+        );
+        if (spreadsheetFile) {
+          setBulkFile(spreadsheetFile);
+          setRawFiles([]);
+          setLoading(false);
+          return;
+        }
+        // Non-spreadsheet files → "coming soon"
         await new Promise((r) => setTimeout(r, 600));
         const fileNames = userMsg.files.map((f) => f.name).join(", ");
         setMessages((prev) => [
@@ -239,6 +259,8 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
   function clearChat() {
     setMessages([]);
     setFiles([]);
+    setRawFiles([]);
+    setBulkFile(null);
     setQuery("");
   }
 
@@ -489,7 +511,9 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
       </div>
 
       {/* ── CONTENT AREA ─────────────────────────────────────── */}
-      {hasChat ? (
+      {bulkFile ? (
+        <BulkUpload file={bulkFile} onClose={() => { setBulkFile(null); clearChat(); }} />
+      ) : hasChat ? (
         /* Chat messages */
         <div style={{
           maxWidth: 860, width: "100%", margin: "0 auto",

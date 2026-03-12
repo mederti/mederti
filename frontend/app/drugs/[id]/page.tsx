@@ -610,9 +610,9 @@ export default async function DrugPage({ params }: Props) {
             {/* WHERE IS IT AVAILABLE? */}
             <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Where is it available?</span>
+                <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Shortage reports by country</span>
                 <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                  {countries.length} countr{countries.length !== 1 ? "ies" : "y"} checked
+                  {countries.length} countr{countries.length !== 1 ? "ies" : "y"} affected
                 </span>
               </div>
               <div style={{ padding: "18px 20px" }}>

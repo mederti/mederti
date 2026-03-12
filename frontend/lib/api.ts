@@ -1,6 +1,12 @@
 // Routes are now served by Next.js API Route Handlers under /api/*
 // No external backend dependency required.
-const BASE = "/api";
+// Server Components need an absolute URL; client-side can use relative.
+function getBase() {
+  if (typeof window !== "undefined") return "/api"; // browser
+  const vercelUrl = process.env.VERCEL_URL; // e.g. myapp-abc123.vercel.app
+  if (vercelUrl) return `https://${vercelUrl}/api`;
+  return `http://localhost:${process.env.PORT ?? 3000}/api`;
+}
 
 export interface DrugHit {
   drug_id: string;
@@ -147,7 +153,8 @@ export interface SummaryResponse {
 }
 
 async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { next: { revalidate: 300 } });
+  const base = getBase();
+  const res = await fetch(`${base}${path}`, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
   return res.json();
 }

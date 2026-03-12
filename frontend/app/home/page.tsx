@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { api, ShortageRow, RecallRow, SummaryResponse, RecallSummaryResponse } from "@/lib/api";
 import Link from "next/link";
 import {
@@ -121,8 +123,6 @@ function fmtDate(date: string | null, locale = "en-AU") {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-
-export const revalidate = 300; // 5 min ISR
 
 export default async function HomePage() {
   let auShortages: ShortageRow[]             = [];

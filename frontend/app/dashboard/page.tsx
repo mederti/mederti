@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { api, ShortageRow, SummaryResponse, RecallSummaryResponse, RecallRow } from "@/lib/api";
 import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";

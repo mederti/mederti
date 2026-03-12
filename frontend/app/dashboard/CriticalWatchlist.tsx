@@ -62,7 +62,11 @@ interface WatchItem {
   countriesAffected: number;
 }
 
-export default function CriticalWatchlist() {
+interface CriticalWatchlistProps {
+  countryFilter?: string | null;
+}
+
+export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistProps) {
   const [items, setItems] = useState<WatchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const sbRef = useRef(createBrowserClient());
@@ -79,10 +83,16 @@ export default function CriticalWatchlist() {
           .select("product_id, country, status, severity, drug_products(product_name)")
           .neq("status", "available");
 
-        const { data: shortageData } = await supabase
+        let shortageQ = supabase
           .from("shortage_events")
           .select("drug_id, country_code, severity, drugs(generic_name)")
           .eq("status", "active");
+
+        if (countryFilter) {
+          shortageQ = shortageQ.eq("country_code", countryFilter);
+        }
+
+        const { data: shortageData } = await shortageQ;
 
         for (const name of WATCHLIST) {
           const terms = SEARCH_TERMS[name] ?? [name.toLowerCase()];
@@ -142,7 +152,7 @@ export default function CriticalWatchlist() {
     }
 
     load();
-  }, []);
+  }, [countryFilter]);
 
   return (
     <div

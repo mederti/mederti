@@ -52,6 +52,7 @@ interface TooltipState {
 interface Props {
   onCountryClick: (countryCode: string, countryName: string) => void;
   activeFilter: string | null;
+  timePeriod?: "24h" | "7d" | "30d" | "90d" | null;
 }
 
 /* ── Teal colour scale: #ccfbf1 (light) → #0d9488 (deep) ── */
@@ -66,7 +67,7 @@ function getTealColor(count: number, maxCount: number): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-export default function RegionalSupplyMap({ onCountryClick, activeFilter }: Props) {
+export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePeriod }: Props) {
   const [data, setData] = useState<Map<string, CountryData>>(new Map());
   const [maxCount, setMaxCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -78,11 +79,23 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter }: Prop
 
     async function load() {
       try {
-        const { data: rows } = await supabase
+        let query = supabase
           .from("shortage_events")
           .select("country_code, country, severity")
-          .in("status", ["active", "anticipated"])
-          .limit(10000);
+          .in("status", ["active", "anticipated"]);
+
+        if (timePeriod) {
+          const MS: Record<string, number> = {
+            "24h": 86400000, "7d": 604800000,
+            "30d": 2592000000, "90d": 7776000000,
+          };
+          query = query.gte(
+            "updated_at",
+            new Date(Date.now() - (MS[timePeriod] ?? 0)).toISOString()
+          );
+        }
+
+        const { data: rows } = await query.limit(10000);
 
         if (!rows) return;
 
@@ -114,7 +127,7 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter }: Prop
     }
 
     load();
-  }, []);
+  }, [timePeriod]);
 
   const handleMouseEnter = useCallback(
     (geo: GeoType, evt: React.MouseEvent<SVGPathElement>) => {

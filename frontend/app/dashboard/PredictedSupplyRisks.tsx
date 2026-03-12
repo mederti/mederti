@@ -38,7 +38,11 @@ function riskStyle(level: string) {
 }
 
 /* ── Component ── */
-export default function PredictedSupplyRisks() {
+interface PredictedSupplyRisksProps {
+  countryFilter?: string | null;
+}
+
+export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyRisksProps) {
   const [items, setItems] = useState<RiskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,22 +58,23 @@ export default function PredictedSupplyRisks() {
         const d60 = new Date(now - 60 * 86400000).toISOString();
 
         /* ── 3 parallel queries ── */
+        let activeQ = supabase
+          .from("shortage_events")
+          .select("drug_id, country_code, severity, drugs(generic_name)")
+          .eq("status", "active");
+        let velocityQ = supabase
+          .from("shortage_events")
+          .select("drug_id, updated_at")
+          .gte("updated_at", d60);
+
+        if (countryFilter) {
+          activeQ = activeQ.eq("country_code", countryFilter);
+          velocityQ = velocityQ.eq("country_code", countryFilter);
+        }
+
         const [activeRes, velocityRes, logRes] = await Promise.allSettled([
-          /* 1. Active shortage events — country spread + severity */
-          supabase
-            .from("shortage_events")
-            .select("drug_id, country_code, severity, drugs(generic_name)")
-            .eq("status", "active")
-            .limit(5000),
-
-          /* 2. Recently UPDATED events — velocity (last 30d vs prior 30d) */
-          supabase
-            .from("shortage_events")
-            .select("drug_id, updated_at")
-            .gte("updated_at", d60)
-            .limit(5000),
-
-          /* 3. Status-change log — escalation trajectory + history */
+          activeQ.limit(5000),
+          velocityQ.limit(5000),
           supabase
             .from("shortage_status_log")
             .select("drug_id, old_severity, new_severity")
@@ -217,7 +222,7 @@ export default function PredictedSupplyRisks() {
     }
 
     load();
-  }, []);
+  }, [countryFilter]);
 
   /* ── Render ── */
   return (

@@ -92,9 +92,10 @@ function abbreviateSource(name: string): string {
 
 interface ShortageAlertsProps {
   countryFilter?: string | null;
+  timePeriod?: "24h" | "7d" | "30d" | "90d" | null;
 }
 
-export default function ShortageAlerts({ countryFilter }: ShortageAlertsProps = {}) {
+export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAlertsProps = {}) {
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
   const sbRef = useRef(createBrowserClient());
@@ -104,17 +105,31 @@ export default function ShortageAlerts({ countryFilter }: ShortageAlertsProps = 
 
     async function load() {
       try {
-        const h48 = new Date(
-          Date.now() - 48 * 60 * 60 * 1000
-        ).toISOString();
+        const TIME_MS: Record<string, number> = {
+          "24h": 86400000, "7d": 604800000,
+          "30d": 2592000000, "90d": 7776000000,
+        };
 
         let query = supabase
           .from("shortage_events")
           .select(
             "shortage_id, drug_id, severity, country_code, updated_at, drugs(generic_name), data_sources(name)"
           )
-          .gte("updated_at", h48)
-          .in("status", ["active", "anticipated"])
+          .in("status", ["active", "anticipated"]);
+
+        if (timePeriod) {
+          query = query.gte(
+            "updated_at",
+            new Date(Date.now() - (TIME_MS[timePeriod] ?? 172800000)).toISOString()
+          );
+        } else {
+          query = query.gte(
+            "updated_at",
+            new Date(Date.now() - 172800000).toISOString()
+          );
+        }
+
+        query = query
           .order("severity", { ascending: true })
           .order("updated_at", { ascending: false })
           .limit(countryFilter ? 50 : 20);
@@ -158,7 +173,7 @@ export default function ShortageAlerts({ countryFilter }: ShortageAlertsProps = 
     load();
     const iv = setInterval(load, 5 * 60 * 1000);
     return () => clearInterval(iv);
-  }, [countryFilter]);
+  }, [countryFilter, timePeriod]);
 
   return (
     <div
@@ -209,7 +224,7 @@ export default function ShortageAlerts({ countryFilter }: ShortageAlertsProps = 
             fontFamily: "var(--font-dm-mono), monospace",
           }}
         >
-          last 48h · refreshes every 5m
+          {timePeriod ? `last ${timePeriod}` : "last 48h"} · refreshes every 5m
         </span>
       </div>
 

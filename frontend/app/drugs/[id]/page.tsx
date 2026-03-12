@@ -440,7 +440,7 @@ export default async function DrugPage({ params }: Props) {
         <div
           className="drug-header-card"
           style={{
-            background: "var(--app-bg)",
+            background: "#fff",
             border: "1px solid var(--app-border)",
             borderRadius: 14,
             padding: "24px 28px",
@@ -449,6 +449,7 @@ export default async function DrugPage({ params }: Props) {
             alignItems: "center",
             justifyContent: "space-between",
             gap: 24,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
           }}
         >
           <div>

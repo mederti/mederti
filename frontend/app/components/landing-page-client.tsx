@@ -259,7 +259,10 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
         background: "#fff",
         borderBottom: "1px solid var(--app-border)",
         padding: hasChat ? "24px 24px 20px" : "36px 24px 24px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: hasChat ? 12 : 16,
+        minHeight: hasChat ? undefined : "calc(100vh - 64px)",
+        display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: hasChat ? undefined : "center",
+        gap: hasChat ? 12 : 16,
         transition: "padding 0.3s",
       }}>
         {/* Title — compact when chatting */}

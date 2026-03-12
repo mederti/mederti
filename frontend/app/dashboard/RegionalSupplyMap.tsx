@@ -341,6 +341,7 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
                       fill={fill}
                       opacity={0.4}
                       style={{
+                        transformBox: "fill-box",
                         transformOrigin: "center",
                         animation: `mederti-pulse 2.5s ease-in-out infinite`,
                         animationDelay: pulseDelay,

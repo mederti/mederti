@@ -434,22 +434,18 @@ export default async function DrugPage({ params }: Props) {
 
       <SiteNav />
 
-      <div className="drug-page" style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 64px" }}>
-
-        {/* ═══ DRUG HEADER CARD ═══ */}
+      {/* ═══ FULL-WIDTH HEADER BAND ═══ */}
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
         <div
           className="drug-header-card"
           style={{
-            background: "#fff",
-            border: "1px solid var(--app-border)",
-            borderRadius: 14,
-            padding: "24px 28px",
-            marginBottom: 20,
+            maxWidth: 1100,
+            margin: "0 auto",
+            padding: "28px 32px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 24,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
           }}
         >
           <div>
@@ -544,6 +540,9 @@ export default async function DrugPage({ params }: Props) {
             <WatchlistButton drugId={id} />
           </div>
         </div>
+      </div>
+
+      <div className="drug-page" style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 64px" }}>
 
         {/* ═══ ANSWER ROW — Status + ETA ═══ */}
         <div className="drug-answer-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>

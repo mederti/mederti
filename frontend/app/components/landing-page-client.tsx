@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { DrugHit } from "@/lib/api";
 import LandingContent from "./landing-content";
+import BulkUpload from "./bulk-upload";
 
 /* Simple markdown to HTML: bold, italic, newlines, bullet lists */
 function renderMd(text: string): string {
@@ -95,6 +96,8 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
   const [query, setQuery]       = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [files, setFiles]       = useState<AttachedFile[]>([]);
+  const [rawFiles, setRawFiles] = useState<File[]>([]);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [loading, setLoading]   = useState(false);
   const [focused, setFocused]   = useState(false);
   const inputRef    = useRef<HTMLInputElement>(null);
@@ -113,7 +116,9 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
+    const newRaw: File[] = [];
     Array.from(fileList).forEach((f) => {
+      newRaw.push(f);
       const af: AttachedFile = { id: uid(), name: f.name, type: f.type, size: f.size };
       if (f.type.startsWith("image/")) {
         const reader = new FileReader();
@@ -125,10 +130,15 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
       }
       setFiles((prev) => [...prev, af]);
     });
+    setRawFiles((prev) => [...prev, ...newRaw]);
   }
 
   function removeFile(id: string) {
+    const removed = files.find((f) => f.id === id);
     setFiles((prev) => prev.filter((f) => f.id !== id));
+    if (removed) {
+      setRawFiles((prev) => prev.filter((f) => f.name !== removed.name));
+    }
   }
 
   /* ── submit ──────────────────────────────────────────────── */
@@ -151,13 +161,26 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
     try {
       if (userMsg.files && userMsg.files.length > 0 && !q) {
+        // Check for spreadsheet files — enter bulk upload mode
+        const spreadsheet = rawFiles.find((f) =>
+          /\.(csv|tsv|xlsx|xls)$/i.test(f.name)
+        );
+        if (spreadsheet) {
+          setBulkFile(spreadsheet);
+          setMessages([]);
+          setRawFiles([]);
+          setLoading(false);
+          return;
+        }
+
+        // Non-spreadsheet files (PDF, images) — show coming soon
         await new Promise((r) => setTimeout(r, 600));
         const fileNames = userMsg.files.map((f) => f.name).join(", ");
         setMessages((prev) => [
           ...prev,
           {
             id: uid(), role: "assistant",
-            text: `I've received your file${userMsg.files!.length > 1 ? "s" : ""}: ${fileNames}.\n\nBulk drug shortage lookups from uploaded files are coming soon. In the meantime, type any drug name to search our database of ${totalActive}+ shortage records across 30 regulatory sources.`,
+            text: `I've received your file${userMsg.files!.length > 1 ? "s" : ""}: ${fileNames}.\n\nPDF and image analysis is coming soon. In the meantime, upload a CSV or Excel file for bulk drug shortage lookups, or type any drug name to search our database of ${totalActive}+ shortage records.`,
             ts: Date.now(),
           },
         ]);
@@ -239,7 +262,9 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
   function clearChat() {
     setMessages([]);
     setFiles([]);
+    setRawFiles([]);
     setQuery("");
+    setBulkFile(null);
   }
 
   /* ── severity badge ──────────────────────────────────────── */
@@ -492,7 +517,18 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
       </div>
 
       {/* ── CONTENT AREA ─────────────────────────────────────── */}
-      {hasChat ? (
+      {bulkFile ? (
+        <BulkUpload
+          file={bulkFile}
+          onClose={() => {
+            setBulkFile(null);
+            setMessages([]);
+            setFiles([]);
+            setRawFiles([]);
+            setQuery("");
+          }}
+        />
+      ) : hasChat ? (
         /* Chat messages */
         <div style={{
           maxWidth: 860, width: "100%", margin: "0 auto",

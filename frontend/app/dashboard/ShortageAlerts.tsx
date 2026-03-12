@@ -90,7 +90,11 @@ function abbreviateSource(name: string): string {
   return name.length > 16 ? name.slice(0, 15) + "…" : name;
 }
 
-export default function ShortageAlerts() {
+interface ShortageAlertsProps {
+  countryFilter?: string | null;
+}
+
+export default function ShortageAlerts({ countryFilter }: ShortageAlertsProps = {}) {
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
   const sbRef = useRef(createBrowserClient());
@@ -104,7 +108,7 @@ export default function ShortageAlerts() {
           Date.now() - 48 * 60 * 60 * 1000
         ).toISOString();
 
-        const { data } = await supabase
+        let query = supabase
           .from("shortage_events")
           .select(
             "shortage_id, drug_id, severity, country_code, updated_at, drugs(generic_name), data_sources(name)"
@@ -113,7 +117,13 @@ export default function ShortageAlerts() {
           .in("status", ["active", "anticipated"])
           .order("severity", { ascending: true })
           .order("updated_at", { ascending: false })
-          .limit(20);
+          .limit(countryFilter ? 50 : 20);
+
+        if (countryFilter) {
+          query = query.eq("country_code", countryFilter);
+        }
+
+        const { data } = await query;
 
         if (data) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,7 +158,7 @@ export default function ShortageAlerts() {
     load();
     const iv = setInterval(load, 5 * 60 * 1000);
     return () => clearInterval(iv);
-  }, []);
+  }, [countryFilter]);
 
   return (
     <div

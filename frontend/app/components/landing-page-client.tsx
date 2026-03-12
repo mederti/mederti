@@ -116,9 +116,9 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
-    const newRaw: File[] = [];
-    Array.from(fileList).forEach((f) => {
-      newRaw.push(f);
+    const newRaw = Array.from(fileList);
+    setRawFiles((prev) => [...prev, ...newRaw]);
+    newRaw.forEach((f) => {
       const af: AttachedFile = { id: uid(), name: f.name, type: f.type, size: f.size };
       if (f.type.startsWith("image/")) {
         const reader = new FileReader();
@@ -130,7 +130,6 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
       }
       setFiles((prev) => [...prev, af]);
     });
-    setRawFiles((prev) => [...prev, ...newRaw]);
   }
 
   function removeFile(id: string) {
@@ -161,26 +160,24 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
     try {
       if (userMsg.files && userMsg.files.length > 0 && !q) {
-        // Check for spreadsheet files — enter bulk upload mode
-        const spreadsheet = rawFiles.find((f) =>
+        // Check for spreadsheet files → enter bulk upload mode
+        const spreadsheetFile = rawFiles.find((f) =>
           /\.(csv|tsv|xlsx|xls)$/i.test(f.name)
         );
-        if (spreadsheet) {
-          setBulkFile(spreadsheet);
-          setMessages([]);
+        if (spreadsheetFile) {
+          setBulkFile(spreadsheetFile);
           setRawFiles([]);
           setLoading(false);
           return;
         }
-
-        // Non-spreadsheet files (PDF, images) — show coming soon
+        // Non-spreadsheet files → "coming soon"
         await new Promise((r) => setTimeout(r, 600));
         const fileNames = userMsg.files.map((f) => f.name).join(", ");
         setMessages((prev) => [
           ...prev,
           {
             id: uid(), role: "assistant",
-            text: `I've received your file${userMsg.files!.length > 1 ? "s" : ""}: ${fileNames}.\n\nPDF and image analysis is coming soon. In the meantime, upload a CSV or Excel file for bulk drug shortage lookups, or type any drug name to search our database of ${totalActive}+ shortage records.`,
+            text: `I've received your file${userMsg.files!.length > 1 ? "s" : ""}: ${fileNames}.\n\nBulk drug shortage lookups from uploaded files are coming soon. In the meantime, type any drug name to search our database of ${totalActive}+ shortage records across 30 regulatory sources.`,
             ts: Date.now(),
           },
         ]);
@@ -263,8 +260,8 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
     setMessages([]);
     setFiles([]);
     setRawFiles([]);
-    setQuery("");
     setBulkFile(null);
+    setQuery("");
   }
 
   /* ── severity badge ──────────────────────────────────────── */
@@ -284,10 +281,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
         background: "#fff",
         borderBottom: "1px solid var(--app-border)",
         padding: hasChat ? "24px 24px 20px" : "36px 24px 24px",
-        minHeight: hasChat ? undefined : "calc(100vh - 64px)",
-        display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: hasChat ? undefined : "center",
-        gap: hasChat ? 12 : 16,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: hasChat ? 12 : 16,
         transition: "padding 0.3s",
       }}>
         {/* Title — compact when chatting */}
@@ -518,16 +512,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
 
       {/* ── CONTENT AREA ─────────────────────────────────────── */}
       {bulkFile ? (
-        <BulkUpload
-          file={bulkFile}
-          onClose={() => {
-            setBulkFile(null);
-            setMessages([]);
-            setFiles([]);
-            setRawFiles([]);
-            setQuery("");
-          }}
-        />
+        <BulkUpload file={bulkFile} onClose={() => { setBulkFile(null); clearChat(); }} />
       ) : hasChat ? (
         /* Chat messages */
         <div style={{

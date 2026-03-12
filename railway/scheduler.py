@@ -15,9 +15,14 @@ import os
 # Add scrapers directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "scrapers"))
 
-from tga_shortage   import TGAShortageScraper
-from mhra_shortage  import MHRARecallScraper
-from fda_shortage   import FDAShortageScraper, FDARecallScraper
+from tga_shortage            import TGAShortageScraper
+from mhra_shortage           import MHRARecallScraper
+from fda_shortage            import FDAShortageScraper, FDARecallScraper
+from health_canada_shortage  import HealthCanadaShortageScraper
+from ema_shortage            import EMAShortageScraper
+from bfarm_shortage          import BfArMShortageScraper
+from aifa_shortage           import AIFAShortageScraper
+from fimea_shortage          import FimeaShortageScraper
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,10 +33,17 @@ log = logging.getLogger("scheduler")
 
 # All scrapers to run, in order
 SCRAPERS = [
+    # Phase 0 — original 4 scrapers (AU, GB, US)
     TGAShortageScraper,
     MHRARecallScraper,
     FDAShortageScraper,
     FDARecallScraper,
+    # Phase 1 — migrated scrapers (CA, EU, DE, IT, FI)
+    HealthCanadaShortageScraper,
+    EMAShortageScraper,
+    BfArMShortageScraper,
+    AIFAShortageScraper,
+    FimeaShortageScraper,
 ]
 
 

@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
   ComposableMap,
   Geographies,
   Geography,
-  ZoomableGroup,
+  Marker,
 } from "react-simple-maps";
 import type { Geography as GeoType } from "react-simple-maps";
 import { MapPin } from "lucide-react";
@@ -26,10 +26,27 @@ const NUM_TO_A2: Record<number, string> = {
 
 const FLAGS: Record<string, string> = {
   AU: "🇦🇺", AT: "🇦🇹", BE: "🇧🇪", BR: "🇧🇷", CA: "🇨🇦", CH: "🇨🇭",
-  CZ: "🇨🇿", DE: "🇩🇪", DK: "🇩🇰", ES: "🇪🇸", EU: "🇪🇺", FI: "🇫🇮",
-  FR: "🇫🇷", GB: "🇬🇧", HU: "🇭🇺", IE: "🇮🇪", IT: "🇮🇹", JP: "🇯🇵",
-  KR: "🇰🇷", MX: "🇲🇽", NL: "🇳🇱", NO: "🇳🇴", NZ: "🇳🇿", SE: "🇸🇪",
-  SG: "🇸🇬", US: "🇺🇸", ZA: "🇿🇦",
+  CL: "🇨🇱", CN: "🇨🇳", CO: "🇨🇴", CZ: "🇨🇿", DE: "🇩🇪", DK: "🇩🇰",
+  ES: "🇪🇸", EU: "🇪🇺", FI: "🇫🇮", FR: "🇫🇷", GB: "🇬🇧", GR: "🇬🇷",
+  HR: "🇭🇷", HU: "🇭🇺", IE: "🇮🇪", IL: "🇮🇱", IN: "🇮🇳", IT: "🇮🇹",
+  JP: "🇯🇵", KR: "🇰🇷", MX: "🇲🇽", NL: "🇳🇱", NG: "🇳🇬", NO: "🇳🇴",
+  NZ: "🇳🇿", PL: "🇵🇱", PT: "🇵🇹", PR: "🇵🇷", SE: "🇸🇪", SG: "🇸🇬",
+  TR: "🇹🇷", UA: "🇺🇦", US: "🇺🇸", UY: "🇺🇾", VE: "🇻🇪", ZA: "🇿🇦",
+};
+
+/* ── Country centre coordinates [longitude, latitude] ── */
+const COUNTRY_CENTERS: Record<string, [number, number]> = {
+  AU: [134, -25], AT: [14.5, 47.5], BE: [4.5, 50.8], BR: [-51, -10],
+  CA: [-106, 56], CL: [-71, -35], CN: [104, 35], CO: [-74, 4],
+  HR: [16, 45.2], CZ: [15.5, 49.8], DK: [10, 56], FI: [26, 64],
+  FR: [2.5, 46.5], DE: [10.5, 51.2], GR: [22, 39], HU: [19.5, 47.2],
+  IN: [79, 21], IE: [-8, 53.5], IL: [35, 31.5], IT: [12.5, 42.5],
+  JP: [138, 36], KR: [128, 36], MX: [-102, 23.5], NL: [5.3, 52.2],
+  NZ: [174, -41], NG: [8, 10], NO: [10, 62], PL: [20, 52],
+  PT: [-8.2, 39.5], PR: [-66.5, 18.2], SG: [104, 1.4], ZA: [25, -29],
+  ES: [-3.7, 40.4], SE: [16, 62], CH: [8.2, 46.8], TR: [35.2, 39],
+  UA: [31.2, 48.4], GB: [-2, 54], US: [-98, 39], UY: [-56, -33],
+  VE: [-67, 8],
 };
 
 const SEV_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -57,15 +74,39 @@ interface Props {
 
 /* ── Teal colour scale: #ccfbf1 (light) → #0d9488 (deep) ── */
 function getTealColor(count: number, maxCount: number): string {
-  if (count === 0) return "#f1f5f9";
+  if (count === 0) return "#ccfbf1";
   const ratio = Math.min(count / Math.max(maxCount, 1), 1);
-  // Power curve for more visual differentiation at lower counts
   const t = Math.pow(ratio, 0.5);
   const r = Math.round(204 + (13 - 204) * t);
   const g = Math.round(251 + (148 - 251) * t);
   const b = Math.round(241 + (136 - 241) * t);
   return `rgb(${r}, ${g}, ${b})`;
 }
+
+function getTealStroke(count: number, maxCount: number): string {
+  const ratio = Math.min(count / Math.max(maxCount, 1), 1);
+  const t = Math.pow(ratio, 0.5);
+  const r = Math.round(153 + (10 - 153) * t);
+  const g = Math.round(220 + (120 - 220) * t);
+  const b = Math.round(210 + (110 - 210) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+const MIN_R = 4;
+const MAX_R = 26;
+
+function getBubbleRadius(count: number, maxCount: number): number {
+  if (count === 0 || maxCount === 0) return MIN_R;
+  return Math.sqrt(count / maxCount) * (MAX_R - MIN_R) + MIN_R;
+}
+
+/* ── Pulse animation CSS (injected once) ── */
+const PULSE_CSS = `
+@keyframes mederti-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.2; transform: scale(1.6); }
+}
+`;
 
 export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePeriod }: Props) {
   const [data, setData] = useState<Map<string, CountryData>>(new Map());
@@ -129,24 +170,24 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
     load();
   }, [timePeriod]);
 
-  const handleMouseEnter = useCallback(
-    (geo: GeoType, evt: React.MouseEvent<SVGPathElement>) => {
-      const numericId = parseInt(geo.id, 10);
-      const cc = NUM_TO_A2[numericId];
-      if (!cc) return;
-      const d = data.get(cc);
-      if (!d) return;
-      setTooltip({
-        x: evt.clientX,
-        y: evt.clientY,
-        cc,
-        country: d.country,
-        count: d.count,
-        maxSeverity: d.maxSeverity,
-      });
-    },
-    [data]
-  );
+  /* ── Sorted bubbles: largest first (behind), smallest on top ── */
+  const sortedBubbles = useMemo(() => {
+    const entries: Array<{ cc: string; d: CountryData }> = [];
+    data.forEach((d, cc) => {
+      if (COUNTRY_CENTERS[cc]) entries.push({ cc, d });
+    });
+    entries.sort((a, b) => b.d.count - a.d.count);
+    return entries;
+  }, [data]);
+
+  /* ── Top 3 countries for pulse animation ── */
+  const top3Set = useMemo(() => {
+    const set = new Set<string>();
+    for (let i = 0; i < Math.min(3, sortedBubbles.length); i++) {
+      set.add(sortedBubbles[i].cc);
+    }
+    return set;
+  }, [sortedBubbles]);
 
   const handleMouseMove = useCallback(
     (evt: React.MouseEvent) => {
@@ -157,16 +198,25 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
 
   const handleMouseLeave = useCallback(() => setTooltip(null), []);
 
-  const handleClick = useCallback(
-    (geo: GeoType) => {
-      const numericId = parseInt(geo.id, 10);
-      const cc = NUM_TO_A2[numericId];
-      if (!cc) return;
-      const d = data.get(cc);
-      if (!d) return;
+  const handleBubbleEnter = useCallback(
+    (cc: string, d: CountryData, evt: React.MouseEvent) => {
+      setTooltip({
+        x: evt.clientX,
+        y: evt.clientY,
+        cc,
+        country: d.country,
+        count: d.count,
+        maxSeverity: d.maxSeverity,
+      });
+    },
+    []
+  );
+
+  const handleBubbleClick = useCallback(
+    (cc: string, d: CountryData) => {
       onCountryClick(cc, d.country);
     },
-    [data, onCountryClick]
+    [onCountryClick]
   );
 
   const sevBadge: Record<string, { color: string; bg: string }> = {
@@ -175,6 +225,14 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
     medium: { color: "#fff", bg: "#ca8a04" },
     low: { color: "#fff", bg: "#16a34a" },
   };
+
+  /* ── Legend example counts ── */
+  const legendCounts = useMemo(() => {
+    if (maxCount === 0) return [1, 5, 10];
+    const mid = Math.round(maxCount / 2);
+    const low = Math.max(1, Math.round(maxCount / 6));
+    return [low, mid, maxCount];
+  }, [maxCount]);
 
   return (
     <div
@@ -185,6 +243,9 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
         overflow: "hidden",
       }}
     >
+      {/* Inject pulse animation */}
+      <style>{PULSE_CSS}</style>
+
       {/* Header */}
       <div
         style={{
@@ -238,42 +299,85 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
             projectionConfig={{ scale: 147, center: [10, 10] }}
             style={{ width: "100%", height: "auto", maxHeight: 400 }}
           >
-            <ZoomableGroup zoom={1}>
-              <Geographies geography={GEO_URL}>
-                {({ geographies }: { geographies: GeoType[] }) =>
-                  geographies.map((geo) => {
-                    const numericId = parseInt(geo.id, 10);
-                    const cc = NUM_TO_A2[numericId];
-                    const d = cc ? data.get(cc) : undefined;
-                    const fill = d ? getTealColor(d.count, maxCount) : "#f1f5f9";
-                    const isSelected = activeFilter === cc;
-                    const hasData = !!d;
+            {/* Base map — neutral gray, no interactivity */}
+            <Geographies geography={GEO_URL}>
+              {({ geographies }: { geographies: GeoType[] }) =>
+                geographies.map((geo) => (
+                  <Geography
+                    key={geo.rsmKey}
+                    geography={geo}
+                    fill="#f1f5f9"
+                    stroke="#e2e8f0"
+                    strokeWidth={0.5}
+                    style={{
+                      default: { outline: "none" },
+                      hover: { outline: "none", fill: "#f1f5f9", cursor: "default" },
+                      pressed: { outline: "none" },
+                    }}
+                  />
+                ))
+              }
+            </Geographies>
 
-                    return (
-                      <Geography
-                        key={geo.rsmKey}
-                        geography={geo}
-                        fill={isSelected ? "#0d9488" : fill}
-                        stroke={isSelected ? "#065f46" : "#fff"}
-                        strokeWidth={isSelected ? 1.5 : 0.5}
-                        style={{
-                          default: { outline: "none" },
-                          hover: {
-                            outline: "none",
-                            fill: hasData ? "#0d9488" : "#e2e8f0",
-                            cursor: hasData ? "pointer" : "default",
-                          },
-                          pressed: { outline: "none" },
-                        }}
-                        onMouseEnter={(evt) => handleMouseEnter(geo, evt)}
-                        onMouseLeave={handleMouseLeave}
-                        onClick={() => handleClick(geo)}
-                      />
-                    );
-                  })
-                }
-              </Geographies>
-            </ZoomableGroup>
+            {/* Bubble markers — largest first (behind), smallest on top */}
+            {sortedBubbles.map(({ cc, d }, idx) => {
+              const coords = COUNTRY_CENTERS[cc];
+              if (!coords) return null;
+              const r = getBubbleRadius(d.count, maxCount);
+              const fill = getTealColor(d.count, maxCount);
+              const stroke = getTealStroke(d.count, maxCount);
+              const isSelected = activeFilter === cc;
+              const isPulse = top3Set.has(cc);
+              const pulseDelay = isPulse
+                ? `${sortedBubbles.findIndex((b) => b.cc === cc) * 0.4}s`
+                : undefined;
+
+              return (
+                <Marker key={cc} coordinates={coords}>
+                  {/* Pulse ring for top 3 */}
+                  {isPulse && (
+                    <circle
+                      r={r}
+                      fill={fill}
+                      opacity={0.4}
+                      style={{
+                        transformOrigin: "center",
+                        animation: `mederti-pulse 2.5s ease-in-out infinite`,
+                        animationDelay: pulseDelay,
+                      }}
+                    />
+                  )}
+                  {/* Main bubble */}
+                  <circle
+                    r={r}
+                    fill={fill}
+                    fillOpacity={0.8}
+                    stroke={isSelected ? "#065f46" : stroke}
+                    strokeWidth={isSelected ? 2 : 1}
+                    style={{ cursor: "pointer", transition: "stroke-width 0.15s" }}
+                    onMouseEnter={(evt) => handleBubbleEnter(cc, d, evt)}
+                    onMouseLeave={handleMouseLeave}
+                    onClick={() => handleBubbleClick(cc, d)}
+                  />
+                  {/* Count label for large bubbles */}
+                  {r >= 14 && (
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      style={{
+                        fontSize: r >= 20 ? 10 : 8,
+                        fontWeight: 700,
+                        fill: "#fff",
+                        pointerEvents: "none",
+                        fontFamily: "var(--font-dm-mono), monospace",
+                      }}
+                    >
+                      {d.count}
+                    </text>
+                  )}
+                </Marker>
+              );
+            })}
           </ComposableMap>
 
           {/* Legend */}
@@ -282,32 +386,34 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: 8,
+              gap: 16,
               padding: "10px 0 14px",
               fontSize: 11,
               color: "#64748b",
             }}
           >
-            <span>Fewer</span>
-            {[0, 0.15, 0.3, 0.5, 0.7, 0.85, 1].map((t, i) => {
-              const r = Math.round(204 + (13 - 204) * Math.pow(t, 0.5));
-              const g = Math.round(251 + (148 - 251) * Math.pow(t, 0.5));
-              const b = Math.round(241 + (136 - 241) * Math.pow(t, 0.5));
+            {/* Bubble size examples */}
+            {legendCounts.map((count, i) => {
+              const r = getBubbleRadius(count, maxCount);
               return (
-                <div
-                  key={i}
-                  style={{
-                    width: 24, height: 10, borderRadius: 2,
-                    background: t === 0 ? "#f1f5f9" : `rgb(${r},${g},${b})`,
-                    border: "1px solid #e2e8f0",
-                  }}
-                />
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <svg width={r * 2 + 4} height={r * 2 + 4}>
+                    <circle
+                      cx={r + 2}
+                      cy={r + 2}
+                      r={r}
+                      fill={getTealColor(count, maxCount)}
+                      fillOpacity={0.8}
+                      stroke={getTealStroke(count, maxCount)}
+                      strokeWidth={1}
+                    />
+                  </svg>
+                  <span>{count}</span>
+                </div>
               );
             })}
-            <span>More</span>
-            <div style={{ width: 1, height: 12, background: "#e2e8f0", margin: "0 4px" }} />
-            <div style={{ width: 14, height: 10, borderRadius: 2, background: "#f1f5f9", border: "1px solid #e2e8f0" }} />
-            <span>No data</span>
+            <div style={{ width: 1, height: 12, background: "#e2e8f0", margin: "0 2px" }} />
+            <span style={{ color: "#94a3b8" }}>shortages</span>
           </div>
 
           {/* Tooltip */}

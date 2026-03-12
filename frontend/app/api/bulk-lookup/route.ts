@@ -10,6 +10,7 @@ function normalize(name: string): string {
       ""
     )
     .replace(/[/()[\]]/g, " ")
+    .replace(/\b(mg|mcg|µg|ml|g|%|iu|units?|mmol)\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 }

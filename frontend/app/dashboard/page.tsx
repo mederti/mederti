@@ -24,10 +24,9 @@ export default function DashboardPage() {
         style={{
           background: "#fff",
           borderBottom: "1px solid #e2e8f0",
-          padding: "28px 24px 24px",
         }}
       >
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 24px" }}>
           <div
             style={{
               display: "flex",

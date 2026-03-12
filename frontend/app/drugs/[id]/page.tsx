@@ -454,7 +454,7 @@ export default async function DrugPage({ params }: Props) {
         <div
           className="drug-header-card"
           style={{
-            maxWidth: 1100,
+            maxWidth: 1200,
             margin: "0 auto",
             padding: "28px 32px",
             display: "flex",
@@ -557,7 +557,7 @@ export default async function DrugPage({ params }: Props) {
         </div>
       </div>
 
-      <div className="drug-page" style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 64px" }}>
+      <div className="drug-page" style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 32px 64px" }}>
 
         {/* ═══ ANSWER ROW — Status + ETA ═══ */}
         <div className="drug-answer-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>

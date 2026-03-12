@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import SituationBanner from "./SituationBanner";
+import PredictedSupplyRisks from "./PredictedSupplyRisks";
 import ShortageAlerts from "./ShortageAlerts";
 import MedicineSearch from "./MedicineSearch";
 import CriticalWatchlist from "./CriticalWatchlist";
@@ -95,6 +96,23 @@ export default function DashboardPage() {
             Global Situation
           </div>
           <SituationBanner />
+        </section>
+
+        {/* 2. Predicted Supply Risks */}
+        <section style={{ marginBottom: 20 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "#94a3b8",
+              marginBottom: 10,
+            }}
+          >
+            Predictive Intelligence
+          </div>
+          <PredictedSupplyRisks />
         </section>
 
         {/* Two-column layout: Alerts + Search */}

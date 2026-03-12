@@ -68,25 +68,21 @@ export default function CriticalWatchlist() {
   const sbRef = useRef(createBrowserClient());
 
   useEffect(() => {
-    let cancelled = false;
     const supabase = sbRef.current;
 
     async function load() {
       try {
         const results: WatchItem[] = [];
 
-        const { data: availData, error: availErr } = await supabase
+        const { data: availData } = await supabase
           .from("drug_availability")
           .select("product_id, country, status, severity, drug_products(product_name)")
           .neq("status", "available");
 
-        const { data: shortageData, error: shortErr } = await supabase
+        const { data: shortageData } = await supabase
           .from("shortage_events")
           .select("drug_id, country_code, severity, drugs(generic_name)")
           .eq("status", "active");
-
-        console.log("[CriticalWatchlist] availData:", availData?.length, "error:", availErr);
-        console.log("[CriticalWatchlist] shortageData:", shortageData?.length, "error:", shortErr);
 
         for (const name of WATCHLIST) {
           const terms = SEARCH_TERMS[name] ?? [name.toLowerCase()];
@@ -137,18 +133,15 @@ export default function CriticalWatchlist() {
           });
         }
 
-        if (!cancelled) {
-          setItems(results);
-          setLoading(false);
-        }
+        setItems(results);
       } catch (err) {
         console.error("[CriticalWatchlist] load error:", err);
-        if (!cancelled) setLoading(false);
+      } finally {
+        setLoading(false);
       }
     }
 
     load();
-    return () => { cancelled = true; };
   }, []);
 
   return (

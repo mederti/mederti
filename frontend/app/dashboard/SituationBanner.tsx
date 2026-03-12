@@ -18,7 +18,6 @@ export default function SituationBanner() {
   const sbRef = useRef(createBrowserClient());
 
   useEffect(() => {
-    let cancelled = false;
     const supabase = sbRef.current;
 
     async function load() {
@@ -26,10 +25,6 @@ export default function SituationBanner() {
         const now = new Date();
         const h24 = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
         const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-        // Diagnostic: simple query first
-        const diag = await supabase.from("shortage_events").select("id").limit(1);
-        console.log("[SituationBanner] diagnostic:", diag.data, diag.error);
 
         const [activeRes, critRes, newRes, resolvedRes] = await Promise.allSettled([
           supabase
@@ -52,14 +47,6 @@ export default function SituationBanner() {
             .gte("updated_at", d7),
         ]);
 
-        console.log("[SituationBanner] counts:", {
-          active: activeRes.status === "fulfilled" ? { count: activeRes.value.count, error: activeRes.value.error } : activeRes,
-          critical: critRes.status === "fulfilled" ? { count: critRes.value.count, error: critRes.value.error } : critRes,
-          new24h: newRes.status === "fulfilled" ? { count: newRes.value.count, error: newRes.value.error } : newRes,
-          resolved7d: resolvedRes.status === "fulfilled" ? { count: resolvedRes.value.count, error: resolvedRes.value.error } : resolvedRes,
-        });
-
-        if (cancelled) return;
         setStats({
           totalActive:
             activeRes.status === "fulfilled" ? (activeRes.value.count ?? 0) : 0,
@@ -74,13 +61,13 @@ export default function SituationBanner() {
         });
       } catch (err) {
         console.error("[SituationBanner] load error:", err);
-        if (!cancelled) setStats({ totalActive: 0, criticalCount: 0, newLast24h: 0, resolvedLast7d: 0 });
+        setStats({ totalActive: 0, criticalCount: 0, newLast24h: 0, resolvedLast7d: 0 });
       }
     }
 
     load();
     const iv = setInterval(load, 5 * 60 * 1000);
-    return () => { cancelled = true; clearInterval(iv); };
+    return () => clearInterval(iv);
   }, []);
 
   const cards: {

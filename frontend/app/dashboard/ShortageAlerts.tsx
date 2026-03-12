@@ -75,7 +75,6 @@ export default function ShortageAlerts() {
   const sbRef = useRef(createBrowserClient());
 
   useEffect(() => {
-    let cancelled = false;
     const supabase = sbRef.current;
 
     async function load() {
@@ -84,7 +83,7 @@ export default function ShortageAlerts() {
           Date.now() - 48 * 60 * 60 * 1000
         ).toISOString();
 
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("shortage_events")
           .select(
             "shortage_id, drug_id, severity, country_code, updated_at, drugs(generic_name), data_sources(name)"
@@ -95,9 +94,7 @@ export default function ShortageAlerts() {
           .order("updated_at", { ascending: false })
           .limit(20);
 
-        console.log("[ShortageAlerts] data:", data?.length, "error:", error);
-
-        if (!cancelled && data) {
+        if (data) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setAlerts(
             (data as any[]).map((r) => ({
@@ -111,16 +108,16 @@ export default function ShortageAlerts() {
             }))
           );
         }
-        if (!cancelled) setLoading(false);
       } catch (err) {
         console.error("[ShortageAlerts] load error:", err);
-        if (!cancelled) setLoading(false);
+      } finally {
+        setLoading(false);
       }
     }
 
     load();
     const iv = setInterval(load, 5 * 60 * 1000);
-    return () => { cancelled = true; clearInterval(iv); };
+    return () => clearInterval(iv);
   }, []);
 
   return (

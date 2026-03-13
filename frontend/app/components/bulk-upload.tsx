@@ -165,18 +165,51 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
         throw new Error(`Unsupported file type: .${ext}. Please upload a CSV or Excel file.`);
       }
 
-      /* ── Title row detection ── */
+      /* ── Smart header row detection ──
+       * Real customer files can have multiple title/metadata rows before the
+       * actual column headers. We scan the first 15 rows and score each one
+       * for "looks like a header row":
+       *   - Has 3+ non-empty text cells
+       *   - Most cells are short text (< 50 chars), not numbers or long descriptions
+       *   - Not a single merged title cell spanning the row
+       * The best-scoring row is used as column headers; everything above it is
+       * discarded and everything below becomes data.
+       */
       let headers = Object.keys(rawData[0] ?? {});
       let actualData = rawData;
 
-      if (rawData.length > 1) {
-        const firstRowValues = Object.values(rawData[0] ?? {});
-        const populatedCells = firstRowValues.filter((v) => v && String(v).trim().length > 0).length;
+      if (rawData.length > 2) {
+        const scanLimit = Math.min(rawData.length, 15);
+        let bestRow = -1;
+        let bestScore = -1;
 
-        if (populatedCells < 4) {
-          const newHeaders = Object.values(rawData[0]).map((v) => String(v).trim()).filter(Boolean);
+        for (let r = 0; r < scanLimit; r++) {
+          const vals = Object.values(rawData[r] ?? {}).map((v) => String(v).trim());
+          const nonEmpty = vals.filter((v) => v.length > 0);
+          if (nonEmpty.length < 3) continue; // too sparse — title or blank row
+
+          // Score: penalise rows where most cells are numeric (data, not headers)
+          const numericCount = nonEmpty.filter((v) => /^\d+([.,]\d+)?$/.test(v)).length;
+          const shortTextCount = nonEmpty.filter((v) => v.length > 0 && v.length < 50 && !/^\d+([.,]\d+)?$/.test(v)).length;
+          const textRatio = shortTextCount / Math.max(nonEmpty.length, 1);
+          const numericRatio = numericCount / Math.max(nonEmpty.length, 1);
+
+          // Good header row: lots of short text, few numbers
+          if (numericRatio > 0.5) continue; // majority numeric — this is data
+          const score = shortTextCount * 10 + textRatio * 50 - numericCount * 5;
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestRow = r;
+          }
+        }
+
+        // If the best header row isn't the xlsx-auto-detected first row, re-map
+        if (bestRow > 0) {
+          const headerRowVals = Object.values(rawData[bestRow] ?? {}).map((v) => String(v).trim());
+          const newHeaders = headerRowVals.filter(Boolean);
           if (newHeaders.length >= 3) {
-            actualData = rawData.slice(1).map((row) => {
+            actualData = rawData.slice(bestRow + 1).map((row) => {
               const mapped: Record<string, string> = {};
               const vals = Object.values(row);
               newHeaders.forEach((h, i) => { mapped[h] = vals[i] ?? ""; });
@@ -184,20 +217,41 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
             });
             headers = newHeaders;
           }
+        } else if (bestRow === 0) {
+          // xlsx auto-detected headers correctly — check if the first row of
+          // data is actually another header row (sometimes xlsx picks the title
+          // row as headers and the real headers become data row 0)
+          const firstDataVals = Object.values(rawData[0] ?? {}).map((v) => String(v).trim());
+          const nonEmpty = firstDataVals.filter((v) => v.length > 0);
+          const numericCount = nonEmpty.filter((v) => /^\d+([.,]\d+)?$/.test(v)).length;
+          if (nonEmpty.length >= 3 && numericCount === 0) {
+            // All text, no numbers — this row IS the real header
+            // The xlsx-generated keys are the title row, so re-map
+            const newHeaders = firstDataVals.filter(Boolean);
+            if (newHeaders.length >= 3) {
+              actualData = rawData.slice(1).map((row) => {
+                const mapped: Record<string, string> = {};
+                const vals = Object.values(row);
+                newHeaders.forEach((h, i) => { mapped[h] = vals[i] ?? ""; });
+                return mapped;
+              });
+              headers = newHeaders;
+            }
+          }
         }
       }
 
       setTotalParsed(actualData.length);
 
-      // 500-row limit
+      // 2000-row limit (generous for most procurement files)
       let wasTruncated = false;
-      if (actualData.length > 500) {
-        actualData = actualData.slice(0, 500);
+      if (actualData.length > 2000) {
+        actualData = actualData.slice(0, 2000);
         wasTruncated = true;
         setTruncated(true);
       }
 
-      setProgress(`Parsed ${actualData.length} rows${wasTruncated ? " (limited to 500)" : ""}`);
+      setProgress(`Parsed ${actualData.length} rows${wasTruncated ? " (limited to 2,000)" : ""}`);
 
       /* ── Phase 2: Detect columns ── */
       setPhase("detecting-columns");
@@ -530,10 +584,10 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
               fontSize: 13,
             }}>
               <span style={{ color: "var(--app-text-2)" }}>
-                Showing 500 of {totalParsed.toLocaleString()} rows.
-                For unlimited bulk lookups,{" "}
-                <Link href="/pricing" style={{ color: "var(--teal)", fontWeight: 600, textDecoration: "none" }}>
-                  contact us for enterprise access
+                Showing 2,000 of {totalParsed.toLocaleString()} rows.
+                For larger files,{" "}
+                <Link href="/contact" style={{ color: "var(--teal)", fontWeight: 600, textDecoration: "none" }}>
+                  contact us
                 </Link>.
               </span>
             </div>

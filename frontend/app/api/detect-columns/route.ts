@@ -21,23 +21,33 @@ const DRUG_ALIASES = [
   "description", "drug name", "medicine", "product", "item",
   "product name", "drug", "drug_name", "medicine_name", "product_name",
   "generic_name", "generic", "active_ingredient", "ingredient",
-  "medication", "med", "name",
+  "medication", "med", "name", "item description", "stock description",
+  "material", "material description", "desc", "item name", "stock name",
+  "article", "article description", "therapeutic", "product description",
+  "line description", "order description", "catalogue description",
 ];
 
 const QTY_ORDERED_ALIASES = [
   "qty ordered", "quantity", "qty", "order qty", "quantity ordered",
   "qty_ordered", "order_qty", "amount", "count", "units",
+  "ordered", "order quantity", "qty ord", "qty order", "demand",
+  "requested", "qty requested",
 ];
 
 const QTY_BACKORDERED_ALIASES = [
   "qty backordered", "backordered", "back order", "bo qty",
   "qty_backordered", "backorder", "back_order", "bo_qty",
-  "unfulfilled", "qty unfulfilled",
+  "unfulfilled", "qty unfulfilled", "qty bo", "qty cancelled",
+  "qty canceled", "qty short", "short qty", "shortage qty",
+  "knockout", "knocked out", "qty knockout", "out of stock",
+  "oos qty", "qty oos", "cancelled", "canceled",
 ];
 
 const SUPPLIER_ALIASES = [
   "vendor name", "supplier", "manufacturer", "vendor",
   "vendor_name", "mfr", "supplier_name", "manufacturer_name",
+  "vendor code", "mfr name", "wholesaler", "distributor",
+  "company", "source", "principal", "sponsor",
 ];
 
 /* ── Helpers ── */

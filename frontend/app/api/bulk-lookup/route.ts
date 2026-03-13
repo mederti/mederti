@@ -1,58 +1,121 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-/* ── Normalize drug name: strip dosage, forms, extra whitespace ── */
+/* ── Known Australian pharmaceutical brand/manufacturer prefixes ──
+ * These appear at the start of EDI descriptions and should be stripped
+ * to get the generic name. E.g. "APOTEX METFORMIN TAB" → "METFORMIN TAB"
+ */
+const KNOWN_PREFIXES = new Set([
+  "apotex", "sandoz", "arrow", "mylan", "pfizer", "sanofi", "teva",
+  "alphapharm", "generic health", "genhealth", "gehlth", "chemmart",
+  "maynepharma", "mayne", "pharmacor", "pcor", "lupin", "sun", "sunph",
+  "accord", "viatris", "aspen", "boucher", "strides", "cipla", "dr reddy",
+  "drreddy", "aurobindo", "torrent", "alkem", "glenmark", "fresenius",
+  "fkabi", "baxter", "bbraun", "hikma", "hospira", "amneal",
+  "vitpty", "vitalion", "aft", "perril", "evaris", "sanocc",
+]);
+
+/* ── Normalize drug name: strip dosage, forms, pack info, extra whitespace ── */
 function normalize(name: string): string {
   return name
-    .replace(/\d+(\.\d+)?\s*(mg|mcg|µg|g|ml|%|iu|units?|mmol)\b/gi, "")
+    // Strip product codes like "SANDOZ-44120252" or "SANOFI-354519"
+    .replace(/\b[A-Z]+-\d{4,}\b/gi, "")
+    // Strip dosage + units (5MG, 100MCG, 10MG/ML, 1.5G, 100IU/ML)
+    .replace(/\d+(\.\d+)?\s*(mg|mcg|µg|g|ml|l|%|iu|units?|mmol)(\/\d*\s*(mg|mcg|µg|g|ml|l))?/gi, "")
+    // Strip dosage forms + delivery methods
     .replace(
-      /\b(tabs?|tablets?|caps?|capsules?|injection|inj|solution|soln|suspension|susp|inhaler|inh|cream|ointment|oral|iv|im|sc|sr|mr|er|xl|pr|ec|inf|blister|modified.release|slow.release|extended.release)\b/gi,
+      /\b(tabs?|tablets?|caps?|capsules?|injection|inj|solution|soln|suspension|susp|inhaler|inh|cream|ointment|oral|iv|im|sc|sr|mr|er|xl|pr|ec|inf|blister|modified.release|slow.release|extended.release|pwd|powder|vial|ampoule|amp|syringe|pen|solostar|flexpen|kwikpen|turbuhaler|accuhaler|diskus|autohaler|spray|drops?|eye drop|ear drop|nasal|topical|suppository|supp|patch|transdermal|lozenge|wafer|sachet|granules?|liquid|elixir|linctus|mixture|mouthwash|gargle|enema|pessary|foam|gel|lotion|paste|shampoo)\b/gi,
       ""
     )
+    // Strip packaging info (100 PACK, 30GM TUBE, 15ML, 200 DOSE COUNTER, CFC FREE)
+    .replace(/\d+\s*(dose|pack|vial|amp|ampoule|sachet|strip|tube|bottle|box|count(er)?)\b/gi, "")
+    .replace(/\b(cfc\s*free|counter|pack|blister)\b/gi, "")
+    // Strip remaining stray units
+    .replace(/\b(mg|mcg|µg|ml|g|%|iu|units?|mmol|gm)\b/gi, "")
+    // Clean punctuation
     .replace(/[/()[\]]/g, " ")
-    .replace(/\b(mg|mcg|µg|ml|g|%|iu|units?|mmol)\b/gi, "")
-    .replace(/\d+\s*(dose|pack|vial|amp|ampoule|sachet|strip)\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Try to detect and strip manufacturer/brand prefix from EDI descriptions.
+ * Uses known prefix list + heuristic: if the first word is ALL-CAPS and the
+ * second word is also ALL-CAPS with 4+ letters, the first word is likely a
+ * manufacturer prefix.
+ */
+function stripManufacturerPrefix(raw: string): string {
+  const trimmed = raw.trim();
+  const words = trimmed.split(/\s+/);
+  if (words.length < 2) return trimmed;
+
+  // Check if first word (lowercased) is a known prefix
+  const firstLower = words[0].toLowerCase().replace(/[^a-z]/g, "");
+  if (KNOWN_PREFIXES.has(firstLower)) {
+    return words.slice(1).join(" ");
+  }
+
+  // Check compound prefixes (e.g. "GENERIC HEALTH", "DR REDDY")
+  if (words.length >= 3) {
+    const twoWordPrefix = (words[0] + " " + words[1]).toLowerCase().replace(/[^a-z ]/g, "");
+    if (KNOWN_PREFIXES.has(twoWordPrefix)) {
+      return words.slice(2).join(" ");
+    }
+  }
+
+  // Heuristic: first word is ALL-CAPS but looks like a company name (ends in
+  // PHARMA, PTY, LTD, etc.) — strip it
+  if (/^[A-Z]{2,}$/.test(words[0]) && /^(PHARMA|PTY|LTD|INC|CORP|LABS?)$/i.test(words[1])) {
+    return words.slice(2).join(" ");
+  }
+
+  return trimmed;
 }
 
 /**
  * EDI drug name parsing: returns an array of candidate strings to try, in order.
  * E.g. "MAYNEPHARMA OXYCODONE IR TAB 5MG BLISTER" →
  *   ["MAYNEPHARMA OXYCODONE IR", "OXYCODONE IR", "OXYCODONE"]
+ * E.g. "PANAMAX TAB 500MG BLISTER 100 PACK" →
+ *   ["PANAMAX", "PANAMAX"] (brand name IS the first word)
  */
 function parseEDIDrugName(raw: string): string[] {
   const candidates: string[] = [];
 
-  // 1. Full string normalized
+  // 1. Full string normalized (preserves brand names)
   const full = normalize(raw);
   if (full) candidates.push(full);
 
-  // 2. Strip leading ALL-CAPS manufacturer prefix(es)
-  const withoutMfr = raw.replace(/^(?:[A-Z]{2,}\s+)+/, "").trim();
+  // 2. Try stripping known manufacturer prefix
+  const withoutMfr = stripManufacturerPrefix(raw);
   if (withoutMfr !== raw.trim() && withoutMfr.length > 0) {
     const normMfr = normalize(withoutMfr);
     if (normMfr && !candidates.includes(normMfr)) candidates.push(normMfr);
   }
 
-  // 3. First 3 words (from manufacturer-stripped version)
+  // 3. Progressive word reduction from the manufacturer-stripped version
   const base = withoutMfr || raw;
   const words = normalize(base).split(/\s+/).filter(Boolean);
+
   if (words.length >= 3) {
     const c3 = words.slice(0, 3).join(" ");
     if (!candidates.includes(c3)) candidates.push(c3);
   }
 
-  // 4. First 2 words
   if (words.length >= 2) {
     const c2 = words.slice(0, 2).join(" ");
     if (!candidates.includes(c2)) candidates.push(c2);
   }
 
-  // 5. First word only (often the generic name itself)
   if (words.length >= 1) {
     const c1 = words[0];
     if (!candidates.includes(c1)) candidates.push(c1);
+  }
+
+  // 4. Also try the raw first word (often the brand name: PANAMAX, VENTOLIN, FLAGYL)
+  const rawFirst = raw.trim().split(/\s+/)[0]?.replace(/[^a-zA-Z]/g, "");
+  if (rawFirst && rawFirst.length > 2 && !candidates.includes(rawFirst)) {
+    candidates.push(rawFirst);
   }
 
   return candidates.filter((c) => c.length > 1);
@@ -89,8 +152,8 @@ export async function POST(req: NextRequest) {
   if (!drugNames || !Array.isArray(drugNames) || drugNames.length === 0) {
     return NextResponse.json({ error: "drugNames array required" }, { status: 400 });
   }
-  if (drugNames.length > 500) {
-    return NextResponse.json({ error: "Maximum 500 drugs per lookup" }, { status: 400 });
+  if (drugNames.length > 2000) {
+    return NextResponse.json({ error: "Maximum 2000 drugs per lookup" }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();

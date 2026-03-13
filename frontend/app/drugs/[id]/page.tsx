@@ -607,10 +607,9 @@ export default async function DrugPage({ params }: Props) {
               ? sevColor((userShortage as { severity?: string }).severity ?? "medium")
               : { color: "var(--low)", bg: "var(--low-bg)", border: "var(--low-b)" };
             const mySev = userShortage ? ((userShortage as { severity?: string }).severity ?? "active") : null;
-            const mySevIsCritical = mySev?.toLowerCase() === "critical";
             return (
               <div style={{
-                background: mySevIsCritical ? myTheme.bg : "#fff",
+                background: myTheme.bg,
                 border: `1px solid ${myTheme.border}`,
                 borderRadius: 12, padding: "22px 24px",
               }}>
@@ -635,7 +634,7 @@ export default async function DrugPage({ params }: Props) {
 
           {/* 2. GLOBAL STATUS */}
           <div style={{
-            background: isCritical ? statusTheme.bg : "#fff",
+            background: statusTheme.bg,
             border: `1px solid ${statusTheme.border}`,
             borderRadius: 12, padding: "22px 24px",
           }}>

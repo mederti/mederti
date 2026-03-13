@@ -6,6 +6,8 @@ import SiteFooter from "@/app/components/site-footer";
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api, type DrugHit, type ShortageEvent } from "@/lib/api";
+import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
+import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -112,6 +114,19 @@ function SearchResults() {
   const [altCounts, setAltCounts] = useState<Record<string, number>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const ac = useAutocomplete({
+    minChars: 2,
+    debounceMs: 200,
+    limit: 8,
+    onSelect: (item) => {
+      ac.setIsOpen(false);
+      router.push(item.href);
+    },
+    onSubmit: () => {
+      ac.setIsOpen(false);
+    },
+  });
+
   const search = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setTotal(0); return; }
     setLoading(true);
@@ -140,10 +155,11 @@ function SearchResults() {
   }, []);
 
   // Run initial search on mount
-  useEffect(() => { if (initialQ) search(initialQ); }, [initialQ, search]);
+  useEffect(() => { if (initialQ) { search(initialQ); ac.setQuery(initialQ); } }, [initialQ, search]);
 
   function handleChange(q: string) {
     setQuery(q);
+    ac.setQuery(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const url = q.trim() ? `/search?q=${encodeURIComponent(q.trim())}` : "/search";
@@ -156,12 +172,13 @@ function SearchResults() {
     <>
       {/* Search bar */}
       <div style={{ marginBottom: 40 }}>
-        <div style={{ position: "relative", maxWidth: 600 }}>
-          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--app-text-4)", fontSize: 16, pointerEvents: "none" }}>
+        <div ref={ac.containerRef} style={{ position: "relative", maxWidth: 600 }}>
+          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--app-text-4)", fontSize: 16, pointerEvents: "none", zIndex: 1 }}>
             ⌕
           </span>
           <input
             autoFocus
+            {...ac.inputProps}
             value={query}
             onChange={e => handleChange(e.target.value)}
             placeholder="Search drug name, brand name, or ATC code…"
@@ -172,9 +189,22 @@ function SearchResults() {
               outline: "none", background: "#fff", color: "var(--app-text)",
               boxSizing: "border-box",
             }}
-            onFocus={e => (e.target.style.borderColor = "var(--teal)")}
+            onFocus={e => { ac.inputProps.onFocus(); (e.target.style.borderColor = "var(--teal)"); }}
             onBlur={e => (e.target.style.borderColor = "var(--app-border-2)")}
           />
+
+          {/* Autocomplete dropdown */}
+          {ac.isOpen && (
+            <AutocompleteDropdown
+              items={ac.items}
+              cursor={ac.cursor}
+              loading={ac.loading}
+              query={query}
+              listId={ac.inputProps["aria-controls"]}
+              onSelect={(item) => { ac.setIsOpen(false); router.push(item.href); }}
+              onHover={() => {}}
+            />
+          )}
         </div>
         {query.trim() && !loading && (
           <div style={{ marginTop: 10, fontSize: 13, color: "var(--app-text-4)" }}>

@@ -11,6 +11,8 @@ import {
 import { DrugHit } from "@/lib/api";
 import LandingContent from "./landing-content";
 import BulkUpload from "./bulk-upload";
+import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
+import AutocompleteDropdown from "./autocomplete-dropdown";
 
 /* Simple markdown to HTML: bold, italic, newlines, bullet lists */
 function renderMd(text: string): string {
@@ -107,6 +109,15 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const hasChat = messages.length > 0;
+
+  const ac = useAutocomplete({
+    minChars: 2,
+    debounceMs: 200,
+    limit: 8,
+    onSelect: (item) => router.push(item.href),
+    onSubmit: () => handleSubmit(),
+    enabled: !hasChat,
+  });
 
   // scroll to bottom on new messages (within the messages container)
   useEffect(() => {
@@ -262,6 +273,11 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
   }, [query, files, totalActive, messages]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    // When autocomplete is active, let it handle keyboard events
+    if (!hasChat && ac.isOpen) {
+      ac.inputProps.onKeyDown(e);
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
   }
 
@@ -309,9 +325,10 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
           </div>
 
           {/* ── Input bar ──────────────────────────────────────── */}
+          <div ref={ac.containerRef} style={{ maxWidth: 860, width: "100%", position: "relative" }}>
           <form
             onSubmit={handleSubmit}
-            style={{ maxWidth: 860, width: "100%", padding: "0" }}
+            style={{ width: "100%", padding: "0" }}
           >
             {/* Attached file chips */}
             {files.length > 0 && (
@@ -383,13 +400,18 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
                 ref={inputRef}
                 type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => { setQuery(e.target.value); ac.setQuery(e.target.value); }}
                 onKeyDown={handleKeyDown}
-                onFocus={() => setFocused(true)}
+                onFocus={() => { setFocused(true); ac.inputProps.onFocus(); }}
                 onBlur={() => setFocused(false)}
                 placeholder="Search drugs, upload a file, or scan a barcode..."
                 autoComplete="off"
                 spellCheck={false}
+                role={ac.inputProps.role}
+                aria-expanded={ac.inputProps["aria-expanded"]}
+                aria-activedescendant={ac.inputProps["aria-activedescendant"]}
+                aria-autocomplete={ac.inputProps["aria-autocomplete"]}
+                aria-controls={ac.inputProps["aria-controls"]}
                 style={{
                   flex: 1, padding: "14px 8px",
                   border: "none", outline: "none",
@@ -401,7 +423,7 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
 
               {/* Clear */}
               {query && (
-                <button type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }}
+                <button type="button" onClick={() => { setQuery(""); ac.clear(); inputRef.current?.focus(); }}
                   style={{ background: "none", border: "none", cursor: "pointer", padding: "0 6px", display: "flex", alignItems: "center", color: "var(--app-text-4)" }}>
                   <X style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
                 </button>
@@ -438,6 +460,20 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
               </span>
             </div>
           </form>
+
+          {/* Autocomplete dropdown */}
+          {ac.isOpen && !hasChat && (
+            <AutocompleteDropdown
+              items={ac.items}
+              cursor={ac.cursor}
+              loading={ac.loading}
+              query={query}
+              listId={ac.inputProps["aria-controls"]}
+              onSelect={(item) => { ac.setIsOpen(false); router.push(item.href); }}
+              onHover={() => {}}
+            />
+          )}
+          </div>
 
           {/* Suggestion pills */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", maxWidth: 860 }}>

@@ -2,8 +2,8 @@ import SiteNav from "./components/landing-nav";
 import SiteFooter from "./components/site-footer";
 import LandingPageClient from "./components/landing-page-client";
 import { redirect } from "next/navigation";
-import { api } from "@/lib/api";
 import { createServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const revalidate = 300; // 5 min ISR
 
@@ -19,11 +19,23 @@ export default async function Home() {
     // Otherwise ignore auth errors and show landing page
   }
 
-  // Fetch live stats for trust bar
-  let totalActive = "12,400";
+  // Fetch live stats from Supabase (same source as dashboard)
+  let totalActive = "8,100";
+  let countryCount = "20";
+  let sourceCount = "30";
   try {
-    const summary = await api.getSummary();
-    if (summary?.total_active) totalActive = summary.total_active.toLocaleString();
+    const admin = getSupabaseAdmin();
+    const [activeRes, countriesRes, sourcesRes] = await Promise.all([
+      admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
+      admin.from("shortage_events").select("country_code").eq("status", "active"),
+      admin.from("data_sources").select("id", { count: "exact", head: true }),
+    ]);
+    if (activeRes.count) totalActive = activeRes.count.toLocaleString();
+    if (countriesRes.data) {
+      const unique = new Set(countriesRes.data.map((r: { country_code: string }) => r.country_code).filter(Boolean));
+      countryCount = String(unique.size);
+    }
+    if (sourcesRes.count) sourceCount = String(sourcesRes.count);
   } catch { /* fallback to static */ }
 
   return (
@@ -49,7 +61,7 @@ export default async function Home() {
       <SiteNav />
 
       {/* ── Hero + Chat + Content (all managed by client component) ── */}
-      <LandingPageClient totalActive={totalActive} />
+      <LandingPageClient totalActive={totalActive} countryCount={countryCount} sourceCount={sourceCount} />
 
       <SiteFooter />
     </div>

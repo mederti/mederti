@@ -91,7 +91,7 @@ const SUGGESTIONS = [
 
 /* ── component ─────────────────────────────────────────────────── */
 
-export default function LandingPageClient({ totalActive }: { totalActive: string }) {
+export default function LandingPageClient({ totalActive, countryCount, sourceCount }: { totalActive: string; countryCount: string; sourceCount: string }) {
   const router = useRouter();
   const [query, setQuery]       = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -186,7 +186,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
           ...prev,
           {
             id: uid(), role: "assistant",
-            text: `I've received your file${userMsg.files!.length > 1 ? "s" : ""}: ${fileNames}.\n\nBulk drug shortage lookups from uploaded files are coming soon. In the meantime, type any drug name to search our database of ${totalActive}+ shortage records across 30 regulatory sources.`,
+            text: `I've received your file${userMsg.files!.length > 1 ? "s" : ""}: ${fileNames}.\n\nBulk drug shortage lookups from uploaded files are coming soon. In the meantime, type any drug name to search our database of ${totalActive}+ shortage records across ${sourceCount} regulatory sources.`,
             ts: Date.now(),
           },
         ]);
@@ -304,7 +304,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
               Find Short-Supply Medicines Globally.
             </h1>
             <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.5 }}>
-              Search drugs, upload bulk lists, or scan a barcode. Real-time data from 30 regulatory sources.
+              Search drugs, upload bulk lists, or scan a barcode. Real-time data from {sourceCount} regulatory sources.
             </p>
           </div>
 
@@ -476,8 +476,8 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
           }}>
             {[
               { val: totalActive, label: "active shortages", href: "/shortages?status=active" },
-              { val: "30",   label: "regulatory sources", href: "/shortages" },
-              { val: "11",   label: "countries",          href: "/shortages" },
+              { val: sourceCount, label: "regulatory sources", href: "/shortages" },
+              { val: countryCount, label: "countries",          href: "/shortages" },
               { val: "live", label: "data feed",          href: "/shortages" },
             ].map(({ val, label, href }) => (
               <Link key={label} href={href} style={{
@@ -867,7 +867,7 @@ export default function LandingPageClient({ totalActive }: { totalActive: string
         </div>
       ) : (
         /* Marketing content */
-        <LandingContent />
+        <LandingContent countryCount={countryCount} />
       )}
 
       {/* ── Hidden file inputs ─────────────────────────────── */}

@@ -17,7 +17,7 @@ function Dot({ color }: { color: "red" | "amber" | "green" }) {
   );
 }
 
-export default function LandingContent() {
+export default function LandingContent({ countryCount }: { countryCount: string }) {
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 0" }}>
 
@@ -133,7 +133,7 @@ export default function LandingContent() {
             Drug shortages are a global problem.
           </h2>
           <p style={{ fontSize: 15, color: "var(--app-text-3)", maxWidth: 520, lineHeight: 1.65, margin: "0 auto" }}>
-            We track shortage signals across 20+ countries in real time. Hover to explore.
+            We track shortage signals across {countryCount}+ countries in real time. Hover to explore.
           </p>
         </div>
 
@@ -160,7 +160,7 @@ export default function LandingContent() {
             Every part of the supply chain, served differently.
           </h2>
           <p style={{ fontSize: 15, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
-            Three views of the same data — built for how each user actually works.
+            Five views of the same data — built for how each user actually works.
           </p>
         </div>
 
@@ -168,21 +168,33 @@ export default function LandingContent() {
           {[
             {
               icon: "\uD83D\uDC8A",
-              title: "Pharmacists & Clinicians",
+              title: "Pharmacists",
               desc: "Fast answers at the dispensary counter. Is it available? When is it back? What can I use instead?",
               features: ["Real-time availability by country", "AI-matched therapeutic alternatives", "Alert when stock returns", "Mobile-optimised interface"],
             },
             {
+              icon: "\uD83E\uDE7A",
+              title: "Doctors",
+              desc: "Know which drugs are in shortage before you write the script. Avoid the callback from a frustrated pharmacist.",
+              features: ["Shortage alerts before you prescribe", "Therapeutic alternatives with dosing", "Country-level availability", "Weekly shortage brief"],
+            },
+            {
               icon: "\uD83C\uDFE5",
-              title: "Hospital Procurement",
+              title: "Hospitals",
               desc: "Comprehensive shortage intelligence with source data, confidence scores and procurement guidance.",
               features: ["Full source audit trail", "Manufacturer & supplier data", "Watchlist & bulk alerts", "Exportable reports"],
             },
             {
               icon: "\uD83C\uDFDB",
-              title: "Regulators & Government",
+              title: "Governments",
               desc: "Market-wide intelligence. Early warning signals. Policy-ready reporting. Know before the calls come in.",
               features: ["National supply heatmaps", "AI early warning \u2014 30\u201390 day forecasts", "Global comparison view", "One-click ministerial briefings"],
+            },
+            {
+              icon: "\uD83D\uDCE6",
+              title: "Suppliers",
+              desc: "Turn shortage intelligence into supply opportunity. See where demand is unmet and where you can step in.",
+              features: ["Portfolio risk intelligence", "Unmet demand signals", "Global regulatory monitoring", "Market gap analysis"],
             },
           ].map((card) => (
             <div key={card.title} style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "28px 24px" }}>

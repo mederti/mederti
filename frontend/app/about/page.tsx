@@ -2,39 +2,30 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
   title: "About — Mederti",
   description: "Mederti aggregates pharmaceutical shortage data from 20+ regulatory bodies worldwide to help clinicians and procurement teams act before supply chains fail.",
 };
 
-const SOURCES = [
-  { code: "US", name: "FDA", full: "U.S. Food & Drug Administration" },
-  { code: "AU", name: "TGA", full: "Therapeutic Goods Administration" },
-  { code: "CA", name: "Health Canada", full: "Health Canada Drug Shortages DB" },
-  { code: "GB", name: "MHRA", full: "Medicines & Healthcare Regulatory Agency" },
-  { code: "EU", name: "EMA", full: "European Medicines Agency" },
-  { code: "DE", name: "BfArM", full: "Bundesinstitut für Arzneimittel" },
-  { code: "FR", name: "ANSM", full: "Agence nationale de sécurité du médicament" },
-  { code: "IT", name: "AIFA", full: "Agenzia Italiana del Farmaco" },
-  { code: "ES", name: "AEMPS", full: "Agencia Española de Medicamentos" },
-  { code: "FI", name: "Fimea", full: "Finnish Medicines Agency" },
-  { code: "NZ", name: "Pharmac", full: "Pharmac New Zealand" },
-  { code: "SG", name: "HSA", full: "Health Sciences Authority" },
-];
+/* ── helpers ── */
+function fmtNum(n: number): string {
+  if (n >= 1000) return Math.floor(n / 100) * 100 + "+"; // e.g. 9113 → "9,100+"  formatted below
+  return String(n);
+}
+function fmtDisplay(n: number): string {
+  const raw = fmtNum(n);
+  const num = parseInt(raw.replace(/[^0-9]/g, ""), 10);
+  const suffix = raw.includes("+") ? "+" : "";
+  return num.toLocaleString("en-US") + suffix;
+}
 
-const STATS = [
-  { n: "6,000+", label: "Active shortage events" },
-  { n: "12", label: "Regulatory bodies indexed" },
-  { n: "20+", label: "Countries covered" },
-  { n: "6h", label: "Typical data refresh" },
-];
-
-const HOW = [
+const HOW_STEPS = [
   {
     step: "01",
     title: "Aggregate",
-    body: "Automated scrapers run every 6–12 hours against 12 live regulatory databases — FDA, TGA, Health Canada, EMA, MHRA, and more. Raw shortage notices are pulled directly from official sources.",
+    // body is built dynamically with live source count
   },
   {
     step: "02",
@@ -48,7 +39,55 @@ const HOW = [
   },
 ];
 
-export default function AboutPage() {
+interface DataSource {
+  abbreviation: string;
+  country: string;
+  country_code: string;
+  name: string;
+  is_active: boolean;
+}
+
+export default async function AboutPage() {
+  const sb = getSupabaseAdmin();
+
+  /* ── parallel data fetches ── */
+  const [
+    { count: activeShortages },
+    { count: totalDrugs },
+    { count: totalSources },
+    { data: sourcesRaw },
+    { data: countryRows },
+  ] = await Promise.all([
+    sb.from("shortage_events").select("*", { count: "exact", head: true }).eq("status", "active"),
+    sb.from("drugs").select("*", { count: "exact", head: true }),
+    sb.from("data_sources").select("*", { count: "exact", head: true }).eq("is_active", true),
+    sb.from("data_sources").select("abbreviation, country, country_code, name, is_active").eq("is_active", true).order("country_code"),
+    sb.from("data_sources").select("country_code").eq("is_active", true),
+  ]);
+
+  const sources: DataSource[] = sourcesRaw ?? [];
+  const countries = new Set((countryRows ?? []).map((r: { country_code: string }) => r.country_code));
+  const activeCount = activeShortages ?? 0;
+  const drugCount = totalDrugs ?? 0;
+  const sourceCount = totalSources ?? 0;
+  const countryCount = countries.size;
+
+  const STATS = [
+    { n: fmtDisplay(activeCount), label: "Active shortage events" },
+    { n: fmtDisplay(drugCount), label: "Drugs tracked" },
+    { n: String(sourceCount), label: "Regulatory sources" },
+    { n: String(countryCount), label: "Countries covered" },
+  ];
+
+  const howSteps = [
+    {
+      ...HOW_STEPS[0],
+      body: `Automated scrapers run every 6\u201312 hours against ${sourceCount} live regulatory databases \u2014 FDA, TGA, Health Canada, EMA, MHRA, and more. Raw shortage notices are pulled directly from official sources.`,
+    },
+    HOW_STEPS[1],
+    HOW_STEPS[2],
+  ];
+
   return (
     <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
       <style>{`
@@ -77,8 +116,8 @@ export default function AboutPage() {
             </h1>
             <p style={{ fontSize: 18, color: "var(--app-text-3)", lineHeight: 1.7, maxWidth: 600, margin: "0 auto" }}>
               Mederti was built because pharmaceutical shortages kill people — and most of the
-              information that would help is already public, just scattered across twenty
-              different regulatory websites in twelve languages.
+              information that would help is already public, just scattered across dozens
+              of regulatory websites in multiple languages.
             </p>
           </div>
         </div>
@@ -152,7 +191,7 @@ export default function AboutPage() {
             From regulatory notice to your screen in hours.
           </h2>
           <div className="about-how-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 32 }}>
-            {HOW.map((h) => (
+            {howSteps.map((h) => (
               <div key={h.step} style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "var(--teal)", marginBottom: 16 }}>
                   {h.step}
@@ -176,27 +215,24 @@ export default function AboutPage() {
             Data sources
           </div>
           <h2 style={{ fontSize: "clamp(22px,3vw,34px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 12, marginTop: 0 }}>
-            Official regulatory data only.
+            {sourceCount} official regulatory sources and counting.
           </h2>
           <p style={{ fontSize: 15, color: "var(--app-text-3)", marginBottom: 48, lineHeight: 1.65 }}>
             Every shortage record traces back to a public government source. No scraped forum posts, no unverified reports.
           </p>
           <div className="about-sources-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-            {SOURCES.map((s) => (
-              <div key={s.code} style={{
+            {sources.map((s) => (
+              <div key={s.abbreviation + s.country_code} style={{
                 background: "var(--app-bg)", border: "1px solid var(--app-border)",
                 borderRadius: 8, padding: "16px 18px",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--teal)", letterSpacing: "0.05em" }}>{s.code}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>{s.name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--teal)", letterSpacing: "0.05em" }}>{s.country_code}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>{s.abbreviation}</span>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--app-text-4)", lineHeight: 1.5 }}>{s.full}</div>
+                <div style={{ fontSize: 11, color: "var(--app-text-4)", lineHeight: 1.5 }}>{s.name}</div>
               </div>
             ))}
-          </div>
-          <div style={{ marginTop: 16, fontSize: 13, color: "var(--app-text-4)" }}>
-            + 8 additional sources being integrated (NL, DK, IE, SE, CZ, HU, CH, NO)
           </div>
         </div>
       </section>
@@ -205,7 +241,7 @@ export default function AboutPage() {
       <section className="about-section" style={{ padding: "96px 48px", background: "var(--app-bg)" }}>
         <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
           <h2 style={{ fontSize: "clamp(24px,3.5vw,40px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 16, marginTop: 0 }}>
-            Built for pharmacists,<br />by people who've been there.
+            Built for pharmacists,<br />by people who&apos;ve been there.
           </h2>
           <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.7, marginBottom: 36 }}>
             Questions, partnership requests, or data corrections?<br />

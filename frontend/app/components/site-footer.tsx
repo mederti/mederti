@@ -60,6 +60,7 @@ export default function SiteFooter() {
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "#9ca3af", marginBottom: 16 }}>Resources</div>
             <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <Link href="/intelligence" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Intelligence</Link>
               <Link href="/home" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>News Feed</Link>
               <Link href="/watchlist" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Watchlist</Link>
               <Link href="/dashboard" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Data Sources</Link>

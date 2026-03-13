@@ -15,10 +15,36 @@ const dmMono = DM_Mono({
   display: "swap",
 });
 
+const SITE_URL = "https://mederti.vercel.app";
+
 export const metadata: Metadata = {
   title: "Mederti — Global Pharmaceutical Shortage Intelligence",
   description:
-    "Real-time pharmaceutical shortage intelligence from regulatory bodies across 9 countries.",
+    "Real-time drug shortage intelligence across 13 countries. Search shortages, find alternatives, get alerted when stock returns.",
+  metadataBase: new URL(SITE_URL),
+  openGraph: {
+    title: "Mederti — Global Pharmaceutical Shortage Intelligence",
+    description:
+      "Real-time drug shortage intelligence across 13 countries. Search shortages, find alternatives, get alerted when stock returns.",
+    url: SITE_URL,
+    siteName: "Mederti",
+    type: "website",
+    images: [
+      {
+        url: `${SITE_URL}/api/og`,
+        width: 1200,
+        height: 630,
+        alt: "Mederti — The world's pharma intelligence platform",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Mederti — Global Pharmaceutical Shortage Intelligence",
+    description:
+      "Real-time drug shortage intelligence across 13 countries. Search shortages, find alternatives, get alerted when stock returns.",
+    images: [`${SITE_URL}/api/og`],
+  },
 };
 
 export default function RootLayout({

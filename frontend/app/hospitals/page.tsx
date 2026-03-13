@@ -1,4 +1,16 @@
+import type { Metadata } from "next";
 import PersonaPage, { PersonaContent } from "../components/persona-page";
+
+export const metadata: Metadata = {
+  title: "Mederti for Hospitals — Proactive shortage intelligence for procurement teams",
+  description:
+    "Anticipate drug shortages weeks ahead. Supply risk alerts, therapeutic alternatives, and formulary impact analysis for hospital procurement.",
+  openGraph: {
+    title: "Mederti for Hospitals — Proactive shortage intelligence for procurement teams",
+    description:
+      "Anticipate drug shortages weeks ahead. Supply risk alerts, therapeutic alternatives, and formulary impact analysis for hospital procurement.",
+  },
+};
 
 const content: PersonaContent = {
   heroHeadline: "Stop managing shortages. Start anticipating them.",

@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const article = ALL_ARTICLES[slug];
   if (!article) return { title: "Not Found" };
   return {
-    title: `${article.title} \u2014 Mederti Intelligence`,
+    title: `${article.title} — Mederti Intelligence`,
     description: article.metaDescription,
   };
 }
@@ -58,203 +58,335 @@ export default async function IntelligenceArticlePage({ params }: Props) {
   const catStyle = CATEGORY_STYLE[article.category];
 
   return (
-    <div style={{ background: "#fff", minHeight: "100vh", fontFamily: "var(--font-inter, system-ui, sans-serif)" }}>
+    <div style={{ background: "#fff", minHeight: "100vh" }}>
       <SiteNav />
 
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "40px 24px 80px" }}>
-        {/* ─── Breadcrumb ─── */}
-        <nav style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 32, display: "flex", alignItems: "center", gap: 6 }}>
+      {/* ─── Article header ─── */}
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px 0" }}>
+        {/* Breadcrumb */}
+        <nav style={{ fontSize: 13, color: "#94a3b8", marginBottom: 40, display: "flex", alignItems: "center", gap: 6 }}>
           <Link href="/intelligence" style={{ color: "var(--teal)", textDecoration: "none", fontWeight: 500 }}>Intelligence</Link>
           <span>&rsaquo;</span>
           <span>{catStyle.label}</span>
-          <span>&rsaquo;</span>
-          <span style={{ color: "var(--app-text-3)" }}>{article.title.split(":")[0]}</span>
         </nav>
+      </div>
 
-        <div className="intel-article-layout" style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 56 }}>
-          {/* ─── Main column ─── */}
-          <article>
-            {/* Category pill */}
-            <span style={{
-              display: "inline-block", fontSize: 11, fontWeight: 600,
-              padding: "3px 10px", borderRadius: 20, marginBottom: 20,
-              color: catStyle.color, background: catStyle.bg,
+      <div className="intel-article-layout" style={{
+        maxWidth: 1200, margin: "0 auto", padding: "0 32px 80px",
+        display: "grid", gridTemplateColumns: "1fr 300px", gap: 64,
+      }}>
+        {/* ─── Main column ─── */}
+        <article style={{ maxWidth: 680 }}>
+          {/* Category tag */}
+          <span style={{
+            fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
+            textTransform: "uppercase", color: catStyle.color,
+          }}>
+            {catStyle.label}
+          </span>
+
+          {/* Title */}
+          <h1 style={{
+            fontSize: "clamp(30px, 4vw, 44px)", fontWeight: 700,
+            lineHeight: 1.12, letterSpacing: "-0.02em",
+            color: "#0f172a", margin: "16px 0 20px",
+          }}>
+            {article.title}
+          </h1>
+
+          {/* Author + date */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 14, color: "#94a3b8", marginBottom: 36 }}>
+            {article.author && <span style={{ fontWeight: 500, color: "#475569" }}>{article.author}</span>}
+            <span>&middot;</span>
+            <span>{article.date}</span>
+            <span>&middot;</span>
+            <span>{article.readTime}</span>
+          </div>
+
+          {/* ─── Live data callout ─── */}
+          {shortageCount > 0 && (
+            <div style={{
+              background: "#f8fafc",
+              borderLeft: "3px solid var(--teal)",
+              borderRadius: "0 6px 6px 0",
+              padding: "24px 28px", marginBottom: 40,
             }}>
-              {catStyle.label}
-            </span>
-
-            <h1 style={{
-              fontSize: "clamp(28px,4vw,40px)", fontWeight: 750,
-              lineHeight: 1.12, letterSpacing: "-0.03em",
-              color: "var(--app-text)", margin: "0 0 20px",
-            }}>
-              {article.title}
-            </h1>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "var(--app-text-4)", marginBottom: 32 }}>
-              {article.author && <span style={{ fontWeight: 500, color: "var(--app-text-3)" }}>{article.author}</span>}
-              <span>&middot;</span>
-              <span>{article.date}</span>
-              <span>&middot;</span>
-              <span>{article.readTime}</span>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.10em", color: "var(--teal)", marginBottom: 14 }}>
+                Live data — updated in real time
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 28 }}>
+                <div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: "#0f172a", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{shortageCount}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>active shortages</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: "#0f172a", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{countries.length}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>countries affected</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: "var(--crit)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{critCount}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>critical</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: "var(--high)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{highCount}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>high severity</div>
+                </div>
+              </div>
+              {countries.length > 0 && (
+                <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 14 }}>
+                  Affected: {countries.join(", ")}
+                </div>
+              )}
             </div>
+          )}
 
-            {/* ─── Live data callout ─── */}
-            {shortageCount > 0 && (
-              <div style={{
-                background: "var(--teal-bg)", border: "1px solid var(--teal-b, rgba(13,148,136,0.2))",
-                borderRadius: 10, padding: "20px 24px", marginBottom: 36,
+          {/* Hero image placeholder */}
+          <div style={{
+            width: "100%", height: 360, background: "#f1f5f9",
+            borderRadius: 6,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 48,
+          }}>
+            <span style={{ fontSize: 13, color: "#94a3b8" }}>Image</span>
+          </div>
+
+          {/* ─── Article body ─── */}
+          {article.sections.map((section, i) => (
+            <div key={i} style={{ marginBottom: 8 }}>
+              {section.heading && (
+                <h2 style={{
+                  fontSize: 22, fontWeight: 700, color: "#0f172a",
+                  letterSpacing: "-0.015em", margin: "44px 0 16px",
+                  lineHeight: 1.25,
+                }}>
+                  {section.heading}
+                </h2>
+              )}
+              <p style={{
+                fontSize: i === 0 ? 18 : 16,
+                lineHeight: 1.85,
+                color: i === 0 ? "#334155" : "#475569",
+                margin: 0,
               }}>
-                <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.10em", color: "var(--teal)", marginBottom: 10 }}>
-                  Live data
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
-                  <div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: "var(--app-text)", lineHeight: 1 }}>{shortageCount}</div>
-                    <div style={{ fontSize: 12, color: "var(--app-text-3)", marginTop: 4 }}>active shortages</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: "var(--app-text)", lineHeight: 1 }}>{countries.length}</div>
-                    <div style={{ fontSize: 12, color: "var(--app-text-3)", marginTop: 4 }}>countries affected</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: "var(--crit)", lineHeight: 1 }}>{critCount}</div>
-                    <div style={{ fontSize: 12, color: "var(--app-text-3)", marginTop: 4 }}>critical</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: "var(--high)", lineHeight: 1 }}>{highCount}</div>
-                    <div style={{ fontSize: 12, color: "var(--app-text-3)", marginTop: 4 }}>high severity</div>
-                  </div>
-                </div>
-                {countries.length > 0 && (
-                  <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 12 }}>
-                    Affected: {countries.join(", ")}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Hero image placeholder */}
-            <div style={{
-              width: "100%", height: 320, background: "var(--app-bg)",
-              borderRadius: 10, border: "1px solid var(--app-border)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              marginBottom: 40,
-            }}>
-              <span style={{ fontSize: 13, color: "var(--app-text-4)" }}>Image</span>
-            </div>
-
-            {/* Article body */}
-            {article.sections.map((section, i) => (
-              <div key={i} style={{ marginBottom: 28 }}>
-                {section.heading && (
-                  <h2 style={{
-                    fontSize: 20, fontWeight: 700, color: "var(--app-text)",
-                    letterSpacing: "-0.015em", margin: "36px 0 14px",
-                  }}>
-                    {section.heading}
-                  </h2>
-                )}
-                <p style={{ fontSize: 16, lineHeight: 1.8, color: "var(--app-text-2)", margin: 0 }}>
-                  {section.body}
-                </p>
-
-                {/* Pull quote after section 2 */}
-                {i === 1 && article.pullQuote && (
-                  <blockquote style={{
-                    margin: "36px 0",
-                    padding: "24px 28px",
-                    borderLeft: "3px solid var(--teal)",
-                    background: "var(--app-bg)",
-                    borderRadius: "0 10px 10px 0",
-                  }}>
-                    <p style={{
-                      fontSize: "clamp(17px,2vw,20px)", fontWeight: 500,
-                      fontStyle: "italic", lineHeight: 1.6,
-                      color: "var(--app-text)", margin: 0,
-                    }}>
-                      &ldquo;{article.pullQuote}&rdquo;
-                    </p>
-                  </blockquote>
-                )}
-              </div>
-            ))}
-
-            {/* Bottom CTA */}
-            <div style={{
-              marginTop: 48, padding: "32px", borderRadius: 12,
-              background: "#0f172a", textAlign: "center",
-            }}>
-              <div style={{ fontSize: 18, fontWeight: 650, color: "#f0f4f8", marginBottom: 12 }}>
-                Explore the data behind this article
-              </div>
-              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", margin: "0 0 20px", lineHeight: 1.6 }}>
-                Search real-time shortage data across 13 countries on the Mederti platform.
+                {section.body}
               </p>
+
+              {/* Pull quote after section 2 */}
+              {i === 1 && article.pullQuote && (
+                <blockquote style={{
+                  margin: "44px 0",
+                  padding: "0 0 0 28px",
+                  borderLeft: "3px solid var(--teal)",
+                }}>
+                  <p style={{
+                    fontSize: "clamp(19px, 2.5vw, 24px)", fontWeight: 500,
+                    fontStyle: "italic", lineHeight: 1.55,
+                    color: "#0f172a", margin: 0,
+                  }}>
+                    &ldquo;{article.pullQuote}&rdquo;
+                  </p>
+                </blockquote>
+              )}
+            </div>
+          ))}
+
+          {/* Bottom CTA */}
+          <div style={{
+            marginTop: 56, padding: "36px 40px",
+            borderRadius: 8,
+            background: "#0f172a",
+          }}>
+            <div style={{
+              fontSize: 20, fontWeight: 650, color: "#f1f5f9", marginBottom: 10,
+              lineHeight: 1.3,
+            }}>
+              Explore the data behind this article
+            </div>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", margin: "0 0 24px", lineHeight: 1.6 }}>
+              Search real-time shortage data across 20+ countries on the Mederti platform.
+            </p>
+            <div style={{ display: "flex", gap: 12 }}>
               <Link href="/dashboard" style={{
                 display: "inline-flex", alignItems: "center",
-                padding: "12px 32px", borderRadius: 8,
+                padding: "11px 28px", borderRadius: 6,
                 fontSize: 14, fontWeight: 600,
                 color: "#fff", textDecoration: "none",
                 background: "var(--teal)",
               }}>
                 Go to Dashboard
               </Link>
-            </div>
-          </article>
-
-          {/* ─── Sidebar ─── */}
-          <aside className="intel-article-sidebar">
-            {/* Live shortage status */}
-            {drugRow?.id && (
-              <div style={{
-                border: "1px solid var(--app-border)", borderRadius: 10,
-                padding: "20px", marginBottom: 28,
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.10em", color: "var(--teal)", marginBottom: 12 }}>
-                  Live shortage status
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>
-                  Amoxicillin
-                </div>
-                <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 4 }}>
-                  {shortageCount} active shortage{shortageCount !== 1 ? "s" : ""} across {countries.length} countr{countries.length !== 1 ? "ies" : "y"}
-                </div>
+              {drugRow?.id && (
                 <Link href={`/drugs/${drugRow.id}`} style={{
-                  display: "inline-block", marginTop: 12,
-                  fontSize: 13, fontWeight: 600, color: "var(--teal)", textDecoration: "none",
+                  display: "inline-flex", alignItems: "center",
+                  padding: "11px 28px", borderRadius: 6,
+                  fontSize: 14, fontWeight: 600,
+                  color: "rgba(255,255,255,0.7)", textDecoration: "none",
+                  border: "1px solid rgba(255,255,255,0.2)",
                 }}>
-                  View drug page &rarr;
+                  View Amoxicillin &rarr;
                 </Link>
-              </div>
-            )}
-
-            {/* Related articles */}
-            <div style={{ marginBottom: 28 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.10em", color: "var(--app-text-4)", marginBottom: 16 }}>
-                Related
-              </div>
-              {RELATED_ARTICLES.map((ra) => (
-                <div key={ra.slug} style={{
-                  padding: "16px 0",
-                  borderBottom: "1px solid var(--app-border)",
-                }}>
-                  <span style={{
-                    display: "inline-block", fontSize: 10, fontWeight: 600,
-                    padding: "2px 8px", borderRadius: 20, marginBottom: 8,
-                    color: CATEGORY_STYLE[ra.category].color,
-                    background: CATEGORY_STYLE[ra.category].bg,
-                  }}>
-                    {CATEGORY_STYLE[ra.category].label}
-                  </span>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.35, marginBottom: 4 }}>
-                    {ra.title}
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>{ra.date}</div>
-                </div>
-              ))}
+              )}
             </div>
-          </aside>
+          </div>
+        </article>
+
+        {/* ─── Sidebar ─── */}
+        <aside className="intel-article-sidebar">
+          {/* Live shortage status */}
+          {drugRow?.id && (
+            <div style={{
+              borderLeft: "3px solid var(--teal)",
+              padding: "20px",
+              marginBottom: 36,
+              background: "#f8fafc",
+              borderRadius: "0 6px 6px 0",
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.10em", color: "var(--teal)", marginBottom: 12 }}>
+                Live shortage status
+              </div>
+              <div style={{
+                fontSize: 16, fontWeight: 650, color: "#0f172a", marginBottom: 8,
+              }}>
+                Amoxicillin
+              </div>
+              <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4, lineHeight: 1.5 }}>
+                {shortageCount} active shortage{shortageCount !== 1 ? "s" : ""} across {countries.length} countr{countries.length !== 1 ? "ies" : "y"}
+              </div>
+              <Link href={`/drugs/${drugRow.id}`} style={{
+                display: "inline-block", marginTop: 12,
+                fontSize: 13, fontWeight: 600, color: "var(--teal)", textDecoration: "none",
+              }}>
+                View drug page &rarr;
+              </Link>
+            </div>
+          )}
+
+          {/* Related articles */}
+          <div style={{ marginBottom: 36 }}>
+            <div style={{
+              fontSize: 11, fontWeight: 600, letterSpacing: "0.12em",
+              textTransform: "uppercase", color: "#94a3b8",
+              marginBottom: 20, paddingBottom: 12,
+              borderBottom: "2px solid #0f172a",
+            }}>
+              Related
+            </div>
+            {RELATED_ARTICLES.map((ra, i) => (
+              <div key={ra.slug} style={{
+                padding: "18px 0",
+                borderBottom: i < RELATED_ARTICLES.length - 1 ? "1px solid #e5e7eb" : "none",
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: CATEGORY_STYLE[ra.category].color,
+                }}>
+                  {CATEGORY_STYLE[ra.category].label}
+                </span>
+                <div style={{
+                  fontSize: 15, fontWeight: 650, color: "#0f172a",
+                  lineHeight: 1.35, margin: "8px 0 6px",
+                }}>
+                  {ra.title}
+                </div>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>{ra.date}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Newsletter sidebar CTA */}
+          <div style={{
+            background: "#0f172a", borderRadius: 8,
+            padding: "24px 20px", textAlign: "center",
+          }}>
+            <div style={{
+              fontSize: 11, fontWeight: 600, letterSpacing: "0.10em",
+              textTransform: "uppercase", color: "var(--teal)",
+              marginBottom: 10,
+            }}>
+              Newsletter
+            </div>
+            <div style={{
+              fontSize: 16, fontWeight: 650, color: "#fff",
+              lineHeight: 1.35, marginBottom: 16,
+            }}>
+              Weekly intelligence briefing
+            </div>
+            <input
+              type="email"
+              placeholder="you@hospital.org"
+              style={{
+                width: "100%", padding: "10px 14px",
+                borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)",
+                background: "rgba(255,255,255,0.06)",
+                color: "#fff", fontSize: 13,
+                outline: "none", marginBottom: 10,
+                boxSizing: "border-box",
+              }}
+            />
+            <button style={{
+              width: "100%", padding: "10px 0", borderRadius: 6,
+              border: "none", background: "var(--teal)",
+              color: "#fff", fontSize: 13, fontWeight: 600,
+              cursor: "pointer",
+            }}>
+              Subscribe
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      {/* ─── NEWSLETTER FOOTER ─── */}
+      <div style={{
+        background: "#0f172a",
+        padding: "64px 32px",
+      }}>
+        <div style={{
+          maxWidth: 560, margin: "0 auto", textAlign: "center",
+        }}>
+          <div style={{
+            fontSize: "clamp(22px, 3vw, 28px)", fontWeight: 650,
+            color: "#fff", lineHeight: 1.3,
+            marginBottom: 12,
+          }}>
+            Get the Mederti Intelligence briefing every Monday.
+          </div>
+          <p style={{
+            fontSize: 14, color: "rgba(255,255,255,0.4)",
+            lineHeight: 1.6, margin: "0 0 28px",
+          }}>
+            Shortage alerts, new data releases and analysis — one concise email per week.
+          </p>
+          <div className="intel-newsletter-form" style={{
+            display: "flex", gap: 10,
+            justifyContent: "center",
+          }}>
+            <input
+              type="email"
+              placeholder="you@hospital.org"
+              style={{
+                width: 280, padding: "12px 16px",
+                borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)",
+                background: "rgba(255,255,255,0.06)",
+                color: "#fff", fontSize: 14,
+                outline: "none",
+              }}
+            />
+            <button style={{
+              padding: "12px 24px", borderRadius: 6,
+              border: "none", background: "var(--teal)",
+              color: "#fff", fontSize: 14, fontWeight: 600,
+              cursor: "pointer",
+            }}>
+              Subscribe
+            </button>
+          </div>
+          <div style={{
+            fontSize: 12, color: "rgba(255,255,255,0.25)",
+            marginTop: 16,
+          }}>
+            No spam. Unsubscribe anytime.
+          </div>
         </div>
       </div>
 
@@ -269,6 +401,8 @@ export default async function IntelligenceArticlePage({ params }: Props) {
           .intel-article-sidebar {
             order: -1;
           }
+          .intel-newsletter-form { flex-direction: column !important; align-items: center !important; }
+          .intel-newsletter-form input { width: 100% !important; max-width: 320px !important; }
         }
       `}</style>
     </div>

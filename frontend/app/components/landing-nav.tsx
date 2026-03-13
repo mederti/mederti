@@ -17,10 +17,12 @@ const APP_LINKS = [
 ];
 
 const GUEST_LINKS = [
-  { label: "Pharmacists",          href: "/pharmacists" },
-  { label: "Doctors",              href: "/doctors" },
-  { label: "Hospitals",            href: "/hospitals" },
-  { label: "Government Agencies",  href: "/government" },
+  { label: "Pharmacists",   href: "/pharmacists" },
+  { label: "Doctors",       href: "/doctors" },
+  { label: "Hospitals",     href: "/hospitals" },
+  { label: "Governments",   href: "/government" },
+  { label: "Intelligence",  href: "/intelligence" },
+  { label: "Suppliers",     href: "/suppliers" },
 ];
 
 const COUNTRIES = [

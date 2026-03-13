@@ -10,20 +10,18 @@ import {
 } from "./data";
 
 export const metadata: Metadata = {
-  title: "Mederti Intelligence \u2014 Pharmaceutical Shortage Reports & Analysis",
+  title: "Mederti Intelligence — Pharmaceutical Shortage Reports & Analysis",
   description:
     "Data-driven pharmaceutical shortage reports, supply chain analysis and market intelligence from the Mederti data team. Updated weekly.",
 };
 
 /* ── helpers ── */
-function CategoryPill({ category }: { category: InsightCard["category"] }) {
+function CategoryTag({ category }: { category: InsightCard["category"] }) {
   const s = CATEGORY_STYLE[category];
   return (
     <span style={{
-      display: "inline-block", fontSize: 11, fontWeight: 600,
-      padding: "3px 10px", borderRadius: 20,
-      color: s.color, background: s.bg,
-      letterSpacing: "0.02em",
+      fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
+      textTransform: "uppercase", color: s.color,
     }}>
       {s.label}
     </span>
@@ -47,13 +45,13 @@ function ProBadge() {
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionDivider({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       fontSize: 11, fontWeight: 600, letterSpacing: "0.12em",
       textTransform: "uppercase", color: "var(--app-text-4)",
-      marginBottom: 24, paddingBottom: 12,
-      borderBottom: "1px solid var(--app-border)",
+      paddingBottom: 16, marginBottom: 28,
+      borderBottom: "2px solid var(--app-text)",
     }}>
       {children}
     </div>
@@ -72,82 +70,88 @@ export default async function IntelligencePage() {
     ? (Math.floor(activeShortages / 100) * 100).toLocaleString("en-US") + "+"
     : String(activeShortages);
 
-  const hero = ARTICLES[0]; // Amoxicillin article as hero
+  const hero = ARTICLES[0];
   const sideArticles = ARTICLES.slice(1);
 
   return (
-    <div style={{ background: "#fff", minHeight: "100vh", fontFamily: "var(--font-inter, system-ui, sans-serif)" }}>
+    <div style={{ background: "#fff", minHeight: "100vh" }}>
       <SiteNav />
 
-      {/* ─── MASTHEAD BAR ─── */}
+      {/* ─── DARK NAVY MASTHEAD ─── */}
       <div style={{
-        borderBottom: "1px solid var(--app-border)",
-        padding: "16px 24px",
-        background: "#fff",
+        background: "#0f172a",
+        padding: "52px 32px 48px",
       }}>
-        <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{
-              fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-              color: "var(--app-text)",
-            }}>
-              Mederti Intelligence
-            </span>
-            <span style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-              Pharmaceutical supply chain intelligence
-            </span>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{
+            fontSize: "clamp(28px, 4vw, 42px)",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            color: "#fff",
+            lineHeight: 1.1,
+          }}>
+            Mederti Intelligence
           </div>
           <div style={{
-            display: "flex", alignItems: "center", gap: 14,
-            fontSize: 12, color: "var(--app-text-4)",
+            fontSize: 14, color: "rgba(255,255,255,0.45)",
+            marginTop: 14, lineHeight: 1.5,
+            maxWidth: 520,
           }}>
-            <span>
-              <span style={{ color: "var(--teal)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtShortages}</span> active shortages
+            Pharmaceutical shortage analysis, supply chain reports and market intelligence from the Mederti data team.
+          </div>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 20,
+            marginTop: 24, fontSize: 13,
+          }}>
+            <span style={{ color: "rgba(255,255,255,0.35)" }}>
+              <span style={{ color: "var(--teal)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtShortages}</span>{" "}
+              active shortages tracked
             </span>
-            <span style={{ color: "var(--app-border)" }}>|</span>
-            <span>
-              <span style={{ color: "var(--teal)", fontWeight: 600 }}>{sourceCount}+</span> sources
+            <span style={{ color: "rgba(255,255,255,0.15)" }}>|</span>
+            <span style={{ color: "rgba(255,255,255,0.35)" }}>
+              <span style={{ color: "var(--teal)", fontWeight: 600 }}>{sourceCount}+</span>{" "}
+              regulatory sources
             </span>
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 24px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
 
-        {/* ─── HERO: featured article + sidebar articles ─── */}
+        {/* ─── HERO: lead article + sidebar stack ─── */}
         <section className="intel-hero" style={{
-          display: "grid", gridTemplateColumns: "1fr 380px",
-          gap: 32, padding: "40px 0", borderBottom: "1px solid var(--app-border)",
+          display: "grid", gridTemplateColumns: "1fr 340px",
+          gap: 48, padding: "48px 0 44px",
+          borderBottom: "1px solid #e5e7eb",
         }}>
           {/* Main hero */}
-          <Link href={`/intelligence/${hero.slug}`} style={{ textDecoration: "none", display: "flex", flexDirection: "column", gap: 16 }}>
+          <Link href={`/intelligence/${hero.slug}`} style={{ textDecoration: "none", display: "flex", flexDirection: "column", gap: 0 }}>
             {/* Image placeholder */}
             <div style={{
-              width: "100%", aspectRatio: "16/9", background: "#0f172a",
-              borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+              width: "100%", aspectRatio: "16/9", background: "#f1f5f9",
+              borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
+              marginBottom: 24,
             }}>
               <span style={{
-                fontSize: 11, fontWeight: 600, letterSpacing: "0.10em",
-                textTransform: "uppercase", color: "rgba(255,255,255,0.3)",
+                fontSize: 12, fontWeight: 500, letterSpacing: "0.06em",
+                textTransform: "uppercase", color: "#94a3b8",
               }}>
                 Featured
               </span>
             </div>
-            <div>
-              <CategoryPill category={hero.category} />
-            </div>
+            <CategoryTag category={hero.category} />
             <h1 style={{
-              fontSize: "clamp(24px,3vw,34px)", fontWeight: 750,
-              lineHeight: 1.15, letterSpacing: "-0.025em",
-              color: "var(--app-text)", margin: 0,
+              fontSize: "clamp(26px, 3vw, 36px)", fontWeight: 700,
+              lineHeight: 1.18, letterSpacing: "-0.02em",
+              color: "#0f172a", margin: "12px 0 16px",
             }}>
               {hero.title}
             </h1>
-            <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.6, margin: 0 }}>
+            <p style={{ fontSize: 15, color: "#64748b", lineHeight: 1.65, margin: "0 0 16px" }}>
               {hero.description}
             </p>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--app-text-4)" }}>
-              {hero.author && <span style={{ fontWeight: 500 }}>{hero.author}</span>}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#94a3b8" }}>
+              {hero.author && <span style={{ fontWeight: 500, color: "#64748b" }}>{hero.author}</span>}
               {hero.author && <span>&middot;</span>}
               <span>{hero.date}</span>
               {hero.readTime && <><span>&middot;</span><span>{hero.readTime}</span></>}
@@ -155,44 +159,44 @@ export default async function IntelligencePage() {
           </Link>
 
           {/* Side articles stack */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
             {sideArticles.map((a, i) => (
               <div key={a.slug} style={{
-                padding: "20px 0",
-                borderBottom: i < sideArticles.length - 1 ? "1px solid var(--app-border)" : "none",
+                padding: "24px 0",
+                borderBottom: i < sideArticles.length - 1 ? "1px solid #e5e7eb" : "none",
               }}>
-                <CategoryPill category={a.category} />
+                <CategoryTag category={a.category} />
                 <div style={{
-                  fontSize: 16, fontWeight: 650, color: "var(--app-text)",
+                  fontSize: 18, fontWeight: 650, color: "#0f172a",
                   lineHeight: 1.3, letterSpacing: "-0.01em",
-                  margin: "10px 0 8px",
+                  margin: "8px 0 10px",
                 }}>
                   {a.title}
                 </div>
-                <p style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.55, margin: "0 0 8px" }}>
+                <p style={{ fontSize: 13, color: "#64748b", lineHeight: 1.55, margin: "0 0 8px" }}>
                   {a.description}
                 </p>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--app-text-4)" }}>
-                  {a.author && <span style={{ fontWeight: 500 }}>{a.author}</span>}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8" }}>
+                  {a.author && <span style={{ fontWeight: 500, color: "#64748b" }}>{a.author}</span>}
                   {a.author && <span>&middot;</span>}
                   <span>{a.date}</span>
                 </div>
               </div>
             ))}
 
-            {/* Data signal teaser in sidebar */}
+            {/* Data signal teaser */}
             <div style={{
-              marginTop: 20, padding: "16px 20px",
-              background: "var(--app-bg)", borderRadius: 8,
-              border: "1px solid var(--app-border)",
+              marginTop: 24, padding: "18px 20px",
+              background: "#f8fafc", borderRadius: 6,
+              borderLeft: "3px solid var(--low)",
             }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--low)", marginBottom: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--low)", marginBottom: 6 }}>
                 Latest signal
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.35 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", lineHeight: 1.35 }}>
                 {DATA_RELEASES[0].icon} {DATA_RELEASES[0].title}
               </div>
-              <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
                 {DATA_RELEASES[0].date}
               </div>
             </div>
@@ -201,32 +205,33 @@ export default async function IntelligencePage() {
 
         {/* ─── SHORTAGE REPORTS ─── */}
         <section id="reports" style={{ padding: "48px 0 0", scrollMarginTop: 80 }}>
-          <SectionLabel>Shortage Reports</SectionLabel>
-          <div className="intel-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          <SectionDivider>Shortage Reports</SectionDivider>
+          <div className="intel-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 32 }}>
             {REPORTS.map((r) => (
               <div key={r.slug} style={{
-                background: "#fff", border: "1px solid var(--app-border)",
-                borderRadius: 10, padding: "24px 22px",
                 display: "flex", flexDirection: "column", gap: 10,
               }}>
-                <CategoryPill category={r.category} />
-                <div style={{ fontSize: 15, fontWeight: 650, color: "var(--app-text)", lineHeight: 1.3, letterSpacing: "-0.01em" }}>
+                <CategoryTag category={r.category} />
+                <div style={{
+                  fontSize: 17, fontWeight: 650, color: "#0f172a",
+                  lineHeight: 1.3, letterSpacing: "-0.01em",
+                }}>
                   {r.title}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--app-text-4)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#94a3b8" }}>
                   <span>{r.date}</span>
                   {r.readTime && <><span>&middot;</span><span>{r.readTime}</span></>}
                 </div>
-                <p style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.6, margin: 0, flex: 1 }}>
+                <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.6, margin: 0, flex: 1 }}>
                   {r.description}
                 </p>
                 <div>
                   <a href="#" style={{
                     display: "inline-flex", alignItems: "center",
-                    padding: "7px 16px", borderRadius: 6,
+                    padding: "8px 18px", borderRadius: 6,
                     fontSize: 12, fontWeight: 600,
-                    color: "var(--app-text-2)", textDecoration: "none",
-                    border: "1px solid var(--app-border)",
+                    color: "#0f172a", textDecoration: "none",
+                    border: "1px solid #d1d5db",
                     background: "#fff",
                   }}>
                     Download PDF
@@ -240,27 +245,27 @@ export default async function IntelligencePage() {
 
         {/* ─── DATA & SIGNALS ─── */}
         <section id="signals" style={{ padding: "48px 0 0", scrollMarginTop: 80 }}>
-          <SectionLabel>Data and Signals</SectionLabel>
-          <div className="intel-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          <SectionDivider>Data &amp; Signals</SectionDivider>
+          <div className="intel-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 32 }}>
             {DATA_RELEASES.map((d) => (
               <div key={d.slug} style={{
-                background: "#fff", border: "1px solid var(--app-border)",
-                borderRadius: 10, padding: "22px",
                 display: "flex", flexDirection: "column", gap: 8,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {d.icon && <span style={{ fontSize: 20 }}>{d.icon}</span>}
-                  <CategoryPill category={d.category} />
+                  <CategoryTag category={d.category} />
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 620, color: "var(--app-text)", lineHeight: 1.35 }}>
+                <div style={{
+                  fontSize: 16, fontWeight: 650, color: "#0f172a", lineHeight: 1.35,
+                }}>
                   {d.title}
                 </div>
-                <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>{d.date}</div>
-                <p style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.55, margin: 0 }}>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>{d.date}</div>
+                <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.6, margin: 0 }}>
                   {d.description}
                 </p>
                 <div>
-                  <Link href="/dashboard" style={{ fontSize: 12, fontWeight: 600, color: "var(--low)", textDecoration: "none" }}>
+                  <Link href="/dashboard" style={{ fontSize: 12, fontWeight: 600, color: "var(--teal)", textDecoration: "none" }}>
                     View data &rarr;
                   </Link>
                 </div>
@@ -271,51 +276,113 @@ export default async function IntelligencePage() {
 
         {/* ─── PODCASTS & VIDEO ─── */}
         <section id="podcasts" style={{ padding: "48px 0 64px", scrollMarginTop: 80 }}>
-          <SectionLabel>Podcasts and Video</SectionLabel>
-          <div className="intel-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          <SectionDivider>Podcasts &amp; Video</SectionDivider>
+          <div className="intel-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 32 }}>
             {MEDIA.map((m) => (
               <div key={m.slug} style={{
-                background: "#fff", border: "1px solid var(--app-border)",
-                borderRadius: 10, overflow: "hidden",
                 display: "flex", flexDirection: "column",
+                overflow: "hidden",
               }}>
                 <div style={{
-                  height: 140, background: "#0f172a",
+                  height: 160, background: "#0f172a",
+                  borderRadius: 6,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  borderBottom: "1px solid var(--app-border)",
+                  marginBottom: 16,
                 }}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.35 }}>
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.3 }}>
                     <polygon points="5,3 19,12 5,21" fill="#fff" />
                   </svg>
                 </div>
-                <div style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <CategoryPill category={m.category} />
-                    {m.duration && (
-                      <span style={{
-                        fontSize: 11, fontWeight: 600, padding: "2px 8px",
-                        borderRadius: 20, color: "var(--med)", background: "var(--med-bg)",
-                      }}>
-                        {m.duration}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 620, color: "var(--app-text)", lineHeight: 1.35 }}>
-                    {m.title}
-                  </div>
-                  <p style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.55, margin: 0, flex: 1 }}>
-                    {m.description}
-                  </p>
-                  <div>
-                    <a href="#" style={{ fontSize: 12, fontWeight: 600, color: "var(--med)", textDecoration: "none" }}>
-                      {m.title.toLowerCase().includes("video") ? "Watch" : "Listen"} &rarr;
-                    </a>
-                  </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <CategoryTag category={m.category} />
+                  {m.duration && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 500,
+                      color: "#94a3b8",
+                    }}>
+                      {m.duration}
+                    </span>
+                  )}
+                </div>
+                <div style={{
+                  fontSize: 16, fontWeight: 650, color: "#0f172a", lineHeight: 1.35,
+                  marginBottom: 8,
+                }}>
+                  {m.title}
+                </div>
+                <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.6, margin: "0 0 12px", flex: 1 }}>
+                  {m.description}
+                </p>
+                <div>
+                  <a href="#" style={{ fontSize: 12, fontWeight: 600, color: "var(--med)", textDecoration: "none" }}>
+                    {m.title.toLowerCase().includes("video") ? "Watch" : "Listen"} &rarr;
+                  </a>
                 </div>
               </div>
             ))}
           </div>
         </section>
+      </div>
+
+      {/* ─── NEWSLETTER FOOTER ─── */}
+      <div style={{
+        background: "#0f172a",
+        padding: "64px 32px",
+      }}>
+        <div style={{
+          maxWidth: 560, margin: "0 auto", textAlign: "center",
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, letterSpacing: "0.12em",
+            textTransform: "uppercase", color: "var(--teal)",
+            marginBottom: 16,
+          }}>
+            Newsletter
+          </div>
+          <div style={{
+            fontSize: "clamp(22px, 3vw, 28px)", fontWeight: 650,
+            color: "#fff", lineHeight: 1.3,
+            marginBottom: 12,
+          }}>
+            Get the Mederti Intelligence briefing every Monday.
+          </div>
+          <p style={{
+            fontSize: 14, color: "rgba(255,255,255,0.4)",
+            lineHeight: 1.6, margin: "0 0 28px",
+          }}>
+            Shortage alerts, new data releases and analysis — one concise email per week.
+          </p>
+          <div className="intel-newsletter-form" style={{
+            display: "flex", gap: 10,
+            justifyContent: "center",
+          }}>
+            <input
+              type="email"
+              placeholder="you@hospital.org"
+              style={{
+                width: 280, padding: "12px 16px",
+                borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)",
+                background: "rgba(255,255,255,0.06)",
+                color: "#fff", fontSize: 14,
+                outline: "none",
+              }}
+            />
+            <button style={{
+              padding: "12px 24px", borderRadius: 6,
+              border: "none", background: "var(--teal)",
+              color: "#fff", fontSize: 14, fontWeight: 600,
+              cursor: "pointer",
+            }}>
+              Subscribe
+            </button>
+          </div>
+          <div style={{
+            fontSize: 12, color: "rgba(255,255,255,0.25)",
+            marginTop: 16,
+          }}>
+            No spam. Unsubscribe anytime.
+          </div>
+        </div>
       </div>
 
       <SiteFooter />
@@ -326,6 +393,8 @@ export default async function IntelligencePage() {
         }
         @media (max-width: 768px) {
           .intel-grid { grid-template-columns: 1fr 1fr !important; }
+          .intel-newsletter-form { flex-direction: column !important; align-items: center !important; }
+          .intel-newsletter-form input { width: 100% !important; max-width: 320px !important; }
         }
         @media (max-width: 540px) {
           .intel-grid { grid-template-columns: 1fr !important; }

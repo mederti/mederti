@@ -611,8 +611,7 @@ export default async function DrugPage({ params }: Props) {
             return (
               <div style={{
                 background: mySevIsCritical ? myTheme.bg : "#fff",
-                border: `1px solid ${mySevIsCritical ? myTheme.border : "var(--app-border)"}`,
-                borderLeft: `4px solid ${myTheme.color}`,
+                border: `1px solid ${myTheme.border}`,
                 borderRadius: 12, padding: "22px 24px",
               }}>
                 <div style={{
@@ -637,8 +636,7 @@ export default async function DrugPage({ params }: Props) {
           {/* 2. GLOBAL STATUS */}
           <div style={{
             background: isCritical ? statusTheme.bg : "#fff",
-            border: `1px solid ${isCritical ? statusTheme.border : "var(--app-border)"}`,
-            borderLeft: `4px solid ${statusTheme.color}`,
+            border: `1px solid ${statusTheme.border}`,
             borderRadius: 12, padding: "22px 24px",
           }}>
             <div style={{

@@ -1,4 +1,16 @@
+import type { Metadata } from "next";
 import PersonaPage, { PersonaContent } from "../components/persona-page";
+
+export const metadata: Metadata = {
+  title: "Mederti for Pharmacists — Drug shortage answers at the dispensary counter",
+  description:
+    "Real-time drug shortage intelligence built for pharmacists. Instant answers on stock availability, trusted alternatives, and restocking timelines.",
+  openGraph: {
+    title: "Mederti for Pharmacists — Drug shortage answers at the dispensary counter",
+    description:
+      "Real-time drug shortage intelligence built for pharmacists. Instant answers on stock availability, trusted alternatives, and restocking timelines.",
+  },
+};
 
 const content: PersonaContent = {
   heroHeadline: "Know before your patient asks.",

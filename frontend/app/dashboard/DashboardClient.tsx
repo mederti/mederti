@@ -189,7 +189,7 @@ export default function DashboardClient() {
         </div>
       </div>
 
-      {/* Filter Bar */}
+      {/* Filter Bar: Search + Country + Period on one line */}
       <div
         style={{
           background: "#fff",
@@ -204,15 +204,19 @@ export default function DashboardClient() {
           style={{
             maxWidth: 1200,
             margin: "0 auto",
-            padding: "12px 24px",
+            padding: "10px 24px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
+            gap: 14,
           }}
         >
+          {/* Medicine Search — takes remaining space */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <MedicineSearch />
+          </div>
+
           {/* Country dropdown */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <span
               style={{
                 fontSize: 12,
@@ -220,9 +224,10 @@ export default function DashboardClient() {
                 color: "#64748b",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
+                whiteSpace: "nowrap",
               }}
             >
-              Region
+              Filter by
             </span>
             <div
               style={{
@@ -275,7 +280,7 @@ export default function DashboardClient() {
           </div>
 
           {/* Time period pills */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <span
               style={{
                 fontSize: 12,
@@ -331,22 +336,6 @@ export default function DashboardClient() {
       <div
         style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 48px" }}
       >
-        {/* 1. Medicine Search */}
-        <section style={{ marginBottom: 20 }}>
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              color: "#94a3b8",
-              marginBottom: 10,
-            }}
-          >
-            Search
-          </div>
-          <MedicineSearch />
-        </section>
 
         {/* 2. Global Situation Banner */}
         <section style={{ marginBottom: 20 }}>
@@ -448,10 +437,12 @@ export default function DashboardClient() {
 
       {/* Responsive styles */}
       <style>{`
-        @media (max-width: 640px) {
+        @media (max-width: 900px) {
           .db-filter-bar {
-            flex-direction: column !important;
-            align-items: flex-start !important;
+            flex-wrap: wrap !important;
+          }
+          .db-filter-bar > div:first-child {
+            flex-basis: 100% !important;
           }
         }
       `}</style>

@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -84,6 +85,96 @@ const DOT_COLORS: Record<string, string> = {
   resolved: "#16a34a",      // green
   update: "#0d9488",        // teal
 };
+
+/* ── OG Metadata ── */
+const SITE_URL = "https://mederti.vercel.app";
+const COUNTRY_NAMES: Record<string, string> = {
+  AU: "Australia", US: "United States", GB: "United Kingdom", CA: "Canada",
+  DE: "Germany", FR: "France", IT: "Italy", ES: "Spain", EU: "EU",
+  NZ: "New Zealand", SG: "Singapore", IE: "Ireland", NO: "Norway",
+  FI: "Finland", CH: "Switzerland", SE: "Sweden", AT: "Austria",
+  BE: "Belgium", NL: "Netherlands", JP: "Japan",
+};
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = getSupabaseAdmin();
+
+  const [drugRes, shortagesRes] = await Promise.allSettled([
+    supabase.from("drugs").select("generic_name, strengths, dosage_forms").eq("id", id).single(),
+    supabase
+      .from("shortage_events")
+      .select("country_code, status, severity, source_id, updated_at")
+      .eq("drug_id", id)
+      .in("status", ["active", "anticipated"]),
+  ]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const drug = drugRes.status === "fulfilled" ? (drugRes.value as any).data : null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const shortages = shortagesRes.status === "fulfilled" ? ((shortagesRes.value as any).data ?? []) : [];
+
+  if (!drug) return { title: "Drug Not Found — Mederti" };
+
+  const name = drug.generic_name;
+  const strength = drug.strengths?.[0] ?? "";
+  const activeShortages = shortages.filter(
+    (s: { status: string }) => s.status === "active" || s.status === "anticipated",
+  );
+  const countries = [...new Set(activeShortages.map((s: { country_code: string }) => s.country_code).filter(Boolean))];
+  const worstSeverity = activeShortages.reduce(
+    (worst: string, s: { severity: string | null }) => {
+      const sev = s.severity?.toLowerCase() ?? "";
+      if (sev === "critical") return "Critical";
+      if (sev === "high" && worst !== "Critical") return "High";
+      if (worst === "No") return sev ? sev.charAt(0).toUpperCase() + sev.slice(1) : worst;
+      return worst;
+    },
+    "No",
+  );
+
+  const statusLabel =
+    activeShortages.length > 0
+      ? `${worstSeverity} shortage in ${countries.length} ${countries.length === 1 ? "country" : "countries"}`
+      : "No active shortage";
+
+  const title = `${name}${strength ? ` ${strength}` : ""} — ${statusLabel} · Mederti`;
+
+  const countryNames = countries.slice(0, 4).map((c: string) => COUNTRY_NAMES[c] ?? c);
+  const countryList = countryNames.join(", ") + (countries.length > 4 ? ` +${countries.length - 4} more` : "");
+  const sources = new Set(activeShortages.map((s: { source_id: string }) => s.source_id).filter(Boolean));
+  const latestUpdate = activeShortages[0]?.updated_at;
+  const hoursAgo = latestUpdate
+    ? Math.round((Date.now() - new Date(latestUpdate).getTime()) / 3600000)
+    : null;
+
+  const description =
+    activeShortages.length > 0
+      ? `${name} is currently in ${worstSeverity.toLowerCase()} shortage in ${countries.length} ${countries.length === 1 ? "country" : "countries"} including ${countryList}.${hoursAgo !== null ? ` Updated ${hoursAgo}h ago` : ""} from ${sources.size} regulatory ${sources.size === 1 ? "source" : "sources"}.`
+      : `${name} shortage status, alternatives, and supply intelligence. Monitored across 13 countries from 40+ regulatory sources.`;
+
+  const url = `${SITE_URL}/drugs/${id}`;
+  const ogImage = `${SITE_URL}/api/og/drug/${id}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: "Mederti",
+      type: "website",
+      images: [{ url: ogImage, width: 1200, height: 630, alt: `${name} shortage status` }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
+    },
+  };
+}
 
 /* ── Page Component ── */
 export default async function DrugPage({ params }: Props) {

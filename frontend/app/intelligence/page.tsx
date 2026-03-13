@@ -10,9 +10,14 @@ import {
 } from "./data";
 
 export const metadata: Metadata = {
-  title: "Mederti Intelligence — Pharmaceutical Shortage Reports & Analysis",
+  title: "Mederti Intelligence — The industry hub for pharmaceutical supply intelligence",
   description:
     "Data-driven pharmaceutical shortage reports, supply chain analysis and market intelligence from the Mederti data team. Updated weekly.",
+  openGraph: {
+    title: "Mederti Intelligence — The industry hub for pharmaceutical supply intelligence",
+    description:
+      "Data-driven pharmaceutical shortage reports, supply chain analysis and market intelligence from the Mederti data team. Updated weekly.",
+  },
 };
 
 /* ── helpers ── */

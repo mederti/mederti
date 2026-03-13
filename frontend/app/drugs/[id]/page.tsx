@@ -468,7 +468,7 @@ export default async function DrugPage({ params }: Props) {
 
   /* ── Render ── */
   return (
-    <div style={{ background: "var(--app-bg-2)", minHeight: "100vh", color: "var(--app-text)" }}>
+    <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)" }}>
       <style>{`
         @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
         @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }

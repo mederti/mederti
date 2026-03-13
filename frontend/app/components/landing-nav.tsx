@@ -5,25 +5,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
-  Home, Search, MessageSquare, Bell, Bookmark,
+  Home, Search, Bookmark,
   ChevronDown, User, LogOut,
 } from "lucide-react";
 
 /* ── Nav link sets ── */
 const APP_LINKS = [
-  { href: "/home",      label: "Home",      icon: Home },
-  { href: "/search",    label: "Search",    icon: Search },
-  { href: "/chat",      label: "AI Chat",   icon: MessageSquare },
-  { href: "/alerts",    label: "Alerts",    icon: Bell },
+  { href: "/search",    label: "Search",     icon: Search },
+  { href: "/dashboard", label: "Dashboard",  icon: Home },
   { href: "/watchlist", label: "Watchlist",  icon: Bookmark },
 ];
 
 const GUEST_LINKS = [
-  { label: "Features",  href: "#features" },
-  { label: "Pricing",   href: "/pricing" },
-  { label: "About",     href: "/about" },
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Contact",   href: "/contact" },
+  { label: "Pharmacists",          href: "/#who" },
+  { label: "Doctors",              href: "/#who" },
+  { label: "Hospitals",            href: "/#who" },
+  { label: "Government Agencies",  href: "/#who" },
 ];
 
 const COUNTRIES = [
@@ -116,7 +113,7 @@ export default function SiteNav() {
       }}>
 
         {/* ── Left: Logo ── */}
-        <Link href={loggedIn ? "/home" : "/"} style={{
+        <Link href={loggedIn ? "/dashboard" : "/"} style={{
           display: "flex", alignItems: "center",
           textDecoration: "none", flexShrink: 0,
         }}>
@@ -270,6 +267,16 @@ export default function SiteNav() {
             </div>
           ) : (
             <>
+              <Link href="/pricing" style={{
+                fontSize: 13, fontWeight: 430, color: txt,
+                textDecoration: "none", padding: "7px 10px",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = txtHi; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = txt; }}
+              >
+                Pricing
+              </Link>
               <Link href="/login" style={{
                 display: "flex", alignItems: "center",
                 padding: "7px 18px", borderRadius: 7,

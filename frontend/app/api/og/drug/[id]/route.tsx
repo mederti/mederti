@@ -42,8 +42,8 @@ export async function GET(
   const name = drug?.generic_name ?? id.replace(/-/g, " ");
   const strength = drug?.strengths?.[0] ?? "";
 
-  const countries = [...new Set(shortages.map((s: { country_code: string }) => s.country_code).filter(Boolean))];
-  const countryNames = countries.slice(0, 5).map((c: string) => COUNTRY_NAMES[c] ?? c);
+  const countries: string[] = [...new Set(shortages.map((s: { country_code: string }) => s.country_code).filter(Boolean) as string[])];
+  const countryNames = countries.slice(0, 5).map((c) => COUNTRY_NAMES[c] ?? c);
 
   const worstSeverity = shortages.reduce(
     (worst: string, s: { severity: string | null }) => {

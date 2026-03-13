@@ -121,7 +121,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const activeShortages = shortages.filter(
     (s: { status: string }) => s.status === "active" || s.status === "anticipated",
   );
-  const countries = [...new Set(activeShortages.map((s: { country_code: string }) => s.country_code).filter(Boolean))];
+  const countries: string[] = [...new Set(activeShortages.map((s: { country_code: string }) => s.country_code).filter(Boolean) as string[])];
   const worstSeverity = activeShortages.reduce(
     (worst: string, s: { severity: string | null }) => {
       const sev = s.severity?.toLowerCase() ?? "";

@@ -6,13 +6,56 @@ function normalize(name: string): string {
   return name
     .replace(/\d+(\.\d+)?\s*(mg|mcg|µg|g|ml|%|iu|units?|mmol)\b/gi, "")
     .replace(
-      /\b(tabs?|tablets?|caps?|capsules?|injection|inj|solution|soln|suspension|susp|inhaler|cream|ointment|oral|iv|im|sc|sr|mr|er|xl|pr|ec|modified.release|slow.release|extended.release)\b/gi,
+      /\b(tabs?|tablets?|caps?|capsules?|injection|inj|solution|soln|suspension|susp|inhaler|inh|cream|ointment|oral|iv|im|sc|sr|mr|er|xl|pr|ec|inf|blister|modified.release|slow.release|extended.release)\b/gi,
       ""
     )
     .replace(/[/()[\]]/g, " ")
     .replace(/\b(mg|mcg|µg|ml|g|%|iu|units?|mmol)\b/gi, "")
+    .replace(/\d+\s*(dose|pack|vial|amp|ampoule|sachet|strip)\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * EDI drug name parsing: returns an array of candidate strings to try, in order.
+ * E.g. "MAYNEPHARMA OXYCODONE IR TAB 5MG BLISTER" →
+ *   ["MAYNEPHARMA OXYCODONE IR", "OXYCODONE IR", "OXYCODONE"]
+ */
+function parseEDIDrugName(raw: string): string[] {
+  const candidates: string[] = [];
+
+  // 1. Full string normalized
+  const full = normalize(raw);
+  if (full) candidates.push(full);
+
+  // 2. Strip leading ALL-CAPS manufacturer prefix(es)
+  const withoutMfr = raw.replace(/^(?:[A-Z]{2,}\s+)+/, "").trim();
+  if (withoutMfr !== raw.trim() && withoutMfr.length > 0) {
+    const normMfr = normalize(withoutMfr);
+    if (normMfr && !candidates.includes(normMfr)) candidates.push(normMfr);
+  }
+
+  // 3. First 3 words (from manufacturer-stripped version)
+  const base = withoutMfr || raw;
+  const words = normalize(base).split(/\s+/).filter(Boolean);
+  if (words.length >= 3) {
+    const c3 = words.slice(0, 3).join(" ");
+    if (!candidates.includes(c3)) candidates.push(c3);
+  }
+
+  // 4. First 2 words
+  if (words.length >= 2) {
+    const c2 = words.slice(0, 2).join(" ");
+    if (!candidates.includes(c2)) candidates.push(c2);
+  }
+
+  // 5. First word only (often the generic name itself)
+  if (words.length >= 1) {
+    const c1 = words[0];
+    if (!candidates.includes(c1)) candidates.push(c1);
+  }
+
+  return candidates.filter((c) => c.length > 1);
 }
 
 /* ── Escape special PostgREST chars in ilike patterns ── */
@@ -57,22 +100,25 @@ export async function POST(req: NextRequest) {
   for (let i = 0; i < drugNames.length; i += BATCH_SIZE) {
     const batch = drugNames.slice(i, i + BATCH_SIZE);
 
-    // Build OR filter for drugs table (generic_name)
-    const drugOrFilter = batch
-      .map((name) => {
-        const norm = escapeIlike(normalize(name));
-        if (!norm) return null;
-        return `generic_name.ilike.%${norm}%`;
+    // Build OR filter for drugs table — include all EDI candidates
+    const allCandidates = batch.flatMap((name) => parseEDIDrugName(name));
+    const uniqueCandidates = [...new Set(allCandidates)];
+
+    const drugOrFilter = uniqueCandidates
+      .map((c) => {
+        const escaped = escapeIlike(c);
+        if (!escaped) return null;
+        return `generic_name.ilike.%${escaped}%`;
       })
       .filter(Boolean)
       .join(",");
 
-    // Build OR filter for drug_products table (product_name)
-    const productOrFilter = batch
-      .map((name) => {
-        const norm = escapeIlike(normalize(name));
-        if (!norm) return null;
-        return `product_name.ilike.%${norm}%`;
+    // Build OR filter for drug_products table
+    const productOrFilter = uniqueCandidates
+      .map((c) => {
+        const escaped = escapeIlike(c);
+        if (!escaped) return null;
+        return `product_name.ilike.%${escaped}%`;
       })
       .filter(Boolean)
       .join(",");
@@ -103,65 +149,78 @@ export async function POST(req: NextRequest) {
         ? ((productsRes.value as { data: { id: string; product_name: string; trade_name: string | null }[] | null }).data ?? [])
         : [];
 
-    // Match each name in the batch to the best drug result
+    // Match each name using progressive EDI candidate parsing
     for (const originalName of batch) {
-      const norm = normalize(originalName).toLowerCase();
-      if (!norm) {
+      const candidates = parseEDIDrugName(originalName);
+      if (candidates.length === 0) {
         results[originalName] = { drug: null, confidence: "none" };
         continue;
       }
 
-      // 1. Exact generic_name match
-      let match = drugs.find(
-        (d) => d.generic_name.toLowerCase() === norm
-      );
-      let confidence: "exact" | "fuzzy" | "none" = "exact";
+      let bestMatch: MatchedDrug | null = null;
+      let bestConfidence: "exact" | "fuzzy" | "none" = "none";
 
-      // 2. Contains match on generic_name
-      if (!match) {
-        match = drugs.find(
-          (d) =>
-            d.generic_name.toLowerCase().includes(norm) ||
-            norm.includes(d.generic_name.toLowerCase())
-        );
-        confidence = "fuzzy";
-      }
+      for (const candidate of candidates) {
+        const normLower = candidate.toLowerCase();
+        if (!normLower) continue;
 
-      // 3. Brand name match
-      if (!match) {
-        match = drugs.find((d) =>
-          (d.brand_names ?? []).some(
-            (b) =>
-              b.toLowerCase().includes(norm) ||
-              norm.includes(b.toLowerCase())
-          )
+        // 1. Exact generic_name match
+        let match = drugs.find(
+          (d) => d.generic_name.toLowerCase() === normLower
         );
-        confidence = "fuzzy";
-      }
+        let confidence: "exact" | "fuzzy" | "none" = "exact";
 
-      // 4. Product name match → look up parent drug
-      if (!match && products.length > 0) {
-        const prodMatch = products.find(
-          (p) =>
-            p.product_name.toLowerCase().includes(norm) ||
-            norm.includes(p.product_name.toLowerCase())
-        );
-        if (prodMatch) {
-          // Try to find the drug by searching generic_name with product_name
-          const { data: drugFromProd } = await supabase
-            .from("drugs")
-            .select("id, generic_name, brand_names, atc_code")
-            .ilike("generic_name", `%${escapeIlike(prodMatch.product_name.split(" ")[0])}%`)
-            .limit(1);
-          if (drugFromProd && drugFromProd.length > 0) {
-            match = drugFromProd[0];
-            confidence = "fuzzy";
+        // 2. Contains match on generic_name
+        if (!match) {
+          match = drugs.find(
+            (d) =>
+              d.generic_name.toLowerCase().includes(normLower) ||
+              normLower.includes(d.generic_name.toLowerCase())
+          );
+          confidence = "fuzzy";
+        }
+
+        // 3. Brand name match
+        if (!match) {
+          match = drugs.find((d) =>
+            (d.brand_names ?? []).some(
+              (b) =>
+                b.toLowerCase().includes(normLower) ||
+                normLower.includes(b.toLowerCase())
+            )
+          );
+          confidence = "fuzzy";
+        }
+
+        // 4. Product name match → look up parent drug
+        if (!match && products.length > 0) {
+          const prodMatch = products.find(
+            (p) =>
+              p.product_name.toLowerCase().includes(normLower) ||
+              normLower.includes(p.product_name.toLowerCase())
+          );
+          if (prodMatch) {
+            const { data: drugFromProd } = await supabase
+              .from("drugs")
+              .select("id, generic_name, brand_names, atc_code")
+              .ilike("generic_name", `%${escapeIlike(prodMatch.product_name.split(" ")[0])}%`)
+              .limit(1);
+            if (drugFromProd && drugFromProd.length > 0) {
+              match = drugFromProd[0];
+              confidence = "fuzzy";
+            }
           }
+        }
+
+        if (match) {
+          bestMatch = match;
+          bestConfidence = confidence;
+          break; // First candidate that matches wins
         }
       }
 
-      results[originalName] = match
-        ? { drug: match, confidence }
+      results[originalName] = bestMatch
+        ? { drug: bestMatch, confidence: bestConfidence }
         : { drug: null, confidence: "none" };
     }
   }

@@ -39,14 +39,6 @@ const HOW_STEPS = [
   },
 ];
 
-interface DataSource {
-  abbreviation: string;
-  country: string;
-  country_code: string;
-  name: string;
-  is_active: boolean;
-}
-
 export default async function AboutPage() {
   const sb = getSupabaseAdmin();
 
@@ -55,17 +47,14 @@ export default async function AboutPage() {
     { count: activeShortages },
     { count: totalDrugs },
     { count: totalSources },
-    { data: sourcesRaw },
     { data: countryRows },
   ] = await Promise.all([
     sb.from("shortage_events").select("*", { count: "exact", head: true }).eq("status", "active"),
     sb.from("drugs").select("*", { count: "exact", head: true }),
     sb.from("data_sources").select("*", { count: "exact", head: true }).eq("is_active", true),
-    sb.from("data_sources").select("abbreviation, country, country_code, name, is_active").eq("is_active", true).order("country_code"),
     sb.from("data_sources").select("country_code").eq("is_active", true),
   ]);
 
-  const sources: DataSource[] = sourcesRaw ?? [];
   const countries = new Set((countryRows ?? []).map((r: { country_code: string }) => r.country_code));
   const activeCount = activeShortages ?? 0;
   const drugCount = totalDrugs ?? 0;
@@ -96,7 +85,7 @@ export default async function AboutPage() {
           .about-section { padding: 60px 20px !important; }
           .about-how-grid { grid-template-columns: 1fr !important; }
           .about-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
-          .about-sources-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .about-mission-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
           .about-footer { padding: 24px 20px !important; flex-direction: column !important; gap: 12px !important; text-align: center !important; }
           .about-footer-links { justify-content: center !important; }
         }
@@ -202,35 +191,6 @@ export default async function AboutPage() {
                 <div style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.75 }}>
                   {h.body}
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* DATA SOURCES */}
-      <section className="about-section" style={{ padding: "96px 48px", borderBottom: "1px solid var(--app-border)" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 16 }}>
-            Data sources
-          </div>
-          <h2 style={{ fontSize: "clamp(22px,3vw,34px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 12, marginTop: 0 }}>
-            {sourceCount} official regulatory sources and counting.
-          </h2>
-          <p style={{ fontSize: 15, color: "var(--app-text-3)", marginBottom: 48, lineHeight: 1.65 }}>
-            Every shortage record traces back to a public government source. No scraped forum posts, no unverified reports.
-          </p>
-          <div className="about-sources-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-            {sources.map((s) => (
-              <div key={s.abbreviation + s.country_code} style={{
-                background: "var(--app-bg)", border: "1px solid var(--app-border)",
-                borderRadius: 8, padding: "16px 18px",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--teal)", letterSpacing: "0.05em" }}>{s.country_code}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>{s.abbreviation}</span>
-                </div>
-                <div style={{ fontSize: 11, color: "var(--app-text-4)", lineHeight: 1.5 }}>{s.name}</div>
               </div>
             ))}
           </div>

@@ -12,9 +12,11 @@ import { downloadSampleCSV } from "./bulk-upload-sample";
 
 interface ParsedRow {
   rowIndex: number;
-  drugName: string;
-  quantity?: number;
-  stockLevel?: string;
+  drugName: string;          // sent to API for matching
+  drugDescription: string;   // raw cell value for display
+  quantity?: number;          // qty ordered
+  backorderQty?: number;     // qty backordered
+  supplier?: string;         // vendor/supplier
 }
 
 interface ShortageInfo {
@@ -42,19 +44,28 @@ interface ResultRow extends ParsedRow {
   lookup: LookupResult;
   worstSeverity: string;
   sortRank: number;
+  hasBackorder: boolean;
 }
 
-type Phase = "parsing" | "looking-up" | "done" | "error";
+interface ColumnMap {
+  drugCol: string | null;
+  qtyOrderedCol: string | null;
+  qtyBackorderedCol: string | null;
+  supplierCol: string | null;
+  method: "ai" | "fallback";
+}
+
+type Phase = "parsing" | "detecting-columns" | "looking-up" | "done" | "error";
 
 /* ── Constants ── */
 
 const FLAGS: Record<string, string> = {
-  AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", CA: "🇨🇦", DE: "🇩🇪",
-  FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", NZ: "🇳🇿", SG: "🇸🇬",
-  EU: "🇪🇺", IE: "🇮🇪", NL: "🇳🇱", CH: "🇨🇭", NO: "🇳🇴",
-  FI: "🇫🇮", SE: "🇸🇪", DK: "🇩🇰", AT: "🇦🇹", BE: "🇧🇪",
-  CZ: "🇨🇿", HU: "🇭🇺", JP: "🇯🇵", IN: "🇮🇳", BR: "🇧🇷",
-  ZA: "🇿🇦", PL: "🇵🇱", PT: "🇵🇹", GR: "🇬🇷", MX: "🇲🇽",
+  AU: "\u{1F1E6}\u{1F1FA}", US: "\u{1F1FA}\u{1F1F8}", GB: "\u{1F1EC}\u{1F1E7}", CA: "\u{1F1E8}\u{1F1E6}", DE: "\u{1F1E9}\u{1F1EA}",
+  FR: "\u{1F1EB}\u{1F1F7}", IT: "\u{1F1EE}\u{1F1F9}", ES: "\u{1F1EA}\u{1F1F8}", NZ: "\u{1F1F3}\u{1F1FF}", SG: "\u{1F1F8}\u{1F1EC}",
+  EU: "\u{1F1EA}\u{1F1FA}", IE: "\u{1F1EE}\u{1F1EA}", NL: "\u{1F1F3}\u{1F1F1}", CH: "\u{1F1E8}\u{1F1ED}", NO: "\u{1F1F3}\u{1F1F4}",
+  FI: "\u{1F1EB}\u{1F1EE}", SE: "\u{1F1F8}\u{1F1EA}", DK: "\u{1F1E9}\u{1F1F0}", AT: "\u{1F1E6}\u{1F1F9}", BE: "\u{1F1E7}\u{1F1EA}",
+  CZ: "\u{1F1E8}\u{1F1FF}", HU: "\u{1F1ED}\u{1F1FA}", JP: "\u{1F1EF}\u{1F1F5}", IN: "\u{1F1EE}\u{1F1F3}", BR: "\u{1F1E7}\u{1F1F7}",
+  ZA: "\u{1F1FF}\u{1F1E6}", PL: "\u{1F1F5}\u{1F1F1}", PT: "\u{1F1F5}\u{1F1F9}", GR: "\u{1F1EC}\u{1F1F7}", MX: "\u{1F1F2}\u{1F1FD}",
 };
 
 const SEV: Record<string, { color: string; bg: string; border: string; label: string; rank: number }> = {
@@ -68,61 +79,9 @@ const SEV: Record<string, { color: string; bg: string; border: string; label: st
   none:     { color: "#94a3b8", bg: "#f8fafc", border: "#e2e8f0", label: "Not in database", rank: 6 },
 };
 
-const DRUG_NAME_ALIASES = [
-  "drug_name", "drugname", "drug", "medicine_name", "medicine",
-  "product_name", "productname", "product", "generic_name", "genericname",
-  "generic", "active_ingredient", "ingredient", "medication", "med",
-  "name", "item",
-];
-
-const QUANTITY_ALIASES = [
-  "quantity", "qty", "amount", "count", "units", "stock_qty",
-];
-
-const STOCK_ALIASES = [
-  "stock_level", "stock", "level", "status", "availability",
-  "current_stock", "supply",
-];
+const SKIP_PATTERNS = /^(total|subtotal|grand total|page total|sum|report total)$/i;
 
 /* ── Helpers ── */
-
-function detectColumn(headers: string[], aliases: string[]): string | null {
-  const normed = headers.map((h) =>
-    h.toLowerCase().trim().replace(/[^a-z0-9]/g, "")
-  );
-  // Exact alias match
-  for (const alias of aliases) {
-    const a = alias.replace(/[^a-z0-9]/g, "");
-    const idx = normed.indexOf(a);
-    if (idx >= 0) return headers[idx];
-  }
-  // Partial match
-  for (const alias of aliases) {
-    const a = alias.replace(/[^a-z0-9]/g, "");
-    const idx = normed.findIndex((h) => h.includes(a));
-    if (idx >= 0) return headers[idx];
-  }
-  return null;
-}
-
-function mapRows(data: Record<string, string>[]): ParsedRow[] {
-  if (data.length === 0) return [];
-  const headers = Object.keys(data[0]);
-  const drugCol = detectColumn(headers, DRUG_NAME_ALIASES);
-  const qtyCol = detectColumn(headers, QUANTITY_ALIASES);
-  const stockCol = detectColumn(headers, STOCK_ALIASES);
-
-  if (!drugCol) throw new Error("Could not detect a drug name column. Expected a column like \"Drug Name\", \"Medicine\", or \"Product\".");
-
-  return data
-    .map((row, i) => ({
-      rowIndex: i + 1,
-      drugName: (row[drugCol] ?? "").trim(),
-      quantity: qtyCol ? parseFloat(row[qtyCol]) || undefined : undefined,
-      stockLevel: stockCol ? (row[stockCol] ?? "").trim() || undefined : undefined,
-    }))
-    .filter((r) => r.drugName.length > 0);
-}
 
 function worstSev(shortages: ShortageInfo[]): string {
   if (shortages.length === 0) return "ok";
@@ -132,10 +91,34 @@ function worstSev(shortages: ShortageInfo[]): string {
   return entry ? entry[0] : "medium";
 }
 
-function sortRank(result: LookupResult): number {
+function sortRank(result: LookupResult, hasBackorder: boolean): number {
   if (!result.matchedDrug) return 100;
-  if (result.shortages.length === 0) return 50;
-  return Math.min(...result.shortages.map((s) => SEV[s.severity ?? "medium"]?.rank ?? 3));
+  if (result.shortages.length === 0 && !hasBackorder) return 50;
+  if (result.shortages.length === 0 && hasBackorder) return 40;
+  const sevRank = Math.min(...result.shortages.map((s) => SEV[s.severity ?? "medium"]?.rank ?? 3));
+  return hasBackorder ? Math.max(sevRank - 1, 0) : sevRank;
+}
+
+function mapRowsFromColumns(
+  data: Record<string, string>[],
+  colMap: ColumnMap,
+): ParsedRow[] {
+  const { drugCol, qtyOrderedCol, qtyBackorderedCol, supplierCol } = colMap;
+  if (!drugCol) throw new Error("Could not detect a drug name column. Expected a column like \"Description\", \"Drug Name\", or \"Product\".");
+
+  return data
+    .map((row, i) => {
+      const rawDrug = (row[drugCol] ?? "").trim();
+      return {
+        rowIndex: i + 1,
+        drugName: rawDrug,
+        drugDescription: rawDrug,
+        quantity: qtyOrderedCol ? parseFloat(row[qtyOrderedCol]) || undefined : undefined,
+        backorderQty: qtyBackorderedCol ? parseFloat(row[qtyBackorderedCol]) || undefined : undefined,
+        supplier: supplierCol ? (row[supplierCol] ?? "").trim() || undefined : undefined,
+      };
+    })
+    .filter((r) => r.drugName.length > 0 && !SKIP_PATTERNS.test(r.drugName));
 }
 
 /* ── Component ── */
@@ -155,9 +138,9 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
 
   const processFile = useCallback(async () => {
     try {
-      /* ── Phase 1: Parse ── */
+      /* ── Phase 1: Parse file ── */
       setPhase("parsing");
-      setProgress("Reading file…");
+      setProgress("Reading file\u2026");
 
       let rawData: Record<string, string>[];
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -182,27 +165,83 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
         throw new Error(`Unsupported file type: .${ext}. Please upload a CSV or Excel file.`);
       }
 
-      setTotalParsed(rawData.length);
+      /* ── Title row detection ── */
+      let headers = Object.keys(rawData[0] ?? {});
+      let actualData = rawData;
+
+      if (rawData.length > 1) {
+        const firstRowValues = Object.values(rawData[0] ?? {});
+        const populatedCells = firstRowValues.filter((v) => v && String(v).trim().length > 0).length;
+
+        if (populatedCells < 4) {
+          const newHeaders = Object.values(rawData[0]).map((v) => String(v).trim()).filter(Boolean);
+          if (newHeaders.length >= 3) {
+            actualData = rawData.slice(1).map((row) => {
+              const mapped: Record<string, string> = {};
+              const vals = Object.values(row);
+              newHeaders.forEach((h, i) => { mapped[h] = vals[i] ?? ""; });
+              return mapped;
+            });
+            headers = newHeaders;
+          }
+        }
+      }
+
+      setTotalParsed(actualData.length);
 
       // 500-row limit
       let wasTruncated = false;
-      if (rawData.length > 500) {
-        rawData = rawData.slice(0, 500);
+      if (actualData.length > 500) {
+        actualData = actualData.slice(0, 500);
         wasTruncated = true;
         setTruncated(true);
       }
 
-      const parsed = mapRows(rawData);
-      if (parsed.length === 0) {
-        throw new Error("No valid drug names found in the file. Check that it has a column like \"Drug Name\".");
+      setProgress(`Parsed ${actualData.length} rows${wasTruncated ? " (limited to 500)" : ""}`);
+
+      /* ── Phase 2: Detect columns ── */
+      setPhase("detecting-columns");
+      setProgress("Analyzing column layout\u2026");
+
+      const sampleRows = actualData.slice(0, 2).map((row) =>
+        headers.map((h) => row[h] ?? "")
+      );
+
+      let colMap: ColumnMap;
+      try {
+        const detectRes = await fetch("/api/detect-columns", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ headers, sampleRows }),
+        });
+        if (!detectRes.ok) throw new Error(`${detectRes.status}`);
+        colMap = await detectRes.json();
+      } catch {
+        throw new Error("Failed to analyze file columns. Please try again.");
       }
 
-      setProgress(`Parsed ${parsed.length} medicines${wasTruncated ? " (limited to 500)" : ""}`);
+      if (!colMap.drugCol) {
+        throw new Error(
+          "Could not identify a drug name column. Expected a column like \"Description\", \"Drug Name\", or \"Product\"."
+        );
+      }
 
-      /* ── Phase 2: Lookup ── */
+      setProgress(
+        colMap.method === "ai"
+          ? `AI detected columns: ${colMap.drugCol}${colMap.supplierCol ? `, ${colMap.supplierCol}` : ""}`
+          : `Detected columns: ${colMap.drugCol}${colMap.supplierCol ? `, ${colMap.supplierCol}` : ""}`
+      );
+
+      /* ── Phase 3: Map rows ── */
+      const parsed = mapRowsFromColumns(actualData, colMap);
+      if (parsed.length === 0) {
+        throw new Error("No valid drug names found in the file after filtering.");
+      }
+
+      /* ── Phase 4: Lookup ── */
       setPhase("looking-up");
       const uniqueNames = [...new Set(parsed.map((r) => r.drugName))];
-      setProgress(`Looking up ${uniqueNames.length} unique medicines…`);
+      setProgress(`Looking up ${uniqueNames.length} unique medicines\u2026`);
 
       const res = await fetch("/api/bulk-lookup", {
         method: "POST",
@@ -219,13 +258,11 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
         results: LookupResult[];
       };
 
-      // Build lookup map
       const lookupMap = new Map<string, LookupResult>();
       for (const lr of lookupResults) {
         lookupMap.set(lr.drugName, lr);
       }
 
-      // Merge parsed rows with lookup results
       const merged: ResultRow[] = parsed.map((row) => {
         const lookup = lookupMap.get(row.drugName) ?? {
           drugName: row.drugName,
@@ -233,15 +270,16 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
           matchConfidence: "none" as const,
           shortages: [],
         };
+        const hasBackorder = (row.backorderQty ?? 0) > 0;
         return {
           ...row,
           lookup,
           worstSeverity: lookup.matchedDrug ? worstSev(lookup.shortages) : "none",
-          sortRank: sortRank(lookup),
+          sortRank: sortRank(lookup, hasBackorder),
+          hasBackorder,
         };
       });
 
-      // Sort: critical first → high → active → ok → not found
       merged.sort((a, b) => a.sortRank - b.sortRank);
 
       setRows(merged);
@@ -265,7 +303,6 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
 
     const doc = new jsPDF();
 
-    // Header
     doc.setFontSize(18);
     doc.setTextColor(15, 23, 42);
     doc.text("Mederti \u2014 Drug Shortage Report", 14, 22);
@@ -274,29 +311,28 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
     doc.text(`Generated: ${new Date().toLocaleDateString("en-AU", { year: "numeric", month: "long", day: "numeric" })}`, 14, 30);
     doc.text(`Source file: ${file.name}`, 14, 36);
 
-    // Summary
-    const withShortages = rows.filter((r) => r.lookup.shortages.length > 0);
-    const critCount = rows.filter((r) =>
+    const withShortagesPDF = rows.filter((r) => r.lookup.shortages.length > 0);
+    const critCountPDF = rows.filter((r) =>
       r.lookup.shortages.some((s) => s.severity === "critical")
     ).length;
+    const boPDF = rows.filter((r) => r.hasBackorder && r.lookup.shortages.length > 0).length;
 
     doc.setFontSize(12);
     doc.setTextColor(15, 23, 42);
     doc.text(
-      `${rows.length} medicines checked \u00B7 ${withShortages.length} with active shortages \u00B7 ${critCount} critical`,
+      `${rows.length} medicines \u00B7 ${withShortagesPDF.length} with shortages \u00B7 ${critCountPDF} critical \u00B7 ${boPDF} on backorder`,
       14, 48
     );
 
-    // Table
     autoTable(doc, {
       startY: 56,
-      head: [["#", "Drug Name", "Matched Drug", "Qty", "Stock", "Shortages", "Countries", "Severity"]],
+      head: [["#", "Drug Description", "Supplier", "Qty Ord", "Qty BO", "Shortages", "Countries", "Severity"]],
       body: rows.map((r, i) => [
         String(i + 1),
-        r.drugName,
-        r.lookup.matchedDrug?.generic_name ?? "Not found",
+        r.drugDescription,
+        r.supplier ?? "-",
         r.quantity != null ? String(r.quantity) : "-",
-        r.stockLevel ?? "-",
+        r.backorderQty != null ? String(r.backorderQty) : "-",
         r.lookup.shortages.length > 0 ? `${r.lookup.shortages.length} active` : "None",
         [...new Set(r.lookup.shortages.map((s) => s.country_code).filter(Boolean))].join(", ") || "-",
         SEV[r.worstSeverity]?.label ?? "-",
@@ -306,12 +342,11 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         0: { cellWidth: 10 },
-        3: { cellWidth: 16 },
+        3: { cellWidth: 18 },
         4: { cellWidth: 18 },
       },
     });
 
-    // Footer on each page
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
@@ -333,7 +368,7 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
   const criticalCount = rows.filter((r) =>
     r.lookup.shortages.some((s) => s.severity === "critical")
   ).length;
-  const notFound = rows.filter((r) => !r.lookup.matchedDrug).length;
+  const boWithShortage = rows.filter((r) => r.hasBackorder && r.lookup.shortages.length > 0).length;
 
   /* ── Render ── */
   return (
@@ -363,7 +398,7 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
       </div>
 
       {/* Loading states */}
-      {(phase === "parsing" || phase === "looking-up") && (
+      {(phase === "parsing" || phase === "detecting-columns" || phase === "looking-up") && (
         <div style={{
           background: "#fff", border: "1px solid var(--app-border)",
           borderRadius: 12, padding: "48px 24px", textAlign: "center",
@@ -373,7 +408,9 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
             animation: "spin 1s linear infinite", margin: "0 auto 16px",
           }} />
           <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>
-            {phase === "parsing" ? "Parsing file…" : "Looking up medicines…"}
+            {phase === "parsing" ? "Parsing file\u2026"
+              : phase === "detecting-columns" ? "Analyzing column layout\u2026"
+              : "Looking up medicines\u2026"}
           </div>
           <div style={{ fontSize: 13, color: "var(--app-text-4)" }}>{progress}</div>
         </div>
@@ -415,7 +452,7 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
               { label: "Medicines checked", value: rows.length, color: "var(--app-text)" },
               { label: "With active shortages", value: withShortages, color: "var(--high)" },
               { label: "Critical", value: criticalCount, color: "var(--crit)" },
-              { label: "Not found", value: notFound, color: "var(--app-text-4)" },
+              { label: "On backorder + shortage", value: boWithShortage, color: "#f59e0b" },
             ].map((s) => (
               <div key={s.label} style={{
                 background: "#fff", border: "1px solid var(--app-border)",
@@ -450,7 +487,10 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
                   </span>{" "}
                   medicines have active shortages
                   {criticalCount > 0 && (
-                    <> · <span style={{ fontWeight: 600, color: "var(--crit)" }}>{criticalCount} critical</span></>
+                    <> &middot; <span style={{ fontWeight: 600, color: "var(--crit)" }}>{criticalCount} critical</span></>
+                  )}
+                  {boWithShortage > 0 && (
+                    <> &middot; <span style={{ fontWeight: 600, color: "#f59e0b" }}>{boWithShortage} already on backorder</span></>
                   )}
                 </>
               ) : (
@@ -507,12 +547,12 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
             {/* Table header */}
             <div className="bu-row" style={{
               display: "grid",
-              gridTemplateColumns: "36px 1fr 1fr 64px 72px 100px 90px 80px 36px",
+              gridTemplateColumns: "36px 1.5fr 0.8fr 64px 64px 100px 70px 80px 36px",
               gap: 8, padding: "10px 16px",
               borderBottom: "1px solid var(--app-border)",
               background: "var(--app-bg)",
             }}>
-              {["#", "Drug Name", "Matched Drug", "Qty", "Stock", "Status", "Countries", "Severity", ""].map((h) => (
+              {["#", "Drug Description", "Supplier", "Qty Ord", "Qty BO", "Status", "Severity", "Countries", ""].map((h) => (
                 <span key={h} style={{
                   fontSize: 10, fontWeight: 600, textTransform: "uppercase",
                   letterSpacing: "0.08em", color: "var(--app-text-4)",
@@ -527,13 +567,16 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
               const sev = SEV[r.worstSeverity] ?? SEV.ok;
               const noMatch = !r.lookup.matchedDrug;
               const countries = [...new Set(r.lookup.shortages.map((s) => s.country_code).filter(Boolean))] as string[];
+              const matchedName = r.lookup.matchedDrug?.generic_name;
+              const showMatchedName = matchedName && matchedName.toLowerCase() !== r.drugDescription.toLowerCase();
 
               return (
                 <div key={i} className="bu-row" style={{
                   display: "grid",
-                  gridTemplateColumns: "36px 1fr 1fr 64px 72px 100px 90px 80px 36px",
+                  gridTemplateColumns: "36px 1.5fr 0.8fr 64px 64px 100px 70px 80px 36px",
                   gap: 8, padding: "10px 16px", alignItems: "center",
                   borderBottom: i < rows.length - 1 ? "1px solid var(--app-bg-2)" : "none",
+                  borderLeft: r.hasBackorder ? "3px solid #f59e0b" : "3px solid transparent",
                   opacity: noMatch ? 0.6 : 1,
                 }}>
                   {/* # */}
@@ -544,38 +587,48 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
                     {i + 1}
                   </span>
 
-                  {/* Drug name from file */}
+                  {/* Drug description + matched name subtitle */}
+                  <div style={{ overflow: "hidden" }}>
+                    <div style={{
+                      fontSize: 13, fontWeight: 500, color: "var(--app-text)",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {r.drugDescription}
+                    </div>
+                    {showMatchedName && (
+                      <div style={{
+                        fontSize: 11, color: "var(--app-text-4)", marginTop: 1,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        {matchedName}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Supplier */}
                   <span style={{
-                    fontSize: 13, fontWeight: 500, color: "var(--app-text)",
+                    fontSize: 12, color: "var(--app-text-3)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
-                    {r.drugName}
+                    {r.supplier ?? "\u2014"}
                   </span>
 
-                  {/* Matched drug */}
-                  <span style={{
-                    fontSize: 13,
-                    color: noMatch ? "var(--app-text-4)" : "var(--app-text-2)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    fontStyle: noMatch ? "italic" : "normal",
-                  }}>
-                    {r.lookup.matchedDrug?.generic_name ?? "Not in database"}
-                  </span>
-
-                  {/* Qty */}
+                  {/* Qty Ordered */}
                   <span style={{
                     fontSize: 12, color: "var(--app-text-3)",
                     fontFamily: "var(--font-dm-mono), monospace",
                   }}>
-                    {r.quantity != null ? r.quantity.toLocaleString() : "—"}
+                    {r.quantity != null ? r.quantity.toLocaleString() : "\u2014"}
                   </span>
 
-                  {/* Stock */}
+                  {/* Qty Backordered */}
                   <span style={{
-                    fontSize: 12, color: "var(--app-text-3)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    fontSize: 12,
+                    color: r.hasBackorder ? "#f59e0b" : "var(--app-text-3)",
+                    fontWeight: r.hasBackorder ? 600 : 400,
+                    fontFamily: "var(--font-dm-mono), monospace",
                   }}>
-                    {r.stockLevel ?? "—"}
+                    {r.backorderQty != null ? r.backorderQty.toLocaleString() : "\u2014"}
                   </span>
 
                   {/* Status badge */}
@@ -610,27 +663,6 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
                     )}
                   </div>
 
-                  {/* Countries */}
-                  <div style={{
-                    display: "flex", gap: 2, fontSize: 13, lineHeight: 1,
-                    overflow: "hidden",
-                  }}>
-                    {countries.length > 0
-                      ? countries.slice(0, 5).map((cc) => (
-                          <span key={cc} title={cc}>{FLAGS[cc] ?? "🌐"}</span>
-                        ))
-                      : <span style={{ fontSize: 12, color: "var(--app-text-4)" }}>—</span>
-                    }
-                    {countries.length > 5 && (
-                      <span style={{
-                        fontSize: 10, color: "var(--app-text-4)",
-                        fontFamily: "var(--font-dm-mono), monospace",
-                      }}>
-                        +{countries.length - 5}
-                      </span>
-                    )}
-                  </div>
-
                   {/* Severity dot + label */}
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     {!noMatch && (
@@ -646,6 +678,27 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
                           {sev.label}
                         </span>
                       </>
+                    )}
+                  </div>
+
+                  {/* Countries */}
+                  <div style={{
+                    display: "flex", gap: 2, fontSize: 13, lineHeight: 1,
+                    overflow: "hidden",
+                  }}>
+                    {countries.length > 0
+                      ? countries.slice(0, 5).map((cc) => (
+                          <span key={cc} title={cc}>{FLAGS[cc] ?? "\u{1F310}"}</span>
+                        ))
+                      : <span style={{ fontSize: 12, color: "var(--app-text-4)" }}>{"\u2014"}</span>
+                    }
+                    {countries.length > 5 && (
+                      <span style={{
+                        fontSize: 10, color: "var(--app-text-4)",
+                        fontFamily: "var(--font-dm-mono), monospace",
+                      }}>
+                        +{countries.length - 5}
+                      </span>
                     )}
                   </div>
 
@@ -671,7 +724,7 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
             marginTop: 12, fontSize: 11, color: "var(--app-text-4)",
           }}>
             <span>
-              Data sourced from 30+ regulatory bodies · Updated in real-time
+              Data sourced from 30+ regulatory bodies &middot; Updated in real-time
             </span>
             <button onClick={downloadSampleCSV} style={{
               background: "none", border: "none", cursor: "pointer",

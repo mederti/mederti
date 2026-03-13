@@ -6,6 +6,7 @@ import Link from "next/link";
 import { WatchlistButton } from "@/app/components/watchlist-button";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
+import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -246,6 +247,44 @@ export default async function DrugPage({ params }: Props) {
   const userShortage = activeShortages.find(
     (s: { country_code: string }) => s.country_code?.toUpperCase() === userCountry
   );
+
+  /* ── Compute Supply Risk Score ── */
+  const now = Date.now();
+  const d30ms = now - 30 * 86400000;
+  const d60ms = now - 60 * 86400000;
+
+  let riskLast30 = 0;
+  let riskPrior30 = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const s of shortages as any[]) {
+    const t = new Date(s.updated_at ?? s.created_at).getTime();
+    if (t >= d30ms) riskLast30++;
+    else if (t >= d60ms) riskPrior30++;
+  }
+
+  let riskEscalations = 0;
+  let riskLogEntries = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const log of statusLog as any[]) {
+    const t = new Date(log.changed_at).getTime();
+    if (t >= d30ms) {
+      riskLogEntries++;
+      const oldS = SEV_RANK[log.old_severity] ?? 0;
+      const newS = SEV_RANK[log.new_severity] ?? 0;
+      if (newS > oldS) riskEscalations++;
+    }
+  }
+
+  const maxSevRank = SEV_RANK[worstSeverity] ?? 0;
+  const drugRisk = calculateRiskScore({
+    last30: riskLast30,
+    prior30: riskPrior30,
+    countryCount: affectedCountries.size,
+    logEntries: riskLogEntries,
+    escalations: riskEscalations,
+    maxSev: maxSevRank,
+  });
+  const riskColors = riskStyle(drugRisk.riskLevel);
 
   /* ── Build Supply Timeline ── */
   const timeline: TimelineEntry[] = [];
@@ -624,25 +663,52 @@ export default async function DrugPage({ params }: Props) {
             </div>
           </div>
 
-          {/* 3. PREDICTED SUPPLY */}
+          {/* 3. SUPPLY RISK SCORE */}
           <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
-            <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-              Predicted supply
+            <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+              Supply Risk Score
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", lineHeight: 1.1, marginBottom: 4 }}>
-              {activeShortages[0]?.estimated_resolution_date
-                ? new Date(activeShortages[0].estimated_resolution_date).toLocaleDateString("en-AU", { month: "short", year: "numeric" })
-                : activeShortages.length > 0 ? "TBC" : "In supply"}
+            {/* Score + badge row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <span style={{
+                fontFamily: "var(--font-dm-mono), monospace",
+                fontSize: 32, fontWeight: 700, letterSpacing: "-0.02em",
+                color: activeShortages.length > 0 ? riskColors.color : "var(--app-text-3)",
+                lineHeight: 1,
+              }}>
+                {activeShortages.length > 0 ? drugRisk.riskScore : "—"}
+              </span>
+              {activeShortages.length > 0 && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4,
+                  textTransform: "uppercase", letterSpacing: "0.04em",
+                  background: riskColors.bg, color: riskColors.color,
+                  border: `1px solid ${riskColors.border}`,
+                  whiteSpace: "nowrap",
+                }}>
+                  {drugRisk.riskLevel}
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 14 }}>
-              {activeShortages[0]?.start_date
-                ? `Since ${formatDate(activeShortages[0].start_date)}`
-                : activeShortages.length > 0 ? "Start date unavailable" : "No disruption"}
+            {/* Visual bar */}
+            {activeShortages.length > 0 && (
+              <div style={{
+                height: 6, borderRadius: 3, background: "#e2e8f0",
+                overflow: "hidden", marginBottom: 10,
+              }}>
+                <div style={{
+                  width: `${drugRisk.riskScore}%`, height: "100%", borderRadius: 3,
+                  background: `linear-gradient(90deg, #ca8a04 0%, ${riskColors.color} 100%)`,
+                }} />
+              </div>
+            )}
+            {/* Primary signal */}
+            <div style={{ fontSize: 12, color: "var(--app-text-3)", marginBottom: 6 }}>
+              {activeShortages.length > 0 ? drugRisk.primarySignal : "No active shortage signal"}
             </div>
-            <div style={{ height: 1, background: "var(--app-border)", marginBottom: 14 }} />
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, color: "var(--app-text-3)" }}>AI confidence</span>
-              <span style={{ fontFamily: "var(--font-dm-mono), monospace", fontSize: 16, fontWeight: 500, color: "var(--teal)" }}>—</span>
+            {/* Subtitle */}
+            <div style={{ fontSize: 11, color: "var(--app-text-4)", fontStyle: "italic" }}>
+              Based on shortage velocity, geographic spread and historical patterns
             </div>
           </div>
         </div>

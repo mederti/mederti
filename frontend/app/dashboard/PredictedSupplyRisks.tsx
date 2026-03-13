@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { Activity, TrendingUp } from "lucide-react";
+import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 
 /* ── Flags ── */
 const FLAGS: Record<string, string> = {
@@ -15,8 +16,6 @@ const FLAGS: Record<string, string> = {
   NL: "\u{1F1F3}\u{1F1F1}", JP: "\u{1F1EF}\u{1F1F5}",
 };
 
-const SEV_RANK: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
-
 /* ── Types ── */
 interface RiskItem {
   drugId: string;
@@ -26,15 +25,6 @@ interface RiskItem {
   primarySignal: string;
   countries: string[];
   trending: boolean;
-}
-
-/* ── Risk colours ── */
-function riskStyle(level: string) {
-  if (level === "HIGH RISK")
-    return { color: "#dc2626", bg: "#fef2f2", border: "#fecaca" };
-  if (level === "ELEVATED")
-    return { color: "#ea580c", bg: "#fff7ed", border: "#fed7aa" };
-  return { color: "#ca8a04", bg: "#fefce8", border: "#fef08a" };
 }
 
 /* ── Component ── */
@@ -155,58 +145,30 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
           if (newS > oldS) d.escalations++;
         }
 
-        /* ── Score each drug ── */
+        /* ── Score each drug using shared utility ── */
         const scored: RiskItem[] = [];
 
         for (const [drugId, d] of drugMap) {
-          // 1. Velocity (0-30): acceleration of updated shortage reports
-          let v = 0;
-          if (d.prior30 > 0) {
-            const accel = d.last30 - d.prior30;
-            v = accel * 4 + Math.min(d.last30, 10) * 2;
-          } else if (d.last30 > 0) {
-            v = d.last30 * 5;
-          }
-          const velocityScore = Math.max(0, Math.min(30, v));
-
-          // 2. Multi-country spread (0-25)
-          const spreadScore = Math.min(25, d.countries.size * 7);
-
-          // 3. Historical pattern (0-20): status-log transitions = supply volatility
-          const historyScore = Math.min(20, d.logEntries * 3);
-
-          // 4. Severity trajectory (0-25): escalations + current severity level
-          const trajectoryScore = Math.min(
-            25,
-            d.escalations * 8 + d.maxSev * 4
-          );
-
-          const total = velocityScore + spreadScore + historyScore + trajectoryScore;
+          const result = calculateRiskScore({
+            last30: d.last30,
+            prior30: d.prior30,
+            countryCount: d.countries.size,
+            logEntries: d.logEntries,
+            escalations: d.escalations,
+            maxSev: d.maxSev,
+          });
 
           // Exclude drugs with insufficient signal
-          if (total < 15) continue;
-
-          // Dominant signal
-          const signals = [
-            { s: velocityScore, l: "Accelerating shortage reports" },
-            { s: spreadScore, l: "Spreading across markets" },
-            { s: historyScore, l: "Recurring shortage pattern" },
-            { s: trajectoryScore, l: "Severity escalating" },
-          ];
-          signals.sort((a, b) => b.s - a.s);
-
-          const riskScore = Math.min(100, total);
-          const riskLevel: RiskItem["riskLevel"] =
-            riskScore >= 65 ? "HIGH RISK" : riskScore >= 40 ? "ELEVATED" : "WATCH";
+          if (result.riskScore < 15) continue;
 
           scored.push({
             drugId,
             drugName: d.name,
-            riskScore,
-            riskLevel,
-            primarySignal: signals[0].l,
+            riskScore: result.riskScore,
+            riskLevel: result.riskLevel,
+            primarySignal: result.primarySignal,
             countries: Array.from(d.countries).slice(0, 6),
-            trending: d.last30 > d.prior30 && d.last30 > 2,
+            trending: result.trending,
           });
         }
 

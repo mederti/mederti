@@ -1,0 +1,8 @@
+# =============================================================================
+# Mederti — Daily Content Agent Dependencies
+# =============================================================================
+# Install:  pip install -r agents/requirements.txt
+# Also requires: pip install -r backend/requirements.txt (for supabase, dotenv)
+
+# ── Claude API ──────────────────────────────────────────────────────────────
+anthropic>=0.39.0,<1.0.0

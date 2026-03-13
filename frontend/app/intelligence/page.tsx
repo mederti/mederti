@@ -58,11 +58,40 @@ function SectionDivider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/* Convert a DB row to InsightCard format */
+function dbToCard(row: {
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  author: string;
+  read_time: string | null;
+  published_at: string | null;
+  drug_name: string | null;
+}): InsightCard {
+  const d = row.published_at ? new Date(row.published_at) : new Date();
+  return {
+    slug: row.slug,
+    category: (row.category as InsightCard["category"]) ?? "article",
+    title: row.title,
+    date: d.toLocaleDateString("en-AU", { month: "long", year: "numeric" }),
+    description: row.description,
+    author: row.author,
+    readTime: row.read_time ?? undefined,
+  };
+}
+
 export default async function IntelligencePage() {
   const supabase = getSupabaseAdmin();
-  const [shortagesRes, sourcesRes] = await Promise.all([
+  const [shortagesRes, sourcesRes, dbArticlesRes] = await Promise.all([
     supabase.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("data_sources").select("id", { count: "exact", head: true }),
+    supabase
+      .from("intelligence_articles")
+      .select("slug, title, description, category, author, read_time, published_at, drug_name")
+      .eq("status", "published")
+      .order("published_at", { ascending: false })
+      .limit(10),
   ]);
   const activeShortages = shortagesRes.count ?? 0;
   const sourceCount = sourcesRes.count ?? 0;
@@ -70,51 +99,18 @@ export default async function IntelligencePage() {
     ? (Math.floor(activeShortages / 100) * 100).toLocaleString("en-US") + "+"
     : String(activeShortages);
 
-  const hero = ARTICLES[0];
-  const sideArticles = ARTICLES.slice(1);
+  /* Map DB articles to InsightCard format */
+  const dbCards = (dbArticlesRes.data ?? []).map(dbToCard);
+  const dbArticleCards = dbCards.filter((c) => c.category === "article");
+
+  /* Use DB articles for hero section if available, fall back to placeholders */
+  const heroSource = dbArticleCards.length > 0 ? dbArticleCards : ARTICLES;
+  const hero = heroSource[0];
+  const sideArticles = heroSource.slice(1, 4);
 
   return (
     <div style={{ background: "#fff", minHeight: "100vh" }}>
       <SiteNav />
-
-      {/* ─── DARK NAVY MASTHEAD ─── */}
-      <div style={{
-        background: "#0f172a",
-        padding: "52px 32px 48px",
-      }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{
-            fontSize: "clamp(28px, 4vw, 42px)",
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-            color: "#fff",
-            lineHeight: 1.1,
-          }}>
-            Mederti Intelligence
-          </div>
-          <div style={{
-            fontSize: 14, color: "rgba(255,255,255,0.45)",
-            marginTop: 14, lineHeight: 1.5,
-            maxWidth: 520,
-          }}>
-            Pharmaceutical shortage analysis, supply chain reports and market intelligence from the Mederti data team.
-          </div>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 20,
-            marginTop: 24, fontSize: 13,
-          }}>
-            <span style={{ color: "rgba(255,255,255,0.35)" }}>
-              <span style={{ color: "var(--teal)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtShortages}</span>{" "}
-              active shortages tracked
-            </span>
-            <span style={{ color: "rgba(255,255,255,0.15)" }}>|</span>
-            <span style={{ color: "rgba(255,255,255,0.35)" }}>
-              <span style={{ color: "var(--teal)", fontWeight: 600 }}>{sourceCount}+</span>{" "}
-              regulatory sources
-            </span>
-          </div>
-        </div>
-      </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
 

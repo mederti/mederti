@@ -7,13 +7,33 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   AMOXICILLIN_ARTICLE,
   RELATED_ARTICLES,
+  ARTICLES,
   CATEGORY_STYLE,
+  type Category,
+  type InsightCard,
 } from "../data";
 
-/* ── article lookup (only one article for now) ── */
+/* ── article lookup (placeholder articles) ── */
 const ALL_ARTICLES: Record<string, typeof AMOXICILLIN_ARTICLE> = {
   [AMOXICILLIN_ARTICLE.slug]: AMOXICILLIN_ARTICLE,
 };
+
+interface DBArticle {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  content_type: string;
+  body_json: { heading?: string; body: string }[];
+  author: string;
+  read_time: string | null;
+  drug_id: string | null;
+  drug_name: string | null;
+  meta_description: string | null;
+  pull_quote: string | null;
+  published_at: string | null;
+}
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -21,6 +41,23 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
+
+  /* Check DB first */
+  const supabase = getSupabaseAdmin();
+  const { data: dbRow } = await supabase
+    .from("intelligence_articles")
+    .select("title, meta_description")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .single();
+
+  if (dbRow) {
+    return {
+      title: `${dbRow.title} — Mederti Intelligence`,
+      description: dbRow.meta_description ?? undefined,
+    };
+  }
+
   const article = ALL_ARTICLES[slug];
   if (!article) return { title: "Not Found" };
   return {
@@ -31,31 +68,107 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function IntelligenceArticlePage({ params }: Props) {
   const { slug } = await params;
-  const article = ALL_ARTICLES[slug];
-  if (!article) notFound();
-
-  /* ── Live data callout — amoxicillin shortage stats ── */
   const supabase = getSupabaseAdmin();
-  const { data: shortages } = await supabase
-    .from("shortage_events")
-    .select("id, country, severity")
-    .eq("status", "active")
-    .ilike("drug_name", "%amoxicillin%");
 
-  const shortageCount = shortages?.length ?? 0;
-  const countries = [...new Set(shortages?.map((s) => s.country).filter(Boolean))];
-  const critCount = shortages?.filter((s) => s.severity === "critical").length ?? 0;
-  const highCount = shortages?.filter((s) => s.severity === "high").length ?? 0;
-
-  /* Find an amoxicillin drug record to link to */
-  const { data: drugRow } = await supabase
-    .from("drugs")
-    .select("id")
-    .ilike("generic_name", "%amoxicillin%")
-    .limit(1)
+  /* ── Try DB first, then placeholder ── */
+  const { data: dbArticle } = await supabase
+    .from("intelligence_articles")
+    .select("id, slug, title, description, category, content_type, body_json, author, read_time, drug_id, drug_name, meta_description, pull_quote, published_at")
+    .eq("slug", slug)
+    .eq("status", "published")
     .single();
 
-  const catStyle = CATEGORY_STYLE[article.category];
+  const placeholderArticle = ALL_ARTICLES[slug] ?? null;
+  if (!dbArticle && !placeholderArticle) notFound();
+
+  /* ── Normalize into rendering vars ── */
+  const isDB = !!dbArticle;
+  const articleTitle = isDB ? dbArticle.title : placeholderArticle!.title;
+  const articleAuthor = isDB ? dbArticle.author : placeholderArticle!.author;
+  const articleDate = isDB
+    ? (dbArticle.published_at ? new Date(dbArticle.published_at).toLocaleDateString("en-AU", { month: "long", year: "numeric" }) : "")
+    : placeholderArticle!.date;
+  const articleReadTime = isDB ? (dbArticle.read_time ?? "") : placeholderArticle!.readTime;
+  const articleCategory = (isDB ? dbArticle.category : placeholderArticle!.category) as Category;
+  const sections: { heading?: string; body: string }[] = isDB ? (dbArticle.body_json ?? []) : placeholderArticle!.sections;
+  const pullQuote = isDB ? dbArticle.pull_quote : placeholderArticle!.pullQuote;
+  const drugId = isDB ? dbArticle.drug_id : null;
+  const drugName = isDB ? dbArticle.drug_name : "Amoxicillin";
+
+  /* ── Live data callout — generic drug shortage stats ── */
+  let shortageCount = 0;
+  let countries: string[] = [];
+  let critCount = 0;
+  let highCount = 0;
+  let drugRowId: string | null = null;
+
+  if (drugId) {
+    /* DB article with drug_id — look up shortages for that specific drug */
+    const { data: drugRow } = await supabase
+      .from("drugs")
+      .select("id, generic_name")
+      .eq("id", drugId)
+      .single();
+
+    if (drugRow) {
+      drugRowId = drugRow.id;
+      const { data: shortages } = await supabase
+        .from("shortage_events")
+        .select("id, country, severity")
+        .eq("status", "active")
+        .eq("drug_id", drugId);
+
+      shortageCount = shortages?.length ?? 0;
+      countries = [...new Set(shortages?.map((s) => s.country).filter(Boolean))];
+      critCount = shortages?.filter((s) => s.severity === "critical").length ?? 0;
+      highCount = shortages?.filter((s) => s.severity === "high").length ?? 0;
+    }
+  } else if (!isDB) {
+    /* Placeholder amoxicillin article — use ilike search */
+    const { data: shortages } = await supabase
+      .from("shortage_events")
+      .select("id, country, severity")
+      .eq("status", "active")
+      .ilike("drug_name", "%amoxicillin%");
+
+    shortageCount = shortages?.length ?? 0;
+    countries = [...new Set(shortages?.map((s) => s.country).filter(Boolean))];
+    critCount = shortages?.filter((s) => s.severity === "critical").length ?? 0;
+    highCount = shortages?.filter((s) => s.severity === "high").length ?? 0;
+
+    const { data: drugRow } = await supabase
+      .from("drugs")
+      .select("id")
+      .ilike("generic_name", "%amoxicillin%")
+      .limit(1)
+      .single();
+    drugRowId = drugRow?.id ?? null;
+  }
+
+  /* ── Related articles: DB articles in same category, or placeholders ── */
+  let relatedCards: InsightCard[] = [];
+  if (isDB) {
+    const { data: relatedRows } = await supabase
+      .from("intelligence_articles")
+      .select("slug, title, description, category, author, read_time, published_at")
+      .eq("status", "published")
+      .eq("category", articleCategory)
+      .neq("slug", slug)
+      .order("published_at", { ascending: false })
+      .limit(3);
+    relatedCards = (relatedRows ?? []).map((r) => ({
+      slug: r.slug,
+      category: r.category as Category,
+      title: r.title,
+      date: r.published_at ? new Date(r.published_at).toLocaleDateString("en-AU", { month: "long", year: "numeric" }) : "",
+      description: r.description,
+      author: r.author,
+      readTime: r.read_time ?? undefined,
+    }));
+  }
+  if (relatedCards.length === 0) relatedCards = RELATED_ARTICLES;
+
+  const catStyle = CATEGORY_STYLE[articleCategory];
 
   return (
     <div style={{ background: "#fff", minHeight: "100vh" }}>
@@ -91,16 +204,15 @@ export default async function IntelligenceArticlePage({ params }: Props) {
             lineHeight: 1.12, letterSpacing: "-0.02em",
             color: "#0f172a", margin: "16px 0 20px",
           }}>
-            {article.title}
+            {articleTitle}
           </h1>
 
           {/* Author + date */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 14, color: "#94a3b8", marginBottom: 36 }}>
-            {article.author && <span style={{ fontWeight: 500, color: "#475569" }}>{article.author}</span>}
+            {articleAuthor && <span style={{ fontWeight: 500, color: "#475569" }}>{articleAuthor}</span>}
             <span>&middot;</span>
-            <span>{article.date}</span>
-            <span>&middot;</span>
-            <span>{article.readTime}</span>
+            <span>{articleDate}</span>
+            {articleReadTime && <><span>&middot;</span><span>{articleReadTime}</span></>}
           </div>
 
           {/* ─── Live data callout ─── */}
@@ -151,7 +263,7 @@ export default async function IntelligenceArticlePage({ params }: Props) {
           </div>
 
           {/* ─── Article body ─── */}
-          {article.sections.map((section, i) => (
+          {sections.map((section, i) => (
             <div key={i} style={{ marginBottom: 8 }}>
               {section.heading && (
                 <h2 style={{
@@ -172,7 +284,7 @@ export default async function IntelligenceArticlePage({ params }: Props) {
               </p>
 
               {/* Pull quote after section 2 */}
-              {i === 1 && article.pullQuote && (
+              {i === 1 && pullQuote && (
                 <blockquote style={{
                   margin: "44px 0",
                   padding: "0 0 0 28px",
@@ -183,7 +295,7 @@ export default async function IntelligenceArticlePage({ params }: Props) {
                     fontStyle: "italic", lineHeight: 1.55,
                     color: "#0f172a", margin: 0,
                   }}>
-                    &ldquo;{article.pullQuote}&rdquo;
+                    &ldquo;{pullQuote}&rdquo;
                   </p>
                 </blockquote>
               )}
@@ -215,15 +327,15 @@ export default async function IntelligenceArticlePage({ params }: Props) {
               }}>
                 Go to Dashboard
               </Link>
-              {drugRow?.id && (
-                <Link href={`/drugs/${drugRow.id}`} style={{
+              {drugRowId && drugName && (
+                <Link href={`/drugs/${drugRowId}`} style={{
                   display: "inline-flex", alignItems: "center",
                   padding: "11px 28px", borderRadius: 6,
                   fontSize: 14, fontWeight: 600,
                   color: "rgba(255,255,255,0.7)", textDecoration: "none",
                   border: "1px solid rgba(255,255,255,0.2)",
                 }}>
-                  View Amoxicillin &rarr;
+                  View {drugName} &rarr;
                 </Link>
               )}
             </div>
@@ -233,7 +345,7 @@ export default async function IntelligenceArticlePage({ params }: Props) {
         {/* ─── Sidebar ─── */}
         <aside className="intel-article-sidebar">
           {/* Live shortage status */}
-          {drugRow?.id && (
+          {drugRowId && shortageCount > 0 && (
             <div style={{
               borderLeft: "3px solid var(--teal)",
               padding: "20px",
@@ -247,12 +359,12 @@ export default async function IntelligenceArticlePage({ params }: Props) {
               <div style={{
                 fontSize: 16, fontWeight: 650, color: "#0f172a", marginBottom: 8,
               }}>
-                Amoxicillin
+                {drugName}
               </div>
               <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4, lineHeight: 1.5 }}>
                 {shortageCount} active shortage{shortageCount !== 1 ? "s" : ""} across {countries.length} countr{countries.length !== 1 ? "ies" : "y"}
               </div>
-              <Link href={`/drugs/${drugRow.id}`} style={{
+              <Link href={`/drugs/${drugRowId}`} style={{
                 display: "inline-block", marginTop: 12,
                 fontSize: 13, fontWeight: 600, color: "var(--teal)", textDecoration: "none",
               }}>
@@ -271,10 +383,10 @@ export default async function IntelligenceArticlePage({ params }: Props) {
             }}>
               Related
             </div>
-            {RELATED_ARTICLES.map((ra, i) => (
+            {relatedCards.map((ra, i) => (
               <div key={ra.slug} style={{
                 padding: "18px 0",
-                borderBottom: i < RELATED_ARTICLES.length - 1 ? "1px solid #e5e7eb" : "none",
+                borderBottom: i < relatedCards.length - 1 ? "1px solid #e5e7eb" : "none",
               }}>
                 <span style={{
                   fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",

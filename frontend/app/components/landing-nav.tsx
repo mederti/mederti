@@ -16,13 +16,13 @@ const APP_LINKS = [
   { href: "/watchlist", label: "Watchlist",  icon: Bookmark },
 ];
 
-const GUEST_LINKS = [
-  { label: "Pharmacists",   href: "/pharmacists" },
-  { label: "Doctors",       href: "/doctors" },
-  { label: "Hospitals",     href: "/hospitals" },
-  { label: "Governments",   href: "/government" },
-  { label: "Intelligence",  href: "/intelligence" },
-  { label: "Suppliers",     href: "/suppliers" },
+const GUEST_LINKS: { label: string; href: string; style?: "bold" | "regular" | "teal" }[] = [
+  { label: "Pharmacists",   href: "/pharmacists",  style: "bold" },
+  { label: "Doctors",       href: "/doctors",      style: "bold" },
+  { label: "Hospitals",     href: "/hospitals",     style: "bold" },
+  { label: "Governments",   href: "/government",   style: "bold" },
+  { label: "Suppliers",     href: "/suppliers",     style: "regular" },
+  { label: "Intelligence",  href: "/intelligence",  style: "teal" },
 ];
 
 const COUNTRIES = [
@@ -143,27 +143,34 @@ export default function SiteNav() {
               );
             })
           ) : (
-            GUEST_LINKS.map(({ label, href }) => (
-              <Link key={label} href={href} style={{
-                display: "flex", alignItems: "center", gap: 4,
-                padding: "7px 14px", borderRadius: 6,
-                fontSize: 14, fontWeight: 430,
-                color: txt,
-                textDecoration: "none",
-                transition: "color 0.15s, background 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = txtHi;
-                e.currentTarget.style.background = hoverBg;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = txt;
-                e.currentTarget.style.background = "transparent";
-              }}
-              >
-                {label}
-              </Link>
-            ))
+            GUEST_LINKS.map(({ label, href, style: linkStyle }) => {
+              const isTeal = linkStyle === "teal";
+              const isBold = linkStyle === "bold";
+              const baseColor = isTeal ? "var(--teal)" : txt;
+              const hoverColor = isTeal ? "var(--teal)" : txtHi;
+              return (
+                <Link key={label} href={href} style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "7px 14px", borderRadius: 6,
+                  fontSize: 14,
+                  fontWeight: isBold || isTeal ? 600 : 400,
+                  color: baseColor,
+                  textDecoration: "none",
+                  transition: "color 0.15s, background 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = hoverColor;
+                  e.currentTarget.style.background = hoverBg;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = baseColor;
+                  e.currentTarget.style.background = "transparent";
+                }}
+                >
+                  {label}
+                </Link>
+              );
+            })
           )}
         </div>
 

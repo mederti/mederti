@@ -5,12 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
-  Home, Search, Bookmark,
+  Home, Search, Bookmark, TrendingUp,
   ChevronDown, User, LogOut,
 } from "lucide-react";
+import { useUserProfile } from "@/lib/hooks/use-user-profile";
 
 /* ── Nav link sets ── */
-const APP_LINKS = [
+const BASE_APP_LINKS = [
   { href: "/search",    label: "Search",     icon: Search },
   { href: "/dashboard", label: "Dashboard",  icon: Home },
   { href: "/watchlist", label: "Watchlist",  icon: Bookmark },
@@ -41,6 +42,7 @@ const ICON = { width: 15, height: 15, strokeWidth: 1.5 } as const;
 export default function SiteNav() {
   const pathname = usePathname();
   const supabase = createBrowserClient();
+  const { isSupplier } = useUserProfile();
   const [email, setEmail]             = useState<string | null>(null);
   const [initials, setInitials]       = useState("?");
   const [country, setCountry]         = useState(() => {
@@ -87,6 +89,11 @@ export default function SiteNav() {
 
   const loggedIn = email !== null;
 
+  const appLinks = [
+    ...BASE_APP_LINKS,
+    ...(isSupplier ? [{ href: "/supplier-dashboard", label: "Opportunities", icon: TrendingUp }] : []),
+  ];
+
   /* ── Header colors (light) ── */
   const bg       = "#fff";
   const border   = "1px solid var(--app-border)";
@@ -125,7 +132,7 @@ export default function SiteNav() {
         {/* ── Center: Nav links ── */}
         <div className="site-nav-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
           {loggedIn ? (
-            APP_LINKS.map(({ href, label, icon: Icon }) => {
+            appLinks.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== "/home" && pathname?.startsWith(href));
               return (
                 <Link key={href} href={href} style={{

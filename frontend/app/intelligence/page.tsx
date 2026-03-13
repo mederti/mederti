@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import MarketSidebar from "./MarketSidebar";
 import {
   REPORTS, ARTICLES, DATA_RELEASES, MEDIA,
   CATEGORY_STYLE,
@@ -118,6 +119,13 @@ export default async function IntelligencePage() {
       <SiteNav />
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
+
+        {/* ─── TWO-COLUMN: main (70%) + market sidebar (30%) ─── */}
+        <div className="intel-two-col" style={{
+          display: "flex", gap: 48, paddingTop: 0,
+        }}>
+          {/* Main content column */}
+          <div className="intel-main-col" style={{ flex: "1 1 0%", minWidth: 0 }}>
 
         {/* ─── HERO: lead article + sidebar stack ─── */}
         <section className="intel-hero" style={{
@@ -323,6 +331,17 @@ export default async function IntelligencePage() {
             ))}
           </div>
         </section>
+
+          </div>{/* end .intel-main-col */}
+
+          {/* Market data sidebar (30%) */}
+          <div className="intel-sidebar-col" style={{ width: 300, flexShrink: 0 }}>
+            <div style={{ paddingTop: 48 }}>
+              <MarketSidebar />
+            </div>
+          </div>
+
+        </div>{/* end .intel-two-col */}
       </div>
 
       {/* ─── NEWSLETTER FOOTER ─── */}
@@ -389,6 +408,16 @@ export default async function IntelligencePage() {
       <SiteFooter />
 
       <style>{`
+        @media (max-width: 1024px) {
+          .intel-two-col { flex-direction: column !important; }
+          .intel-sidebar-col {
+            width: 100% !important;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 32px !important;
+          }
+          .intel-sidebar-col > div { padding-top: 0 !important; }
+          .market-sidebar { position: static !important; }
+        }
         @media (max-width: 860px) {
           .intel-hero { grid-template-columns: 1fr !important; }
         }

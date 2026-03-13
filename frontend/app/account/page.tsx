@@ -8,6 +8,14 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import SiteFooter from "@/app/components/site-footer";
 
+const ROLE_OPTIONS = [
+  { value: "default",     label: "Default" },
+  { value: "pharmacist",  label: "Pharmacist" },
+  { value: "hospital",    label: "Hospital" },
+  { value: "supplier",    label: "Supplier" },
+  { value: "government",  label: "Government" },
+] as const;
+
 interface WatchlistRow {
   id: string;
   drug_id: string;
@@ -56,12 +64,20 @@ export default function AccountPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState<"watchlist" | "settings">("watchlist");
+  const [role, setRole] = useState<string>("default");
+  const [roleSaving, setRoleSaving] = useState(false);
+  const [roleSaved, setRoleSaved] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
-      if (session?.user) fetchWatchlist(session.user.id);
+      if (session?.user) {
+        fetchWatchlist(session.user.id);
+        // Fetch user profile for role
+        supabase.from("user_profiles").select("role").eq("user_id", session.user.id).single()
+          .then(({ data }) => { if (data?.role) setRole(data.role); });
+      }
     });
   }, []);
 
@@ -94,6 +110,20 @@ export default function AccountPage() {
     setSigningOut(true);
     await supabase.auth.signOut();
     router.push("/");
+  }
+
+  async function saveRole(newRole: string) {
+    if (!user) return;
+    setRoleSaving(true);
+    setRoleSaved(false);
+    await supabase.from("user_profiles").upsert(
+      { user_id: user.id, role: newRole },
+      { onConflict: "user_id" },
+    );
+    setRole(newRole);
+    setRoleSaving(false);
+    setRoleSaved(true);
+    setTimeout(() => setRoleSaved(false), 2000);
   }
 
   const inputStyle = {
@@ -300,6 +330,45 @@ export default function AccountPage() {
                     <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 8 }}>
                       To change your email, contact <a href="mailto:hello@mederti.com" style={{ color: "var(--teal)" }}>hello@mederti.com</a>
                     </div>
+                  </div>
+
+                  {/* Role selector */}
+                  <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>Role</div>
+                    <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 16 }}>
+                      Your role determines which features and dashboards you can access.
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {ROLE_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => saveRole(opt.value)}
+                          disabled={roleSaving}
+                          style={{
+                            padding: "8px 16px", borderRadius: 7,
+                            fontSize: 13, fontWeight: role === opt.value ? 600 : 400,
+                            background: role === opt.value ? "var(--teal-bg)" : "#fff",
+                            color: role === opt.value ? "var(--teal)" : "var(--app-text-3)",
+                            border: `1px solid ${role === opt.value ? "var(--teal)" : "var(--app-border)"}`,
+                            cursor: roleSaving ? "wait" : "pointer",
+                            fontFamily: "var(--font-inter), sans-serif",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {roleSaved && (
+                      <div style={{ fontSize: 12, color: "var(--teal)", marginTop: 10, fontWeight: 500 }}>
+                        Role updated successfully.
+                      </div>
+                    )}
+                    {role === "supplier" && (
+                      <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 10 }}>
+                        You now have access to the <Link href="/supplier-dashboard" style={{ color: "var(--teal)", fontWeight: 500 }}>Supplier Dashboard</Link>.
+                      </div>
+                    )}
                   </div>
 
                   {/* Alert preferences */}

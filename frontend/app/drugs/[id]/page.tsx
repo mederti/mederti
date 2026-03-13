@@ -607,9 +607,12 @@ export default async function DrugPage({ params }: Props) {
               ? sevColor((userShortage as { severity?: string }).severity ?? "medium")
               : { color: "var(--low)", bg: "var(--low-bg)", border: "var(--low-b)" };
             const mySev = userShortage ? ((userShortage as { severity?: string }).severity ?? "active") : null;
+            const mySevIsCritical = mySev?.toLowerCase() === "critical";
             return (
               <div style={{
-                background: myTheme.bg, border: `1px solid ${myTheme.border}`,
+                background: mySevIsCritical ? myTheme.bg : "#fff",
+                border: `1px solid ${mySevIsCritical ? myTheme.border : "var(--app-border)"}`,
+                borderLeft: `4px solid ${myTheme.color}`,
                 borderRadius: 12, padding: "22px 24px",
               }}>
                 <div style={{
@@ -633,7 +636,9 @@ export default async function DrugPage({ params }: Props) {
 
           {/* 2. GLOBAL STATUS */}
           <div style={{
-            background: statusTheme.bg, border: `1px solid ${statusTheme.border}`,
+            background: isCritical ? statusTheme.bg : "#fff",
+            border: `1px solid ${isCritical ? statusTheme.border : "var(--app-border)"}`,
+            borderLeft: `4px solid ${statusTheme.color}`,
             borderRadius: 12, padding: "22px 24px",
           }}>
             <div style={{
@@ -727,7 +732,7 @@ export default async function DrugPage({ params }: Props) {
         </div>
 
         {/* ═══ MAIN TWO-COL LAYOUT ═══ */}
-        <div className="drug-two-col" style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
+        <div className="drug-two-col" style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 24, alignItems: "start" }}>
 
           {/* ── LEFT COLUMN ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -794,31 +799,29 @@ export default async function DrugPage({ params }: Props) {
               </div>
             </div>
 
-            {/* AI INSIGHT */}
-            <div style={{ background: "var(--app-bg)", border: "1px solid var(--ind-b)", borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {/* AI INSIGHT — borderless section */}
+            <div style={{ padding: "4px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>AI Insight</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--indigo)", fontWeight: 500 }}>
                   ✦ AI-generated
                 </div>
               </div>
-              <div style={{ padding: "18px 20px" }}>
-                <p style={{ fontSize: 14, lineHeight: 1.75, color: "var(--app-text-2)", marginBottom: 14 }}>
-                  {activeShortages.length > 0
-                    ? `This drug is currently under active shortage in ${affectedCountries.size} countr${affectedCountries.size !== 1 ? "ies" : "y"}. Supply disruptions of this type typically persist for 3–9 months based on historical patterns. Consider therapeutic alternatives where clinically appropriate.`
-                    : `No active shortages are currently reported for ${drug.generic_name}. Monitor regularly as supply conditions can change rapidly.`}
-                </p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-                  {["When will stock return?", "Which alternatives are safe?", "Is my country affected?", "Historical shortage pattern"].map((q) => (
-                    <button key={q} style={{
-                      fontSize: 12, padding: "6px 12px", borderRadius: 6,
-                      background: "var(--ind-bg)", color: "var(--indigo)", border: "1px solid var(--ind-b)",
-                      cursor: "pointer", fontFamily: "var(--font-inter), sans-serif",
-                    }}>
-                      {q}
-                    </button>
-                  ))}
-                </div>
+              <p style={{ fontSize: 14, lineHeight: 1.75, color: "var(--app-text-2)", marginBottom: 14 }}>
+                {activeShortages.length > 0
+                  ? `This drug is currently under active shortage in ${affectedCountries.size} countr${affectedCountries.size !== 1 ? "ies" : "y"}. Supply disruptions of this type typically persist for 3–9 months based on historical patterns. Consider therapeutic alternatives where clinically appropriate.`
+                  : `No active shortages are currently reported for ${drug.generic_name}. Monitor regularly as supply conditions can change rapidly.`}
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {["When will stock return?", "Which alternatives are safe?", "Is my country affected?", "Historical shortage pattern"].map((q) => (
+                  <button key={q} style={{
+                    fontSize: 12, padding: "6px 12px", borderRadius: 6,
+                    background: "var(--ind-bg)", color: "var(--indigo)", border: "1px solid var(--ind-b)",
+                    cursor: "pointer", fontFamily: "var(--font-inter), sans-serif",
+                  }}>
+                    {q}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -1029,9 +1032,9 @@ export default async function DrugPage({ params }: Props) {
           {/* ── RIGHT COLUMN (sticky) ── */}
           <div className="drug-right-col" style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 76 }}>
 
-            {/* ALTERNATIVES */}
-            <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {/* ALTERNATIVES — no outer wrapper, cards sit directly */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
                   What can I use instead?
                 </span>
@@ -1039,57 +1042,55 @@ export default async function DrugPage({ params }: Props) {
                   {alternatives.length} alternative{alternatives.length !== 1 ? "s" : ""}
                 </span>
               </div>
-              <div style={{ padding: "18px 20px" }}>
-                {alternatives.length === 0 ? (
-                  <p style={{ fontSize: 14, color: "var(--app-text-3)" }}>No alternatives on file.</p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {alternatives.map((alt: any) => (
-                      <Link
-                        key={alt.alternative_drug_id}
-                        href={`/drugs/${alt.alternative_drug_id}`}
-                        style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "14px 18px",
-                          background: "var(--app-bg-2)", border: "1px solid var(--app-border)",
-                          borderRadius: 10, textDecoration: "none",
-                          transition: "border-color 0.15s, background 0.15s",
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text)", marginBottom: 2 }}>
-                            {alt.drugs?.generic_name ?? "Unknown"}
-                          </div>
-                          <div style={{ fontSize: 12, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                            {alt.relationship_type?.replace(/_/g, " ")}
-                          </div>
-                          {alt.dose_conversion_notes && (
-                            <div style={{ fontSize: 11, color: "var(--app-text-3)", marginTop: 4 }}>
-                              {alt.dose_conversion_notes}
-                            </div>
-                          )}
+              {alternatives.length === 0 ? (
+                <p style={{ fontSize: 14, color: "var(--app-text-3)" }}>No alternatives on file.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {alternatives.map((alt: any) => (
+                    <Link
+                      key={alt.alternative_drug_id}
+                      href={`/drugs/${alt.alternative_drug_id}`}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "14px 18px",
+                        background: "#fff", border: "1px solid var(--app-border)",
+                        borderRadius: 10, textDecoration: "none",
+                        transition: "border-color 0.15s, background 0.15s",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text)", marginBottom: 2 }}>
+                          {alt.drugs?.generic_name ?? "Unknown"}
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
-                          {alt.clinical_evidence_level && (
-                            <span style={{
-                              fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 4,
-                              background: "var(--low-bg)", color: "var(--low)", border: "1px solid var(--low-b)",
-                            }}>
-                              {alt.clinical_evidence_level}
-                            </span>
-                          )}
-                          {alt.similarity_score != null && (
-                            <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                              {Math.round(alt.similarity_score * 100)}% match
-                            </span>
-                          )}
+                        <div style={{ fontSize: 12, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
+                          {alt.relationship_type?.replace(/_/g, " ")}
                         </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
+                        {alt.dose_conversion_notes && (
+                          <div style={{ fontSize: 11, color: "var(--app-text-3)", marginTop: 4 }}>
+                            {alt.dose_conversion_notes}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
+                        {alt.clinical_evidence_level && (
+                          <span style={{
+                            fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 4,
+                            background: "var(--low-bg)", color: "var(--low)", border: "1px solid var(--low-b)",
+                          }}>
+                            {alt.clinical_evidence_level}
+                          </span>
+                        )}
+                        {alt.similarity_score != null && (
+                          <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
+                            {Math.round(alt.similarity_score * 100)}% match
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* ANALYST PROMO */}

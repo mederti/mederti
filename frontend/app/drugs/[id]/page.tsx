@@ -559,9 +559,40 @@ export default async function DrugPage({ params }: Props) {
 
       <div className="drug-page" style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 32px 64px" }}>
 
-        {/* ═══ ANSWER ROW — Status + ETA ═══ */}
-        <div className="drug-answer-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-          {/* Status card */}
+        {/* ═══ ANSWER ROW — 3 panels ═══ */}
+        <div className="drug-answer-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
+
+          {/* 1. MY COUNTRY */}
+          {(() => {
+            const myTheme = userShortage
+              ? sevColor((userShortage as { severity?: string }).severity ?? "medium")
+              : { color: "var(--low)", bg: "var(--low-bg)", border: "var(--low-b)" };
+            const mySev = userShortage ? ((userShortage as { severity?: string }).severity ?? "active") : null;
+            return (
+              <div style={{
+                background: myTheme.bg, border: `1px solid ${myTheme.border}`,
+                borderRadius: 12, padding: "22px 24px",
+              }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em",
+                  color: myTheme.color, marginBottom: 8, display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>{FLAGS[userCountry] ?? "🌐"}</span>
+                  {userCountryName[userCountry] ?? userCountry}
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 4 }}>
+                  {mySev ? (mySev.charAt(0).toUpperCase() + mySev.slice(1)) + " shortage" : "In supply"}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--app-text-3)" }}>
+                  {userShortage
+                    ? ((userShortage as { reason?: string }).reason?.replace(/^availability:\s*/i, "") ?? "Supply disruption")
+                    : "No shortage reported"}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 2. GLOBAL STATUS */}
           <div style={{
             background: statusTheme.bg, border: `1px solid ${statusTheme.border}`,
             borderRadius: 12, padding: "22px 24px",
@@ -575,7 +606,7 @@ export default async function DrugPage({ params }: Props) {
                 ? (affectedCountries.size === 1
                   ? `Shortage in ${activeShortages[0]?.country ?? "1 country"}`
                   : `Shortage in ${affectedCountries.size} countries`)
-                : "Available"}
+                : "Global status"}
             </div>
             <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 4 }}>
               {activeShortages.length > 0
@@ -593,24 +624,24 @@ export default async function DrugPage({ params }: Props) {
             </div>
           </div>
 
-          {/* ETA card */}
+          {/* 3. PREDICTED SUPPLY */}
           <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
-            <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-              When will it be back?
+            <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+              Predicted supply
             </div>
             <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", lineHeight: 1.1, marginBottom: 4 }}>
               {activeShortages[0]?.estimated_resolution_date
                 ? new Date(activeShortages[0].estimated_resolution_date).toLocaleDateString("en-AU", { month: "short", year: "numeric" })
                 : activeShortages.length > 0 ? "TBC" : "In supply"}
             </div>
-            <div style={{ fontSize: 11, color: "var(--app-text-3)", fontFamily: "var(--font-dm-mono), monospace", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 14 }}>
               {activeShortages[0]?.start_date
-                ? `Started: ${formatDate(activeShortages[0].start_date)}`
-                : "Start date unavailable"}
+                ? `Since ${formatDate(activeShortages[0].start_date)}`
+                : activeShortages.length > 0 ? "Start date unavailable" : "No disruption"}
             </div>
             <div style={{ height: 1, background: "var(--app-border)", marginBottom: 14 }} />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, color: "var(--app-text-3)" }}>AI prediction confidence</span>
+              <span style={{ fontSize: 12, color: "var(--app-text-3)" }}>AI confidence</span>
               <span style={{ fontFamily: "var(--font-dm-mono), monospace", fontSize: 16, fontWeight: 500, color: "var(--teal)" }}>—</span>
             </div>
           </div>

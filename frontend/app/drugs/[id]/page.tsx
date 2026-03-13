@@ -663,38 +663,55 @@ export default async function DrugPage({ params }: Props) {
             </div>
           </div>
 
-          {/* 3. SUPPLY RISK SCORE */}
+          {/* 3. PREDICTED SUPPLY + RISK SCORE */}
           <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
-            <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
-              Supply Risk Score
+            <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+              Predicted supply
             </div>
-            {/* Score + badge row */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              <span style={{
-                fontFamily: "var(--font-dm-mono), monospace",
-                fontSize: 32, fontWeight: 700, letterSpacing: "-0.02em",
-                color: activeShortages.length > 0 ? riskColors.color : "var(--app-text-3)",
-                lineHeight: 1,
-              }}>
-                {activeShortages.length > 0 ? drugRisk.riskScore : "—"}
+            {/* Estimated availability date */}
+            <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", lineHeight: 1.1, marginBottom: 4 }}>
+              {activeShortages[0]?.estimated_resolution_date
+                ? new Date(activeShortages[0].estimated_resolution_date).toLocaleDateString("en-AU", { month: "short", year: "numeric" })
+                : activeShortages.length > 0 ? "TBC" : "In supply"}
+            </div>
+            <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 14 }}>
+              {activeShortages[0]?.start_date
+                ? `Since ${formatDate(activeShortages[0].start_date)}`
+                : activeShortages.length > 0 ? "Start date unavailable" : "No disruption"}
+            </div>
+            {/* Divider */}
+            <div style={{ height: 1, background: "var(--app-border)", marginBottom: 12 }} />
+            {/* Risk score row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Supply Risk Score
               </span>
-              {activeShortages.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {activeShortages.length > 0 && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                    textTransform: "uppercase", letterSpacing: "0.04em",
+                    background: riskColors.bg, color: riskColors.color,
+                    border: `1px solid ${riskColors.border}`,
+                    whiteSpace: "nowrap",
+                  }}>
+                    {drugRisk.riskLevel}
+                  </span>
+                )}
                 <span style={{
-                  fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4,
-                  textTransform: "uppercase", letterSpacing: "0.04em",
-                  background: riskColors.bg, color: riskColors.color,
-                  border: `1px solid ${riskColors.border}`,
-                  whiteSpace: "nowrap",
+                  fontFamily: "var(--font-dm-mono), monospace",
+                  fontSize: 18, fontWeight: 700,
+                  color: activeShortages.length > 0 ? riskColors.color : "var(--app-text-3)",
                 }}>
-                  {drugRisk.riskLevel}
+                  {activeShortages.length > 0 ? drugRisk.riskScore : "—"}
                 </span>
-              )}
+              </div>
             </div>
             {/* Visual bar */}
             {activeShortages.length > 0 && (
               <div style={{
-                height: 6, borderRadius: 3, background: "#e2e8f0",
-                overflow: "hidden", marginBottom: 10,
+                height: 5, borderRadius: 3, background: "#e2e8f0",
+                overflow: "hidden", marginBottom: 6,
               }}>
                 <div style={{
                   width: `${drugRisk.riskScore}%`, height: "100%", borderRadius: 3,
@@ -703,12 +720,8 @@ export default async function DrugPage({ params }: Props) {
               </div>
             )}
             {/* Primary signal */}
-            <div style={{ fontSize: 12, color: "var(--app-text-3)", marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>
               {activeShortages.length > 0 ? drugRisk.primarySignal : "No active shortage signal"}
-            </div>
-            {/* Subtitle */}
-            <div style={{ fontSize: 11, color: "var(--app-text-4)", fontStyle: "italic" }}>
-              Based on shortage velocity, geographic spread and historical patterns
             </div>
           </div>
         </div>

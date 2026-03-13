@@ -276,16 +276,6 @@ export default function SiteNav() {
             </div>
           ) : (
             <>
-              <Link href="/pricing" style={{
-                fontSize: 13, fontWeight: 430, color: txt,
-                textDecoration: "none", padding: "7px 10px",
-                transition: "color 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = txtHi; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = txt; }}
-              >
-                Pricing
-              </Link>
               <Link href="/login" style={{
                 display: "flex", alignItems: "center",
                 padding: "7px 18px", borderRadius: 7,

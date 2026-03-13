@@ -666,7 +666,7 @@ export default async function DrugPage({ params }: Props) {
           </div>
 
           {/* 3. PREDICTED SUPPLY + RISK SCORE */}
-          <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
+          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "22px 24px" }}>
             <div style={{ fontSize: 11, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
               Predicted supply
             </div>
@@ -735,14 +735,14 @@ export default async function DrugPage({ params }: Props) {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
             {/* WHERE IS IT AVAILABLE? */}
-            <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Shortage reports by country</span>
                 <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
                   {countries.length} countr{countries.length !== 1 ? "ies" : "y"} affected
                 </span>
               </div>
-              <div style={{ padding: "18px 20px" }}>
+              <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden", padding: "18px 20px" }}>
                 <div style={{ display: "flex", flexDirection: "column" }}>
                   {/* User's country — always shown first */}
                   {!userCountryInList && (

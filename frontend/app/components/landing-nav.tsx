@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
   Home, Search, Bookmark, TrendingUp,
   ChevronDown, User, LogOut,
 } from "lucide-react";
 import { useUserProfile } from "@/lib/hooks/use-user-profile";
+import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
+import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
 
 /* ── Nav link sets ── */
 const BASE_APP_LINKS = [
@@ -41,6 +43,7 @@ const ICON = { width: 15, height: 15, strokeWidth: 1.5 } as const;
 
 export default function SiteNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const supabase = createBrowserClient();
   const { isSupplier } = useUserProfile();
   const [email, setEmail]             = useState<string | null>(null);
@@ -57,9 +60,47 @@ export default function SiteNav() {
   });
   const [showCountry, setShowCountry] = useState(false);
   const [showUser, setShowUser]       = useState(false);
+  const [searchOpen, setSearchOpen]   = useState(false);
 
   const countryRef = useRef<HTMLDivElement>(null);
   const userRef    = useRef<HTMLDivElement>(null);
+  const searchRef  = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /* ── Global search autocomplete ── */
+  const ac = useAutocomplete({
+    minChars: 2,
+    debounceMs: 200,
+    limit: 8,
+    enabled: searchOpen,
+    onSelect: (item) => {
+      ac.clear();
+      setSearchOpen(false);
+      router.push(item.href);
+    },
+    onSubmit: (q) => {
+      ac.setIsOpen(false);
+      setSearchOpen(false);
+      router.push(`/search?q=${encodeURIComponent(q)}`);
+    },
+  });
+
+  // Hide nav search on pages that already have a search bar
+  const hideNavSearch = pathname === "/" || pathname === "/home" || pathname === "/search";
+
+  /* ── Auto-focus search input when expanded ── */
+  useEffect(() => {
+    if (searchOpen) {
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+    } else {
+      ac.clear();
+    }
+  }, [searchOpen]);
+
+  /* ── Close search when navigating to a page with its own search ── */
+  useEffect(() => {
+    if (hideNavSearch && searchOpen) setSearchOpen(false);
+  }, [hideNavSearch]);
 
   // Auth check
   useEffect(() => {
@@ -77,6 +118,7 @@ export default function SiteNav() {
     function handle(e: MouseEvent) {
       if (countryRef.current && !countryRef.current.contains(e.target as Node)) setShowCountry(false);
       if (userRef.current && !userRef.current.contains(e.target as Node)) setShowUser(false);
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setSearchOpen(false);
     }
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
@@ -116,6 +158,7 @@ export default function SiteNav() {
       transition: "background 0.2s, border-color 0.2s",
     }}>
       <div style={{
+        position: "relative",
         maxWidth: 1200, margin: "0 auto", height: "100%",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 32px",
@@ -129,8 +172,8 @@ export default function SiteNav() {
           <img src={logo} alt="Mederti" style={{ height: 28, transition: "opacity 0.2s" }} />
         </Link>
 
-        {/* ── Center: Nav links ── */}
-        <div className="site-nav-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        {/* ── Center: Nav links (hidden when search overlay is open) ── */}
+        <div className="site-nav-links" style={{ display: searchOpen ? "none" : "flex", alignItems: "center", gap: 2 }}>
           {loggedIn ? (
             appLinks.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== "/home" && pathname?.startsWith(href));
@@ -181,8 +224,112 @@ export default function SiteNav() {
           )}
         </div>
 
+        {/* ── Expanded search overlay (positioned over nav links area) ── */}
+        {searchOpen && (
+          <div
+            ref={searchRef}
+            className="nav-search-overlay"
+            style={{
+              position: "absolute", left: 80, right: 120,
+              top: "50%", transform: "translateY(-50%)",
+              display: "flex", alignItems: "center",
+              zIndex: 150,
+              animation: "navSearchFadeIn 0.15s ease-out",
+            }}
+          >
+            <div ref={ac.containerRef} style={{ position: "relative", flex: 1 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                background: "var(--app-bg)", border: "1px solid var(--app-border)",
+                borderRadius: 10, padding: "8px 14px",
+                transition: "border-color 0.15s",
+              }}>
+                <Search width={15} height={15} strokeWidth={1.5} color={txtDim} style={{ flexShrink: 0 }} />
+                <input
+                  ref={searchInputRef}
+                  {...ac.inputProps}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape" && !ac.isOpen) {
+                      setSearchOpen(false);
+                      return;
+                    }
+                    ac.inputProps.onKeyDown(e);
+                  }}
+                  placeholder="Search drugs..."
+                  style={{
+                    flex: 1, border: "none", outline: "none", background: "transparent",
+                    fontSize: 14, color: "var(--app-text)",
+                    fontFamily: "var(--font-inter), system-ui, sans-serif",
+                  }}
+                />
+                {ac.query && (
+                  <button
+                    onClick={() => ac.clear()}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 20, height: 20, borderRadius: "50%",
+                      background: "var(--app-bg-2)", border: "none",
+                      cursor: "pointer", fontSize: 11, color: txtDim, flexShrink: 0,
+                      lineHeight: 1,
+                    }}
+                    aria-label="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {ac.isOpen && (
+                <AutocompleteDropdown
+                  items={ac.items}
+                  cursor={ac.cursor}
+                  loading={ac.loading}
+                  query={ac.query}
+                  listId={ac.inputProps["aria-controls"]}
+                  onSelect={(item) => {
+                    ac.clear();
+                    setSearchOpen(false);
+                    router.push(item.href);
+                  }}
+                  onHover={() => {}}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Right: controls ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+
+          {/* Search icon (hidden on pages with their own search bar) */}
+          {!hideNavSearch && (
+            <button
+              onClick={() => {
+                setSearchOpen(v => !v);
+                setShowCountry(false);
+                setShowUser(false);
+              }}
+              style={{
+                display: searchOpen ? "none" : "flex",
+                alignItems: "center", justifyContent: "center",
+                width: 32, height: 32, borderRadius: "50%",
+                background: "transparent", border: "none",
+                cursor: "pointer", color: txtDim,
+                transition: "color 0.15s, background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = txtHi;
+                e.currentTarget.style.background = hoverBg;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = txtDim;
+                e.currentTarget.style.background = "transparent";
+              }}
+              aria-label="Search drugs"
+            >
+              <Search width={17} height={17} strokeWidth={1.8} />
+            </button>
+          )}
 
           {/* Country selector */}
           <div ref={countryRef} style={{ position: "relative" }}>
@@ -323,9 +470,14 @@ export default function SiteNav() {
       </div>
 
       <style>{`
+        @keyframes navSearchFadeIn {
+          from { opacity: 0; transform: translateY(-50%) scale(0.97); }
+          to   { opacity: 1; transform: translateY(-50%) scale(1); }
+        }
         @media (max-width: 768px) {
           .site-nav > div { padding: 0 16px !important; }
           .site-nav-links { display: none !important; }
+          .nav-search-overlay { left: 52px !important; right: 0 !important; }
         }
       `}</style>
     </nav>

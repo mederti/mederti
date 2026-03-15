@@ -1,6 +1,8 @@
 [build]
 builder = "nixpacks"
+nixpacksConfigPath = "nixpacks.toml"
+rootDirectory = "/"
 
 [deploy]
-startCommand = "python scheduler.py"
+startCommand = "python run_all_scrapers.py tga fda health_canada mhra ema bfarm ansm aifa aemps fda_enforcement hsa pharmac medsafe cbg_meb dkma fimea hpra lakemedelsverket sukl ogyei swissmedic noma ages anvisa pmda mfds cofepris sahpra nafdac sfda uae_mohap israel_moh belgium_famhp portugal_infarmed poland_mz turkey_titck greece_eof hk_drugoffice india_cdsco china_nmpa malaysia_npra argentina_anmat tga_recalls fda_medwatch"
 restartPolicyType = "never"

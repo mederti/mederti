@@ -59,3 +59,29 @@ app.include_router(intelligence_sources.router, prefix="/intelligence-sources", 
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok"}
+
+
+@app.get("/health/db", tags=["Health"])
+def health_db():
+    """Test Supabase connectivity — returns env var status + a test query."""
+    import os
+    import traceback
+
+    url = os.environ.get("SUPABASE_URL", "")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    result = {
+        "supabase_url_set": bool(url),
+        "supabase_url_preview": url[:40] + "..." if len(url) > 40 else url,
+        "service_key_set": bool(key),
+        "service_key_length": len(key),
+    }
+    try:
+        db = get_supabase_client()
+        resp = db.table("data_sources").select("id").limit(1).execute()
+        result["db_connected"] = True
+        result["row_count"] = len(resp.data or [])
+    except Exception as e:
+        result["db_connected"] = False
+        result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()
+    return result

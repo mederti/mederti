@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+nixpacksConfigPath = "nixpacks.toml"
+rootDirectory = "/"
+
+[deploy]
+startCommand = "python railway/recall_cron/run.py"
+restartPolicyType = "never"
+cronSchedule = "0 */6 * * *"

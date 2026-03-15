@@ -1,7 +1,6 @@
 [build]
 builder = "nixpacks"
-nixpacksConfigPath = "nixpacks.toml"
-rootDirectory = "/"
+nixpacksConfigPath = "railway/recall_cron/nixpacks.toml"
 
 [deploy]
 startCommand = "python railway/recall_cron/run.py"

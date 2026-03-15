@@ -35,6 +35,7 @@ class SupabaseTable:
         self._method = "GET"
         self._body: Any = None
         self._count_mode: Optional[str] = None
+        self._single_mode: bool = False
 
     def select(self, columns: str = "*", count: Optional[str] = None) -> "SupabaseTable":
         self._params["select"] = columns
@@ -50,8 +51,17 @@ class SupabaseTable:
             self._headers["Prefer"] = "resolution=merge-duplicates,return=representation"
         return self
 
-    def upsert(self, data: Any) -> "SupabaseTable":
-        return self.insert(data, upsert=True)
+    def upsert(self, data: Any, on_conflict: Optional[str] = None) -> "SupabaseTable":
+        self.insert(data, upsert=True)
+        if on_conflict:
+            self._params["on_conflict"] = on_conflict
+        return self
+
+    def single(self) -> "SupabaseTable":
+        """Request a single object instead of an array (PostgREST singular response)."""
+        self._single_mode = True
+        self._headers["Accept"] = "application/vnd.pgrst.object+json"
+        return self
 
     def update(self, data: Any) -> "SupabaseTable":
         self._method = "PATCH"
@@ -150,7 +160,7 @@ class SupabaseTable:
                 raise ValueError(f"Unsupported method: {self._method}")
 
         resp.raise_for_status()
-        data = resp.json() if resp.content else []
+        data = resp.json() if resp.content else (None if self._single_mode else [])
         count = None
         if self._count_mode and "content-range" in resp.headers:
             # Format: "0-9/100" or "*/100"
@@ -183,7 +193,7 @@ class _NegatedFilter:
 class SupabaseResponse:
     """Mimics the supabase-py response object."""
 
-    def __init__(self, data: List[Dict], count: Optional[int] = None):
+    def __init__(self, data: Any = None, count: Optional[int] = None):
         self.data = data
         self.count = count
 

@@ -476,4 +476,16 @@ class BaseRecallScraper(ABC):
             summary["duration_s"] = round((finished_at - started_at).total_seconds(), 2)
             self.log.info("Recall scrape finished", extra=summary)
 
+            # Update last_scraped_at on the data source
+            if summary["status"] != "failed":
+                try:
+                    self.db.table("data_sources").update({
+                        "last_scraped_at": finished_at.isoformat(),
+                    }).eq("id", self.SOURCE_ID).execute()
+                except Exception as ts_exc:
+                    self.log.warning(
+                        "Could not update last_scraped_at",
+                        extra={"error": str(ts_exc), "source": self.SOURCE_NAME},
+                    )
+
         return summary

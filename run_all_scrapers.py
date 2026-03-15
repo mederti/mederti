@@ -95,6 +95,21 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "nafdac":          ("backend.scrapers.nafdac_scraper",               "NafdacScraper"),
     # Middle East scrapers
     "sfda":            ("backend.scrapers.sfda_scraper",                 "SFDAScraper"),
+    "uae_mohap":       ("backend.scrapers.uae_mohap_scraper",            "UAEMOHAPScraper"),
+    "israel_moh":      ("backend.scrapers.israel_moh_scraper",           "IsraelMOHScraper"),
+    # Europe — additional countries
+    "belgium_famhp":   ("backend.scrapers.belgium_famhp_scraper",        "BelgiumFamhpScraper"),
+    "portugal_infarmed":("backend.scrapers.portugal_infarmed_scraper",   "PortugalInfarmedScraper"),
+    "poland_mz":       ("backend.scrapers.poland_mz_scraper",            "PolandMZScraper"),
+    "turkey_titck":    ("backend.scrapers.turkey_titck_scraper",         "TurkeyTITCKScraper"),
+    "greece_eof":      ("backend.scrapers.greece_eof_scraper",           "GreeceEOFScraper"),
+    # Asia-Pacific — additional countries
+    "hk_drugoffice":   ("backend.scrapers.hk_drugoffice_scraper",        "HKDrugOfficeScraper"),
+    "india_cdsco":     ("backend.scrapers.india_cdsco_scraper",          "IndiaCDSCOScraper"),
+    "china_nmpa":      ("backend.scrapers.china_nmpa_scraper",           "ChinaNMPAScraper"),
+    "malaysia_npra":   ("backend.scrapers.malaysia_npra_scraper",        "MalaysiaNPRAScraper"),
+    # South America — additional countries
+    "argentina_anmat": ("backend.scrapers.argentina_anmat_scraper",      "ArgentinaANMATScraper"),
     # Licensed supplement scrapers (require API keys)
     "ashp":            ("backend.scrapers.ashp_scraper",                 "ASHPScraper"),
     "tga_recalls":     ("backend.scrapers.tga_recalls_scraper",          "TgaRecallsScraper"),

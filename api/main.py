@@ -63,25 +63,36 @@ def health():
 
 @app.get("/health/db", tags=["Health"])
 def health_db():
-    """Test Supabase connectivity — returns env var status + a test query."""
+    """Test Supabase connectivity — raw httpx call bypassing SDK."""
     import os
+    import httpx
     import traceback
 
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     result = {
         "supabase_url_set": bool(url),
         "supabase_url_preview": url[:40] + "..." if len(url) > 40 else url,
         "service_key_set": bool(key),
         "service_key_length": len(key),
     }
+
+    # Test 1: raw httpx call to PostgREST
     try:
-        db = get_supabase_client()
-        resp = db.table("data_sources").select("id").limit(1).execute()
-        result["db_connected"] = True
-        result["row_count"] = len(resp.data or [])
+        resp = httpx.get(
+            f"{url}/rest/v1/data_sources?select=id&limit=1",
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+            },
+            timeout=10.0,
+        )
+        result["raw_httpx_status"] = resp.status_code
+        result["raw_httpx_rows"] = len(resp.json()) if resp.status_code == 200 else None
+        result["raw_httpx_ok"] = resp.status_code == 200
     except Exception as e:
-        result["db_connected"] = False
-        result["error"] = str(e)
-        result["traceback"] = traceback.format_exc()
+        result["raw_httpx_ok"] = False
+        result["raw_httpx_error"] = str(e)
+
+    # Skip SDK test — it hangs. Raw httpx result is sufficient for diagnosis.
     return result

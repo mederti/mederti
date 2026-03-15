@@ -27,8 +27,8 @@ from backend.utils.db import get_supabase_client
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Warm up DB connection on startup
-    get_supabase_client()
+    # Client is lazily created on first request (sync context)
+    # to avoid httpx threading issues when created in async lifespan
     yield
 
 

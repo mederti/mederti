@@ -249,12 +249,11 @@ export default async function HomePage() {
           <h1 style={{
             fontSize: 42, fontWeight: 700, color: "var(--app-text)",
             letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 10,
-            whiteSpace: "nowrap",
           }}>
             Find Short-Supply Medicines Globally.
           </h1>
           <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.6, maxWidth: 560, margin: "0 auto" }}>
-            Pharmacists, hospitals, and suppliers use Mederti to track drug shortages, find alternatives, and plan ahead — across 30 regulatory sources in 11 countries.
+            Pharmacists, hospitals, and suppliers use Mederti to track drug shortages, find alternatives, and plan ahead — across 42 regulatory sources in 20+ countries.
           </p>
         </div>
 
@@ -266,8 +265,8 @@ export default async function HomePage() {
         }}>
           {[
             { val: (summary?.total_active ?? "…").toLocaleString(), label: "active shortages tracked", href: "/shortages?status=active" },
-            { val: "30",   label: "regulatory sources", href: "/shortages" },
-            { val: "11",   label: "countries monitored", href: "/shortages" },
+            { val: "42",   label: "regulatory sources", href: "/shortages" },
+            { val: "20+",  label: "countries monitored", href: "/shortages" },
             { val: "live", label: "updated every 30 min", href: "/shortages" },
           ].map(({ val, label, href }) => (
             <Link key={label} href={href} style={{
@@ -392,23 +391,31 @@ export default async function HomePage() {
             )}
           </div>
 
-          {/* ── Card 4: Predicted Shortages ──────────────────────────────── */}
+          {/* ── Card 4: Predicted Shortages (illustrative) ───────────────── */}
           <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={TrendingUp}
               title="Get ahead of what's coming"
               iconColor="var(--indigo)"
-              sub="AI early-warning signals"
+              sub="Preview — coming soon"
             />
+            <div style={{
+              padding: "8px 20px 6px",
+              fontSize: 11, color: "var(--app-text-4)",
+              background: "var(--app-bg)",
+              borderBottom: "1px solid var(--app-border)",
+              fontStyle: "italic",
+            }}>
+              Illustrative examples — AI early-warning signals are in development
+            </div>
             <div style={{ display: "flex", flexDirection: "column" }}>
               {PREDICTED.map(p => {
                 const rs = RISK_STYLES[p.riskCls];
                 return (
-                  <Link
+                  <div
                     key={p.drug}
-                    href={`/search?q=${encodeURIComponent(p.drug)}`}
                     className="home-row"
-                    style={{ alignItems: "flex-start" }}
+                    style={{ alignItems: "flex-start", opacity: 0.75 }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="home-row-name" style={{ marginBottom: 3 }}>{p.drug}</div>
@@ -428,7 +435,7 @@ export default async function HomePage() {
                         {p.eta}
                       </span>
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
@@ -512,27 +519,34 @@ export default async function HomePage() {
             ))}
           </div>
 
-          {/* ── Card 6: Alternatives ─────────────────────────────────────── */}
+          {/* ── Card 6: Alternatives (illustrative) ──────────────────────── */}
           <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
             <CardHeader
               icon={ArrowLeftRight}
               title="What to dispense instead"
               iconColor="var(--low)"
-              sub="Clinically-matched alternatives"
+              sub="Preview — coming soon"
               viewHref="/search"
             />
+            <div style={{
+              padding: "8px 20px 6px",
+              fontSize: 11, color: "var(--app-text-4)",
+              background: "var(--app-bg)",
+              borderBottom: "1px solid var(--app-border)",
+              fontStyle: "italic",
+            }}>
+              Illustrative examples — search a drug to see real alternatives
+            </div>
             <div style={{ display: "flex", flexDirection: "column" }}>
               {ALTS.map(alt => (
-                <Link
+                <div
                   key={alt.from}
-                  href={`/search?q=${encodeURIComponent(alt.from)}`}
                   style={{
                     display: "block",
                     padding: "12px 20px",
                     borderBottom: "1px solid var(--app-bg-2)",
-                    textDecoration: "none",
+                    opacity: 0.75,
                   }}
-                  className="tga-article"
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
@@ -562,7 +576,7 @@ export default async function HomePage() {
                       </span>
                     </div>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           </div>

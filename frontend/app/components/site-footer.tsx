@@ -17,7 +17,7 @@ export default function SiteFooter() {
           <div>
             <img src="/logo-black.png" alt="Mederti" style={{ height: 30, marginBottom: 20 }} />
             <p style={{ fontSize: 13, lineHeight: 1.7, color: "#6b7280", maxWidth: 280, margin: 0 }}>
-              Global pharmaceutical shortage intelligence. Real-time data from 30+ regulatory sources across 20 countries.
+              Global pharmaceutical shortage intelligence. Real-time data from 42 regulatory sources across 20+ countries.
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
               <a href="https://twitter.com/mederti" aria-label="Twitter" style={{ color: "#9ca3af", transition: "color 0.15s" }}>
@@ -41,7 +41,7 @@ export default function SiteFooter() {
               <Link href="/shortages" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Shortages</Link>
               <Link href="/recalls" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Recalls</Link>
               <Link href="/alerts" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Alerts</Link>
-              <Link href="/chat" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>AI Chat</Link>
+              <Link href="/supplier-dashboard" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Supplier Dashboard</Link>
             </nav>
           </div>
 
@@ -61,9 +61,9 @@ export default function SiteFooter() {
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "#9ca3af", marginBottom: 16 }}>Resources</div>
             <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <Link href="/intelligence" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Intelligence</Link>
-              <Link href="/home" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>News Feed</Link>
+              <Link href="/home" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Home Feed</Link>
               <Link href="/watchlist" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Watchlist</Link>
-              <Link href="/dashboard" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Data Sources</Link>
+              <Link href="/dashboard" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Dashboard</Link>
             </nav>
           </div>
 

@@ -35,7 +35,7 @@ const content: PersonaContent = {
   ],
 
   previewTitle: "National supply at a glance.",
-  previewUrl: "app.mederti.com/national-dashboard",
+  previewUrl: "mederti.vercel.app/national-dashboard",
   previewRows: [
     { label: "Active critical shortages", badge: "23", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },
     { label: "High severity", badge: "41", badgeColor: "var(--high)", badgeBg: "var(--high-bg)" },

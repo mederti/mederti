@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
+import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 
 type Tab = "password" | "magic";
@@ -57,19 +58,20 @@ function LoginForm() {
       minHeight: "100vh", background: "var(--app-bg)",
       display: "flex", flexDirection: "column",
     }}>
+      <SiteNav />
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{
         width: "100%", maxWidth: 420,
         background: "#fff", border: "1px solid var(--app-border)",
         borderRadius: 14, padding: "36px 40px",
       }}>
-        {/* Logo */}
+        {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <Link href="/" style={{ fontSize: 22, fontWeight: 700, color: "var(--teal)", letterSpacing: "-0.025em", textDecoration: "none" }}>
-            Mederti
-          </Link>
-          <p style={{ fontSize: 14, color: "var(--app-text-3)", marginTop: 6 }}>
+          <p style={{ fontSize: 18, fontWeight: 600, color: "var(--app-text)", marginTop: 0, marginBottom: 4 }}>
             Sign in to your account
+          </p>
+          <p style={{ fontSize: 13, color: "var(--app-text-4)", margin: 0 }}>
+            Access your watchlist, alerts, and personalised feed
           </p>
         </div>
 
@@ -156,6 +158,19 @@ function LoginForm() {
                   outline: "none", boxSizing: "border-box",
                 }}
               />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4, marginTop: -6 }}>
+              <button
+                type="button"
+                onClick={() => { setTab("magic"); setError(null); setMagicSent(false); }}
+                style={{
+                  background: "none", border: "none", padding: 0,
+                  fontSize: 12, color: "var(--teal)", cursor: "pointer",
+                  fontFamily: "var(--font-inter), sans-serif",
+                }}
+              >
+                Forgot password?
+              </button>
             </div>
             <button
               type="submit"

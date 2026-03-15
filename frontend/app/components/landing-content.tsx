@@ -56,7 +56,7 @@ export default function LandingContent({ countryCount }: { countryCount: string 
               borderRadius: 5, padding: "4px 12px", fontSize: 12, color: "var(--app-text-4)",
               fontFamily: "var(--font-dm-mono), monospace", maxWidth: 280,
             }}>
-              app.mederti.com/dashboard
+              mederti.vercel.app/dashboard
             </span>
           </div>
 

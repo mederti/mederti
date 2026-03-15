@@ -40,7 +40,7 @@ export default function ChatPage() {
             </h1>
           </div>
           <p style={{ fontSize: 16, color: "var(--app-text-3)", margin: "0 auto", maxWidth: 520, lineHeight: 1.65 }}>
-            Ask anything about drug shortages, alternatives, and supply intelligence. Get instant, data-backed answers from across 12 global regulators.
+            Ask anything about drug shortages, alternatives, and supply intelligence. Get instant, data-backed answers from across 42 global regulatory sources.
           </p>
         </div>
       </div>
@@ -102,11 +102,16 @@ export default function ChatPage() {
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {EXAMPLE_QUESTIONS.map((q) => {
-              const searchQ = q
-                .replace(/[?]/g, "")
-                .split(" ")
-                .slice(0, 4)
-                .join(" ");
+              // Extract the key drug or topic for a useful search query
+              const searchMap: Record<string, string> = {
+                "What are the alternatives to amoxicillin in Australia?": "amoxicillin",
+                "Show me critical shortages in the US this month": "shortage",
+                "Which cancer drugs have the most recalls globally?": "cancer",
+                "What shortage is affecting metformin supply in Canada?": "metformin",
+                "Compare shortage severity between the UK and Germany": "shortage",
+                "Are there biosimilars available for adalimumab?": "adalimumab",
+              };
+              const searchQ = searchMap[q] ?? q.split(" ").slice(0, 3).join(" ");
               return (
                 <Link
                   key={q}

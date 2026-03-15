@@ -4,6 +4,7 @@ import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import MarketSidebar from "./MarketSidebar";
+import NewsletterForm from "./NewsletterForm";
 import {
   REPORTS, ARTICLES, DATA_RELEASES, MEDIA,
   CATEGORY_STYLE,
@@ -235,7 +236,7 @@ export default async function IntelligencePage() {
                   {r.description}
                 </p>
                 <div>
-                  <a href="#" style={{
+                  <Link href={`/intelligence/${r.slug}`} style={{
                     display: "inline-flex", alignItems: "center",
                     padding: "8px 18px", borderRadius: 6,
                     fontSize: 12, fontWeight: 600,
@@ -243,9 +244,9 @@ export default async function IntelligencePage() {
                     border: "1px solid #d1d5db",
                     background: "#fff",
                   }}>
-                    Download PDF
+                    Read report
                     {r.isPro && <ProBadge />}
-                  </a>
+                  </Link>
                 </div>
               </div>
             ))}
@@ -323,9 +324,9 @@ export default async function IntelligencePage() {
                   {m.description}
                 </p>
                 <div>
-                  <a href="#" style={{ fontSize: 12, fontWeight: 600, color: "var(--med)", textDecoration: "none" }}>
-                    {m.title.toLowerCase().includes("video") ? "Watch" : "Listen"} &rarr;
-                  </a>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "#94a3b8", fontStyle: "italic" }}>
+                    Coming soon
+                  </span>
                 </div>
               </div>
             ))}
@@ -345,65 +346,7 @@ export default async function IntelligencePage() {
       </div>
 
       {/* ─── NEWSLETTER FOOTER ─── */}
-      <div style={{
-        background: "#0f172a",
-        padding: "64px 32px",
-      }}>
-        <div style={{
-          maxWidth: 560, margin: "0 auto", textAlign: "center",
-        }}>
-          <div style={{
-            fontSize: 11, fontWeight: 600, letterSpacing: "0.12em",
-            textTransform: "uppercase", color: "var(--teal)",
-            marginBottom: 16,
-          }}>
-            Newsletter
-          </div>
-          <div style={{
-            fontSize: "clamp(22px, 3vw, 28px)", fontWeight: 650,
-            color: "#fff", lineHeight: 1.3,
-            marginBottom: 12,
-          }}>
-            Get the Mederti Intelligence briefing every Monday.
-          </div>
-          <p style={{
-            fontSize: 14, color: "rgba(255,255,255,0.4)",
-            lineHeight: 1.6, margin: "0 0 28px",
-          }}>
-            Shortage alerts, new data releases and analysis — one concise email per week.
-          </p>
-          <div className="intel-newsletter-form" style={{
-            display: "flex", gap: 10,
-            justifyContent: "center",
-          }}>
-            <input
-              type="email"
-              placeholder="you@hospital.org"
-              style={{
-                width: 280, padding: "12px 16px",
-                borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)",
-                background: "rgba(255,255,255,0.06)",
-                color: "#fff", fontSize: 14,
-                outline: "none",
-              }}
-            />
-            <button style={{
-              padding: "12px 24px", borderRadius: 6,
-              border: "none", background: "var(--teal)",
-              color: "#fff", fontSize: 14, fontWeight: 600,
-              cursor: "pointer",
-            }}>
-              Subscribe
-            </button>
-          </div>
-          <div style={{
-            fontSize: 12, color: "rgba(255,255,255,0.25)",
-            marginTop: 16,
-          }}>
-            No spam. Unsubscribe anytime.
-          </div>
-        </div>
-      </div>
+      <NewsletterForm />
 
       <SiteFooter />
 

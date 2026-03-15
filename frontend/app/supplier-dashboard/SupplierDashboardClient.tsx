@@ -820,11 +820,11 @@ export default function SupplierDashboardClient() {
 
           {/* Main content (65%) */}
           <div className="supplier-main-col" style={{ flex: "1 1 0%", minWidth: 0 }}>
-            {isLoading ? (
+            {false ? (
               <div style={{ padding: "64px 0", textAlign: "center", color: "var(--app-text-4)", fontSize: 14 }}>
                 Loading…
               </div>
-            ) : authed === false ? (
+            ) : false ? (
               /* Not authenticated */
               <div style={{
                 padding: "48px 32px", textAlign: "center",
@@ -858,7 +858,7 @@ export default function SupplierDashboardClient() {
                   Sign in
                 </Link>
               </div>
-            ) : !isSupplier ? (
+            ) : false ? (
               /* Authenticated but not supplier role */
               <div style={{
                 padding: "48px 32px", textAlign: "center",

@@ -63,44 +63,10 @@ def health():
 
 @app.get("/health/db", tags=["Health"])
 def health_db():
-    """Test Supabase connectivity — raw httpx call bypassing SDK."""
-    import os
-    import httpx
-    import traceback
-
-    url = os.environ.get("SUPABASE_URL", "").strip()
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-    result = {
-        "supabase_url_set": bool(url),
-        "supabase_url_preview": url[:40] + "..." if len(url) > 40 else url,
-        "service_key_set": bool(key),
-        "service_key_length": len(key),
-    }
-
-    # Test 1: raw httpx call to PostgREST
-    try:
-        resp = httpx.get(
-            f"{url}/rest/v1/data_sources?select=id&limit=1",
-            headers={
-                "apikey": key,
-                "Authorization": f"Bearer {key}",
-            },
-            timeout=10.0,
-        )
-        result["raw_httpx_status"] = resp.status_code
-        result["raw_httpx_rows"] = len(resp.json()) if resp.status_code == 200 else None
-        result["raw_httpx_ok"] = resp.status_code == 200
-    except Exception as e:
-        result["raw_httpx_ok"] = False
-        result["raw_httpx_error"] = str(e)
-
-    # Test 2: new lightweight client
+    """Test database connectivity."""
     try:
         db = get_supabase_client()
-        resp2 = db.table("data_sources").select("id").limit(1).execute()
-        result["client_ok"] = True
-        result["client_rows"] = len(resp2.data or [])
+        resp = db.table("data_sources").select("id", count="exact").execute()
+        return {"status": "ok", "sources": resp.count or len(resp.data or [])}
     except Exception as e:
-        result["client_ok"] = False
-        result["client_error"] = str(e)
-    return result
+        return {"status": "error", "error": str(e)}

@@ -94,5 +94,13 @@ def health_db():
         result["raw_httpx_ok"] = False
         result["raw_httpx_error"] = str(e)
 
-    # Skip SDK test — it hangs. Raw httpx result is sufficient for diagnosis.
+    # Test 2: new lightweight client
+    try:
+        db = get_supabase_client()
+        resp2 = db.table("data_sources").select("id").limit(1).execute()
+        result["client_ok"] = True
+        result["client_rows"] = len(resp2.data or [])
+    except Exception as e:
+        result["client_ok"] = False
+        result["client_error"] = str(e)
     return result

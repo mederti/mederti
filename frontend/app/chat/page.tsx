@@ -136,12 +136,12 @@ function DrugPills({ drugs }: { drugs: DrugHit[] }) {
           className="chat-drug-pill"
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 20,
-            background: "var(--app-bg)",
+            padding: "8px 16px", borderRadius: 99,
+            background: "#fff",
+            border: "1px solid var(--app-border)",
             textDecoration: "none", color: "var(--app-text)",
             fontSize: 13, fontWeight: 500,
-            transition: "background 0.15s",
-            border: "none",
+            transition: "background 0.15s, border-color 0.15s",
           }}
         >
           {d.generic_name}

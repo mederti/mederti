@@ -370,7 +370,7 @@ export default function V3ChatPanel({
                 alt="Mederti"
                 width={26}
                 height={26}
-                style={{ borderRadius: 7, flexShrink: 0, marginRight: 8, marginTop: 2 }}
+                style={{ borderRadius: 7, flexShrink: 0, marginRight: 8, marginTop: 2, width: 26, height: 26, objectFit: "contain" }}
               />
             )}
             <div style={{

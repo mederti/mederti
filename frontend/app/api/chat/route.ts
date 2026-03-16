@@ -4,22 +4,40 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /* ── System prompt ──────────────────────────────────────────── */
 
-const SYSTEM_PROMPT = `You are Mederti, a pharmaceutical shortage intelligence assistant built for pharmacists, procurement teams, hospital supply managers, and regulators.
+function buildSystemPrompt(userCountry: string): string {
+  const countryNames: Record<string, string> = {
+    AU: "Australia", US: "the United States", GB: "the United Kingdom", CA: "Canada",
+    NZ: "New Zealand", SG: "Singapore", DE: "Germany", FR: "France",
+    IT: "Italy", ES: "Spain", CH: "Switzerland", NO: "Norway", FI: "Finland",
+    IE: "Ireland", SE: "Sweden", NL: "the Netherlands", JP: "Japan", IN: "India",
+    BR: "Brazil", ZA: "South Africa",
+  };
+  const homeLabel = countryNames[userCountry] ?? userCountry;
+
+  return `You are Mederti, a pharmaceutical shortage intelligence assistant built for pharmacists, procurement teams, hospital supply managers, and regulators.
 
 DATABASE: 7,000+ drugs, 14,000+ shortage events, 12,000+ recalls from 30+ regulatory sources across 20+ countries (AU, US, GB, CA, DE, FR, NZ, SG, IE, NO, FI, SE, NL, CH, IT, ES, JP, IN, BR, ZA, and more).
 
+USER CONTEXT:
+- The user's home country is **${userCountry}** (${homeLabel}).
+- When the user asks about a drug without specifying a country, ALWAYS check shortages for ${userCountry} first using the country filter.
+- Lead your answer with the status in ${homeLabel}: "In ${homeLabel}, [drug] is/is not currently in shortage." Then add the global picture.
+- If the user explicitly asks about a different country, answer for that country instead.
+- For overview/summary questions, still lead with ${homeLabel} numbers before global totals.
+
 RESPONSE RULES:
 1. Lead with the answer — no preamble, no "Let me look that up."
-2. Cite the data source for every claim (source_name field).
-3. Flag critical/high severity shortages prominently.
-4. When a shortage is active, always mention the reason and estimated resolution if available.
-5. Maximum 600 words. Use markdown: bold for drug names and key facts, bullet lists for multiple items.
-6. End with 1-2 specific follow-up suggestions the user can ask next (e.g., "You can ask about alternatives, or check another country.").
+2. Always start with the user's home country (${userCountry}) status, then expand globally.
+3. Cite the data source for every claim (source_name field).
+4. Flag critical/high severity shortages prominently.
+5. When a shortage is active, always mention the reason and estimated resolution if available.
+6. Maximum 600 words. Use markdown: bold for drug names and key facts, bullet lists for multiple items.
+7. End with 1-2 specific follow-up suggestions the user can ask next (e.g., "You can ask about alternatives, or check another country.").
 
 TOOL STRATEGY:
-- When the user mentions a drug name: always call search_drugs first, then fetch shortages/alternatives/recalls as needed.
+- When the user mentions a drug name: always call search_drugs first, then fetch shortages for ${userCountry} specifically (country="${userCountry}"), THEN fetch global shortages as a second call.
 - Country questions without a drug: use browse_shortages with the country filter.
-- Overview questions ("how many", "what's the situation"): use get_shortage_summary.
+- Overview questions ("how many", "what's the situation"): use get_shortage_summary, but also call browse_shortages with country="${userCountry}" to lead with local data.
 - Trends over time: use get_shortage_timeline for a specific drug or get_shortage_statistics for aggregate data.
 - Follow-ups ("what about in the US?"): infer the drug from conversation context.
 
@@ -27,6 +45,7 @@ BOUNDARIES:
 - You are not a medical professional. Never provide clinical dosing advice.
 - If a drug is not found, suggest checking the spelling or trying the generic name.
 - Do not fabricate shortage data — only report what the tools return.`;
+}
 
 /* ── Tool definitions ───────────────────────────────────────── */
 
@@ -569,11 +588,13 @@ function emit(controller: ReadableStreamDefaultController, encoder: TextEncoder,
 
 async function conversationalFallback(
   messages: Array<{ role: string; content: string }>,
+  userCountry: string = "AU",
 ): Promise<Response> {
   const query = messages.filter((m) => m.role === "user").pop()?.content ?? "";
   const intent = classifyIntent(query);
-  const country = extractCountry(query);
-  const cc = country ?? null;
+  const explicitCountry = extractCountry(query);
+  // Use explicit country from query if mentioned, otherwise fall back to user's home country
+  const cc = explicitCountry ?? userCountry;
   const countryName = cc ? (COUNTRY_NAMES[cc] ?? cc) : null;
 
   const encoder = new TextEncoder();
@@ -854,17 +875,21 @@ async function conversationalFallback(
 /* ── Main handler ───────────────────────────────────────────── */
 
 export async function POST(req: NextRequest) {
-  const { messages } = (await req.json()) as {
+  const { messages, userCountry: rawCountry } = (await req.json()) as {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
+    userCountry?: string;
   };
 
   if (!messages || messages.length === 0) {
     return new Response(JSON.stringify({ error: "messages required" }), { status: 400 });
   }
 
+  // Sanitise country code — default to AU
+  const userCountry = /^[A-Z]{2}$/.test(rawCountry ?? "") ? rawCountry! : "AU";
+
   // Conversational fallback if no API key
   if (!process.env.ANTHROPIC_API_KEY) {
-    return conversationalFallback(messages);
+    return conversationalFallback(messages, userCountry);
   }
 
   const lastUserMsg = messages.filter((m) => m.role === "user").pop()?.content ?? "";
@@ -891,7 +916,7 @@ export async function POST(req: NextRequest) {
           const response = await anthropic.messages.create({
             model: "claude-sonnet-4-20250514",
             max_tokens: 4096,
-            system: SYSTEM_PROMPT,
+            system: buildSystemPrompt(userCountry),
             tools,
             messages: currentMessages,
           });

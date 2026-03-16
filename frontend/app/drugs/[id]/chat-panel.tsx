@@ -364,14 +364,14 @@ export default function V3ChatPanel({
             }}
           >
             {msg.role === "assistant" && (
-              <div style={{
-                width: 26, height: 26, borderRadius: "50%",
-                background: "var(--teal)", color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: 700, flexShrink: 0, marginRight: 8, marginTop: 2,
-              }}>
-                M
-              </div>
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src="/icon.png"
+                alt="Mederti"
+                width={26}
+                height={26}
+                style={{ borderRadius: 7, flexShrink: 0, marginRight: 8, marginTop: 2 }}
+              />
             )}
             <div style={{
               maxWidth: "82%",

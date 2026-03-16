@@ -179,7 +179,9 @@ export default function DrugChatPanel({
           alignItems: "center",
           gap: 4,
         }}>
-          {"\u25C6"} AI-generated
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.png" alt="" width={14} height={14} style={{ borderRadius: 3, opacity: 0.8 }} />
+          AI-generated
         </span>
       </div>
 

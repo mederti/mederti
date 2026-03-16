@@ -9,6 +9,7 @@ import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 import { AiInsightChips } from "../ai-insight-chips";
+import { buildAiInsightText } from "../build-insight-text";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -1091,14 +1092,20 @@ export default async function DrugPage({ params }: Props) {
                   similarityScore: a.similarity_score ?? 0,
                 })),
                 isAnticipatedOnly,
+                anticipatedDetails: anticipatedShortages.map((s: { country_code?: string; reason?: string; start_date?: string; estimated_resolution_date?: string; data_sources?: { name?: string; abbreviation?: string } }) => ({
+                  country: s.country_code ?? "??",
+                  source: abbreviateSource(s.data_sources?.name ?? "", s.data_sources?.abbreviation) || "Unknown",
+                  startDate: s.start_date ?? null,
+                  endDate: s.estimated_resolution_date ?? null,
+                  reason: s.reason && !/^availability:/i.test(s.reason.trim()) ? s.reason : null,
+                })),
               }}
-              insightText={
-                isAnticipatedOnly
-                  ? `A shortage of ${drug.generic_name} is anticipated in ${anticipatedCountries.size} countr${anticipatedCountries.size !== 1 ? "ies" : "y"}. Early signals suggest supply disruption may be imminent. Consider reviewing therapeutic alternatives and securing supply proactively.`
-                  : activeShortages.length > 0
-                    ? `This drug is currently under active shortage in ${affectedCountries.size} countr${affectedCountries.size !== 1 ? "ies" : "y"}.${anticipatedShortages.length > 0 ? ` Additionally, shortages are anticipated in ${anticipatedCountries.size} more countr${anticipatedCountries.size !== 1 ? "ies" : "y"}.` : ""} Supply disruptions of this type typically persist for 3–9 months based on historical patterns. Consider therapeutic alternatives where clinically appropriate.`
-                    : `No active shortages are currently reported for ${drug.generic_name}. Monitor regularly as supply conditions can change rapidly.`
-              }
+              insightText={buildAiInsightText({
+                drugName: drug.generic_name,
+                activeShortages: activeShortages as { country_code?: string; status?: string; severity?: string; reason?: string; start_date?: string; estimated_resolution_date?: string; data_sources?: { name?: string; abbreviation?: string } }[],
+                userCountry,
+                affectedCountries: affectedCountries as Set<string>,
+              })}
               hasActiveShortages={confirmedShortages.length > 0}
             />
 

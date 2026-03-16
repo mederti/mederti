@@ -3,6 +3,14 @@ import Anthropic from "@anthropic-ai/sdk";
 
 /* ── Types ── */
 
+interface AnticipatedDetail {
+  country: string;
+  source: string;
+  startDate: string | null;
+  endDate: string | null;
+  reason: string | null;
+}
+
 interface DrugContext {
   drugName: string;
   genericName: string;
@@ -14,6 +22,7 @@ interface DrugContext {
   worstSeverity: string;
   alternatives: Array<{ name: string; similarityScore: number }>;
   isAnticipatedOnly: boolean;
+  anticipatedDetails?: AnticipatedDetail[];
 }
 
 /* ── System prompt ── */
@@ -23,11 +32,17 @@ function buildSystemPrompt(ctx: DrugContext): string {
     ? `Known therapeutic alternatives: ${ctx.alternatives.map(a => `${a.name} (${Math.round(a.similarityScore * 100)}% similarity)`).join(", ")}.`
     : "No therapeutic alternatives currently on file.";
 
+  const anticipatedInfo = ctx.anticipatedDetails && ctx.anticipatedDetails.length > 0
+    ? `\nAnticipated shortage details: ${ctx.anticipatedDetails.map(d =>
+        `${d.country} (${d.source}): ${d.startDate ?? "date unknown"}\u2192${d.endDate ?? "open"}${d.reason ? `, reason: ${d.reason}` : ""}`
+      ).join("; ")}`
+    : "";
+
   const shortageDesc = ctx.isAnticipatedOnly
-    ? `Shortages are ANTICIPATED (not yet confirmed) in ${ctx.anticipatedCountries.join(", ")}.`
+    ? `Shortages are ANTICIPATED (not yet confirmed) in ${ctx.anticipatedCountries.join(", ")}.${anticipatedInfo}`
     : ctx.activeShortageCount > 0
-      ? `There are ${ctx.activeShortageCount} active shortage events affecting ${ctx.affectedCountries.join(", ")}. Worst severity: ${ctx.worstSeverity}.${ctx.anticipatedCount > 0 ? ` Additionally, shortages are anticipated in ${ctx.anticipatedCountries.join(", ")}.` : ""}`
-      : "No active shortages currently reported.";
+      ? `There are ${ctx.activeShortageCount} active shortage events affecting ${ctx.affectedCountries.join(", ")}. Worst severity: ${ctx.worstSeverity}.${ctx.anticipatedCount > 0 ? ` Additionally, shortages are anticipated in ${ctx.anticipatedCountries.join(", ")}.${anticipatedInfo}` : ""}`
+      : `No active shortages currently reported.${anticipatedInfo}`;
 
   return `You are Mederti, a pharmaceutical shortage intelligence assistant embedded in a drug detail page.
 

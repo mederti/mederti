@@ -4,6 +4,14 @@ import { useState, useRef, useCallback } from "react";
 
 /* ── Types ── */
 
+interface AnticipatedDetail {
+  country: string;
+  source: string;
+  startDate: string | null;
+  endDate: string | null;
+  reason: string | null;
+}
+
 interface DrugContext {
   drugName: string;
   genericName: string;
@@ -15,6 +23,8 @@ interface DrugContext {
   worstSeverity: string;
   alternatives: Array<{ name: string; similarityScore: number }>;
   isAnticipatedOnly: boolean;
+  /** Detailed anticipated shortage records for richer chip answers */
+  anticipatedDetails?: AnticipatedDetail[];
 }
 
 interface AiInsightChipsProps {
@@ -150,8 +160,10 @@ export function AiInsightChips({ drugContext, insightText, hasActiveShortages }:
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>AI Insight</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--indigo)", fontWeight: 500 }}>
-          ✦ AI-generated
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--indigo)", fontWeight: 500 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.png" alt="" width={14} height={14} style={{ borderRadius: 3, opacity: 0.8 }} />
+          AI-generated
         </div>
       </div>
 

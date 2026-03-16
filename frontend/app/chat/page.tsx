@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import Link from "next/link";
-import { Send } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -68,14 +68,10 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
 
 function renderMarkdown(text: string): ReactNode {
   if (!text) return null;
-
-  // Split into paragraphs by double newlines
   const blocks = text.split(/\n\n+/);
 
   return blocks.map((block, bi) => {
     const lines = block.split("\n");
-
-    // Check if all lines are bullets
     const allBullets = lines.every((l) => /^\s*[-•]\s/.test(l) || l.trim() === "");
     if (allBullets && lines.some((l) => /^\s*[-•]\s/.test(l))) {
       return (
@@ -86,7 +82,7 @@ function renderMarkdown(text: string): ReactNode {
               const content = l.trimStart().replace(/^[-•]\s/, "");
               return (
                 <li key={li} style={{ position: "relative", paddingLeft: 14, marginBottom: 6, lineHeight: 1.65 }}>
-                  <span style={{ position: "absolute", left: 0, color: "var(--teal)", fontWeight: 600 }}>•</span>
+                  <span style={{ position: "absolute", left: 0, color: "var(--teal)", fontWeight: 600 }}>{"\u2022"}</span>
                   {renderInline(content, `${bi}-${li}`)}
                 </li>
               );
@@ -95,7 +91,6 @@ function renderMarkdown(text: string): ReactNode {
       );
     }
 
-    // Regular paragraph
     return (
       <p key={bi} style={{ margin: "0 0 16px", lineHeight: 1.7 }}>
         {lines.map((line, li) => (
@@ -133,7 +128,7 @@ function SeverityBadge({ severity }: { severity: string }) {
 
 function DrugPills({ drugs }: { drugs: DrugHit[] }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 4px" }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0 4px" }}>
       {drugs.slice(0, 6).map((d) => (
         <Link
           key={d.drug_id}
@@ -142,10 +137,11 @@ function DrugPills({ drugs }: { drugs: DrugHit[] }) {
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             padding: "6px 12px", borderRadius: 20,
-            background: "var(--app-bg)", border: "1px solid var(--app-border)",
+            background: "var(--app-bg)",
             textDecoration: "none", color: "var(--app-text)",
             fontSize: 13, fontWeight: 500,
-            transition: "border-color 0.15s, background 0.15s",
+            transition: "background 0.15s",
+            border: "none",
           }}
         >
           {d.generic_name}
@@ -164,20 +160,17 @@ function DrugPills({ drugs }: { drugs: DrugHit[] }) {
   );
 }
 
-/* ── Shortage table ────────────────────────────────────────── */
+/* ── Shortage rows — no panel ─────────────────────────────── */
 
 function ShortageTable({ shortages }: { shortages: ShortageHit[] }) {
   return (
-    <div style={{
-      margin: "12px 0 4px", borderRadius: 10, overflow: "hidden",
-      border: "1px solid var(--app-border)", background: "#fff",
-    }}>
+    <div style={{ margin: "8px 0 4px" }}>
       {shortages.slice(0, 8).map((s, i) => (
         <div
           key={s.shortage_id}
           style={{
             display: "flex", alignItems: "center", gap: 10,
-            padding: "9px 14px",
+            padding: "8px 0",
             borderBottom: i < Math.min(shortages.length, 8) - 1 ? "1px solid var(--app-border)" : "none",
             fontSize: 13,
           }}
@@ -205,7 +198,7 @@ function ShortageTable({ shortages }: { shortages: ShortageHit[] }) {
   );
 }
 
-/* ── Summary stats ─────────────────────────────────────────── */
+/* ── Summary stats — no panel ─────────────────────────────── */
 
 function SummaryStats({ data }: { data: SummaryData }) {
   const items = [
@@ -217,9 +210,8 @@ function SummaryStats({ data }: { data: SummaryData }) {
   ];
   return (
     <div style={{
-      display: "flex", gap: 20, flexWrap: "wrap",
-      margin: "12px 0 4px", padding: "16px 20px",
-      borderRadius: 10, border: "1px solid var(--app-border)", background: "#fff",
+      display: "flex", gap: 24, flexWrap: "wrap",
+      margin: "8px 0 4px",
     }}>
       {items.map((item) => (
         <div key={item.label}>
@@ -236,7 +228,7 @@ function SummaryStats({ data }: { data: SummaryData }) {
 /* ── Suggested queries ─────────────────────────────────────── */
 
 const SUGGESTED_QUERIES = [
-  "What's the global shortage situation?",
+  "What\u2019s the global shortage situation?",
   "Is amoxicillin available in Australia?",
   "Alternatives to metformin",
   "Critical shortages in the US",
@@ -249,14 +241,8 @@ const SUGGESTED_QUERIES = [
 function ThinkingIndicator() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-      <div style={{
-        width: 22, height: 22, borderRadius: "50%",
-        background: "var(--teal)", color: "#fff",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 10, fontWeight: 700, flexShrink: 0,
-      }}>
-        M
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icon.png" alt="" width={20} height={20} style={{ borderRadius: 5, flexShrink: 0 }} />
       <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
         <span className="chat-dot" style={{ animationDelay: "0s" }} />
         <span className="chat-dot" style={{ animationDelay: "0.15s" }} />
@@ -284,7 +270,6 @@ export default function ChatPage() {
     if (messages.length > 0) scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
@@ -292,7 +277,6 @@ export default function ChatPage() {
     }
   }, [input]);
 
-  // Focus input on mount
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   const sendMessage = useCallback(async (text: string) => {
@@ -306,12 +290,17 @@ export default function ChatPage() {
 
     if (inputRef.current) inputRef.current.style.height = "auto";
 
+    // Read the user's country from the nav cookie
+    const countryMatch = document.cookie.match(/(?:^|; )mederti-country=([A-Z]{2})/);
+    const userCountry = countryMatch?.[1] ?? "AU";
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
+          userCountry,
         }),
       });
 
@@ -397,7 +386,7 @@ export default function ChatPage() {
   return (
     <div style={{
       display: "flex", flexDirection: "column",
-      height: "100vh", background: "#fff",
+      height: "100vh", background: "var(--app-bg)",
       color: "var(--app-text)",
     }}>
       <SiteNav />
@@ -423,37 +412,36 @@ export default function ChatPage() {
               alignItems: "center", justifyContent: "center",
               paddingBottom: 80,
             }}>
-              {/* Logo mark */}
-              <div style={{
-                width: 48, height: 48, borderRadius: 14,
-                background: "var(--teal)", color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 22, fontWeight: 700, marginBottom: 20,
-                boxShadow: "0 2px 12px rgba(13,148,136,0.20)",
-              }}>
-                M
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/icon.png"
+                alt="Mederti"
+                width={40}
+                height={40}
+                style={{ borderRadius: 10, marginBottom: 24 }}
+              />
 
               <h1 style={{
-                fontSize: 22, fontWeight: 600,
-                color: "var(--app-text)", margin: "0 0 8px",
+                fontSize: 28, fontWeight: 700,
+                color: "var(--app-text)", margin: "0 0 10px",
                 letterSpacing: "-0.02em",
               }}>
-                What do you want to know?
+                Find Short-Supply Drugs Globally
               </h1>
 
               <p style={{
-                fontSize: 14, color: "var(--app-text-4)",
-                margin: "0 0 32px", textAlign: "center", maxWidth: 380,
+                fontSize: 15, color: "var(--app-text-4)",
+                margin: "0 0 36px", textAlign: "center", maxWidth: 400,
                 lineHeight: 1.6,
               }}>
                 Ask about drug shortages, alternatives, recalls, or supply intelligence across 30+ countries.
               </p>
 
-              {/* Suggestions */}
+              {/* Suggestion chips — horizontal wrap, white pill style */}
               <div style={{
-                display: "flex", flexWrap: "wrap", gap: 8,
-                justifyContent: "center", maxWidth: 560,
+                display: "flex", flexWrap: "wrap", justifyContent: "center",
+                gap: 8,
+                width: "100%", maxWidth: 640,
               }}>
                 {SUGGESTED_QUERIES.map((q) => (
                   <button
@@ -461,12 +449,15 @@ export default function ChatPage() {
                     onClick={() => sendMessage(q)}
                     className="chat-chip"
                     style={{
-                      padding: "8px 16px", borderRadius: 20,
-                      background: "var(--app-bg)", border: "1px solid var(--app-border)",
+                      padding: "10px 20px", borderRadius: 99,
+                      background: "#fff",
+                      border: "1px solid var(--app-border)",
                       fontSize: 13, color: "var(--app-text-3)",
-                      cursor: "pointer",
+                      cursor: "pointer", textAlign: "center",
                       fontFamily: "var(--font-inter), sans-serif",
-                      transition: "color 0.15s, border-color 0.15s, background 0.15s",
+                      transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                      lineHeight: 1.4,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {q}
@@ -490,7 +481,7 @@ export default function ChatPage() {
                         maxWidth: "80%",
                         padding: "12px 18px",
                         borderRadius: 20,
-                        background: "var(--app-bg)",
+                        background: "var(--app-bg-2, #f0f0f0)",
                         fontSize: 15, lineHeight: 1.6,
                         color: "var(--app-text)",
                       }}>
@@ -498,32 +489,26 @@ export default function ChatPage() {
                       </div>
                     </div>
                   ) : (
-                    /* ── Assistant turn ── */
+                    /* ── Assistant turn — no panels, just flowing content ── */
                     <div>
-                      {/* Small avatar + name */}
-                      <div style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        marginBottom: 8,
-                      }}>
-                        <div style={{
-                          width: 22, height: 22, borderRadius: "50%",
-                          background: "var(--teal)", color: "#fff",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 10, fontWeight: 700, flexShrink: 0,
-                        }}>
-                          M
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>
-                          Mederti
-                        </span>
+                      {/* Avatar */}
+                      <div style={{ marginBottom: 6 }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/icon.png"
+                          alt="Mederti"
+                          width={20}
+                          height={20}
+                          style={{ borderRadius: 5 }}
+                        />
                       </div>
 
-                      {/* Structured data — inline with the prose */}
+                      {/* Structured data — inline, no cards/panels */}
                       {msg.summary && <SummaryStats data={msg.summary} />}
                       {msg.drugs && msg.drugs.length > 0 && <DrugPills drugs={msg.drugs} />}
                       {msg.shortages && msg.shortages.length > 0 && <ShortageTable shortages={msg.shortages} />}
 
-                      {/* Text — flows naturally, no bubble */}
+                      {/* Text — flows naturally */}
                       {msg.content ? (
                         <div style={{
                           fontSize: 15, lineHeight: 1.7,
@@ -547,10 +532,10 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* ── Input bar — fixed at bottom ── */}
+      {/* ── Input bar ── */}
       <div style={{
         borderTop: "1px solid var(--app-border)",
-        background: "#fff",
+        background: "var(--app-bg)",
         padding: "16px 24px 20px",
       }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
@@ -561,8 +546,8 @@ export default function ChatPage() {
               display: "flex", alignItems: "flex-end", gap: 10,
               background: "var(--app-bg)",
               border: "1px solid var(--app-border)",
-              borderRadius: 16,
-              padding: "10px 14px 10px 18px",
+              borderRadius: 24,
+              padding: "12px 14px 12px 20px",
               transition: "border-color 0.2s, box-shadow 0.2s",
             }}
           >
@@ -588,18 +573,19 @@ export default function ChatPage() {
             <button
               type="submit"
               disabled={streaming || !input.trim()}
+              className="chat-send-btn"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 34, height: 34, borderRadius: "50%",
+                width: 32, height: 32, borderRadius: "50%",
                 background: streaming || !input.trim() ? "var(--app-border)" : "var(--teal)",
                 color: "#fff", border: "none",
                 cursor: streaming || !input.trim() ? "default" : "pointer",
                 flexShrink: 0,
-                transition: "background 0.15s, transform 0.1s",
+                transition: "background 0.15s",
               }}
               aria-label="Send message"
             >
-              <Send style={{ width: 15, height: 15 }} strokeWidth={2.2} />
+              <ArrowUp style={{ width: 16, height: 16 }} strokeWidth={2.5} />
             </button>
           </form>
 
@@ -629,7 +615,6 @@ export default function ChatPage() {
           background: var(--teal-bg) !important;
         }
         .chat-drug-pill:hover {
-          border-color: var(--teal-b) !important;
           background: var(--teal-bg) !important;
         }
         .chat-input-form:focus-within {
@@ -637,7 +622,7 @@ export default function ChatPage() {
           box-shadow: 0 0 0 3px rgba(13,148,136,0.08) !important;
         }
         @media (max-width: 640px) {
-          .chat-chip { font-size: 12px !important; padding: 7px 13px !important; }
+          .chat-chip { font-size: 12px !important; padding: 10px 14px !important; }
         }
       `}</style>
     </div>

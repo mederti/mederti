@@ -41,9 +41,15 @@ TOOL STRATEGY:
 - Trends over time: use get_shortage_timeline for a specific drug or get_shortage_statistics for aggregate data.
 - Follow-ups ("what about in the US?"): infer the drug from conversation context.
 
+TYPO HANDLING:
+- Users often misspell drug names and country names. Interpret the likely intended word and search for it.
+- Examples: "amoxicilin" → search "amoxicillin", "metformn" → search "metformin", "Ausrtalia" → Australia, "Singpaore" → Singapore.
+- When you correct a typo, briefly acknowledge it: "Showing results for **amoxicillin**:" — don't lecture about the spelling.
+- If search returns no results for a misspelled term, try a corrected version before giving up.
+
 BOUNDARIES:
 - You are not a medical professional. Never provide clinical dosing advice.
-- If a drug is not found, suggest checking the spelling or trying the generic name.
+- If a drug is not found even after trying corrections, suggest checking the spelling or trying the generic name.
 - Do not fabricate shortage data — only report what the tools return.`;
 }
 
@@ -180,7 +186,7 @@ async function executeTool(name: string, input: Record<string, any>): Promise<an
       const q = (input.query as string).trim();
       const limit = Math.min(input.limit ?? 6, 20);
 
-      // FTS then ilike fallback
+      // FTS → ilike → trigram similarity (handles typos)
       let rows: Record<string, unknown>[] = [];
       try {
         const r = await db.from("drugs").select("id, generic_name, brand_names, atc_code")
@@ -192,6 +198,20 @@ async function executeTool(name: string, input: Record<string, any>): Promise<an
         const r = await db.from("drugs").select("id, generic_name, brand_names, atc_code")
           .ilike("generic_name", `%${q}%`).limit(limit);
         rows = (r.data ?? []) as Record<string, unknown>[];
+      }
+
+      // Trigram similarity fallback for typos (e.g. "amoxicilin", "metformn")
+      if (rows.length === 0 && q.length >= 4) {
+        try {
+          const r = await db.rpc("search_drugs_fuzzy", { search_term: q, result_limit: limit });
+          rows = (r.data ?? []) as Record<string, unknown>[];
+        } catch {
+          // Trigram function may not exist yet — try ilike with first few chars
+          const prefix = q.slice(0, Math.max(4, Math.floor(q.length * 0.7)));
+          const r = await db.from("drugs").select("id, generic_name, brand_names, atc_code")
+            .ilike("generic_name", `${prefix}%`).limit(limit);
+          rows = (r.data ?? []) as Record<string, unknown>[];
+        }
       }
 
       if (rows.length === 0) return { query: q, results: [], total: 0 };
@@ -537,13 +557,54 @@ const COUNTRY_NAMES: Record<string, string> = {
   IE: "Ireland", SE: "Sweden", NL: "the Netherlands", JP: "Japan", IN: "India",
   BR: "Brazil", ZA: "South Africa", EU: "the European Union",
 };
-// Match full country names first (case-insensitive), then uppercase-only ISO codes
+// Levenshtein distance for fuzzy country matching
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+  return dp[m][n];
+}
+
+// Match full country names first (exact), then fuzzy, then ISO codes
 function extractCountry(query: string): string | null {
-  // First try full country names (case-insensitive)
+  // 1. Exact match on full country names (case-insensitive)
   const nameRe = new RegExp(`\\b(${Object.keys(COUNTRY_MAP).join("|")})\\b`, "i");
   const nameMatch = query.match(nameRe);
   if (nameMatch) return COUNTRY_MAP[nameMatch[0].toLowerCase()] ?? null;
-  // Then try ISO codes (uppercase only to avoid matching "in", "no", etc.)
+
+  // 2. Fuzzy match — check each word (and bigrams) against country names
+  const words = query.toLowerCase().split(/\s+/);
+  const countryNames = Object.keys(COUNTRY_MAP);
+  let bestMatch: string | null = null;
+  let bestDist = Infinity;
+
+  // Check single words and consecutive pairs (for "united states", "new zealand", etc.)
+  const candidates = [...words];
+  for (let i = 0; i < words.length - 1; i++) {
+    candidates.push(`${words[i]} ${words[i + 1]}`);
+  }
+
+  for (const candidate of candidates) {
+    if (candidate.length < 4) continue; // Skip short words to avoid false positives
+    for (const name of countryNames) {
+      const dist = levenshtein(candidate, name);
+      // Allow up to 2 edits, but candidate must be at least 60% of the country name length
+      const maxDist = name.length <= 5 ? 1 : 2;
+      if (dist <= maxDist && dist < bestDist) {
+        bestDist = dist;
+        bestMatch = name;
+      }
+    }
+  }
+  if (bestMatch) return COUNTRY_MAP[bestMatch] ?? null;
+
+  // 3. ISO codes (uppercase only to avoid matching "in", "no", etc.)
   const isoMatch = query.match(/\b(AU|US|GB|CA|NZ|SG|DE|FR|IT|ES|CH|NO|FI|IE|SE|NL|JP|IN|BR|ZA|EU)\b/);
   if (isoMatch) return isoMatch[0];
   return null;

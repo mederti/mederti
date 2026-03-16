@@ -393,7 +393,10 @@ DRUG CONTEXT:
 ${(ctx.shortagesByCountry ?? []).length > 0 ? `- Shortage breakdown: ${ctx.shortagesByCountry.map((c: { country: string; severity: string }) => `${c.country} (${c.severity})`).join(", ")}` : ""}
 
 GUIDELINES:
-- You are focused on THIS drug. When the user asks about shortages, alternatives, or recalls, use the drug_id "${id}" unless they ask about a different drug.
+- You start focused on THIS drug, but the user may ask about ANY drug, country, or shortage topic.
+- When the user asks about shortages, alternatives, or recalls without specifying a drug, use the drug_id "${id}" for the current drug.
+- If the user asks about a different drug (e.g. "what about amoxicillin?"), use search_drugs to find it and answer about that drug instead.
+- If the user asks a general question (e.g. "which country has the most shortages?"), answer it using browse_shortages or get_shortage_summary.
 - Keep responses concise — 2-3 short paragraphs maximum.
 - Always cite the data source when available.
 - If severity is critical or high, emphasize this.

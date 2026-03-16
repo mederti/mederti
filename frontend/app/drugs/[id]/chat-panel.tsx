@@ -370,7 +370,7 @@ export default function V3ChatPanel({
                 alt="Mederti"
                 width={26}
                 height={26}
-                style={{ borderRadius: 7, flexShrink: 0, marginRight: 8, marginTop: 2 }}
+                style={{ borderRadius: 7, flexShrink: 0, marginRight: 8, marginTop: 2, width: 26, height: 26, objectFit: "contain" }}
               />
             )}
             <div style={{
@@ -438,7 +438,7 @@ export default function V3ChatPanel({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask about ${drugContext.generic_name}\u2026`}
+            placeholder={`Ask about ${drugContext.generic_name} or any drug\u2026`}
             disabled={streaming}
             style={{
               flex: 1,
@@ -475,7 +475,7 @@ export default function V3ChatPanel({
 
         {/* Hint */}
         <div style={{ fontSize: 10, color: "var(--app-text-4)", marginTop: 6, textAlign: "center" }}>
-          Context-aware &middot; drug data pre-loaded
+          {drugContext.generic_name} context loaded &middot; Ask about any drug or shortage
         </div>
       </div>
     </div>

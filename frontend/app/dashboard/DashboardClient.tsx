@@ -195,7 +195,7 @@ export default function DashboardClient() {
           background: "#fff",
           borderBottom: "1px solid #e2e8f0",
           position: "sticky",
-          top: 0,
+          top: 64,
           zIndex: 40,
         }}
       >

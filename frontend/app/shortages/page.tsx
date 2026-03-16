@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, WifiOff } from "lucide-react";
 import { api, ShortageListResponse } from "@/lib/api";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
@@ -75,10 +75,11 @@ export default async function ShortagesPage({ searchParams }: Props) {
   if (sp.severity) fetchParams.severity = sp.severity;
 
   let data: ShortageListResponse | null = null;
+  let fetchError = false;
   try {
     data = await api.getShortages(fetchParams);
   } catch {
-    // handled below
+    fetchError = true;
   }
 
   const results    = data?.results ?? [];
@@ -102,7 +103,9 @@ export default async function ShortagesPage({ searchParams }: Props) {
             <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--app-text)", margin: 0 }}>Drug Shortages</h1>
           </div>
           <p style={{ fontSize: 14, color: "var(--app-text-3)", margin: 0 }}>
-            {total.toLocaleString()} shortage{total !== 1 ? "s" : ""} across all monitored sources
+            {fetchError
+              ? "Data temporarily unavailable"
+              : `${total.toLocaleString()} shortage${total !== 1 ? "s" : ""} across all monitored sources`}
           </p>
         </div>
       </div>
@@ -165,7 +168,13 @@ export default async function ShortagesPage({ searchParams }: Props) {
           borderRadius: 12,
           overflow: "hidden",
         }}>
-          {results.length === 0 ? (
+          {fetchError ? (
+            <div style={{ padding: "64px 24px", textAlign: "center", color: "var(--app-text-3)" }}>
+              <WifiOff style={{ width: 36, height: 36, color: "var(--high)", margin: "0 auto 12px", display: "block" }} strokeWidth={1.5} />
+              <p style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text-2)", marginBottom: 6 }}>Unable to load shortage data</p>
+              <p style={{ fontSize: 13 }}>The data service is temporarily unavailable. Please try again in a few moments.</p>
+            </div>
+          ) : results.length === 0 ? (
             <div style={{ padding: "64px 24px", textAlign: "center", color: "var(--app-text-3)" }}>
               <AlertCircle style={{ width: 36, height: 36, color: "var(--app-text-4)", margin: "0 auto 12px", display: "block" }} strokeWidth={1.5} />
               <p style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text-2)", marginBottom: 6 }}>No shortages found</p>

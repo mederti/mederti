@@ -27,8 +27,8 @@ from backend.utils.db import get_supabase_client
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Warm up DB connection on startup
-    get_supabase_client()
+    # Client is lazily created on first request (sync context)
+    # to avoid httpx threading issues when created in async lifespan
     yield
 
 
@@ -59,3 +59,14 @@ app.include_router(intelligence_sources.router, prefix="/intelligence-sources", 
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok"}
+
+
+@app.get("/health/db", tags=["Health"])
+def health_db():
+    """Test database connectivity."""
+    try:
+        db = get_supabase_client()
+        resp = db.table("data_sources").select("id", count="exact").execute()
+        return {"status": "ok", "sources": resp.count or len(resp.data or [])}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}

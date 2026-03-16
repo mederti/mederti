@@ -581,4 +581,16 @@ class BaseScraper(ABC):
             )
             self.log.info("Scrape finished", extra=summary)
 
+            # Update last_scraped_at on the data source (even for duplicates)
+            if summary["status"] != "failed":
+                try:
+                    self.db.table("data_sources").update({
+                        "last_scraped_at": finished_at.isoformat(),
+                    }).eq("id", self.SOURCE_ID).execute()
+                except Exception as ts_exc:
+                    self.log.warning(
+                        "Could not update last_scraped_at",
+                        extra={"error": str(ts_exc), "source": self.SOURCE_NAME},
+                    )
+
         return summary

@@ -84,16 +84,19 @@ class EMAScraper(BaseScraper):
     ]
     _STATUS_ALIASES: list[str] = [
         "supply_shortage_status",                          # confirmed JSON field name
+        "Supply shortage status",                          # confirmed XLSX column name
         "shortage_status", "shortage status", "status",
         "Status", "Shortage Status",
     ]
     _START_ALIASES: list[str] = [
         "start_of_shortage_date",                          # confirmed JSON field name
+        "Start of shortage date",                          # confirmed XLSX column name
         "shortage_start_date", "shortage start date", "start date",
         "start_date", "Start date", "Shortage start date",
     ]
     _END_ALIASES: list[str] = [
         "expected_resolution_date",                        # confirmed JSON field name
+        "Expected resolution date",                        # confirmed XLSX column name
         "shortage_end_date", "shortage end date", "end date",
         "end_date", "End date", "Shortage end date",
     ]
@@ -194,19 +197,29 @@ class EMAScraper(BaseScraper):
         if not rows:
             return []
 
-        # First non-empty row is the header
-        header_row = rows[0]
-        # Strip whitespace and None from headers
+        # EMA changed XLSX format (~Mar 2026): first 8 rows are metadata/blank.
+        # Dynamically find the real header by looking for a row with 3+ non-None
+        # values where the first cell doesn't start with "Content type" or "Output".
+        header_idx = 0
+        for idx, row in enumerate(rows):
+            non_none = [v for v in row if v is not None and str(v).strip()]
+            if len(non_none) >= 3:
+                first_val = str(row[0] or "").strip().lower()
+                if not any(kw in first_val for kw in ("content type", "output")):
+                    header_idx = idx
+                    break
+
+        header_row = rows[header_idx]
         headers = [str(h).strip() if h is not None else f"col_{i}"
                    for i, h in enumerate(header_row)]
 
         self.log.info(
             "EMA XLSX columns",
-            extra={"columns": headers, "source": "xlsx"},
+            extra={"columns": headers, "header_row": header_idx, "source": "xlsx"},
         )
 
         records = []
-        for row in rows[1:]:
+        for row in rows[header_idx + 1:]:
             if not any(v is not None and str(v).strip() for v in row):
                 continue  # skip blank rows
             record = {}
@@ -292,7 +305,7 @@ class EMAScraper(BaseScraper):
         start_date = self._parse_date(get(*self._START_ALIASES))
         if not start_date:
             # first_published_date (DD/MM/YYYY) is a reliable fallback
-            start_date = self._parse_date(get("first_published_date"))
+            start_date = self._parse_date(get("first_published_date", "First published date"))
         if not start_date:
             start_date = datetime.now(timezone.utc).date().isoformat()
         end_date = self._parse_date(get(*self._END_ALIASES)) if status == "resolved" else None

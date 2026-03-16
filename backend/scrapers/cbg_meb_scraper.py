@@ -1,17 +1,12 @@
 """
-CBG-MEB Netherlands Drug Shortages Scraper
-───────────────────────────────────────────
-Source:  College ter Beoordeling van Geneesmiddelen (CBG-MEB)
-URL:     https://www.cbg-meb.nl/onderwerpen/geneesmiddelentekorten
+Netherlands Drug Shortages Scraper (Farmanco / KNMP)
+────────────────────────────────────────────────────
+Source:  Farmanco — KNMP (Royal Dutch Pharmacists Association)
+URL:     https://www.farmanco.knmp.nl
 
-KNOWN LIMITATION
-────────────────
-CBG-MEB website uses Next.js SPA rendering. The shortage data is loaded
-client-side via JavaScript. The server-side HTML returned by a plain GET
-request contains no shortage table or drug records — only the Next.js
-skeleton and __NEXT_DATA__ bootstrap JSON (which contains CMS page metadata,
-not shortage records). Returns 0 records until a REST API endpoint that
-serves the shortage data directly is identified.
+Replaces the previous CBG-MEB scraper which targeted a Next.js SPA page
+(cbg-meb.nl) that returned no data server-side. Farmanco serves 280+
+shortage entries as server-rendered HTML with structured CSS classes.
 
 Data source UUID:  10000000-0000-0000-0000-000000000011  (CBG-MEB, NL)
 Country:           Netherlands
@@ -21,6 +16,7 @@ Country code:      NL
 from __future__ import annotations
 
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -31,40 +27,43 @@ from backend.scrapers.base_scraper import BaseScraper
 
 class CbgMebScraper(BaseScraper):
     """
-    Scraper for CBG-MEB Netherlands drug shortage notices.
+    Scraper for Netherlands drug shortage data from Farmanco (KNMP).
 
-    Currently non-functional: the page is a Next.js SPA. The raw HTML
-    contains no shortage table. normalize() returns [] gracefully.
+    Each shortage entry is an <a class="shortage-flex-table"> element
+    containing <ul><li> items with CSS classes:
+      - sort-type             (e.g. "nieuw" = new)
+      - sort-active-ingredient (drug name)
+      - sort-description       (formulation details)
+      - sort-form              (dosage form)
+      - sort-preferential      (insurance preference)
+      - sort-date              (revision date)
     """
 
     SOURCE_ID:    str = "10000000-0000-0000-0000-000000000011"
     SOURCE_NAME:  str = "CBG-MEB (Netherlands)"
-    BASE_URL:     str = "https://www.cbg-meb.nl/onderwerpen/geneesmiddelentekorten"
+    BASE_URL:     str = "https://www.farmanco.knmp.nl"
     COUNTRY:      str = "Netherlands"
     COUNTRY_CODE: str = "NL"
 
     RATE_LIMIT_DELAY: float = 2.0
 
-    KNOWN_LIMITATION: str = (
-        "CBG-MEB website uses Next.js SPA. Data not available in server-side "
-        "HTML. Returns 0 records until API endpoint is identified."
-    )
+    _HEADERS: dict = {
+        "User-Agent":      "Mozilla/5.0 (compatible; Mederti-Scraper/1.0)",
+        "Accept":          "text/html,application/xhtml+xml",
+        "Accept-Language":  "nl-NL,nl;q=0.9,en;q=0.8",
+    }
 
     # ─────────────────────────────────────────────────────────────────────────
     # fetch()
     # ─────────────────────────────────────────────────────────────────────────
 
     def fetch(self) -> dict:
-        """
-        GET BASE_URL and return the raw HTML with metadata.
-        HTTP errors are caught and surfaced in the returned dict.
-        """
-        self.log.info("Fetching CBG-MEB shortage page", extra={"url": self.BASE_URL})
+        self.log.info("Fetching Farmanco NL shortage page", extra={"url": self.BASE_URL})
         try:
-            resp = self._get(self.BASE_URL)
+            resp = self._get(self.BASE_URL, headers=self._HEADERS)
             html = resp.text
             self.log.info(
-                "CBG-MEB response received",
+                "Farmanco response received",
                 extra={"status": resp.status_code, "bytes": len(html)},
             )
             return {
@@ -75,82 +74,127 @@ class CbgMebScraper(BaseScraper):
             }
         except httpx.HTTPStatusError as exc:
             self.log.warning(
-                "CBG-MEB HTTP error during fetch",
+                "Farmanco HTTP error",
                 extra={"status": exc.response.status_code, "url": self.BASE_URL},
             )
-            return {
-                "html":        "",
-                "byte_length": 0,
-                "status_code": exc.response.status_code,
-                "fetched_at":  datetime.now(timezone.utc).isoformat(),
-                "error":       str(exc),
-            }
+            return {"html": "", "byte_length": 0, "status_code": exc.response.status_code,
+                    "fetched_at": datetime.now(timezone.utc).isoformat(), "error": str(exc)}
         except Exception as exc:
             self.log.warning(
-                "CBG-MEB fetch failed",
+                "Farmanco fetch failed",
                 extra={"error": str(exc), "url": self.BASE_URL},
             )
-            return {
-                "html":        "",
-                "byte_length": 0,
-                "status_code": None,
-                "fetched_at":  datetime.now(timezone.utc).isoformat(),
-                "error":       str(exc),
-            }
+            return {"html": "", "byte_length": 0, "status_code": None,
+                    "fetched_at": datetime.now(timezone.utc).isoformat(), "error": str(exc)}
 
     # ─────────────────────────────────────────────────────────────────────────
     # normalize()
     # ─────────────────────────────────────────────────────────────────────────
 
     def normalize(self, raw: dict) -> list[dict]:
-        """
-        Inspect the fetched HTML for an actual shortage table.
-
-        Markers that indicate real shortage data:
-          - '<table' present in HTML
-          - OR 'tekort' appears alongside drug info (i.e. more than 3 times,
-            since the page title/nav may mention it once or twice)
-
-        The Next.js SPA skeleton typically scores 0 or 1 on these checks.
-        If no real data is found, log a warning and return [].
-        """
-        html:        str = raw.get("html", "")
-        byte_length: int = raw.get("byte_length", 0)
-        status_code       = raw.get("status_code")
-
-        self.log.info(
-            "Inspecting CBG-MEB response for shortage table",
-            extra={
-                "byte_length":      byte_length,
-                "status_code":      status_code,
-                "known_limitation": self.KNOWN_LIMITATION,
-            },
-        )
-
-        html_lower  = html.lower()
-        has_table   = "<table" in html_lower
-        # Count occurrences of 'tekort' (Dutch for 'shortage') with drug data
-        tekort_count = html_lower.count("tekort")
-
-        if not has_table and tekort_count < 4:
-            self.log.warning(
-                "CBG-MEB: no shortage table found in HTML (Next.js SPA) — returning []",
-                extra={
-                    "byte_length":   byte_length,
-                    "has_table":     has_table,
-                    "tekort_count":  tekort_count,
-                    "status_code":   status_code,
-                    "limitation":    self.KNOWN_LIMITATION,
-                },
-            )
+        html: str = raw.get("html", "")
+        if not html or raw.get("byte_length", 0) < 10_000:
+            self.log.warning("Farmanco: response too small or empty")
             return []
 
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            self.log.error("beautifulsoup4 not installed")
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        entries = soup.find_all("a", class_="shortage-flex-table")
+
+        if not entries:
+            self.log.warning("Farmanco: no shortage-flex-table entries found")
+            return []
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        normalised: list[dict] = []
+        skipped = 0
+
+        for entry in entries:
+            try:
+                record = self._parse_entry(entry, today)
+                if record:
+                    normalised.append(record)
+                else:
+                    skipped += 1
+            except Exception as exc:
+                skipped += 1
+                self.log.debug("Farmanco entry parse error", extra={"error": str(exc)})
+
         self.log.info(
-            "CBG-MEB: shortage data appears present — "
-            "full parsing not yet implemented",
-            extra={"byte_length": byte_length, "tekort_count": tekort_count},
+            "Farmanco normalisation done",
+            extra={"total": len(entries), "normalised": len(normalised), "skipped": skipped},
         )
-        return []
+        return normalised
+
+    def _parse_entry(self, entry, today: str) -> dict | None:
+        """Parse a single <a class="shortage-flex-table"> entry."""
+        lis = entry.find_all("li")
+        if len(lis) < 4:
+            return None
+
+        def _get_li(class_name: str) -> str:
+            for li in lis:
+                classes = li.get("class", [])
+                if class_name in classes:
+                    return li.get_text(strip=True)
+            return ""
+
+        entry_type = _get_li("sort-type")              # "nieuw" or ""
+        active_ingredient = _get_li("sort-active-ingredient")
+        description = _get_li("sort-description")
+        dosage_form = _get_li("sort-form")
+        preferential = _get_li("sort-preferential")
+        revision_date_raw = _get_li("sort-date")
+
+        if not active_ingredient or len(active_ingredient) < 2:
+            return None
+
+        # Parse revision date (format: DD-MM-YYYY)
+        revision_date = self._parse_date(revision_date_raw) or today
+
+        # Detail page link
+        href = entry.get("href", "")
+        detail_url = f"{self.BASE_URL}{href}" if href else self.BASE_URL
+
+        # Map to standard fields
+        severity = "high" if entry_type.lower() == "nieuw" else "medium"
+
+        return {
+            "generic_name":  active_ingredient[:200],
+            "status":        "active",
+            "severity":      severity,
+            "start_date":    revision_date,
+            "source_url":    detail_url,
+            "notes":         f"{description}. Form: {dosage_form}".strip(". ") if description else dosage_form,
+            "raw_record": {
+                "type":              entry_type,
+                "active_ingredient": active_ingredient,
+                "description":       description,
+                "dosage_form":       dosage_form,
+                "preferential":      preferential,
+                "revision_date":     revision_date_raw,
+                "detail_href":       href,
+            },
+        }
+
+    @staticmethod
+    def _parse_date(raw: str) -> str | None:
+        if not raw:
+            return None
+        # DD-MM-YYYY
+        m = re.match(r"(\d{1,2})-(\d{1,2})-(\d{4})", raw.strip())
+        if m:
+            day, month, year = m.groups()
+            try:
+                return f"{year}-{int(month):02d}-{int(day):02d}"
+            except ValueError:
+                pass
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -179,7 +223,13 @@ if __name__ == "__main__":
 
         events = scraper.normalize(raw)
         print(f"  events      : {len(events)}")
-        print(f"  limitation  : {scraper.KNOWN_LIMITATION}")
+        if events:
+            print(f"\nFirst 5 records:")
+            for i, e in enumerate(events[:5]):
+                print(f"\n  [{i+1}] {e['generic_name']}")
+                print(f"      severity: {e['severity']}  start: {e['start_date']}")
+                print(f"      notes: {(e.get('notes') or '')[:80]}")
+                print(f"      url: {e['source_url']}")
         print("\nDry run complete.")
         sys.exit(0)
 

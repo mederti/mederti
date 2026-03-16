@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
   Home, Search, Bookmark, TrendingUp,
-  ChevronDown, User, LogOut,
+  ChevronDown, User, LogOut, Menu, X,
 } from "lucide-react";
 import { useUserProfile } from "@/lib/hooks/use-user-profile";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
@@ -61,6 +61,7 @@ export default function SiteNav() {
   const [showCountry, setShowCountry] = useState(false);
   const [showUser, setShowUser]       = useState(false);
   const [searchOpen, setSearchOpen]   = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const countryRef = useRef<HTMLDivElement>(null);
   const userRef    = useRef<HTMLDivElement>(null);
@@ -101,6 +102,11 @@ export default function SiteNav() {
   useEffect(() => {
     if (hideNavSearch && searchOpen) setSearchOpen(false);
   }, [hideNavSearch]);
+
+  /* ── Close mobile menu on route change ── */
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   // Auth check
   useEffect(() => {
@@ -298,6 +304,25 @@ export default function SiteNav() {
           </div>
         )}
 
+        {/* ── Mobile hamburger button (visible below 768px) ── */}
+        <button
+          className="mobile-menu-btn"
+          onClick={() => setMobileMenuOpen(v => !v)}
+          style={{
+            display: "none", alignItems: "center", justifyContent: "center",
+            width: 36, height: 36, borderRadius: 8,
+            background: mobileMenuOpen ? "var(--app-bg-2)" : "transparent",
+            border: "none", cursor: "pointer", color: txtMid,
+            transition: "background 0.15s",
+          }}
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+        >
+          {mobileMenuOpen
+            ? <X width={20} height={20} strokeWidth={1.8} />
+            : <Menu width={20} height={20} strokeWidth={1.8} />
+          }
+        </button>
+
         {/* ── Right: controls ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
 
@@ -469,15 +494,105 @@ export default function SiteNav() {
         </div>
       </div>
 
+      {/* ── Mobile slide-down menu ── */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu-drawer" style={{
+          position: "absolute", top: 64, left: 0, right: 0,
+          background: "#fff", borderBottom: "1px solid var(--app-border)",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
+          zIndex: 99, padding: "8px 0",
+          animation: "mobileMenuSlide 0.18s ease-out",
+        }}>
+          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 16px" }}>
+            {loggedIn ? (
+              <>
+                {appLinks.map(({ href, label, icon: Icon }) => {
+                  const active = pathname === href || (href !== "/home" && pathname?.startsWith(href));
+                  return (
+                    <Link key={href} href={href} style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "12px 12px", borderRadius: 8,
+                      fontSize: 15, fontWeight: active ? 600 : 400,
+                      color: active ? "var(--teal)" : "var(--app-text)",
+                      background: active ? "var(--teal-bg)" : "transparent",
+                      textDecoration: "none",
+                    }}>
+                      <Icon width={18} height={18} strokeWidth={1.5} color={active ? "var(--teal)" : txtDim} />
+                      {label}
+                    </Link>
+                  );
+                })}
+                <div style={{ height: 1, background: "var(--app-border)", margin: "8px 12px" }} />
+                <Link href="/shortages" style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                  color: "var(--app-text)", textDecoration: "none",
+                }}>
+                  Shortages
+                </Link>
+                <Link href="/recalls" style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                  color: "var(--app-text)", textDecoration: "none",
+                }}>
+                  Recalls
+                </Link>
+                <Link href="/intelligence" style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                  color: "var(--teal)", fontWeight: 500, textDecoration: "none",
+                }}>
+                  Intelligence
+                </Link>
+              </>
+            ) : (
+              <>
+                {GUEST_LINKS.map(({ label, href }) => (
+                  <Link key={label} href={href} style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "12px 12px", borderRadius: 8,
+                    fontSize: 15, fontWeight: 500,
+                    color: "var(--app-text)",
+                    textDecoration: "none",
+                  }}>
+                    {label}
+                  </Link>
+                ))}
+                <div style={{ height: 1, background: "var(--app-border)", margin: "8px 12px" }} />
+                <Link href="/shortages" style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                  color: "var(--app-text-3)", textDecoration: "none",
+                }}>
+                  Browse Shortages
+                </Link>
+                <Link href="/recalls" style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                  color: "var(--app-text-3)", textDecoration: "none",
+                }}>
+                  Browse Recalls
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes navSearchFadeIn {
           from { opacity: 0; transform: translateY(-50%) scale(0.97); }
           to   { opacity: 1; transform: translateY(-50%) scale(1); }
         }
+        @keyframes mobileMenuSlide {
+          from { opacity: 0; transform: translateY(-8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
         @media (max-width: 768px) {
           .site-nav > div { padding: 0 16px !important; }
           .site-nav-links { display: none !important; }
           .nav-search-overlay { left: 52px !important; right: 0 !important; }
+          .mobile-menu-btn { display: flex !important; }
         }
       `}</style>
     </nav>

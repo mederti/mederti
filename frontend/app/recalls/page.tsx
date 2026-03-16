@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PackageX } from "lucide-react";
+import { PackageX, WifiOff } from "lucide-react";
 import { api, RecallListResponse } from "@/lib/api";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
@@ -84,10 +84,11 @@ export default async function RecallsPage({ searchParams }: Props) {
   if (sp.status)       fetchParams.status        = sp.status;
 
   let data: RecallListResponse | null = null;
+  let fetchError = false;
   try {
     data = await api.getRecalls(fetchParams);
   } catch {
-    // handled below
+    fetchError = true;
   }
 
   const results    = data?.results ?? [];
@@ -108,7 +109,9 @@ export default async function RecallsPage({ searchParams }: Props) {
             <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--app-text)", margin: 0 }}>Drug Recalls</h1>
           </div>
           <p style={{ fontSize: 14, color: "var(--app-text-3)", margin: 0 }}>
-            {total.toLocaleString()} recall{total !== 1 ? "s" : ""} tracked across global regulators
+            {fetchError
+              ? "Data temporarily unavailable"
+              : `${total.toLocaleString()} recall${total !== 1 ? "s" : ""} tracked across global regulators`}
           </p>
         </div>
       </div>
@@ -189,7 +192,13 @@ export default async function RecallsPage({ searchParams }: Props) {
           borderRadius: 12,
           overflow: "hidden",
         }}>
-          {results.length === 0 ? (
+          {fetchError ? (
+            <div style={{ padding: "64px 24px", textAlign: "center" }}>
+              <WifiOff style={{ width: 36, height: 36, color: "var(--high)", margin: "0 auto 12px", display: "block" }} strokeWidth={1.5} />
+              <p style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text-2)", marginBottom: 6 }}>Unable to load recall data</p>
+              <p style={{ fontSize: 13, color: "var(--app-text-4)" }}>The data service is temporarily unavailable. Please try again in a few moments.</p>
+            </div>
+          ) : results.length === 0 ? (
             <div style={{ padding: "64px 24px", textAlign: "center" }}>
               <PackageX style={{ width: 36, height: 36, color: "var(--app-text-4)", margin: "0 auto 12px", display: "block" }} strokeWidth={1.5} />
               <p style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text-2)", marginBottom: 6 }}>No recalls found</p>

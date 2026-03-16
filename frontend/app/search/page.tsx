@@ -240,7 +240,7 @@ function SearchResults() {
           <div style={{ fontSize: 32, marginBottom: 16 }}>🔍</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>No results for &ldquo;{query}&rdquo;</div>
           <div style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.65, maxWidth: 400, margin: "0 auto" }}>
-            Try a different spelling, the generic name, or a brand name. Shortage data covers 6,000+ drugs across 12 countries.
+            Try a different spelling, the generic name, or a brand name. Shortage data covers 7,800+ drugs across 20+ countries.
           </div>
         </div>
       )}
@@ -283,7 +283,7 @@ export default function SearchPage() {
             </h1>
           </div>
           <p style={{ fontSize: 14, color: "var(--app-text-3)", margin: 0 }}>
-            6,000+ active shortages across 12 countries · Updated every 6 hours
+            Search across 42 regulatory sources in 20+ countries · Updated every 30 minutes
           </p>
         </div>
       </div>

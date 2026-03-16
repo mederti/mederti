@@ -10,19 +10,19 @@ export const metadata: Metadata = {
 
 const FREE_FEATURES = [
   "Drug shortage search",
-  "5 country availability view",
-  "Basic alternative suggestions",
-  "3 drug watchlist alerts",
-  "Weekly shortage brief",
+  "20+ country availability view",
+  "Therapeutic alternative suggestions",
+  "Watchlist with email alerts",
+  "Shortage and recall browsing",
 ];
 
 const PRO_FEATURES = [
   "Everything in Free",
   "Full analyst view with source data",
   "Unlimited watchlist alerts",
-  "6-hourly data refresh",
-  "AI shortage assistant",
-  "Exportable PDF reports",
+  "30-minute data refresh",
+  "Bulk formulary upload",
+  "Supplier intelligence dashboard",
   "Expert curator commentary",
   "Up to 20 team seats",
 ];
@@ -30,9 +30,9 @@ const PRO_FEATURES = [
 const ENT_FEATURES = [
   "Everything in Pro",
   "National supply dashboard",
-  "AI early warning system",
-  "Ministerial briefing generator",
-  "Hourly refresh",
+  "Predictive shortage signals",
+  "Custom reporting",
+  "Priority data refresh",
   "Dedicated data analyst",
   "API access",
   "SLA + compliance docs",
@@ -53,7 +53,7 @@ const FAQS = [
   },
   {
     q: "How often is the data refreshed?",
-    a: "Free users get data updated every 12 hours. Pro users get 6-hourly refreshes. Enterprise customers with critical supply requirements can request hourly updates.",
+    a: "All users get data updated every 30 minutes from 42 regulatory sources across 20+ countries. Enterprise customers can request priority refresh intervals.",
   },
   {
     q: "Is there an API for integrating shortage data into our systems?",

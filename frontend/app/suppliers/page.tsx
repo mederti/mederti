@@ -35,7 +35,7 @@ const content: PersonaContent = {
   ],
 
   previewTitle: "Shortage intelligence, at a glance.",
-  previewUrl: "app.mederti.com/market-intelligence",
+  previewUrl: "mederti.vercel.app/market-intelligence",
   previewRows: [
     { label: "Amoxicillin 500mg \u00B7 AU, GB, CA", badge: "Critical \u00B7 42 days", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },
     { label: "Cisplatin 1mg/ml \u00B7 US, DE, FR", badge: "Critical \u00B7 28 days", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },

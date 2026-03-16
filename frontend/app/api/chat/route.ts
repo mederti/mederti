@@ -4,21 +4,48 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /* ── System prompt ──────────────────────────────────────────── */
 
-const SYSTEM_PROMPT = `You are Mederti, a pharmaceutical shortage intelligence assistant. You help pharmacists, procurement teams, and regulators understand drug shortage situations globally.
+function buildSystemPrompt(userCountry: string): string {
+  const countryNames: Record<string, string> = {
+    AU: "Australia", US: "the United States", GB: "the United Kingdom", CA: "Canada",
+    NZ: "New Zealand", SG: "Singapore", DE: "Germany", FR: "France",
+    IT: "Italy", ES: "Spain", CH: "Switzerland", NO: "Norway", FI: "Finland",
+    IE: "Ireland", SE: "Sweden", NL: "the Netherlands", JP: "Japan", IN: "India",
+    BR: "Brazil", ZA: "South Africa",
+  };
+  const homeLabel = countryNames[userCountry] ?? userCountry;
 
-You have access to a live database of 7,000+ drugs, 14,000+ shortage events, and 12,000+ recalls from 30+ regulatory sources across 20+ countries including Australia (AU), United States (US), United Kingdom (GB), Canada (CA), Germany (DE), France (FR), New Zealand (NZ), Singapore (SG), Ireland (IE), Norway (NO), Finland (FI), Sweden (SE), Netherlands (NL), Switzerland (CH), Italy (IT), Spain (ES), Japan (JP), India (IN), Brazil (BR), and South Africa (ZA).
+  return `You are Mederti, a pharmaceutical shortage intelligence assistant built for pharmacists, procurement teams, hospital supply managers, and regulators.
 
-GUIDELINES:
-- Always search for the drug first when the user mentions a specific drug name.
-- For country-specific questions, use the appropriate ISO country code filter.
-- When asked about alternatives, first search for the drug, then call get_drug_alternatives with the drug_id.
-- For overview questions ("how many shortages", "what's the situation"), use get_shortage_summary.
-- For "shortages in [country]" without a specific drug, use browse_shortages with the country filter.
-- When a user asks a follow-up like "what about in the US?", use context from the conversation to determine which drug they mean.
-- Always cite the data source when available (source_name field).
-- If severity is critical or high, emphasize this.
-- Keep responses concise — 2-4 short paragraphs maximum.
-- You are not a medical professional. Do not provide clinical advice.`;
+DATABASE: 7,000+ drugs, 14,000+ shortage events, 12,000+ recalls from 30+ regulatory sources across 20+ countries (AU, US, GB, CA, DE, FR, NZ, SG, IE, NO, FI, SE, NL, CH, IT, ES, JP, IN, BR, ZA, and more).
+
+USER CONTEXT:
+- The user's home country is **${userCountry}** (${homeLabel}).
+- When the user asks about a drug without specifying a country, ALWAYS check shortages for ${userCountry} first using the country filter.
+- Lead your answer with the status in ${homeLabel}: "In ${homeLabel}, [drug] is/is not currently in shortage." Then add the global picture.
+- If the user explicitly asks about a different country, answer for that country instead.
+- For overview/summary questions, still lead with ${homeLabel} numbers before global totals.
+
+RESPONSE RULES:
+1. Lead with the answer — no preamble, no "Let me look that up."
+2. Always start with the user's home country (${userCountry}) status, then expand globally.
+3. Cite the data source for every claim (source_name field).
+4. Flag critical/high severity shortages prominently.
+5. When a shortage is active, always mention the reason and estimated resolution if available.
+6. Maximum 600 words. Use markdown: bold for drug names and key facts, bullet lists for multiple items.
+7. End with 1-2 specific follow-up suggestions the user can ask next (e.g., "You can ask about alternatives, or check another country.").
+
+TOOL STRATEGY:
+- When the user mentions a drug name: always call search_drugs first, then fetch shortages for ${userCountry} specifically (country="${userCountry}"), THEN fetch global shortages as a second call.
+- Country questions without a drug: use browse_shortages with the country filter.
+- Overview questions ("how many", "what's the situation"): use get_shortage_summary, but also call browse_shortages with country="${userCountry}" to lead with local data.
+- Trends over time: use get_shortage_timeline for a specific drug or get_shortage_statistics for aggregate data.
+- Follow-ups ("what about in the US?"): infer the drug from conversation context.
+
+BOUNDARIES:
+- You are not a medical professional. Never provide clinical dosing advice.
+- If a drug is not found, suggest checking the spelling or trying the generic name.
+- Do not fabricate shortage data — only report what the tools return.`;
+}
 
 /* ── Tool definitions ───────────────────────────────────────── */
 
@@ -102,6 +129,42 @@ const tools: Anthropic.Tool[] = [
         status: { type: "string", enum: ["active", "completed", "ongoing"] },
         page_size: { type: "number", description: "Results per page (default 20, max 50)" },
       },
+    },
+  },
+  {
+    name: "get_shortage_timeline",
+    description: "Get a chronological timeline of shortage events for a specific drug. Shows how shortages have evolved over time — new events, resolutions, status changes. Use for questions about history or trends of a specific drug.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        drug_id: { type: "string", description: "UUID of the drug" },
+        country: { type: "string", description: "Optional ISO 2-letter country code to filter" },
+        months: { type: "number", description: "How many months of history to include (default 24, max 60)" },
+      },
+      required: ["drug_id"],
+    },
+  },
+  {
+    name: "get_shortage_statistics",
+    description: "Get aggregate shortage statistics: breakdowns by country, severity, reason category, and monthly trends. Use for analytical questions like 'which country has the most shortages' or 'what are the main causes of shortages'.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        country: { type: "string", description: "Optional ISO country code to scope stats to one country" },
+        status: { type: "string", enum: ["active", "anticipated", "resolved", "stale"], description: "Filter by status (default: active)" },
+      },
+    },
+  },
+  {
+    name: "get_shortage_forecast",
+    description: "Estimate resolution likelihood for active shortages of a drug based on historical resolution patterns, reason category, and severity. Use when users ask 'when will this be resolved' or 'what's the outlook'.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        drug_id: { type: "string", description: "UUID of the drug" },
+        country: { type: "string", description: "Optional ISO country code" },
+      },
+      required: ["drug_id"],
     },
   },
 ];
@@ -296,6 +359,163 @@ async function executeTool(name: string, input: Record<string, any>): Promise<an
       })) };
     }
 
+    case "get_shortage_timeline": {
+      const months = Math.min(input.months ?? 24, 60);
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - months);
+      let query = db.from("shortage_events")
+        .select("shortage_id, country_code, status, severity, reason_category, start_date, end_date, estimated_resolution_date, last_verified_at, data_sources(name)")
+        .eq("drug_id", input.drug_id)
+        .gte("start_date", cutoff.toISOString().slice(0, 10))
+        .order("start_date", { ascending: true })
+        .limit(100);
+      if (input.country) query = query.eq("country_code", input.country.toUpperCase());
+      const { data } = await query;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = (data ?? []) as any[];
+
+      // Build monthly buckets
+      const buckets: Record<string, { new: number; resolved: number; active: number }> = {};
+      for (const r of rows) {
+        const m = (r.start_date as string).slice(0, 7); // YYYY-MM
+        if (!buckets[m]) buckets[m] = { new: 0, resolved: 0, active: 0 };
+        buckets[m].new++;
+        if (r.status === "resolved") buckets[m].resolved++;
+        else buckets[m].active++;
+      }
+
+      return {
+        drug_id: input.drug_id,
+        period: `${months} months`,
+        total_events: rows.length,
+        active: rows.filter(r => r.status === "active" || r.status === "anticipated").length,
+        resolved: rows.filter(r => r.status === "resolved").length,
+        monthly_trend: Object.entries(buckets)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, data]) => ({ month, ...data })),
+        events: rows.map(r => ({
+          shortage_id: r.shortage_id, country_code: r.country_code,
+          status: r.status, severity: r.severity, reason_category: r.reason_category,
+          start_date: r.start_date, end_date: r.end_date,
+          estimated_resolution_date: r.estimated_resolution_date,
+          source_name: (r.data_sources ?? {}).name ?? null,
+        })),
+      };
+    }
+
+    case "get_shortage_statistics": {
+      const statusFilter = input.status ?? "active";
+      const BATCH = 1000;
+      const allRows: Record<string, unknown>[] = [];
+      let offset = 0;
+      while (true) {
+        let query = db.from("shortage_events")
+          .select("severity, reason_category, country_code, country, start_date")
+          .eq("status", statusFilter)
+          .range(offset, offset + BATCH - 1);
+        if (input.country) query = query.eq("country_code", input.country.toUpperCase());
+        const { data } = await query;
+        const batch = (data ?? []) as Record<string, unknown>[];
+        allRows.push(...batch);
+        if (batch.length < BATCH) break;
+        offset += BATCH;
+      }
+
+      const bySev: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+      const byReason: Record<string, number> = {};
+      const byCountry: Record<string, number> = {};
+      const byMonth: Record<string, number> = {};
+      for (const r of allRows) {
+        const s = ((r.severity as string) ?? "low").toLowerCase();
+        if (s in bySev) bySev[s]++;
+        const rc = (r.reason_category as string) ?? "unknown";
+        byReason[rc] = (byReason[rc] ?? 0) + 1;
+        const cc = (r.country_code as string) ?? "XX";
+        byCountry[cc] = (byCountry[cc] ?? 0) + 1;
+        const sd = r.start_date as string;
+        if (sd) {
+          const m = sd.slice(0, 7);
+          byMonth[m] = (byMonth[m] ?? 0) + 1;
+        }
+      }
+
+      return {
+        status_filter: statusFilter,
+        country_filter: input.country ?? "all",
+        total: allRows.length,
+        by_severity: bySev,
+        by_reason: Object.entries(byReason).sort((a, b) => b[1] - a[1]).map(([reason, count]) => ({ reason, count })),
+        by_country: Object.entries(byCountry).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([country_code, count]) => ({ country_code, count })),
+        monthly_trend: Object.entries(byMonth).sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([month, count]) => ({ month, count })),
+      };
+    }
+
+    case "get_shortage_forecast": {
+      // Get active shortages for this drug
+      let activeQuery = db.from("shortage_events")
+        .select("shortage_id, country_code, status, severity, reason_category, start_date, estimated_resolution_date, data_sources(name)")
+        .eq("drug_id", input.drug_id)
+        .in("status", ["active", "anticipated"])
+        .order("start_date", { ascending: false });
+      if (input.country) activeQuery = activeQuery.eq("country_code", input.country.toUpperCase());
+      const { data: activeShortages } = await activeQuery;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const active = (activeShortages ?? []) as any[];
+
+      // Get resolved shortages for this drug to compute avg resolution time
+      const { data: resolvedData } = await db.from("shortage_events")
+        .select("start_date, end_date, severity, reason_category")
+        .eq("drug_id", input.drug_id)
+        .eq("status", "resolved")
+        .not("end_date", "is", null)
+        .order("end_date", { ascending: false })
+        .limit(50);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (resolvedData ?? []) as any[];
+
+      // Compute average resolution time in days
+      let avgDays = 0;
+      let resolvedCount = 0;
+      for (const r of resolved) {
+        const s = new Date(r.start_date);
+        const e = new Date(r.end_date);
+        if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+          avgDays += (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24);
+          resolvedCount++;
+        }
+      }
+      avgDays = resolvedCount > 0 ? Math.round(avgDays / resolvedCount) : 0;
+
+      // Resolution estimates per active shortage
+      const forecasts = active.map(s => {
+        const startDate = new Date(s.start_date);
+        const daysSinceStart = Math.round((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        const estDays = s.estimated_resolution_date
+          ? Math.round((new Date(s.estimated_resolution_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          : avgDays > 0 ? Math.max(0, avgDays - daysSinceStart) : null;
+
+        return {
+          shortage_id: s.shortage_id,
+          country_code: s.country_code,
+          severity: s.severity,
+          reason_category: s.reason_category,
+          start_date: s.start_date,
+          days_active: daysSinceStart,
+          estimated_resolution_date: s.estimated_resolution_date,
+          estimated_days_remaining: estDays,
+          source_name: (s.data_sources ?? {}).name ?? null,
+        };
+      });
+
+      return {
+        drug_id: input.drug_id,
+        active_shortages: active.length,
+        historical_avg_resolution_days: avgDays,
+        historical_resolved_count: resolvedCount,
+        forecasts,
+      };
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }
@@ -328,10 +548,14 @@ function extractCountry(query: string): string | null {
   if (isoMatch) return isoMatch[0];
   return null;
 }
-const NL_NOISE = /\b(shortage|shortages|supply|status|alternative|alternatives|to|in|for|of|the|this|month|what|is|are|drug|drugs|critical|current|about|australia|united states|us|uk|canada|germany|france|au|gb|ca|de|fr|nz|sg)\b/gi;
+const NL_NOISE = /\b(shortage|shortages|supply|status|alternative|alternatives|to|in|for|of|the|this|month|what|is|are|drug|drugs|critical|current|about|available|availability|show|me|get|find|list|check|any|can|you|tell|give|have|has|there|been|been|how|which|where|when|most|right|now|today|recently|australia|united states|united kingdom|new zealand|south africa|us|uk|canada|germany|france|italy|spain|switzerland|norway|finland|ireland|sweden|netherlands|japan|india|brazil|singapore|au|gb|ca|de|fr|nz|sg|it|es|ch|no|fi|ie|se|nl|jp|br|za)\b/gi;
 
 function extractDrugName(query: string): string {
-  return query.replace(NL_NOISE, "").replace(/\s+/g, " ").trim();
+  return query
+    .replace(NL_NOISE, "")
+    .replace(/[?.!,;:'"()[\]{}]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 
@@ -341,7 +565,7 @@ function classifyIntent(query: string): Intent {
   const q = query.toLowerCase();
   if (/^(hi|hello|hey|good morning|good afternoon)\b/.test(q)) return "greeting";
   if (/\b(how|help|what can you|what do you)\b/.test(q) && !/\b(how many|how is|how are)\b/.test(q)) return "help";
-  if (/\b(summary|overview|how many|total|dashboard|statistics|stats|shortages this month|critical.*shortages|shortages.*critical)\b/.test(q)) return "summary";
+  if (/\b(summary|overview|how many|total|dashboard|statistics|stats|situation|global.*shortage|shortages this month|critical.*shortages|shortages.*critical)\b/.test(q)) return "summary";
   if (/\b(alternative|alternatives|substitute|replace|instead|switch)\b/.test(q)) return "alternatives";
   if (/\b(recall|recalls|recalled|safety|withdrawn)\b/.test(q)) return "recalls";
   if (extractCountry(q) && !/\b(alternative|alternatives)\b/.test(q)) return "shortage_country";
@@ -364,11 +588,13 @@ function emit(controller: ReadableStreamDefaultController, encoder: TextEncoder,
 
 async function conversationalFallback(
   messages: Array<{ role: string; content: string }>,
+  userCountry: string = "AU",
 ): Promise<Response> {
   const query = messages.filter((m) => m.role === "user").pop()?.content ?? "";
   const intent = classifyIntent(query);
-  const country = extractCountry(query);
-  const cc = country ?? null;
+  const explicitCountry = extractCountry(query);
+  // Use explicit country from query if mentioned, otherwise fall back to user's home country
+  const cc = explicitCountry ?? userCountry;
   const countryName = cc ? (COUNTRY_NAMES[cc] ?? cc) : null;
 
   const encoder = new TextEncoder();
@@ -649,17 +875,21 @@ async function conversationalFallback(
 /* ── Main handler ───────────────────────────────────────────── */
 
 export async function POST(req: NextRequest) {
-  const { messages } = (await req.json()) as {
+  const { messages, userCountry: rawCountry } = (await req.json()) as {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
+    userCountry?: string;
   };
 
   if (!messages || messages.length === 0) {
     return new Response(JSON.stringify({ error: "messages required" }), { status: 400 });
   }
 
+  // Sanitise country code — default to AU
+  const userCountry = /^[A-Z]{2}$/.test(rawCountry ?? "") ? rawCountry! : "AU";
+
   // Conversational fallback if no API key
   if (!process.env.ANTHROPIC_API_KEY) {
-    return conversationalFallback(messages);
+    return conversationalFallback(messages, userCountry);
   }
 
   const lastUserMsg = messages.filter((m) => m.role === "user").pop()?.content ?? "";
@@ -685,8 +915,8 @@ export async function POST(req: NextRequest) {
 
           const response = await anthropic.messages.create({
             model: "claude-sonnet-4-20250514",
-            max_tokens: 1024,
-            system: SYSTEM_PROMPT,
+            max_tokens: 4096,
+            system: buildSystemPrompt(userCountry),
             tools,
             messages: currentMessages,
           });
@@ -722,6 +952,12 @@ export async function POST(req: NextRequest) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "shortages", data: Array.isArray(shortages) ? shortages.slice(0, 10) : shortages })}\n\n`));
             } else if (block.name === "get_shortage_summary") {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "summary", data: result })}\n\n`));
+            } else if (block.name === "get_shortage_timeline") {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "timeline", data: result })}\n\n`));
+            } else if (block.name === "get_shortage_statistics") {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "statistics", data: result })}\n\n`));
+            } else if (block.name === "get_shortage_forecast") {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "forecast", data: result })}\n\n`));
             }
 
             toolResults.push({

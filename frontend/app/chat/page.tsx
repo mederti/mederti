@@ -1,187 +1,629 @@
-import Link from "next/link";
-import { MessageSquare, Sparkles } from "lucide-react";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+"use client";
 
-const EXAMPLE_QUESTIONS = [
-  "What are the alternatives to amoxicillin in Australia?",
-  "Show me critical shortages in the US this month",
-  "Which cancer drugs have the most recalls globally?",
-  "What shortage is affecting metformin supply in Canada?",
-  "Compare shortage severity between the UK and Germany",
-  "Are there biosimilars available for adalimumab?",
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import Link from "next/link";
+import { ArrowUp } from "lucide-react";
+import SiteNav from "@/app/components/landing-nav";
+
+/* ── Types ─────────────────────────────────────────────────── */
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  drugs?: DrugHit[];
+  shortages?: ShortageHit[];
+  summary?: SummaryData | null;
+}
+
+interface DrugHit {
+  drug_id: string;
+  generic_name: string;
+  brand_names: string[];
+  atc_code: string | null;
+  active_shortage_count: number;
+}
+
+interface ShortageHit {
+  shortage_id: string;
+  generic_name?: string;
+  country_code: string;
+  status: string;
+  severity: string;
+  reason_category?: string;
+  start_date: string;
+  source_name?: string;
+}
+
+interface SummaryData {
+  total_active: number;
+  by_severity: Record<string, number>;
+  by_country: Array<{ country_code: string; count: number }>;
+  new_this_month: number;
+  resolved_this_month: number;
+}
+
+/* ── Markdown renderer ─────────────────────────────────────── */
+
+function renderInline(text: string, keyPrefix: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  const regex = /\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`/g;
+  let last = 0;
+  let match;
+  let k = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    if (match[1]) parts.push(<strong key={`${keyPrefix}-${k++}`}>{match[1]}</strong>);
+    else if (match[2]) parts.push(<em key={`${keyPrefix}-${k++}`}>{match[2]}</em>);
+    else if (match[3]) parts.push(
+      <code key={`${keyPrefix}-${k++}`} style={{
+        padding: "1px 5px", borderRadius: 4, fontSize: "0.9em",
+        background: "var(--app-bg)", fontFamily: "var(--font-dm-mono), monospace",
+      }}>{match[3]}</code>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+function renderMarkdown(text: string): ReactNode {
+  if (!text) return null;
+  const blocks = text.split(/\n\n+/);
+
+  return blocks.map((block, bi) => {
+    const lines = block.split("\n");
+    const allBullets = lines.every((l) => /^\s*[-•]\s/.test(l) || l.trim() === "");
+    if (allBullets && lines.some((l) => /^\s*[-•]\s/.test(l))) {
+      return (
+        <ul key={bi} style={{ margin: "0 0 16px", paddingLeft: 20, listStyle: "none" }}>
+          {lines
+            .filter((l) => /^\s*[-•]\s/.test(l))
+            .map((l, li) => {
+              const content = l.trimStart().replace(/^[-•]\s/, "");
+              return (
+                <li key={li} style={{ position: "relative", paddingLeft: 14, marginBottom: 6, lineHeight: 1.65 }}>
+                  <span style={{ position: "absolute", left: 0, color: "var(--teal)", fontWeight: 600 }}>{"\u2022"}</span>
+                  {renderInline(content, `${bi}-${li}`)}
+                </li>
+              );
+            })}
+        </ul>
+      );
+    }
+
+    return (
+      <p key={bi} style={{ margin: "0 0 16px", lineHeight: 1.7 }}>
+        {lines.map((line, li) => (
+          <span key={li}>
+            {li > 0 && <br />}
+            {renderInline(line, `${bi}-${li}`)}
+          </span>
+        ))}
+      </p>
+    );
+  });
+}
+
+/* ── Severity badge ────────────────────────────────────────── */
+
+function SeverityBadge({ severity }: { severity: string }) {
+  const map: Record<string, { bg: string; color: string }> = {
+    critical: { bg: "var(--crit-bg)", color: "var(--crit)" },
+    high: { bg: "var(--hi-bg)", color: "var(--hi)" },
+    medium: { bg: "var(--med-bg)", color: "var(--med)" },
+    low: { bg: "var(--low-bg)", color: "var(--low)" },
+  };
+  const s = map[severity?.toLowerCase()] ?? map.low;
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4,
+      background: s.bg, color: s.color, textTransform: "uppercase", letterSpacing: "0.04em",
+    }}>
+      {severity}
+    </span>
+  );
+}
+
+/* ── Drug pills ────────────────────────────────────────────── */
+
+function DrugPills({ drugs }: { drugs: DrugHit[] }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0 4px" }}>
+      {drugs.slice(0, 6).map((d) => (
+        <Link
+          key={d.drug_id}
+          href={`/drugs/${d.drug_id}`}
+          className="chat-drug-pill"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "6px 12px", borderRadius: 20,
+            background: "var(--app-bg)",
+            textDecoration: "none", color: "var(--app-text)",
+            fontSize: 13, fontWeight: 500,
+            transition: "background 0.15s",
+            border: "none",
+          }}
+        >
+          {d.generic_name}
+          {d.active_shortage_count > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 600,
+              padding: "1px 6px", borderRadius: 10,
+              background: "var(--hi-bg)", color: "var(--hi)",
+            }}>
+              {d.active_shortage_count}
+            </span>
+          )}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/* ── Shortage rows — no panel ─────────────────────────────── */
+
+function ShortageTable({ shortages }: { shortages: ShortageHit[] }) {
+  return (
+    <div style={{ margin: "8px 0 4px" }}>
+      {shortages.slice(0, 8).map((s, i) => (
+        <div
+          key={s.shortage_id}
+          style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "8px 0",
+            borderBottom: i < Math.min(shortages.length, 8) - 1 ? "1px solid var(--app-border)" : "none",
+            fontSize: 13,
+          }}
+        >
+          <span style={{
+            fontWeight: 600, fontSize: 11, color: "var(--app-text-3)",
+            fontFamily: "var(--font-dm-mono), monospace",
+            minWidth: 24, letterSpacing: "0.02em",
+          }}>
+            {s.country_code}
+          </span>
+          {s.generic_name && (
+            <span style={{ fontWeight: 500, color: "var(--app-text)" }}>{s.generic_name}</span>
+          )}
+          <SeverityBadge severity={s.severity} />
+          <span style={{
+            color: "var(--app-text-4)", marginLeft: "auto", fontSize: 12,
+            fontFamily: "var(--font-dm-mono), monospace",
+          }}>
+            {s.start_date}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Summary stats — no panel ─────────────────────────────── */
+
+function SummaryStats({ data }: { data: SummaryData }) {
+  const items = [
+    { value: data.total_active, label: "Active", color: "var(--app-text)" },
+    { value: data.by_severity.critical ?? 0, label: "Critical", color: "var(--crit)" },
+    { value: data.by_severity.high ?? 0, label: "High", color: "var(--hi)" },
+    { value: data.new_this_month, label: "New this month", color: "var(--teal)" },
+    { value: data.resolved_this_month, label: "Resolved", color: "var(--low)" },
+  ];
+  return (
+    <div style={{
+      display: "flex", gap: 24, flexWrap: "wrap",
+      margin: "8px 0 4px",
+    }}>
+      {items.map((item) => (
+        <div key={item.label}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: item.color, letterSpacing: "-0.02em" }}>
+            {item.value.toLocaleString()}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--app-text-4)", marginTop: 1 }}>{item.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Suggested queries ─────────────────────────────────────── */
+
+const SUGGESTED_QUERIES = [
+  "What\u2019s the global shortage situation?",
+  "Is amoxicillin available in Australia?",
+  "Alternatives to metformin",
+  "Critical shortages in the US",
+  "Cisplatin recalls",
+  "Which country has the most shortages?",
 ];
 
-export default function ChatPage() {
-  return (
-    <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)" }}>
+/* ── Thinking indicator ────────────────────────────────────── */
 
-      {/* Nav */}
+function ThinkingIndicator() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icon.png" alt="" width={20} height={20} style={{ borderRadius: 5, flexShrink: 0 }} />
+      <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+        <span className="chat-dot" style={{ animationDelay: "0s" }} />
+        <span className="chat-dot" style={{ animationDelay: "0.15s" }} />
+        <span className="chat-dot" style={{ animationDelay: "0.3s" }} />
+      </span>
+    </div>
+  );
+}
+
+/* ── Main chat page ────────────────────────────────────────── */
+
+export default function ChatPage() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    if (messages.length > 0) scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 160) + "px";
+    }
+  }, [input]);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || streaming) return;
+
+    const userMsg: ChatMessage = { role: "user", content: text.trim() };
+    const allMessages = [...messages, userMsg];
+    setMessages(allMessages);
+    setInput("");
+    setStreaming(true);
+
+    if (inputRef.current) inputRef.current.style.height = "auto";
+
+    // Read the user's country from the nav cookie
+    const countryMatch = document.cookie.match(/(?:^|; )mederti-country=([A-Z]{2})/);
+    const userCountry = countryMatch?.[1] ?? "AU";
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
+          userCountry,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.body) throw new Error("No stream");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantContent = "";
+      let assistantDrugs: DrugHit[] = [];
+      let assistantShortages: ShortageHit[] = [];
+      let assistantSummary: SummaryData | null = null;
+      let buffer = "";
+
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const payload = JSON.parse(line.slice(6));
+            if (payload.type === "text" && payload.content) {
+              assistantContent += payload.content;
+            } else if (payload.type === "drugs" && payload.data) {
+              assistantDrugs = [...assistantDrugs, ...payload.data];
+            } else if (payload.type === "shortages" && payload.data) {
+              assistantShortages = [...assistantShortages, ...payload.data];
+            } else if (payload.type === "summary" && payload.data) {
+              assistantSummary = payload.data;
+            } else if (payload.type === "done") {
+              break;
+            }
+
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                role: "assistant",
+                content: assistantContent,
+                drugs: assistantDrugs.length > 0 ? assistantDrugs : undefined,
+                shortages: assistantShortages.length > 0 ? assistantShortages : undefined,
+                summary: assistantSummary,
+              };
+              return updated;
+            });
+          } catch {
+            // ignore parse errors
+          }
+        }
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Unknown error";
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Something went wrong: ${errMsg}. Please try again.` },
+      ]);
+    } finally {
+      setStreaming(false);
+      inputRef.current?.focus();
+    }
+  }, [messages, streaming]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessage(input);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(input);
+    }
+  };
+
+  const isEmpty = messages.length === 0;
+
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column",
+      height: "100vh", background: "var(--app-bg)",
+      color: "var(--app-text)",
+    }}>
       <SiteNav />
 
-      {/* Hero */}
-      <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "48px 24px 44px", textAlign: "center" }}>
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 8,
-            padding: "5px 14px", borderRadius: 20,
-            background: "var(--teal-bg)", border: "1px solid var(--teal-b)",
-            marginBottom: 20,
-          }}>
-            <Sparkles style={{ width: 13, height: 13, color: "var(--teal)" }} strokeWidth={1.8} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--teal)", letterSpacing: "0.03em" }}>
-              Coming soon
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 14 }}>
-            <MessageSquare style={{ width: 28, height: 28, color: "var(--teal)" }} strokeWidth={1.6} />
-            <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--app-text)", margin: 0, letterSpacing: "-0.02em" }}>
-              AI Chat
-            </h1>
-          </div>
-          <p style={{ fontSize: 16, color: "var(--app-text-3)", margin: "0 auto", maxWidth: 520, lineHeight: 1.65 }}>
-            Ask anything about drug shortages, alternatives, and supply intelligence. Get instant, data-backed answers from across 42 global regulatory sources.
-          </p>
+      {/* Scrollable area */}
+      <div
+        ref={scrollAreaRef}
+        style={{
+          flex: 1, overflowY: "auto",
+          display: "flex", flexDirection: "column",
+        }}
+      >
+        <div style={{
+          flex: 1, display: "flex", flexDirection: "column",
+          maxWidth: 720, width: "100%", margin: "0 auto",
+          padding: "0 24px",
+        }}>
+
+          {/* ── Empty state ── */}
+          {isEmpty && (
+            <div style={{
+              flex: 1, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              paddingBottom: 80,
+            }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/icon.png"
+                alt="Mederti"
+                width={40}
+                height={40}
+                style={{ borderRadius: 10, marginBottom: 24 }}
+              />
+
+              <h1 style={{
+                fontSize: 28, fontWeight: 700,
+                color: "var(--app-text)", margin: "0 0 10px",
+                letterSpacing: "-0.02em",
+              }}>
+                Find Short-Supply Drugs Globally
+              </h1>
+
+              <p style={{
+                fontSize: 15, color: "var(--app-text-4)",
+                margin: "0 0 36px", textAlign: "center", maxWidth: 400,
+                lineHeight: 1.6,
+              }}>
+                Ask about drug shortages, alternatives, recalls, or supply intelligence across 30+ countries.
+              </p>
+
+              {/* Suggestion chips — horizontal wrap, white pill style */}
+              <div style={{
+                display: "flex", flexWrap: "wrap", justifyContent: "center",
+                gap: 8,
+                width: "100%", maxWidth: 640,
+              }}>
+                {SUGGESTED_QUERIES.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => sendMessage(q)}
+                    className="chat-chip"
+                    style={{
+                      padding: "10px 20px", borderRadius: 99,
+                      background: "#fff",
+                      border: "1px solid var(--app-border)",
+                      fontSize: 13, color: "var(--app-text-3)",
+                      cursor: "pointer", textAlign: "center",
+                      fontFamily: "var(--font-inter), sans-serif",
+                      transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                      lineHeight: 1.4,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Conversation ── */}
+          {!isEmpty && (
+            <div style={{ paddingTop: 32, paddingBottom: 16 }}>
+              {messages.map((msg, i) => (
+                <div key={i} style={{ marginBottom: 28 }}>
+                  {msg.role === "user" ? (
+                    /* ── User turn ── */
+                    <div style={{
+                      display: "flex", justifyContent: "flex-end",
+                    }}>
+                      <div style={{
+                        maxWidth: "80%",
+                        padding: "12px 18px",
+                        borderRadius: 20,
+                        background: "var(--app-bg-2, #f0f0f0)",
+                        fontSize: 15, lineHeight: 1.6,
+                        color: "var(--app-text)",
+                      }}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  ) : (
+                    /* ── Assistant turn — no panels, just flowing content ── */
+                    <div>
+                      {/* Avatar */}
+                      <div style={{ marginBottom: 6 }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/icon.png"
+                          alt="Mederti"
+                          width={20}
+                          height={20}
+                          style={{ borderRadius: 5 }}
+                        />
+                      </div>
+
+                      {/* Structured data — inline, no cards/panels */}
+                      {msg.summary && <SummaryStats data={msg.summary} />}
+                      {msg.drugs && msg.drugs.length > 0 && <DrugPills drugs={msg.drugs} />}
+                      {msg.shortages && msg.shortages.length > 0 && <ShortageTable shortages={msg.shortages} />}
+
+                      {/* Text — flows naturally */}
+                      {msg.content ? (
+                        <div style={{
+                          fontSize: 15, lineHeight: 1.7,
+                          color: "var(--app-text-2)",
+                          marginTop: (msg.drugs || msg.shortages || msg.summary) ? 12 : 0,
+                        }}>
+                          {renderMarkdown(msg.content)}
+                        </div>
+                      ) : (
+                        streaming && i === messages.length - 1 && (
+                          <ThinkingIndicator />
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 48px" }}>
-
-        {/* Input area */}
-        <div style={{
-          background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
-          padding: "20px", marginBottom: 24, maxWidth: 720, margin: "0 auto 24px",
-        }}>
-          <div style={{ position: "relative" }}>
+      {/* ── Input bar ── */}
+      <div style={{
+        borderTop: "1px solid var(--app-border)",
+        background: "var(--app-bg)",
+        padding: "16px 24px 20px",
+      }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <form
+            onSubmit={handleSubmit}
+            className="chat-input-form"
+            style={{
+              display: "flex", alignItems: "flex-end", gap: 10,
+              background: "var(--app-bg)",
+              border: "1px solid var(--app-border)",
+              borderRadius: 24,
+              padding: "12px 14px 12px 20px",
+              transition: "border-color 0.2s, box-shadow 0.2s",
+            }}
+          >
             <textarea
-              disabled
-              placeholder="Coming soon\u2026"
-              rows={3}
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask anything about drug shortages..."
+              disabled={streaming}
+              rows={1}
               style={{
-                width: "100%", resize: "none",
-                padding: "12px 14px",
-                borderRadius: 8, border: "1px solid var(--app-border)",
-                background: "var(--app-bg)",
-                fontSize: 14, color: "var(--app-text-4)",
+                flex: 1, resize: "none",
+                border: "none", outline: "none",
+                fontSize: 15, lineHeight: 1.5,
                 fontFamily: "var(--font-inter), sans-serif",
-                lineHeight: 1.5,
-                cursor: "not-allowed",
-                boxSizing: "border-box",
-                outline: "none",
+                color: "var(--app-text)",
+                background: "transparent",
+                padding: "4px 0",
+                maxHeight: 160,
               }}
             />
             <button
-              disabled
+              type="submit"
+              disabled={streaming || !input.trim()}
+              className="chat-send-btn"
               style={{
-                position: "absolute", bottom: 10, right: 10,
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "7px 16px", borderRadius: 7,
-                background: "var(--app-bg-2)", border: "1px solid var(--app-border)",
-                color: "var(--app-text-4)", fontSize: 13, fontWeight: 500,
-                cursor: "not-allowed",
-                fontFamily: "var(--font-inter), sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 32, height: 32, borderRadius: "50%",
+                background: streaming || !input.trim() ? "var(--app-border)" : "var(--teal)",
+                color: "#fff", border: "none",
+                cursor: streaming || !input.trim() ? "default" : "pointer",
+                flexShrink: 0,
+                transition: "background 0.15s",
               }}
+              aria-label="Send message"
             >
-              <Sparkles style={{ width: 13, height: 13 }} strokeWidth={1.8} />
-              Ask
+              <ArrowUp style={{ width: 16, height: 16 }} strokeWidth={2.5} />
             </button>
-          </div>
-          <p style={{ fontSize: 12, color: "var(--app-text-4)", margin: "10px 0 0", textAlign: "center" }}>
-            AI chat is under development. In the meantime, use search to explore shortage data.
-          </p>
-        </div>
+          </form>
 
-        {/* Example questions */}
-        <div style={{ maxWidth: 720, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <Sparkles style={{ width: 14, height: 14, color: "var(--app-text-4)" }} strokeWidth={1.6} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Example questions
-            </span>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {EXAMPLE_QUESTIONS.map((q) => {
-              // Extract the key drug or topic for a useful search query
-              const searchMap: Record<string, string> = {
-                "What are the alternatives to amoxicillin in Australia?": "amoxicillin",
-                "Show me critical shortages in the US this month": "shortage",
-                "Which cancer drugs have the most recalls globally?": "cancer",
-                "What shortage is affecting metformin supply in Canada?": "metformin",
-                "Compare shortage severity between the UK and Germany": "shortage",
-                "Are there biosimilars available for adalimumab?": "adalimumab",
-              };
-              const searchQ = searchMap[q] ?? q.split(" ").slice(0, 3).join(" ");
-              return (
-                <Link
-                  key={q}
-                  href={`/search?q=${encodeURIComponent(searchQ)}`}
-                  style={{
-                    display: "inline-block",
-                    padding: "8px 14px",
-                    borderRadius: 8,
-                    background: "#fff",
-                    border: "1px solid var(--app-border)",
-                    fontSize: 13,
-                    color: "var(--app-text-2)",
-                    textDecoration: "none",
-                    lineHeight: 1.45,
-                    transition: "border-color 0.12s, color 0.12s",
-                  }}
-                  className="example-chip"
-                >
-                  {q}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Info panel */}
-        <div style={{
-          maxWidth: 720, margin: "32px auto 0",
-          background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
-          padding: "20px 24px",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <MessageSquare style={{ width: 16, height: 16, color: "var(--teal)" }} strokeWidth={1.7} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>
-              What will AI Chat do?
-            </span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {[
-              "Answer natural-language questions about drug availability and shortage reasons",
-              "Suggest therapeutic alternatives when a drug is in short supply",
-              "Summarise shortage trends across countries and drug classes",
-              "Cite source data from TGA, FDA, Health Canada, MHRA and more",
-            ].map((point) => (
-              <div key={point} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <div style={{
-                  width: 5, height: 5, borderRadius: "50%",
-                  background: "var(--teal)", flexShrink: 0, marginTop: 6,
-                }} />
-                <span style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.55 }}>{point}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--app-border)" }}>
-            <Link href="/search" style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              padding: "9px 18px", borderRadius: 8,
-              background: "var(--teal)", color: "#fff",
-              fontSize: 13, fontWeight: 600, textDecoration: "none",
-            }}>
-              Search shortages now
-            </Link>
+          <div style={{
+            fontSize: 11, color: "var(--app-text-4)",
+            textAlign: "center", marginTop: 8,
+            letterSpacing: "0.01em",
+          }}>
+            AI-powered &middot; 30+ regulatory sources &middot; Not medical advice
           </div>
         </div>
       </div>
 
-      <SiteFooter />
-
       <style>{`
-        .example-chip:hover { border-color: var(--teal-b) !important; color: var(--teal) !important; }
+        @keyframes chatBlink {
+          0%, 80%, 100% { opacity: 0.2; }
+          40% { opacity: 0.8; }
+        }
+        .chat-dot {
+          width: 5px; height: 5px; border-radius: 50%;
+          background: var(--app-text-4);
+          animation: chatBlink 1.2s ease-in-out infinite;
+        }
+        .chat-chip:hover {
+          border-color: var(--teal-b) !important;
+          color: var(--teal) !important;
+          background: var(--teal-bg) !important;
+        }
+        .chat-drug-pill:hover {
+          background: var(--teal-bg) !important;
+        }
+        .chat-input-form:focus-within {
+          border-color: var(--teal-b) !important;
+          box-shadow: 0 0 0 3px rgba(13,148,136,0.08) !important;
+        }
+        @media (max-width: 640px) {
+          .chat-chip { font-size: 12px !important; padding: 10px 14px !important; }
+        }
       `}</style>
     </div>
   );

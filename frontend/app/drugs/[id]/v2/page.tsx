@@ -8,6 +8,7 @@ import SiteFooter from "@/app/components/site-footer";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 import Accordion from "./accordion";
 import DrugChatPanel from "./drug-chat-panel";
+import { buildAiInsightText } from "../build-insight-text";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -354,9 +355,12 @@ export default async function DrugPageV2({ params }: Props) {
   }
 
   /* ── AI insight text ── */
-  const insightText = activeShortages.length > 0
-    ? `This drug is currently under active shortage in ${affectedCountries.size} countr${affectedCountries.size !== 1 ? "ies" : "y"}. Supply disruptions of this type typically persist for 3\u20139 months based on historical patterns. Consider therapeutic alternatives where clinically appropriate.`
-    : `No active shortages are currently reported for ${drug.generic_name}. Monitor regularly as supply conditions can change rapidly.`;
+  const insightText = buildAiInsightText({
+    drugName: drug.generic_name,
+    activeShortages: activeShortages as { country_code?: string; status?: string; severity?: string; reason?: string; start_date?: string; estimated_resolution_date?: string; data_sources?: { name?: string; abbreviation?: string } }[],
+    userCountry,
+    affectedCountries: affectedCountries as Set<string>,
+  });
 
   /* ── Build drugContext for chat panel ── */
   const drugContext = {
@@ -395,7 +399,7 @@ export default async function DrugPageV2({ params }: Props) {
 
       <SiteNav />
 
-      {/* ═══ EXPERIMENTAL BANNER ═══ */}
+      {/* ═══ NAV BAR ═══ */}
       <div style={{
         background: "var(--navy)",
         padding: "10px 0",
@@ -405,11 +409,11 @@ export default async function DrugPageV2({ params }: Props) {
           maxWidth: 1280, margin: "0 auto", padding: "0 32px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <span style={{ fontSize: 12, color: "var(--txt-2)" }}>
-            {"\u2697"} Experimental layout
-          </span>
-          <Link href="/contact" style={{ fontSize: 12, color: "var(--teal-l)", textDecoration: "none" }}>
-            Give feedback {"\u2192"}
+          <Link href="/search" style={{ fontSize: 12, color: "var(--teal-l)", textDecoration: "none" }}>
+            {"\u2190"} Back to search
+          </Link>
+          <Link href={`/drugs/${id}`} style={{ fontSize: 12, color: "var(--txt-2)", textDecoration: "none", opacity: 0.6 }}>
+            {"\u2190"} Default view
           </Link>
         </div>
       </div>
@@ -797,10 +801,10 @@ export default async function DrugPageV2({ params }: Props) {
               </Accordion>
             )}
 
-            {/* Back to standard view */}
+            {/* Back to default view */}
             <div style={{ paddingTop: 8 }}>
               <Link href={`/drugs/${id}`} style={{ fontSize: 13, color: "var(--teal)", textDecoration: "none" }}>
-                {"\u2190"} Back to standard view
+                {"\u2190"} Back to default view
               </Link>
             </div>
           </div>

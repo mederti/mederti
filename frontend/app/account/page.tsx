@@ -243,7 +243,12 @@ export default function AccountPage() {
                     background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
                     padding: "48px 32px", textAlign: "center",
                   }}>
-                    <div style={{ fontSize: 28, marginBottom: 12 }}>🔔</div>
+                    <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                      </svg>
+                    </div>
                     <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>No drugs on your watchlist</div>
                     <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 20 }}>
                       Search for a drug and click &ldquo;Alert me when available&rdquo; to start tracking.

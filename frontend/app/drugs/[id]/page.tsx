@@ -683,6 +683,13 @@ export default async function DrugPage({ params }: Props) {
               </span>
             </div>
             <WatchlistButton drugId={id} hasShortage={!!userShortage} />
+            <Link href={`/drugs/${id}/v2`} style={{
+              fontSize: 12, color: "var(--teal)", textDecoration: "none",
+              padding: "4px 10px", borderRadius: 5,
+              background: "var(--teal-bg)", border: "1px solid var(--teal-b)",
+            }}>
+              Try new layout {"\u2192"}
+            </Link>
           </div>
         </div>
       </div>

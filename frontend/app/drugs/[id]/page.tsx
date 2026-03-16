@@ -74,7 +74,7 @@ interface TimelineEntry {
   date: string;
   source: string;
   description: string;
-  type: "initial" | "escalation" | "de_escalation" | "resolved" | "update";
+  type: "initial" | "escalation" | "de_escalation" | "resolved" | "update" | "anticipated";
   countryCode: string;
 }
 
@@ -82,6 +82,7 @@ const DOT_COLORS: Record<string, string> = {
   initial: "#94a3b8",       // grey
   escalation: "#dc2626",    // red
   de_escalation: "#ca8a04", // amber
+  anticipated: "#d97706",   // warning amber
   resolved: "#16a34a",      // green
   update: "#0d9488",        // teal
 };
@@ -292,6 +293,8 @@ export default async function DrugPage({ params }: Props) {
 
   /* ── Derived data ── */
   const activeShortages = shortages.filter((s: { status: string }) => s.status?.toLowerCase() !== "resolved");
+  const anticipatedShortages = activeShortages.filter((s: { status: string }) => s.status?.toLowerCase() === "anticipated");
+  const confirmedShortages = activeShortages.filter((s: { status: string }) => s.status?.toLowerCase() !== "anticipated");
   const activeClassIRecalls = recalls.filter(
     (r: { recall_class: string; status: string }) => r.recall_class === "I" && r.status === "active"
   );
@@ -303,12 +306,16 @@ export default async function DrugPage({ params }: Props) {
   }, "low");
 
   const affectedCountries = new Set(activeShortages.map((s: { country_code: string }) => s.country_code));
+  const anticipatedCountries = new Set(anticipatedShortages.map((s: { country_code: string }) => s.country_code));
   const isCritical = worstSeverity.toLowerCase() === "critical";
+  const isAnticipatedOnly = activeShortages.length > 0 && confirmedShortages.length === 0;
 
   const statusTheme = activeShortages.length > 0
-    ? (worstSeverity === "low"
-      ? { color: "var(--med)", bg: "var(--med-bg)", border: "var(--med-b)" }
-      : sevColor(worstSeverity))
+    ? (isAnticipatedOnly
+      ? { color: "#d97706", bg: "#fef3c7", border: "#f59e0b44" }
+      : worstSeverity === "low"
+        ? { color: "var(--med)", bg: "var(--med-bg)", border: "var(--med-b)" }
+        : sevColor(worstSeverity))
     : { color: "var(--low)", bg: "var(--low-bg)", border: "var(--low-b)" };
 
   // Get product details for form/strength display
@@ -398,6 +405,8 @@ export default async function DrugPage({ params }: Props) {
     let type: TimelineEntry["type"] = "update";
     if (s.status === "resolved") {
       type = "resolved";
+    } else if (s.status === "anticipated") {
+      type = "anticipated";
     }
 
     // Build description
@@ -505,30 +514,38 @@ export default async function DrugPage({ params }: Props) {
     countryCode: string;
     source: string;
     severity: string;
+    status: string;
     lastUpdated: string;
     count: number;
+    hasAnticipated: boolean;
   }> = {};
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const s of activeShortages as any[]) {
     const cc = s.country_code ?? "";
     const src = abbreviateSource(s.data_sources?.name ?? "", s.data_sources?.abbreviation);
+    const isAnticipated = s.status?.toLowerCase() === "anticipated";
     if (!countryGroups[cc]) {
       countryGroups[cc] = {
         country: s.country ?? cc,
         countryCode: cc,
         source: src,
-        severity: (s.severity ?? "low").toLowerCase(),
+        severity: (s.severity ?? "medium").toLowerCase(),
+        status: s.status?.toLowerCase() ?? "active",
         lastUpdated: s.updated_at ?? s.last_verified_at ?? "",
         count: 0,
+        hasAnticipated: isAnticipated,
       };
     }
     countryGroups[cc].count++;
+    if (isAnticipated) countryGroups[cc].hasAnticipated = true;
+    // Active status takes priority over anticipated
+    if (s.status?.toLowerCase() === "active") countryGroups[cc].status = "active";
     // Keep worst severity
     const existing = SEV_ORDER.indexOf(countryGroups[cc].severity as typeof SEV_ORDER[number]);
-    const current = SEV_ORDER.indexOf((s.severity ?? "low").toLowerCase() as typeof SEV_ORDER[number]);
+    const current = SEV_ORDER.indexOf((s.severity ?? "medium").toLowerCase() as typeof SEV_ORDER[number]);
     if (current >= 0 && current < existing) {
-      countryGroups[cc].severity = (s.severity ?? "low").toLowerCase();
+      countryGroups[cc].severity = (s.severity ?? "medium").toLowerCase();
     }
   }
 
@@ -542,8 +559,10 @@ export default async function DrugPage({ params }: Props) {
         countryCode: cc,
         source: a.source_agency ?? "",
         severity: a.severity ?? a.status ?? "medium",
+        status: "active",
         lastUpdated: a.last_verified_at ?? "",
         count: 1,
+        hasAnticipated: false,
       };
     }
   }
@@ -701,10 +720,21 @@ export default async function DrugPage({ params }: Props) {
 
           {/* 1. MY COUNTRY */}
           {(() => {
+            const myStatus = userShortage ? ((userShortage as { status?: string }).status ?? "active").toLowerCase() : null;
+            const myIsAnticipated = myStatus === "anticipated";
+            const mySevRaw = (userShortage as { severity?: string })?.severity ?? "medium";
             const myTheme = userShortage
-              ? sevColor((userShortage as { severity?: string }).severity ?? "medium")
+              ? (myIsAnticipated
+                ? { color: "#d97706", bg: "#fef3c7", border: "#f59e0b44" }
+                : mySevRaw === "low"
+                  ? { color: "var(--med)", bg: "var(--med-bg)", border: "var(--med-b)" }
+                  : sevColor(mySevRaw))
               : { color: "var(--low)", bg: "var(--low-bg)", border: "var(--low-b)" };
-            const mySev = userShortage ? ((userShortage as { severity?: string }).severity ?? "active") : null;
+            const myLabel = myIsAnticipated
+              ? "Anticipated shortage"
+              : userShortage
+                ? (mySevRaw.charAt(0).toUpperCase() + mySevRaw.slice(1)) + " shortage"
+                : null;
             return (
               <div style={{
                 background: myTheme.bg,
@@ -719,11 +749,13 @@ export default async function DrugPage({ params }: Props) {
                   {userCountryName[userCountry] ?? userCountry}
                 </div>
                 <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 4 }}>
-                  {mySev ? (mySev.charAt(0).toUpperCase() + mySev.slice(1)) + " shortage" : "In supply"}
+                  {myLabel ?? "In supply"}
                 </div>
                 <div style={{ fontSize: 13, color: "var(--app-text-3)" }}>
                   {userShortage
-                    ? ((userShortage as { reason?: string }).reason?.replace(/^availability:\s*/i, "") ?? "Supply disruption")
+                    ? (myIsAnticipated
+                      ? "Supply disruption expected"
+                      : ((userShortage as { reason?: string }).reason?.replace(/^availability:\s*/i, "") ?? "Supply disruption"))
                     : "No shortage reported"}
                 </div>
               </div>
@@ -742,14 +774,20 @@ export default async function DrugPage({ params }: Props) {
             }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: "blink 1.6s ease-in-out infinite" }} />
               {activeShortages.length > 0
-                ? (affectedCountries.size === 1
-                  ? `Shortage in ${activeShortages[0]?.country ?? "1 country"}`
-                  : `Shortage in ${affectedCountries.size} countries`)
+                ? (isAnticipatedOnly
+                  ? (anticipatedCountries.size === 1
+                    ? `Anticipated in ${anticipatedShortages[0]?.country ?? "1 country"}`
+                    : `Anticipated in ${anticipatedCountries.size} countries`)
+                  : (affectedCountries.size === 1
+                    ? `Shortage in ${activeShortages[0]?.country ?? "1 country"}`
+                    : `Shortage in ${affectedCountries.size} countries`))
                 : "Global status"}
             </div>
             <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 4 }}>
               {activeShortages.length > 0
-                ? (worstSeverity.charAt(0).toUpperCase() + worstSeverity.slice(1)) + " shortage"
+                ? isAnticipatedOnly
+                  ? "Anticipated shortage"
+                  : (worstSeverity.charAt(0).toUpperCase() + worstSeverity.slice(1)) + " shortage"
                 : "In supply"}
             </div>
             <div style={{ fontSize: 13, color: "var(--app-text-3)" }}>
@@ -864,9 +902,19 @@ export default async function DrugPage({ params }: Props) {
                     </div>
                   )}
                   {countries.map((g, i) => {
-                    const sc = sevColor(g.severity);
+                    const isAnticipatedOnly = g.status === "anticipated";
+                    // For availability, override "low" green to amber — a shortage is never "available"
+                    const sc = isAnticipatedOnly
+                      ? { color: "#d97706", bg: "#fef3c7", border: "#f59e0b44" }
+                      : g.severity === "low"
+                        ? { color: "var(--med)", bg: "var(--med-bg)", border: "var(--med-b)" }
+                        : sevColor(g.severity);
                     const isUser = g.countryCode === userCountry;
-                    const availText = g.severity === "critical" ? "Not available" : g.severity === "high" ? "Very limited" : g.severity === "medium" ? "Limited" : "Available";
+                    const availText = g.severity === "critical" ? "Not available"
+                      : g.severity === "high" ? "Very limited"
+                      : g.severity === "medium" ? "Limited"
+                      : isAnticipatedOnly ? "Anticipated"
+                      : "Supply disruption";
                     return (
                       <div key={g.countryCode} style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -886,6 +934,11 @@ export default async function DrugPage({ params }: Props) {
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ width: 7, height: 7, borderRadius: "50%", background: sc.color, display: "inline-block", flexShrink: 0 }} />
                           <span style={{ fontSize: 13, fontWeight: 500, color: sc.color }}>{availText}</span>
+                          {g.hasAnticipated && !isAnticipatedOnly && (
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", color: "#d97706", background: "#fef3c7", border: "1px solid #f59e0b44", marginLeft: 2 }}>
+                              Anticipated
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -903,9 +956,11 @@ export default async function DrugPage({ params }: Props) {
                 </div>
               </div>
               <p style={{ fontSize: 14, lineHeight: 1.75, color: "var(--app-text-2)", marginBottom: 14 }}>
-                {activeShortages.length > 0
-                  ? `This drug is currently under active shortage in ${affectedCountries.size} countr${affectedCountries.size !== 1 ? "ies" : "y"}. Supply disruptions of this type typically persist for 3–9 months based on historical patterns. Consider therapeutic alternatives where clinically appropriate.`
-                  : `No active shortages are currently reported for ${drug.generic_name}. Monitor regularly as supply conditions can change rapidly.`}
+                {isAnticipatedOnly
+                  ? `A shortage of ${drug.generic_name} is anticipated in ${anticipatedCountries.size} countr${anticipatedCountries.size !== 1 ? "ies" : "y"}. Early signals suggest supply disruption may be imminent. Consider reviewing therapeutic alternatives and securing supply proactively.`
+                  : activeShortages.length > 0
+                    ? `This drug is currently under active shortage in ${affectedCountries.size} countr${affectedCountries.size !== 1 ? "ies" : "y"}.${anticipatedShortages.length > 0 ? ` Additionally, shortages are anticipated in ${anticipatedCountries.size} more countr${anticipatedCountries.size !== 1 ? "ies" : "y"}.` : ""} Supply disruptions of this type typically persist for 3–9 months based on historical patterns. Consider therapeutic alternatives where clinically appropriate.`
+                    : `No active shortages are currently reported for ${drug.generic_name}. Monitor regularly as supply conditions can change rapidly.`}
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                 {["When will stock return?", "Which alternatives are safe?", "Is my country affected?", "Historical shortage pattern"].map((q) => (
@@ -964,15 +1019,18 @@ export default async function DrugPage({ params }: Props) {
                                   background: entry.type === "escalation" ? "var(--crit-bg)"
                                     : entry.type === "resolved" ? "var(--low-bg)"
                                     : entry.type === "de_escalation" ? "var(--med-bg)"
+                                    : entry.type === "anticipated" ? "#fef3c7"
                                     : "var(--app-bg-2)",
                                   border: `1px solid ${entry.type === "escalation" ? "var(--crit-b)"
                                     : entry.type === "resolved" ? "var(--low-b)"
                                     : entry.type === "de_escalation" ? "var(--med-b)"
+                                    : entry.type === "anticipated" ? "#f59e0b44"
                                     : "var(--app-border)"}`,
                                 }}>
                                   {entry.type === "escalation" ? "Escalation"
                                     : entry.type === "de_escalation" ? "De-escalation"
                                     : entry.type === "resolved" ? "Resolved"
+                                    : entry.type === "anticipated" ? "Anticipated"
                                     : entry.type === "initial" ? "Initial report"
                                     : "Update"}
                                 </span>

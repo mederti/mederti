@@ -395,7 +395,7 @@ export default async function DrugPageV2({ params }: Props) {
 
       <SiteNav />
 
-      {/* ═══ EXPERIMENTAL BANNER ═══ */}
+      {/* ═══ NAV BAR ═══ */}
       <div style={{
         background: "var(--navy)",
         padding: "10px 0",
@@ -405,11 +405,11 @@ export default async function DrugPageV2({ params }: Props) {
           maxWidth: 1280, margin: "0 auto", padding: "0 32px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <span style={{ fontSize: 12, color: "var(--txt-2)" }}>
-            {"\u2697"} Experimental layout
-          </span>
-          <Link href="/contact" style={{ fontSize: 12, color: "var(--teal-l)", textDecoration: "none" }}>
-            Give feedback {"\u2192"}
+          <Link href="/search" style={{ fontSize: 12, color: "var(--teal-l)", textDecoration: "none" }}>
+            {"\u2190"} Back to search
+          </Link>
+          <Link href={`/drugs/${id}`} style={{ fontSize: 12, color: "var(--txt-2)", textDecoration: "none", opacity: 0.6 }}>
+            {"\u2190"} Default view
           </Link>
         </div>
       </div>
@@ -797,10 +797,10 @@ export default async function DrugPageV2({ params }: Props) {
               </Accordion>
             )}
 
-            {/* Back to standard view */}
+            {/* Back to default view */}
             <div style={{ paddingTop: 8 }}>
               <Link href={`/drugs/${id}`} style={{ fontSize: 13, color: "var(--teal)", textDecoration: "none" }}>
-                {"\u2190"} Back to standard view
+                {"\u2190"} Back to default view
               </Link>
             </div>
           </div>

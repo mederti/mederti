@@ -3,21 +3,30 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { getPartnerForCountry } from "@/lib/suppliers";
+import { SupplierDrawer } from "../supplier-drawer";
 
 interface HeaderActionsProps {
   drugId: string;
+  drugName: string;
+  userCountry: string;
+  severity: string;
 }
 
-// TODO: link to /suppliers?drug={drugId} post-raise
-export function HeaderActions({ drugId }: HeaderActionsProps) {
+export function HeaderActions({ drugId, drugName, userCountry, severity }: HeaderActionsProps) {
   const router = useRouter();
   const supabase = createBrowserClient();
 
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | undefined>();
+  const [userOrganisation, setUserOrganisation] = useState<string>("");
   const [watchlistId, setWatchlistId] = useState<string | null>(null);
   const [isWatched, setIsWatched] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [supplierDrawerOpen, setSupplierDrawerOpen] = useState(false);
+
+  const partner = getPartnerForCountry(userCountry);
 
   useEffect(() => {
     async function init() {
@@ -28,6 +37,13 @@ export function HeaderActions({ drugId }: HeaderActionsProps) {
       }
       const uid = session.user.id;
       setUserId(uid);
+      setUserEmail(session.user.email ?? undefined);
+
+      const meta = session.user.user_metadata;
+      console.log("user metadata:", meta);
+      setUserOrganisation(
+        meta?.organisation ?? meta?.company ?? meta?.business_name ?? ""
+      );
 
       const { data } = await supabase
         .from("user_watchlists")
@@ -83,56 +99,75 @@ export function HeaderActions({ drugId }: HeaderActionsProps) {
     setToggling(false);
   }
 
-  function handleFindSupplier() {
-    // TODO: link to /suppliers?drug={drugId} post-raise
-    document.getElementById("country-list")?.scrollIntoView({ behavior: "smooth" });
-  }
-
   return (
-    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-      {/* Find a supplier — solid teal primary action */}
-      <button
-        onClick={handleFindSupplier}
-        style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "7px 12px", borderRadius: 8,
-          fontSize: 12, fontWeight: 500, cursor: "pointer",
-          border: "1px solid var(--teal)",
-          background: "var(--teal)",
-          color: "#fff",
-          fontFamily: "Inter, sans-serif",
-        }}
-      >
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2 3h10l-1 6H3L2 3z"/>
-          <circle cx="5" cy="11.5" r=".8" fill="currentColor" stroke="none"/>
-          <circle cx="9" cy="11.5" r=".8" fill="currentColor" stroke="none"/>
-        </svg>
-        Find a supplier
-      </button>
+    <>
+      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+        {/* Find a supplier */}
+        <button
+          onClick={() => partner && setSupplierDrawerOpen(true)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "7px 12px", borderRadius: 8,
+            fontSize: 12, fontWeight: 500,
+            cursor: partner ? "pointer" : "default",
+            border: "1px solid var(--teal)",
+            background: "var(--teal)",
+            color: "#fff",
+            fontFamily: "Inter, sans-serif",
+            opacity: partner ? 1 : 0.4,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3h10l-1 6H3L2 3z"/>
+            <circle cx="5" cy="11.5" r=".8" fill="currentColor" stroke="none"/>
+            <circle cx="9" cy="11.5" r=".8" fill="currentColor" stroke="none"/>
+          </svg>
+          Find a supplier
+        </button>
 
-      {/* Add to watchlist — neutral secondary */}
-      <button
-        onClick={handleWatchlist}
-        disabled={loading || toggling}
-        style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "7px 12px", borderRadius: 8,
-          fontSize: 12, fontWeight: 500,
-          cursor: loading || toggling ? "not-allowed" : "pointer",
-          border: `1px solid ${isWatched ? "var(--teal-b)" : "var(--app-border)"}`,
-          background: isWatched ? "var(--teal-bg)" : "#fff",
-          color: isWatched ? "var(--teal)" : "var(--app-text-3)",
-          fontFamily: "Inter, sans-serif",
-          transition: "all 0.15s",
-          opacity: loading || toggling ? 0.5 : 1,
-        }}
-      >
-        <svg width="13" height="13" viewBox="0 0 14 14" fill={isWatched ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M7 1l1.5 3 3.5.5-2.5 2.5.5 3.5L7 9l-3 1.5.5-3.5L2 4.5 5.5 4z"/>
-        </svg>
-        {isWatched ? "Watching" : "Add to watchlist"}
-      </button>
-    </div>
+        {!partner && (
+          <span style={{ fontSize: 10, color: "var(--app-text-4)" }}>
+            Not available in your region yet
+          </span>
+        )}
+
+        {/* Add to watchlist — neutral secondary */}
+        <button
+          onClick={handleWatchlist}
+          disabled={loading || toggling}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "7px 12px", borderRadius: 8,
+            fontSize: 12, fontWeight: 500,
+            cursor: loading || toggling ? "not-allowed" : "pointer",
+            border: `1px solid ${isWatched ? "var(--teal-b)" : "var(--app-border)"}`,
+            background: isWatched ? "var(--teal-bg)" : "#fff",
+            color: isWatched ? "var(--teal)" : "var(--app-text-3)",
+            fontFamily: "Inter, sans-serif",
+            transition: "all 0.15s",
+            opacity: loading || toggling ? 0.5 : 1,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill={isWatched ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 1l1.5 3 3.5.5-2.5 2.5.5 3.5L7 9l-3 1.5.5-3.5L2 4.5 5.5 4z"/>
+          </svg>
+          {isWatched ? "Watching" : "Add to watchlist"}
+        </button>
+      </div>
+
+      {partner && (
+        <SupplierDrawer
+          isOpen={supplierDrawerOpen}
+          onClose={() => setSupplierDrawerOpen(false)}
+          drugName={drugName}
+          drugId={drugId}
+          severity={severity}
+          partner={partner}
+          userCountry={userCountry}
+          userEmail={userEmail}
+          userOrganisation={userOrganisation}
+        />
+      )}
+    </>
   );
 }

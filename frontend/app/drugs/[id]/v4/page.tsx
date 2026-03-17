@@ -576,7 +576,12 @@ export default async function DrugPageV4({ params }: Props) {
                 </div>
 
                 {/* Action buttons */}
-                <HeaderActions drugId={id} />
+                <HeaderActions
+                  drugId={id}
+                  drugName={`${drug.generic_name}${drugStrength ? ` ${drugStrength}` : ""}`.trim()}
+                  userCountry={userCountry}
+                  severity={mySevRaw}
+                />
                 </div>
               </div>
 

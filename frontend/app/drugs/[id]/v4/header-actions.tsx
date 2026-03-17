@@ -164,6 +164,7 @@ export function HeaderActions({ drugId, drugName, userCountry, severity }: Heade
           severity={severity}
           partner={partner}
           userCountry={userCountry}
+          userId={userId ?? undefined}
           userEmail={userEmail}
           userOrganisation={userOrganisation}
         />

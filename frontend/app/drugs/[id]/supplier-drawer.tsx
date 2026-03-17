@@ -11,6 +11,7 @@ interface Props {
   severity: string;
   partner: SupplierPartner;
   userCountry: string;
+  userId?: string;
   userEmail?: string;
   userOrganisation?: string;
 }
@@ -22,7 +23,7 @@ const COUNTRY_LABELS: Record<string, string> = {
 
 export function SupplierDrawer({
   isOpen, onClose, drugName, drugId, severity,
-  partner, userCountry, userEmail, userOrganisation,
+  partner, userCountry, userId, userEmail, userOrganisation,
 }: Props) {
   const [quantity, setQuantity] = useState("");
   const [urgency, setUrgency] = useState(
@@ -48,6 +49,7 @@ export function SupplierDrawer({
           drugName, drugId, quantity, urgency,
           organisation, message,
           country: userCountry,
+          userId,
           userEmail,
         }),
       });

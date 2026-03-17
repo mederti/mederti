@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, type ReactNode } from "react"
 import Link from "next/link";
 import { ArrowUp } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -258,9 +259,18 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    createBrowserClient().auth.getSession().then(({ data: { session } }) => {
+      setIsAuthed(!!session);
+      setAuthChecked(true);
+    });
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -382,6 +392,43 @@ export default function ChatPage() {
   };
 
   const isEmpty = messages.length === 0;
+
+  if (authChecked && !isAuthed) {
+    return (
+      <div style={{
+        display: "flex", flexDirection: "column",
+        height: "100vh", background: "var(--app-bg)",
+        color: "var(--app-text)",
+      }}>
+        <SiteNav />
+        <div style={{
+          flex: 1, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 16, textAlign: "center", padding: 24,
+        }}>
+          <div style={{ marginBottom: 4, display: "flex", justifyContent: "center" }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 600 }}>Sign in to use Mederti Intelligence</div>
+          <div style={{ fontSize: 14, color: "var(--app-text-3)", maxWidth: 340, lineHeight: 1.6 }}>
+            Get full access to AI-powered drug shortage intelligence, forecasting, and supplier connections.
+          </div>
+          <Link href="/login?next=/chat" style={{
+            padding: "12px 24px", borderRadius: 10,
+            background: "var(--teal)", color: "#fff",
+            fontSize: 14, fontWeight: 500, textDecoration: "none",
+          }}>
+            Sign in
+          </Link>
+          <Link href="/signup" style={{ fontSize: 13, color: "var(--teal)", textDecoration: "none" }}>
+            Create free account
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{

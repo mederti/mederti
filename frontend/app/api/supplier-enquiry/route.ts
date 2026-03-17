@@ -9,7 +9,7 @@ const resend =
     : null;
 
 export async function POST(req: NextRequest) {
-  const { drugName, drugId, quantity, urgency, organisation, message, country, userEmail } =
+  const { drugName, drugId, quantity, urgency, organisation, message, country, userEmail, userId } =
     await req.json();
 
   if (!drugName || !urgency || !country) {
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
     country,
     partner_id: partner.id,
     user_email: userEmail ?? null,
+    user_id: userId ?? null,
     status: "sent",
   });
 

@@ -25,10 +25,32 @@ interface WatchlistRow {
   drugs: { generic_name: string; brand_names: string[] }[] | null;
 }
 
+interface EnquiryRow {
+  id: string;
+  drug_id: string | null;
+  drug_name: string;
+  quantity: string | null;
+  urgency: string;
+  organisation: string | null;
+  partner_id: string;
+  status: string;
+  country: string;
+  created_at: string;
+}
+
+const PARTNER_NAMES: Record<string, string> = {
+  "barwon-au": "Barwon Pharma",
+  "alliance-gb": "Alliance Healthcare",
+};
+
 function NotSignedIn() {
   return (
     <div style={{ textAlign: "center", padding: "80px 20px" }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      </div>
       <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--app-text)", marginBottom: 8, letterSpacing: "-0.02em" }}>
         Sign in to access your account
       </h2>
@@ -63,7 +85,9 @@ export default function AccountPage() {
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
-  const [activeTab, setActiveTab] = useState<"watchlist" | "settings">("watchlist");
+  const [enquiries, setEnquiries] = useState<EnquiryRow[]>([]);
+  const [enquiriesLoading, setEnquiriesLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"watchlist" | "enquiries" | "settings">("watchlist");
   const [role, setRole] = useState<string>("default");
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleSaved, setRoleSaved] = useState(false);
@@ -74,6 +98,7 @@ export default function AccountPage() {
       setLoading(false);
       if (session?.user) {
         fetchWatchlist(session.user.id);
+        fetchEnquiries(session.user.id);
         // Fetch user profile for role
         supabase.from("user_profiles").select("role").eq("user_id", session.user.id).single()
           .then(({ data }) => { if (data?.role) setRole(data.role); });
@@ -91,6 +116,17 @@ export default function AccountPage() {
       .order("created_at", { ascending: false });
     setWatchlist((data ?? []) as WatchlistRow[]);
     setWatchlistLoading(false);
+  }
+
+  async function fetchEnquiries(uid: string) {
+    setEnquiriesLoading(true);
+    const { data } = await supabase
+      .from("supplier_enquiries")
+      .select("id, drug_id, drug_name, quantity, urgency, organisation, partner_id, status, country, created_at")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false });
+    setEnquiries((data ?? []) as EnquiryRow[]);
+    setEnquiriesLoading(false);
   }
 
   async function removeWatch(id: string) {
@@ -183,7 +219,7 @@ export default function AccountPage() {
               </div>
             </div>
 
-            {(["watchlist", "settings"] as const).map(tab => (
+            {(["watchlist", "enquiries", "settings"] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -197,7 +233,9 @@ export default function AccountPage() {
                   textTransform: "capitalize",
                 }}
               >
-                {tab === "watchlist" ? `Watchlist (${watchlist.length})` : "Settings"}
+                {tab === "watchlist" ? `Watchlist (${watchlist.length})`
+                  : tab === "enquiries" ? `Enquiries (${enquiries.length})`
+                  : "Settings"}
               </button>
             ))}
 
@@ -316,6 +354,96 @@ export default function AccountPage() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "enquiries" && (
+              <div>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--app-text)", marginBottom: 6, marginTop: 0, letterSpacing: "-0.02em" }}>
+                  Supplier enquiries
+                </h2>
+                <p style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 28, marginTop: 0 }}>
+                  Requests you&apos;ve sent to supplier partners via Mederti.
+                </p>
+
+                {enquiriesLoading && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[1, 2].map(i => (
+                      <div key={i} style={{ height: 80, background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10 }} />
+                    ))}
+                  </div>
+                )}
+
+                {!enquiriesLoading && enquiries.length === 0 && (
+                  <div style={{
+                    background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+                    padding: "48px 32px", textAlign: "center",
+                  }}>
+                    <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 3h10l-1 6H3L2 3z" /><circle cx="5" cy="11.5" r=".8" fill="currentColor" stroke="none" /><circle cx="9" cy="11.5" r=".8" fill="currentColor" stroke="none" />
+                      </svg>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>No enquiries yet</div>
+                    <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 20 }}>
+                      Use &ldquo;Find a supplier&rdquo; on any drug page to send an enquiry to a verified partner.
+                    </div>
+                    <Link href="/search" style={{
+                      fontSize: 13, fontWeight: 600, padding: "9px 20px",
+                      background: "var(--teal)", color: "#fff", borderRadius: 7, textDecoration: "none",
+                    }}>
+                      Search drugs →
+                    </Link>
+                  </div>
+                )}
+
+                {!enquiriesLoading && enquiries.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {enquiries.map(row => {
+                      const urgencyStyle = row.urgency === "critical"
+                        ? { bg: "var(--crit-bg)", color: "var(--crit)", border: "var(--crit-b)" }
+                        : row.urgency === "urgent"
+                        ? { bg: "var(--high-bg)", color: "var(--high)", border: "var(--high-b)" }
+                        : { bg: "var(--app-bg)", color: "var(--app-text-4)", border: "var(--app-border)" };
+                      return (
+                        <div key={row.id} style={{
+                          background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10,
+                          padding: "16px 18px",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                            <div style={{ minWidth: 0 }}>
+                              {row.drug_id ? (
+                                <Link href={`/drugs/${row.drug_id}`} style={{ textDecoration: "none" }}>
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>{row.drug_name}</div>
+                                </Link>
+                              ) : (
+                                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>{row.drug_name}</div>
+                              )}
+                              <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 2 }}>
+                                To {PARTNER_NAMES[row.partner_id] ?? row.partner_id} · {row.country}
+                              </div>
+                            </div>
+                            <span style={{
+                              fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 4,
+                              textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0,
+                              background: urgencyStyle.bg, color: urgencyStyle.color,
+                              border: `1px solid ${urgencyStyle.border}`,
+                            }}>
+                              {row.urgency}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--app-text-4)" }}>
+                            {row.quantity && <span>Qty: {row.quantity}</span>}
+                            {row.organisation && <span>Org: {row.organisation}</span>}
+                            <span style={{ marginLeft: "auto", fontFamily: "var(--font-dm-mono), monospace", fontSize: 11 }}>
+                              {new Date(row.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

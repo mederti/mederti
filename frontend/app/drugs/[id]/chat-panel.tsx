@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 interface DrugHit {
   drug_id: string;
@@ -81,6 +83,13 @@ export default function V3ChatPanel({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    createBrowserClient().auth.getSession().then(({ data: { session } }) => {
+      setIsAuthed(!!session);
+    });
+  }, []);
 
   // Focus search input when opening
   useEffect(() => {
@@ -414,77 +423,99 @@ export default function V3ChatPanel({
         flexShrink: 0,
         background: "#fff",
       }}>
-        {/* Chips */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-          {PROMPT_CHIPS.filter((chip) => !usedChips.has(chip)).map((chip) => (
-            <button
-              key={chip}
-              onClick={() => handleChipClick(chip)}
-              disabled={streaming}
-              style={{
-                fontSize: 11,
-                padding: "5px 11px",
-                borderRadius: 6,
-                background: "var(--ind-bg)",
-                color: "var(--indigo)",
-                border: "1px solid var(--ind-b)",
-                cursor: streaming ? "default" : "pointer",
-                fontFamily: "var(--font-inter), sans-serif",
-                transition: "opacity 0.15s",
-                opacity: streaming ? 0.5 : 1,
-              }}
-            >
-              {chip}
-            </button>
-          ))}
-        </div>
+        {isAuthed ? (
+          <>
+            {/* Chips */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {PROMPT_CHIPS.filter((chip) => !usedChips.has(chip)).map((chip) => (
+                <button
+                  key={chip}
+                  onClick={() => handleChipClick(chip)}
+                  disabled={streaming}
+                  style={{
+                    fontSize: 11,
+                    padding: "5px 11px",
+                    borderRadius: 6,
+                    background: "var(--ind-bg)",
+                    color: "var(--indigo)",
+                    border: "1px solid var(--ind-b)",
+                    cursor: streaming ? "default" : "pointer",
+                    fontFamily: "var(--font-inter), sans-serif",
+                    transition: "opacity 0.15s",
+                    opacity: streaming ? 0.5 : 1,
+                  }}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
 
-        {/* Input */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8 }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask about ${drugContext.generic_name} or any drug\u2026`}
-            disabled={streaming}
-            style={{
-              flex: 1,
-              padding: "10px 14px",
-              borderRadius: 8,
-              border: "1px solid var(--app-border)",
-              fontSize: 13,
-              fontFamily: "var(--font-inter), sans-serif",
-              outline: "none",
-              background: "var(--app-bg)",
-              color: "var(--app-text)",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={streaming || !input.trim()}
-            style={{
-              padding: "10px 16px",
-              borderRadius: 8,
-              background: streaming || !input.trim() ? "var(--app-border)" : "var(--teal)",
-              color: "#fff",
-              border: "none",
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: streaming || !input.trim() ? "default" : "pointer",
-              fontFamily: "var(--font-inter), sans-serif",
-              transition: "background 0.15s",
-              flexShrink: 0,
-            }}
-          >
-            Send
-          </button>
-        </form>
+            {/* Input */}
+            <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8 }}>
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={`Ask about ${drugContext.generic_name} or any drug\u2026`}
+                disabled={streaming}
+                style={{
+                  flex: 1,
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  border: "1px solid var(--app-border)",
+                  fontSize: 13,
+                  fontFamily: "var(--font-inter), sans-serif",
+                  outline: "none",
+                  background: "var(--app-bg)",
+                  color: "var(--app-text)",
+                }}
+              />
+              <button
+                type="submit"
+                disabled={streaming || !input.trim()}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                  background: streaming || !input.trim() ? "var(--app-border)" : "var(--teal)",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: streaming || !input.trim() ? "default" : "pointer",
+                  fontFamily: "var(--font-inter), sans-serif",
+                  transition: "background 0.15s",
+                  flexShrink: 0,
+                }}
+              >
+                Send
+              </button>
+            </form>
 
-        {/* Hint */}
-        <div style={{ fontSize: 10, color: "var(--app-text-4)", marginTop: 6, textAlign: "center" }}>
-          {drugContext.generic_name} context loaded &middot; Ask about any drug or shortage
-        </div>
+            {/* Hint */}
+            <div style={{ fontSize: 10, color: "var(--app-text-4)", marginTop: 6, textAlign: "center" }}>
+              {drugContext.generic_name} context loaded &middot; Ask about any drug or shortage
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", padding: "8px 0" }}>
+            <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.6, marginBottom: 10 }}>
+              Sign in to ask questions about this drug, get clinical recommendations, and access supplier intelligence.
+            </div>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
+              <Link href={`/login?next=/drugs/${drugId}`} style={{
+                padding: "8px 16px", borderRadius: 8,
+                background: "var(--teal)", color: "#fff",
+                fontSize: 13, fontWeight: 500, textDecoration: "none",
+              }}>
+                Sign in
+              </Link>
+              <Link href="/signup" style={{ fontSize: 12, color: "var(--teal)", textDecoration: "none" }}>
+                Create free account
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

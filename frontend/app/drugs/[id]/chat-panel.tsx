@@ -374,7 +374,7 @@ export default function V3ChatPanel({
             {msg.role === "assistant" && (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
-                src="/logo-black.png"
+                src="/favicon.ico"
                 alt="Mederti"
                 width={26}
                 height={26}

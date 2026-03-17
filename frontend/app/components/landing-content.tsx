@@ -3,9 +3,9 @@
 import { EmailCapture } from "./email-capture";
 import dynamic from "next/dynamic";
 
-const RegionalSupplyMap = dynamic(
-  () => import("../dashboard/RegionalSupplyMap"),
-  { ssr: false }
+const SpinningGlobe = dynamic(
+  () => import("@/app/components/SpinningGlobe").then(m => m.SpinningGlobe),
+  { ssr: false, loading: () => <div style={{ width: 600, height: 600, background: "#ffffff", borderRadius: "50%", margin: "0 auto" }} /> }
 );
 
 
@@ -138,15 +138,9 @@ export default function LandingContent({ countryCount }: { countryCount: string 
         </div>
 
         <div style={{
-          maxWidth: 1000, margin: "0 auto",
-          boxShadow: "0 4px 24px rgba(15,23,42,0.06)",
-          borderRadius: 14,
-          overflow: "hidden",
+          maxWidth: 620, margin: "0 auto",
         }}>
-          <RegionalSupplyMap
-            onCountryClick={() => {}}
-            activeFilter={null}
-          />
+          <SpinningGlobe width={600} height={600} />
         </div>
       </section>
 

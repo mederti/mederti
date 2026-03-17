@@ -549,7 +549,6 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
             display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
             flexShrink: 0,
           }}>
-            <img src="/logo-black.png" alt="Mederti" style={{ height: 18 }} />
             <button
               onClick={clearChat}
               title="New search"

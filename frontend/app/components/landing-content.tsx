@@ -2,6 +2,10 @@
 
 import { EmailCapture } from "./email-capture";
 import dynamic from "next/dynamic";
+import {
+  Pill, Stethoscope, Building2, Landmark, Truck,
+  Factory, Sparkles, AlertTriangle,
+} from "lucide-react";
 
 const SpinningGlobe = dynamic(
   () => import("@/app/components/SpinningGlobe").then(m => m.SpinningGlobe),
@@ -101,14 +105,14 @@ export default function LandingContent({ countryCount }: { countryCount: string 
                 ))}
               </div>
               <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 8, padding: "14px 16px" }}>
-                <div style={{ fontSize: 10, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>{"\u26A0"} Early warning signals</div>
+                <div style={{ fontSize: 10, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}><AlertTriangle size={10} strokeWidth={1.5} /> Early warning signals</div>
                 {[
-                  { icon: "\uD83C\uDFED", text: "Ciprofloxacin 500mg \u2014 Aurobindo facility flagged by FDA inspection", badge: "HIGH RISK", color: "var(--high)", bg: "var(--high-bg)" },
-                  { icon: "\u2726", text: "Metformin 500mg \u2014 AI pattern match with current 850mg shortage", badge: "AI SIGNAL", color: "var(--indigo)", bg: "var(--ind-bg)" },
-                  { icon: "\uD83C\uDFED", text: "Flucloxacillin \u2014 NMPA China manufacturing suspension flagged", badge: "HIGH RISK", color: "var(--high)", bg: "var(--high-bg)" },
+                  { icon: <Factory size={13} strokeWidth={1.5} color="#1a1a1a" />, text: "Ciprofloxacin 500mg \u2014 Aurobindo facility flagged by FDA inspection", badge: "HIGH RISK", color: "var(--high)", bg: "var(--high-bg)" },
+                  { icon: <Sparkles size={13} strokeWidth={1.5} color="#1a1a1a" />, text: "Metformin 500mg \u2014 AI pattern match with current 850mg shortage", badge: "AI SIGNAL", color: "var(--indigo)", bg: "var(--ind-bg)" },
+                  { icon: <Factory size={13} strokeWidth={1.5} color="#1a1a1a" />, text: "Flucloxacillin \u2014 NMPA China manufacturing suspension flagged", badge: "HIGH RISK", color: "var(--high)", bg: "var(--high-bg)" },
                 ].map((w) => (
                   <div key={w.text} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--app-border)", alignItems: "flex-start" }}>
-                    <span style={{ fontSize: 13, flexShrink: 0 }}>{w.icon}</span>
+                    <span style={{ flexShrink: 0, marginTop: 1 }}>{w.icon}</span>
                     <span style={{ fontSize: 11, color: "var(--app-text-2)", lineHeight: 1.5, flex: 1 }}>{w.text}</span>
                     <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, background: w.bg, color: w.color, whiteSpace: "nowrap", flexShrink: 0 }}>{w.badge}</span>
                   </div>
@@ -161,38 +165,38 @@ export default function LandingContent({ countryCount }: { countryCount: string 
         <div className="lp-who-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
           {[
             {
-              icon: "\uD83D\uDC8A",
+              icon: <Pill size={24} strokeWidth={1.5} color="#1a1a1a" />,
               title: "Pharmacists",
               desc: "Fast answers at the dispensary counter. Is it available? When is it back? What can I use instead?",
               features: ["Real-time availability by country", "AI-matched therapeutic alternatives", "Alert when stock returns", "Mobile-optimised interface"],
             },
             {
-              icon: "\uD83E\uDE7A",
+              icon: <Stethoscope size={24} strokeWidth={1.5} color="#1a1a1a" />,
               title: "Doctors",
               desc: "Know which drugs are in shortage before you write the script. Avoid the callback from a frustrated pharmacist.",
               features: ["Shortage alerts before you prescribe", "Therapeutic alternatives with dosing", "Country-level availability", "Weekly shortage brief"],
             },
             {
-              icon: "\uD83C\uDFE5",
+              icon: <Building2 size={24} strokeWidth={1.5} color="#1a1a1a" />,
               title: "Hospitals",
               desc: "Comprehensive shortage intelligence with source data, confidence scores and procurement guidance.",
               features: ["Full source audit trail", "Manufacturer & supplier data", "Watchlist & bulk alerts", "Exportable reports"],
             },
             {
-              icon: "\uD83C\uDFDB",
+              icon: <Landmark size={24} strokeWidth={1.5} color="#1a1a1a" />,
               title: "Governments",
               desc: "Market-wide intelligence. Early warning signals. Policy-ready reporting. Know before the calls come in.",
               features: ["National supply heatmaps", "AI early warning \u2014 30\u201390 day forecasts", "Global comparison view", "One-click ministerial briefings"],
             },
             {
-              icon: "\uD83D\uDCE6",
+              icon: <Truck size={24} strokeWidth={1.5} color="#1a1a1a" />,
               title: "Suppliers",
               desc: "Turn shortage intelligence into supply opportunity. See where demand is unmet and where you can step in.",
               features: ["Portfolio risk intelligence", "Unmet demand signals", "Global regulatory monitoring", "Market gap analysis"],
             },
           ].map((card) => (
             <div key={card.title} style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "28px 24px" }}>
-              <div style={{ fontSize: 24, marginBottom: 12 }}>{card.icon}</div>
+              <div style={{ marginBottom: 12 }}>{card.icon}</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 8, letterSpacing: "-0.01em" }}>{card.title}</div>
               <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.65, marginBottom: 16 }}>{card.desc}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>

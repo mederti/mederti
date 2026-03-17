@@ -150,6 +150,7 @@ export default function V3ChatPanel({
       const decoder = new TextDecoder();
       let assistantContent = "";
       let buffer = "";
+      let pivotTarget: { drug_id: string; generic_name: string } | null = null;
 
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -172,11 +173,18 @@ export default function V3ChatPanel({
                 updated[updated.length - 1] = { role: "assistant", content: assistantContent };
                 return updated;
               });
+            } else if (payload.type === "pivot" && payload.drug_id) {
+              pivotTarget = { drug_id: payload.drug_id, generic_name: payload.generic_name ?? "" };
             }
           } catch {
             // ignore parse errors
           }
         }
+      }
+
+      // Navigate to the new drug page if a pivot was detected
+      if (pivotTarget) {
+        setTimeout(() => router.push(`/drugs/${pivotTarget!.drug_id}`), 600);
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Unknown error";
@@ -184,7 +192,7 @@ export default function V3ChatPanel({
     } finally {
       setStreaming(false);
     }
-  }, [messages, streaming, drugId, drugContext]);
+  }, [messages, streaming, drugId, drugContext, router]);
 
   const handleChipClick = (chip: string) => {
     setUsedChips((prev) => new Set(prev).add(chip));
@@ -275,7 +283,7 @@ export default function V3ChatPanel({
                       setSearching(false);
                       setSearchQuery("");
                       setSearchResults([]);
-                      router.push(`/drugs/${hit.drug_id}/v3`);
+                      router.push(`/drugs/${hit.drug_id}`);
                     }}
                     style={{
                       display: "flex",
@@ -366,7 +374,7 @@ export default function V3ChatPanel({
             {msg.role === "assistant" && (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
-                src="/icon.png"
+                src="/logo-black.png"
                 alt="Mederti"
                 width={26}
                 height={26}

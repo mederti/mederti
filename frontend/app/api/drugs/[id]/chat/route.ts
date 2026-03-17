@@ -79,6 +79,17 @@ const tools: Anthropic.Tool[] = [
       },
     },
   },
+  {
+    name: "navigate_to_drug_page",
+    description: "Navigate the user to a DIFFERENT drug's page. Call this when the user clearly wants to look at a different drug than the current one (e.g. 'tell me about ibuprofen', 'show me metformin', 'switch to paracetamol'). Do NOT call this for the current drug — only when the user names a different drug.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        drug_name: { type: "string", description: "Name of the drug to navigate to" },
+      },
+      required: ["drug_name"],
+    },
+  },
 ];
 
 /* ── Tool executors ─────────────────────────────────────────── */
@@ -252,6 +263,27 @@ async function executeTool(name: string, input: Record<string, any>): Promise<an
       })) };
     }
 
+    case "navigate_to_drug_page": {
+      const q = (input.drug_name as string).trim();
+      const limit = 3;
+      let rows: Record<string, unknown>[] = [];
+      try {
+        const r = await db.from("drugs").select("id, generic_name, brand_names, atc_code")
+          .textSearch("search_vector", q, { config: "english" }).limit(limit);
+        rows = (r.data ?? []) as Record<string, unknown>[];
+      } catch { /* fallback */ }
+      if (rows.length === 0) {
+        const r = await db.from("drugs").select("id, generic_name, brand_names, atc_code")
+          .ilike("generic_name", `%${q}%`).limit(limit);
+        rows = (r.data ?? []) as Record<string, unknown>[];
+      }
+      if (rows.length > 0) {
+        const best = rows[0];
+        return { found: true, drug_id: best.id, generic_name: best.generic_name, brand_names: best.brand_names ?? [] };
+      }
+      return { found: false, drug_name: q };
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }
@@ -276,6 +308,22 @@ async function conversationalFallback(
   const stream = new ReadableStream({
     async start(controller) {
       try {
+        // ── Detect if the user is asking about a DIFFERENT drug ──
+        const pivotMatch = q.match(/\b(?:about|show|tell me about|look up|switch to|what about|how about|find)\s+(.+?)(?:\?|$)/i);
+        if (pivotMatch) {
+          const candidate = pivotMatch[1].trim().replace(/\?$/, "").trim();
+          const currentName = (drugContext.generic_name ?? "").toLowerCase();
+          if (candidate.length >= 3 && !currentName.includes(candidate) && !candidate.includes(currentName)) {
+            const result = await executeTool("navigate_to_drug_page", { drug_name: candidate });
+            if (result.found && result.drug_id !== drugContext.id) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "pivot", drug_id: result.drug_id, generic_name: result.generic_name })}\n\n`));
+              emit(controller, encoder, "text", `Taking you to **${result.generic_name}**\u2026`);
+              // Let the finally block emit "done" and close the controller
+              return;
+            }
+          }
+        }
+
         if (/\b(alternative|alternatives|substitute|replace|instead|switch)\b/.test(q)) {
           const alts = await executeTool("get_drug_alternatives", { drug_id: drugContext.id });
           if (Array.isArray(alts) && alts.length > 0) {
@@ -337,10 +385,14 @@ async function conversationalFallback(
               : `**${drugContext.generic_name}** has no active shortages in any monitored country. We track 20+ countries across 40+ regulatory sources.`
           );
         } else {
-          // General response about the drug
+          // General response about the drug — prioritise user's country
+          const uc = drugContext.userCountryName ?? drugContext.userCountry ?? "your country";
+          const ucStatus = drugContext.userCountryStatus ?? "no data";
+          const ucSev = drugContext.userCountrySeverity ?? "unknown";
+          const ucLine = ucStatus !== "no data" ? ` In **${uc}**, status is **${ucStatus}** (severity: ${ucSev}).` : ` No data for ${uc}.`;
           emit(controller, encoder, "text",
             drugContext.activeShortageCount > 0
-              ? `**${drugContext.generic_name}** currently has **${drugContext.activeShortageCount} active shortage${drugContext.activeShortageCount !== 1 ? "s" : ""}** across ${drugContext.affectedCountries.length} countr${drugContext.affectedCountries.length !== 1 ? "ies" : "y"} (worst severity: ${drugContext.worstSeverity}). Supply risk score: **${drugContext.riskScore}/100** (${drugContext.riskLevel}).\n\n${drugContext.alternativeCount > 0 ? `There are ${drugContext.alternativeCount} therapeutic alternative${drugContext.alternativeCount !== 1 ? "s" : ""} available. ` : ""}${drugContext.recallCount > 0 ? `${drugContext.recallCount} recall${drugContext.recallCount !== 1 ? "s" : ""} on record. ` : ""}Ask me anything specific about this drug.`
+              ? `**${drugContext.generic_name}** currently has **${drugContext.activeShortageCount} active shortage${drugContext.activeShortageCount !== 1 ? "s" : ""}** across ${drugContext.affectedCountries.length} countr${drugContext.affectedCountries.length !== 1 ? "ies" : "y"} (worst severity: ${drugContext.worstSeverity}).${ucLine}\n\nSupply risk score: **${drugContext.riskScore}/100** (${drugContext.riskLevel}).${drugContext.alternativeCount > 0 ? ` ${drugContext.alternativeCount} therapeutic alternative${drugContext.alternativeCount !== 1 ? "s" : ""} available.` : ""}${drugContext.recallCount > 0 ? ` ${drugContext.recallCount} recall${drugContext.recallCount !== 1 ? "s" : ""} on record.` : ""} Ask me anything specific about this drug.`
               : `**${drugContext.generic_name}** has **no active shortages**. Supply looks stable across all monitored markets.\n\n${drugContext.alternativeCount > 0 ? `${drugContext.alternativeCount} therapeutic alternative${drugContext.alternativeCount !== 1 ? "s" : ""} are on file. ` : ""}${drugContext.recallCount > 0 ? `${drugContext.recallCount} historical recall${drugContext.recallCount !== 1 ? "s" : ""}. ` : ""}Ask me anything about this drug.`
           );
         }
@@ -388,14 +440,18 @@ DRUG CONTEXT:
 - Active shortages: ${ctx.activeShortageCount ?? 0} across ${(ctx.affectedCountries ?? []).length} countries${(ctx.affectedCountries ?? []).length > 0 ? ` (${(ctx.affectedCountries ?? []).join(", ")})` : ""}
 - Worst severity: ${ctx.worstSeverity ?? "none"}
 - Supply risk score: ${ctx.riskScore ?? 0}/100 (${ctx.riskLevel ?? "WATCH"})
+- User's country: ${ctx.userCountryName ?? ctx.userCountry ?? "Australia"} (${ctx.userCountry ?? "AU"})
+- ${ctx.userCountry ?? "AU"} shortage status: ${ctx.userCountryStatus ?? "no data"}
+- ${ctx.userCountry ?? "AU"} severity: ${ctx.userCountrySeverity ?? "unknown"}
 - Alternatives on file: ${ctx.alternativeCount ?? 0}
 - Recalls on record: ${ctx.recallCount ?? 0}
 ${(ctx.shortagesByCountry ?? []).length > 0 ? `- Shortage breakdown: ${ctx.shortagesByCountry.map((c: { country: string; severity: string }) => `${c.country} (${c.severity})`).join(", ")}` : ""}
 
 GUIDELINES:
 - You start focused on THIS drug, but the user may ask about ANY drug, country, or shortage topic.
+- The user is in **${ctx.userCountryName ?? ctx.userCountry ?? "Australia"}** — always prioritise ${ctx.userCountry ?? "AU"} data first when answering about shortages or availability, unless they ask about a specific country.
 - When the user asks about shortages, alternatives, or recalls without specifying a drug, use the drug_id "${id}" for the current drug.
-- If the user asks about a different drug (e.g. "what about amoxicillin?"), use search_drugs to find it and answer about that drug instead.
+- If the user asks about a different drug (e.g. "what about ibuprofen?", "show me metformin", "switch to paracetamol"), call navigate_to_drug_page to take them there. The page will automatically update. Then briefly introduce the new drug using search_drugs or get_drug_shortages with the new drug_id.
 - If the user asks a general question (e.g. "which country has the most shortages?"), answer it using browse_shortages or get_shortage_summary.
 - Keep responses concise — 2-3 short paragraphs maximum.
 - Always cite the data source when available.
@@ -441,6 +497,10 @@ GUIDELINES:
           for (const block of toolUseBlocks) {
             if (block.type !== "tool_use") continue;
             const result = await executeTool(block.name, block.input as Record<string, unknown>);
+            // Emit pivot event when navigating to a different drug
+            if (block.name === "navigate_to_drug_page" && result.found && result.drug_id !== id) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "pivot", drug_id: result.drug_id, generic_name: result.generic_name })}\n\n`));
+            }
             toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
           }
 

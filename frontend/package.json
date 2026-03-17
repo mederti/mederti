@@ -16,6 +16,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "country-flag-icons": "^1.6.15",
+    "d3": "^7.9.0",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.575.0",
@@ -28,12 +29,15 @@
     "resend": "^6.9.2",
     "rss-parser": "^3.13.0",
     "tailwind-merge": "^3.5.0",
+    "topojson-client": "^3.1.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/d3": "^7.4.3",
     "@types/papaparse": "^5.5.2",
+    "@types/topojson-client": "^3.1.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

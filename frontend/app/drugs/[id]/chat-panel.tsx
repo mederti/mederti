@@ -283,7 +283,7 @@ export default function V3ChatPanel({
                       setSearching(false);
                       setSearchQuery("");
                       setSearchResults([]);
-                      router.push(`/drugs/${hit.drug_id}/v3`);
+                      router.push(`/drugs/${hit.drug_id}`);
                     }}
                     style={{
                       display: "flex",
@@ -374,7 +374,7 @@ export default function V3ChatPanel({
             {msg.role === "assistant" && (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
-                src="/icon.png"
+                src="/logo-black.png"
                 alt="Mederti"
                 width={26}
                 height={26}

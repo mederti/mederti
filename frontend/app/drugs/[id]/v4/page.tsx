@@ -193,33 +193,6 @@ export default async function DrugPageV4({ params }: Props) {
   const drugForm = primaryProduct?.dosage_form ?? drug.dosage_forms?.[0] ?? "";
   const drugRoute = primaryProduct?.route ?? drug.routes_of_administration?.[0] ?? "";
 
-  /* ── Drug product image (DailyMed API — single lookup, cached 24h) ── */
-  let drugImageUrl: string | null = null;
-  try {
-    const splRes = await fetch(
-      `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?drug_name=${encodeURIComponent(drug.generic_name)}&page=1&pagesize=1`,
-      { next: { revalidate: 86400 }, signal: AbortSignal.timeout(3000) },
-    );
-    if (splRes.ok) {
-      const setid = (await splRes.json())?.data?.[0]?.setid;
-      if (setid) {
-        const mediaRes = await fetch(
-          `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${setid}/media.json`,
-          { next: { revalidate: 86400 }, signal: AbortSignal.timeout(3000) },
-        );
-        if (mediaRes.ok) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const imgs = ((await mediaRes.json())?.data?.media ?? []) as any[];
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const jpgs = imgs.filter((m: any) => m.mime_type?.includes("image"));
-          if (jpgs.length > 0) drugImageUrl = jpgs[0].url;
-        }
-      }
-    }
-  } catch {
-    // Non-critical — continue without image
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sourceSet = new Set<string>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -502,32 +475,21 @@ export default async function DrugPageV4({ params }: Props) {
             >
               {/* LEFT — Drug Identity */}
               <div style={{ flex: 1, display: "flex", gap: 20 }}>
-                {/* Product image */}
+                {/* Drug icon placeholder */}
                 <div style={{
-                  width: 120, height: 120, minWidth: 120,
-                  borderRadius: 10,
-                  overflow: "hidden",
-                  background: "var(--app-bg-2, #f8fafc)",
-                  border: "1px solid var(--app-border)",
+                  width: 80, height: 80, minWidth: 80,
+                  borderRadius: 14,
+                  background: "var(--teal-bg, #f0fdfa)",
+                  border: "1px solid var(--teal-b, #99f6e4)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   alignSelf: "flex-start",
-                  marginTop: 2,
+                  marginTop: 6,
                 }}>
-                  {drugImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={drugImageUrl}
-                      alt={drug.generic_name}
-                      width={120}
-                      height={120}
-                      style={{ objectFit: "cover", width: "100%", height: "100%" }}
-                    />
-                  ) : (
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-4)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.45 }}>
-                      <path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V7.5L13.5 1.5z" />
-                      <path d="M12 11v4" /><path d="M10 13h4" />
-                    </svg>
-                  )}
+                  {/* Pill/capsule icon */}
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                    <path d="M5.5 18.5l13-13a4.24 4.24 0 0 0-6-6l-13 13a4.24 4.24 0 1 0 6 6z" />
+                    <line x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
+                  </svg>
                 </div>
 
                 <div style={{ flex: 1 }}>

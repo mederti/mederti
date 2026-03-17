@@ -137,7 +137,7 @@ function DrugPills({ drugs }: { drugs: DrugHit[] }) {
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             padding: "8px 16px", borderRadius: 99,
-            background: "#fff",
+            background: "var(--app-bg-2, #f8fafc)",
             border: "1px solid var(--app-border)",
             textDecoration: "none", color: "var(--app-text)",
             fontSize: 13, fontWeight: 500,
@@ -242,7 +242,7 @@ function ThinkingIndicator() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/icon.png" alt="" width={20} height={20} style={{ borderRadius: 5, flexShrink: 0 }} />
+      <img src="/favicon.ico" alt="" width={20} height={20} style={{ borderRadius: 5, flexShrink: 0 }} />
       <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
         <span className="chat-dot" style={{ animationDelay: "0s" }} />
         <span className="chat-dot" style={{ animationDelay: "0.15s" }} />
@@ -414,7 +414,7 @@ export default function ChatPage() {
             }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/icon.png"
+                src="/favicon.ico"
                 alt="Mederti"
                 width={40}
                 height={40}
@@ -495,7 +495,7 @@ export default function ChatPage() {
                       <div style={{ marginBottom: 6 }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src="/icon.png"
+                          src="/favicon.ico"
                           alt="Mederti"
                           width={20}
                           height={20}

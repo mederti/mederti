@@ -70,20 +70,15 @@ function computeForecast(
 
   if (activeEvents.length === 0) return null;
 
-  /* ── Days since shortage started ── */
+  /* ── Local market check — only show forecast if user's country is affected ── */
   const countryEvent = activeEvents.find(
-    (e) => e.country_code === userCountry,
+    (e) => (e.country_code ?? "").toUpperCase() === userCountry.toUpperCase(),
   );
-  const earliestEvent = [...activeEvents].sort(
-    (a, b) =>
-      new Date(a.start_date ?? a.created_at ?? 0).getTime() -
-      new Date(b.start_date ?? b.created_at ?? 0).getTime(),
-  )[0];
+  if (!countryEvent) return null; // No local shortage → no forecast
+
   const shortageStart = new Date(
-    countryEvent?.start_date ??
-      countryEvent?.created_at ??
-      earliestEvent?.start_date ??
-      earliestEvent?.created_at ??
+    countryEvent.start_date ??
+      countryEvent.created_at ??
       Date.now(),
   );
   const daysElapsed = Math.max(

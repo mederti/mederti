@@ -212,13 +212,13 @@ export default function LandingChatClient() {
               }}>
                 {/* Message bubble */}
                 <div style={{
-                  padding: "12px 16px",
-                  borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                  background: msg.role === "user" ? "var(--teal)" : "#fff",
+                  padding: msg.role === "user" ? "12px 16px" : "4px 0",
+                  borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : 0,
+                  background: msg.role === "user" ? "var(--teal)" : "transparent",
                   color: msg.role === "user" ? "#fff" : "var(--app-text)",
                   fontSize: 14, lineHeight: 1.6,
-                  border: msg.role === "assistant" ? "1px solid var(--app-border)" : "none",
-                  boxShadow: msg.role === "assistant" ? "0 1px 4px rgba(0,0,0,0.04)" : "none",
+                  border: "none",
+                  boxShadow: "none",
                 }}>
                   {/* Attached files in user message */}
                   {msg.files && msg.files.length > 0 && (
@@ -333,8 +333,8 @@ export default function LandingChatClient() {
           {loading && (
             <div style={{ display: "flex", justifyContent: "flex-start" }}>
               <div style={{
-                padding: "12px 16px", borderRadius: "16px 16px 16px 4px",
-                background: "#fff", border: "1px solid var(--app-border)",
+                padding: "4px 0",
+                background: "transparent",
                 display: "flex", alignItems: "center", gap: 8,
                 fontSize: 14, color: "var(--app-text-4)",
               }}>

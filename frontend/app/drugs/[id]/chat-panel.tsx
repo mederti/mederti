@@ -383,9 +383,9 @@ export default function V3ChatPanel({
             )}
             <div style={{
               maxWidth: "82%",
-              padding: "11px 15px",
-              borderRadius: msg.role === "user" ? "14px 14px 3px 14px" : "14px 14px 14px 3px",
-              background: msg.role === "user" ? "var(--teal)" : "#F1F5F9",
+              padding: msg.role === "user" ? "11px 15px" : "4px 0",
+              borderRadius: msg.role === "user" ? "14px 14px 3px 14px" : 0,
+              background: msg.role === "user" ? "var(--teal)" : "transparent",
               color: msg.role === "user" ? "#fff" : "var(--app-text-2)",
               fontSize: 13,
               lineHeight: 1.65,

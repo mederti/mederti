@@ -257,13 +257,13 @@ export default function DrugChatPanel({
           >
             <div style={{
               maxWidth: "85%",
-              padding: "10px 14px",
-              borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
-              background: msg.role === "user" ? "var(--teal)" : "#fff",
+              padding: msg.role === "user" ? "10px 14px" : "4px 0",
+              borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : 0,
+              background: msg.role === "user" ? "var(--teal)" : "transparent",
               color: msg.role === "user" ? "#fff" : "var(--app-text-2)",
               fontSize: 13,
               lineHeight: 1.6,
-              border: msg.role === "user" ? "none" : "1px solid var(--app-border)",
+              border: "none",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
             }}>

@@ -24,7 +24,14 @@ function severityColor(s: string | null) {
   return                       { color: "var(--low)",  bg: "var(--low-bg)"  };
 }
 
+const COUNTRY_NAMES: Record<string, string> = {
+  US: "United States", CA: "Canada", AU: "Australia", GB: "United Kingdom",
+  EU: "European Union", DE: "Germany", FR: "France", IT: "Italy", ES: "Spain",
+  IE: "Ireland", FI: "Finland", NO: "Norway", CH: "Switzerland", NZ: "New Zealand",
+};
+
 function DrugCard({ drug, altCounts }: { drug: DrugResult; altCounts: Record<string, number> }) {
+  const isCatalogue = drug.source === "catalogue";
   const activeShortages = (drug.shortages || []).filter(s => s.status === "active" || s.status === "anticipated");
   const countries = [...new Set(activeShortages.map(s => s.country_code))];
   const topSeverity = activeShortages.find(s => s.severity === "critical")?.severity
@@ -32,72 +39,86 @@ function DrugCard({ drug, altCounts }: { drug: DrugResult; altCounts: Record<str
     || activeShortages[0]?.severity;
   const alts = altCounts[drug.drug_id] ?? 0;
 
+  const card = (
+    <div style={{
+      background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
+      padding: "20px 24px", cursor: isCatalogue ? "default" : "pointer",
+      transition: "border-color 0.15s, box-shadow 0.15s",
+    }}
+      onMouseEnter={e => { if (!isCatalogue) { (e.currentTarget as HTMLElement).style.borderColor = "var(--teal)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 12px rgba(13,148,136,0.1)"; } }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--app-border)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 4, letterSpacing: "-0.01em" }}>
+            {drug.generic_name}
+          </div>
+          {drug.brand_names.length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
+              {drug.brand_names.slice(0, 3).join(" · ")}
+              {drug.brand_names.length > 3 && ` +${drug.brand_names.length - 3} more`}
+            </div>
+          )}
+        </div>
+        {drug.atc_code && (
+          <span style={{
+            fontSize: 11, fontWeight: 600, color: "var(--teal)", background: "var(--teal-bg)",
+            padding: "3px 8px", borderRadius: 4, fontFamily: "var(--font-dm-mono), monospace",
+            flexShrink: 0,
+          }}>
+            {drug.atc_code}
+          </span>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {isCatalogue ? (
+          <span style={{ fontSize: 12, color: "var(--app-text-3)" }}>
+            Registered in {COUNTRY_NAMES[drug.source_country ?? ""] ?? drug.source_country} via {drug.source_name}
+            {drug.registration_number && (
+              <span style={{ color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace", marginLeft: 6, fontSize: 11 }}>
+                {drug.registration_number}
+              </span>
+            )}
+          </span>
+        ) : drug.active_shortage_count > 0 ? (
+          <>
+            {topSeverity && (
+              <span style={{
+                ...severityColor(topSeverity),
+                fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4,
+                textTransform: "uppercase", letterSpacing: "0.05em",
+              }}>
+                {topSeverity}
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: "var(--app-text-3)" }}>
+              {drug.active_shortage_count} active shortage{drug.active_shortage_count !== 1 ? "s" : ""}
+            </span>
+            {countries.length > 0 && (
+              <span style={{ fontSize: 12, color: "var(--app-text-4)" }}>
+                · {countries.slice(0, 5).join(", ")}{countries.length > 5 ? ` +${countries.length - 5}` : ""}
+              </span>
+            )}
+          </>
+        ) : (
+          <span style={{ fontSize: 12, color: "var(--low)", fontWeight: 500 }}>
+            No active shortages
+          </span>
+        )}
+        {!isCatalogue && alts > 0 && (
+          <span style={{ fontSize: 12, color: "var(--app-text-4)", marginLeft: "auto" }}>
+            {alts} alternative{alts !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
+  if (isCatalogue) return card;
   return (
     <Link href={`/drugs/${drug.drug_id}`} style={{ textDecoration: "none", color: "inherit" }}>
-      <div style={{
-        background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
-        padding: "20px 24px", cursor: "pointer",
-        transition: "border-color 0.15s, box-shadow 0.15s",
-      }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--teal)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 12px rgba(13,148,136,0.1)"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--app-border)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 10 }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 4, letterSpacing: "-0.01em" }}>
-              {drug.generic_name}
-            </div>
-            {drug.brand_names.length > 0 && (
-              <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-                {drug.brand_names.slice(0, 3).join(" · ")}
-                {drug.brand_names.length > 3 && ` +${drug.brand_names.length - 3} more`}
-              </div>
-            )}
-          </div>
-          {drug.atc_code && (
-            <span style={{
-              fontSize: 11, fontWeight: 600, color: "var(--teal)", background: "var(--teal-bg)",
-              padding: "3px 8px", borderRadius: 4, fontFamily: "var(--font-dm-mono), monospace",
-              flexShrink: 0,
-            }}>
-              {drug.atc_code}
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          {drug.active_shortage_count > 0 ? (
-            <>
-              {topSeverity && (
-                <span style={{
-                  ...severityColor(topSeverity),
-                  fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4,
-                  textTransform: "uppercase", letterSpacing: "0.05em",
-                }}>
-                  {topSeverity}
-                </span>
-              )}
-              <span style={{ fontSize: 12, color: "var(--app-text-3)" }}>
-                {drug.active_shortage_count} active shortage{drug.active_shortage_count !== 1 ? "s" : ""}
-              </span>
-              {countries.length > 0 && (
-                <span style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-                  · {countries.slice(0, 5).join(", ")}{countries.length > 5 ? ` +${countries.length - 5}` : ""}
-                </span>
-              )}
-            </>
-          ) : (
-            <span style={{ fontSize: 12, color: "var(--low)", fontWeight: 500 }}>
-              ✓ No active shortages
-            </span>
-          )}
-          {alts > 0 && (
-            <span style={{ fontSize: 12, color: "var(--app-text-4)", marginLeft: "auto" }}>
-              {alts} alternative{alts !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-      </div>
+      {card}
     </Link>
   );
 }
@@ -240,7 +261,7 @@ function SearchResults() {
           <div style={{ fontSize: 32, marginBottom: 16 }}>🔍</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>No results for &ldquo;{query}&rdquo;</div>
           <div style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.65, maxWidth: 400, margin: "0 auto" }}>
-            Try a different spelling, the generic name, or a brand name. Shortage data covers 7,800+ drugs across 20+ countries.
+            Try a different spelling, the generic name, or a brand name. Covers 95,000+ registered drugs across the US, Canada, and 20+ countries.
           </div>
         </div>
       )}
@@ -283,7 +304,7 @@ export default function SearchPage() {
             </h1>
           </div>
           <p style={{ fontSize: 14, color: "var(--app-text-3)", margin: 0 }}>
-            Search across 42 regulatory sources in 20+ countries · Updated every 30 minutes
+            95,000+ registered drugs · 42 regulatory sources · 20+ countries
           </p>
         </div>
       </div>

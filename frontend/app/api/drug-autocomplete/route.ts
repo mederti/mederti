@@ -49,8 +49,8 @@ export async function GET(req: NextRequest) {
   const term = `%${q}%`;
   const qLower = q.toLowerCase();
 
-  // Round 1: search both tables in parallel
-  const [drugsRes, productsRes] = await Promise.all([
+  // Round 1: search drugs, products, and catalogue in parallel
+  const [drugsRes, productsRes, catalogueRes] = await Promise.all([
     sb
       .from("drugs")
       .select("id, generic_name, dosage_forms, strengths")
@@ -61,10 +61,16 @@ export async function GET(req: NextRequest) {
       .select("id, product_name, dosage_form, strength, country")
       .ilike("product_name", term)
       .limit(12),
+    sb
+      .from("drug_catalogue")
+      .select("id, drug_id, generic_name, brand_name, dosage_form, strength, source_country, source_name")
+      .ilike("generic_name", term)
+      .limit(12),
   ]);
 
   const drugRows = drugsRes.data ?? [];
   const productRows = productsRes.data ?? [];
+  const catalogueRows = catalogueRes.data ?? [];
 
   // Round 2: fetch shortage data in parallel
   const drugIds = drugRows.map((d) => d.id);
@@ -138,6 +144,24 @@ export async function GET(req: NextRequest) {
       severity: worstSeverity(sevs),
       shortageCount: sevs.length,
       href: `/search?q=${encodeURIComponent(p.product_name)}`,
+    });
+  }
+
+  // Add catalogue entries not already covered
+  for (const c of catalogueRows) {
+    const name = c.generic_name?.toLowerCase();
+    if (!name || coveredNames.has(name)) continue;
+    coveredNames.add(name);
+    const href = c.drug_id ? `/drugs/${c.drug_id}` : `/search?q=${encodeURIComponent(c.generic_name)}`;
+    items.push({
+      id: c.id,
+      type: "drug",
+      name: c.generic_name,
+      form: c.dosage_form ?? null,
+      strength: c.strength ?? null,
+      severity: null,
+      shortageCount: 0,
+      href,
     });
   }
 

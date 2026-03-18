@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { MobileSupplierPage } from "./MobileSupplierPage";
 import { BottomNav } from "./BottomNav";
+import { V4BellButton } from "@/app/drugs/[id]/v4/bell-button";
 import type { SupplierPartner } from "@/lib/suppliers";
 
 const SEV_ORDER = ["critical", "high", "medium", "low"] as const;
@@ -236,6 +237,9 @@ export function MobileDrugPage({
           >
             Full detail
           </a>
+          <div style={{ position: "relative", width: 42, height: 42, flexShrink: 0 }}>
+            <V4BellButton drugId={drug.id} hasShortage={hasShortage} />
+          </div>
         </div>
 
         {/* AI insight */}

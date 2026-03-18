@@ -163,12 +163,109 @@ export default async function DrugPage({ params }: Props) {
     }
   }
 
+  /* ── Catalogue fallback for drugs not in drugs table ── */
   if (!drug) {
+    const { data: catEntry } = await supabase
+      .from("drug_catalogue")
+      .select("id, generic_name, brand_name, strength, dosage_form, route, source_name, source_country, registration_number, registration_status, sponsor")
+      .eq("id", id)
+      .single();
+
+    if (!catEntry) {
+      return (
+        <div style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ textAlign: "center", color: "var(--app-text-3)" }}>
+            <p style={{ fontSize: 18, marginBottom: 8 }}>Drug not found</p>
+            <Link href="/search" style={{ color: "var(--teal)", fontSize: 14, textDecoration: "none" }}>{"\u2190"} Back to search</Link>
+          </div>
+        </div>
+      );
+    }
+
+    /* Render a minimal stable-supply page for catalogue-only drugs */
+    const catCountry = catEntry.source_country ?? "AU";
+    const catFlag = COUNTRY_NAMES[catCountry] ?? catCountry;
     return (
-      <div style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center", color: "var(--app-text-3)" }}>
-          <p style={{ fontSize: 18, marginBottom: 8 }}>Drug not found</p>
-          <Link href="/dashboard" style={{ color: "var(--teal)", fontSize: 14, textDecoration: "none" }}>{"\u2190"} Back to dashboard</Link>
+      <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
+        <SiteNav />
+        <div style={{ background: "var(--navy)", padding: "8px 24px", display: "flex", alignItems: "center", borderBottom: "1px solid var(--bd)" }}>
+          <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>{"\u2190"} Back to search</Link>
+        </div>
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px" }}>
+          {/* Drug header */}
+          <div style={{ marginBottom: 24 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em", margin: 0 }}>
+              {catEntry.generic_name}
+              {catEntry.strength && <span style={{ fontWeight: 400, color: "var(--app-text-3)", fontSize: 18, marginLeft: 8 }}>{catEntry.strength}</span>}
+            </h1>
+            {catEntry.brand_name && catEntry.brand_name !== catEntry.generic_name && (
+              <div style={{ fontSize: 13, color: "var(--app-text-3)", marginTop: 4 }}>{catEntry.brand_name}</div>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              {catEntry.dosage_form && <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: "1px solid var(--app-border)", color: "var(--app-text-3)" }}>{catEntry.dosage_form}</span>}
+              {catEntry.route && <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: "1px solid var(--app-border)", color: "var(--app-text-3)" }}>{catEntry.route}</span>}
+              <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: "1px solid var(--app-border)", color: "var(--app-text-3)" }}>{catEntry.source_name}</span>
+            </div>
+          </div>
+
+          {/* In supply card */}
+          <div style={{
+            background: "var(--low-bg)", border: "1px solid var(--low-b)", borderRadius: 14,
+            padding: "20px 24px", marginBottom: 20,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--low)", marginBottom: 6 }}>
+              {catFlag} &middot; Supply status
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 600, color: "var(--app-text)", marginBottom: 4 }}>In supply</div>
+            <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.6 }}>
+              No shortage has been reported for this drug. It is registered as <strong>{catEntry.registration_status ?? "active"}</strong> with {catEntry.source_name}.
+            </div>
+          </div>
+
+          {/* Registration details */}
+          <div style={{
+            background: "var(--app-bg-2)", border: "1px solid var(--app-border)", borderRadius: 12,
+            padding: "16px 20px", marginBottom: 20,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-4)", marginBottom: 12 }}>
+              Registration
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px", fontSize: 13 }}>
+              {catEntry.registration_number && (
+                <div>
+                  <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Registration number</div>
+                  <div style={{ color: "var(--app-text)", fontFamily: "monospace", fontSize: 12 }}>{catEntry.registration_number}</div>
+                </div>
+              )}
+              <div>
+                <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Source</div>
+                <div style={{ color: "var(--app-text)" }}>{catEntry.source_name} ({catEntry.source_country})</div>
+              </div>
+              {catEntry.sponsor && (
+                <div>
+                  <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Sponsor</div>
+                  <div style={{ color: "var(--app-text)" }}>{catEntry.sponsor}</div>
+                </div>
+              )}
+              <div>
+                <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Status</div>
+                <div style={{ color: "var(--low)", fontWeight: 500 }}>{catEntry.registration_status ?? "Active"}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* AI insight */}
+          <div style={{
+            background: "var(--ind-bg)", border: "1px solid var(--ind-b)", borderRadius: 12,
+            padding: "14px 18px",
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--indigo)", marginBottom: 6 }}>
+              AI insight
+            </div>
+            <div style={{ fontSize: 13, color: "var(--app-text-2)", lineHeight: 1.6 }}>
+              No active shortages are currently reported for {catEntry.generic_name}. Supply appears stable. This drug is registered with {catEntry.source_name} and no disruptions have been flagged by any monitored regulatory source.
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -254,6 +254,7 @@ export default function SiteNav() {
                 <input
                   ref={searchInputRef}
                   {...ac.inputProps}
+                  suppressHydrationWarning
                   onKeyDown={(e) => {
                     if (e.key === "Escape" && !ac.isOpen) {
                       setSearchOpen(false);

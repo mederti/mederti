@@ -9,7 +9,7 @@ import {
 
 const SpinningGlobe = dynamic(
   () => import("@/app/components/SpinningGlobe").then(m => m.SpinningGlobe),
-  { ssr: false, loading: () => <div style={{ width: 600, height: 600, background: "#ffffff", borderRadius: "50%", margin: "0 auto" }} /> }
+  { ssr: false, loading: () => <div style={{ width: 520, height: 520, background: "#ffffff", borderRadius: "50%", margin: "0 auto" }} /> }
 );
 
 
@@ -137,14 +137,14 @@ export default function LandingContent({ countryCount }: { countryCount: string 
             Drug shortages are a global problem.
           </h2>
           <p style={{ fontSize: 15, color: "var(--app-text-3)", maxWidth: 520, lineHeight: 1.65, margin: "0 auto" }}>
-            We track shortage signals across {countryCount}+ countries in real time. Hover to explore.
+            Tracking shortage signals across 15 countries in real time.
           </p>
         </div>
 
         <div style={{
-          maxWidth: 620, margin: "0 auto",
+          maxWidth: 560, margin: "0 auto", padding: "8px 0 16px",
         }}>
-          <SpinningGlobe width={600} height={600} />
+          <SpinningGlobe width={520} height={520} />
         </div>
       </section>
 

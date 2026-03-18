@@ -412,6 +412,7 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
                 aria-activedescendant={ac.inputProps["aria-activedescendant"]}
                 aria-autocomplete={ac.inputProps["aria-autocomplete"]}
                 aria-controls={ac.inputProps["aria-controls"]}
+                suppressHydrationWarning
                 style={{
                   flex: 1, padding: "14px 8px",
                   border: "none", outline: "none",

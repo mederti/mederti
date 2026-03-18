@@ -1,9 +1,11 @@
 import SiteNav from "./components/landing-nav";
 import SiteFooter from "./components/site-footer";
 import LandingPageClient from "./components/landing-page-client";
+import { MobileHome } from "./components/mobile/MobileHome";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getDevice } from "@/lib/get-device";
 
 export const revalidate = 300; // 5 min ISR
 
@@ -17,6 +19,12 @@ export default async function Home() {
     // redirect() throws a special error — re-throw it
     if (e && typeof e === "object" && "digest" in e) throw e;
     // Otherwise ignore auth errors and show landing page
+  }
+
+  // Mobile → completely different layout
+  const device = await getDevice();
+  if (device === "mobile") {
+    return <MobileHome />;
   }
 
   // Fetch live stats from Supabase (same source as dashboard)

@@ -10,6 +10,9 @@ import { buildAiInsightText } from "./build-insight-text";
 import { ShortageForcast } from "./forecast";
 import { V4BellButton } from "./v4/bell-button";
 import { HeaderActions } from "./v4/header-actions";
+import { getDevice } from "@/lib/get-device";
+import { MobileDrugPage } from "@/app/components/mobile/MobileDrugPage";
+import { getPartnerForCountry } from "@/lib/suppliers";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -411,6 +414,23 @@ export default async function DrugPage({ params }: Props) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     shortagesByCountry: countries.map((c: any) => ({ country: c.country, code: c.countryCode, severity: c.severity })),
   };
+
+  /* ── Mobile layout ── */
+  const device = await getDevice();
+  if (device === "mobile") {
+    const mobilePartner = getPartnerForCountry(userCountry);
+    return (
+      <MobileDrugPage
+        drug={drug}
+        activeShortages={activeShortages}
+        userCountry={userCountry}
+        partner={mobilePartner}
+        drugStrength={drugStrength}
+        predictedReturnDate={predictedReturnDate}
+        confidence={confidence}
+      />
+    );
+  }
 
   /* ── Render ── */
   return (

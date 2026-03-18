@@ -502,6 +502,11 @@ GUIDELINES:
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "pivot", drug_id: result.drug_id, generic_name: result.generic_name })}\n\n`));
             }
             toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
+
+            // Emit pivot event when navigating to a different drug
+            if (block.name === "navigate_to_drug_page" && result.found && result.drug_id !== id) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "pivot", drug_id: result.drug_id, generic_name: result.generic_name })}\n\n`));
+            }
           }
 
           currentMessages = [

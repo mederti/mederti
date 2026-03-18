@@ -191,7 +191,7 @@ export default function V3ChatPanel({
         }
       }
 
-      // Navigate to the new drug page if a pivot was detected
+      // Navigate to the new drug page after stream completes
       if (pivotTarget) {
         setTimeout(() => router.push(`/drugs/${pivotTarget!.drug_id}`), 600);
       }
@@ -292,7 +292,7 @@ export default function V3ChatPanel({
                       setSearching(false);
                       setSearchQuery("");
                       setSearchResults([]);
-                      router.push(`/drugs/${hit.drug_id}`);
+                      router.push(`/drugs/${hit.drug_id}/v3`);
                     }}
                     style={{
                       display: "flex",
@@ -383,7 +383,7 @@ export default function V3ChatPanel({
             {msg.role === "assistant" && (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
-                src="/favicon.ico"
+                src="/icon.png"
                 alt="Mederti"
                 width={26}
                 height={26}

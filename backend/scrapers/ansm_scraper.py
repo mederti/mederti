@@ -264,13 +264,18 @@ class ANSMScraper(BaseScraper):
         start_date = (self._parse_date(rec.get("date_raw", ""))
                       or datetime.now(timezone.utc).date().isoformat())
 
+        # Map statut to availability and use as reason (best available from HTML)
+        avail_map = {"active": "unavailable", "anticipated": "limited", "resolved": "available"}
+        availability = avail_map.get(status, None)
+
         return {
             "generic_name":              generic_name,
             "brand_names":               brand_names,
             "status":                    status,
             "severity":                  "high" if status == "active" else "medium",
-            "reason":                    None,
-            "reason_category":           "unknown",
+            "reason":                    raw_status or None,
+            "reason_category":           self._map_reason(raw_status),
+            "availability_status":       availability,
             "start_date":                start_date,
             "end_date":                  None,
             "estimated_resolution_date": None,

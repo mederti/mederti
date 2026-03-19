@@ -457,23 +457,30 @@ export default function LandingContent({ countryCount }: { countryCount: string 
         </div>
       </section>
 
-      {/* WEEKLY BRIEF */}
-      <section id="brief" style={{ padding: "48px 0 64px" }}>
+      {/* WEEKLY BRIEF + EMAIL CAPTURE — dark section (full-bleed) */}
+      <section id="brief" style={{
+        position: "relative",
+        background: "#070B14",
+        padding: "72px 24px 0",
+        marginLeft: "calc(-50vw + 50%)",
+        marginRight: "calc(-50vw + 50%)",
+        width: "100vw",
+      }}>
         <div className="lp-brief-grid" style={{
           display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, alignItems: "center",
-          maxWidth: 960, margin: "0 auto",
+          maxWidth: 960, margin: "0 auto", paddingBottom: 64,
         }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "#7dd3fc", marginBottom: 12 }}>
               Weekly brief
             </div>
-            <h2 style={{ fontSize: "clamp(22px,3vw,32px)", fontWeight: 700, lineHeight: 1.2, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 12 }}>
+            <h2 style={{ fontSize: "clamp(22px,3vw,32px)", fontWeight: 700, lineHeight: 1.2, letterSpacing: "-0.025em", color: "#fff", marginBottom: 12 }}>
               The shortage intelligence your inbox has been missing.
             </h2>
-            <p style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.7, marginBottom: 6 }}>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", lineHeight: 1.7, marginBottom: 6 }}>
               Every Monday {"\u2014"} new shortages declared, resolutions expected, supply signals to watch. Written by AI, verified by 20 years of industry expertise.
             </p>
-            <p style={{ fontSize: 12, color: "var(--app-text-4)", marginBottom: 24 }}>
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 24 }}>
               Free forever {"\u00B7"} No credit card {"\u00B7"} Unsubscribe anytime
             </p>
             <EmailCapture
@@ -486,22 +493,21 @@ export default function LandingContent({ countryCount }: { countryCount: string 
 
           {/* Email preview */}
           <div style={{
-            background: "#fff", border: "1px solid var(--app-border)",
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: 12, overflow: "hidden",
-            boxShadow: "0 4px 24px rgba(15,23,42,0.06)",
           }}>
             <div style={{
-              background: "#fff", padding: "12px 16px",
-              borderBottom: "1px solid var(--app-border)",
+              padding: "12px 16px",
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
             }}>
-              <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>From: <strong style={{ color: "var(--app-text-2)" }}>Mederti Weekly {"\u00B7"} intelligence@mederti.com</strong></div>
-              <div style={{ fontSize: 11, color: "var(--app-text-4)", marginTop: 2 }}>
-                Subject: <strong style={{ color: "var(--app-text)" }}>Week of 17 Feb 2026 {"\u2014"} 5 new shortages, antibiotic crisis deepens</strong>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>From: <strong style={{ color: "rgba(255,255,255,0.7)" }}>Mederti Weekly {"\u00B7"} intelligence@mederti.com</strong></div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+                Subject: <strong style={{ color: "#fff" }}>Week of 17 Feb 2026 {"\u2014"} 5 new shortages, antibiotic crisis deepens</strong>
               </div>
             </div>
             <div style={{ padding: "0 16px 16px" }}>
-              <div style={{ fontSize: 12, color: "var(--app-text-3)", lineHeight: 1.8, padding: "12px 0", borderBottom: "1px solid var(--app-border)" }}>
-                <strong style={{ color: "var(--app-text-2)" }}>This week across 9 countries:</strong> 5 new shortages declared {"\u00B7"} 2 resolved {"\u00B7"} Antibiotic category now at highest severity since 2023.
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.8, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                <strong style={{ color: "rgba(255,255,255,0.7)" }}>This week across 9 countries:</strong> 5 new shortages declared {"\u00B7"} 2 resolved {"\u00B7"} Antibiotic category now at highest severity since 2023.
               </div>
               {[
                 { color: "red" as const, label: "New critical:", detail: "Amoxicillin 500mg escalated in AU + UK" },
@@ -511,8 +517,8 @@ export default function LandingContent({ countryCount }: { countryCount: string 
               ].map((row, i) => (
                 <div key={i} style={{
                   display: "flex", alignItems: "center", gap: 8,
-                  padding: "9px 0", borderBottom: i < 3 ? "1px solid var(--app-border)" : "none",
-                  fontSize: 12, color: "var(--app-text-2)",
+                  padding: "9px 0", borderBottom: i < 3 ? "1px solid rgba(255,255,255,0.08)" : "none",
+                  fontSize: 12, color: "rgba(255,255,255,0.7)",
                 }}>
                   <Dot color={row.color} />
                   <span><strong>{row.label}</strong>&nbsp;{row.detail}</span>
@@ -521,24 +527,24 @@ export default function LandingContent({ countryCount }: { countryCount: string 
             </div>
           </div>
         </div>
-      </section>
 
-      {/* EMAIL CAPTURE */}
-      <div id="signup" style={{
-        textAlign: "center", padding: "48px 24px",
-        background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
-        marginBottom: 48,
-      }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--app-text)", marginBottom: 8, letterSpacing: "-0.02em" }}>
-          Get early access
-        </h2>
-        <p style={{ fontSize: 14, color: "var(--app-text-3)", marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>
-          Join pharmacists, procurement managers and regulators on the waitlist. Free to start.
-        </p>
-        <div style={{ maxWidth: 420, margin: "0 auto" }}>
-          <EmailCapture />
+        {/* EMAIL CAPTURE — integrated into dark section */}
+        <div id="signup" style={{
+          textAlign: "center", padding: "48px 24px 64px",
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+          maxWidth: 960, margin: "0 auto",
+        }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 8, letterSpacing: "-0.02em" }}>
+            Get early access
+          </h2>
+          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>
+            Join pharmacists, procurement managers and regulators on the waitlist. Free to start.
+          </p>
+          <div style={{ maxWidth: 420, margin: "0 auto" }}>
+            <EmailCapture />
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

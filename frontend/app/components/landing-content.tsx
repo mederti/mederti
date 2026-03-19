@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { EmailCapture } from "./email-capture";
 import dynamic from "next/dynamic";
 import {
@@ -9,7 +10,7 @@ import {
 
 const SpinningGlobe = dynamic(
   () => import("@/app/components/SpinningGlobe").then(m => m.SpinningGlobe),
-  { ssr: false, loading: () => <div style={{ width: 812, height: 812, background: "#ffffff", borderRadius: "50%", margin: "0 auto" }} /> }
+  { ssr: false, loading: () => <div style={{ width: 812, height: 812, background: "#0a1628", borderRadius: "50%", margin: "0 auto" }} /> }
 );
 
 
@@ -22,6 +23,55 @@ function Dot({ color }: { color: "red" | "amber" | "green" }) {
 }
 
 export default function LandingContent({ countryCount }: { countryCount: string }) {
+  const starfieldRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = starfieldRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    function drawStars() {
+      if (!ctx || !canvas) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // 220 small stars
+      for (let i = 0; i < 220; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const radius = Math.random() * 1.2;
+        const opacity = 0.2 + Math.random() * 0.7;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${opacity})`;
+        ctx.fill();
+      }
+      // 15 brighter stars with glow
+      for (let i = 0; i < 15; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const radius = 1.2 + Math.random() * 0.8;
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, radius * 3);
+        glow.addColorStop(0, "rgba(255,255,255,0.9)");
+        glow.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.beginPath();
+        ctx.arc(x, y, radius * 3, 0, Math.PI * 2);
+        ctx.fillStyle = glow;
+        ctx.fill();
+      }
+    }
+
+    const resize = () => {
+      canvas.width = canvas.offsetWidth * (window.devicePixelRatio || 1);
+      canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+      ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+      drawStars();
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 0" }}>
 
@@ -123,27 +173,71 @@ export default function LandingContent({ countryCount }: { countryCount: string 
         </div>
       </div>
 
-      {/* GLOBAL SHORTAGE HEATMAP */}
-      <section id="global" style={{ padding: "48px 0 64px" }}>
-        <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 10 }}>
-            Global coverage
-          </div>
+      {/* GLOBAL SHORTAGE HEATMAP — dark space (full-bleed breakout) */}
+      <section id="global" style={{
+        position: "relative",
+        background: "#070B14",
+        overflow: "hidden",
+        padding: "80px 24px 60px",
+        marginLeft: "calc(-50vw + 50%)",
+        marginRight: "calc(-50vw + 50%)",
+        width: "100vw",
+      }}>
+        {/* Star field canvas */}
+        <canvas
+          ref={starfieldRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Subtle radial glow behind globe */}
+        <div style={{
+          position: "absolute",
+          left: "50%",
+          top: "55%",
+          transform: "translate(-50%, -50%)",
+          width: 700,
+          height: 700,
+          borderRadius: "50%",
+          background: "radial-gradient(ellipse, rgba(30,58,95,0.4) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }} />
+
+        {/* Heading */}
+        <div style={{ position: "relative", zIndex: 2, textAlign: "center", marginBottom: 8 }}>
           <h2 style={{
-            fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700,
-            lineHeight: 1.15, letterSpacing: "-0.025em",
-            color: "var(--app-text)", margin: "0 auto 12px",
+            fontSize: "clamp(24px, 4vw, 42px)",
+            fontWeight: 700,
+            color: "#FFFFFF",
+            letterSpacing: "-0.025em",
+            margin: 0,
           }}>
             Drug shortages are a global problem.
           </h2>
-          <p style={{ fontSize: 15, color: "var(--app-text-3)", maxWidth: 520, lineHeight: 1.65, margin: "0 auto" }}>
+        </div>
+
+        {/* Subtitle */}
+        <div style={{ position: "relative", zIndex: 2, textAlign: "center", marginBottom: 32 }}>
+          <p style={{
+            fontSize: 16,
+            color: "rgba(255,255,255,0.45)",
+            margin: 0,
+          }}>
             Tracking shortage signals across 15 countries in real time.
           </p>
         </div>
 
+        {/* Globe */}
         <div style={{
-          maxWidth: 812, margin: "0 auto", padding: "8px 0 16px",
-          filter: "drop-shadow(0 8px 24px rgba(15,23,42,0.12))",
+          position: "relative", zIndex: 2,
+          display: "flex", justifyContent: "center",
+          maxWidth: 812, margin: "0 auto",
+          filter: "drop-shadow(0 0 40px rgba(125,211,252,0.08))",
         }}>
           <SpinningGlobe width={812} height={812} />
         </div>

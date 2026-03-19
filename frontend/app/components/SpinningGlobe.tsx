@@ -20,7 +20,7 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
 
       const colorScale = d3.scaleLinear<string>()
         .domain([0, 100])
-        .range(["#e7f5f4", "#0F172A"]);
+        .range(["#1e3a5f", "#7dd3fc"]);
 
       const svg = d3.select(container).append("svg")
         .attr("width", width)
@@ -58,17 +58,17 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
         { coords: [-118.2, 34.1] }, { coords: [37.6, 55.8] },
       ];
 
-      // Globe background
+      // Globe background — dark ocean
       svg.append("circle")
         .attr("cx", width / 2).attr("cy", height / 2)
         .attr("r", projection.scale()!)
-        .attr("fill", "#ffffff");
+        .attr("fill", "#0a1628");
 
-      // Graticule
+      // Graticule — subtle on dark
       svg.append("path")
         .datum(d3.geoGraticule()())
         .attr("fill", "none")
-        .attr("stroke", "#eceef1")
+        .attr("stroke", "rgba(255,255,255,0.06)")
         .attr("stroke-width", 0.5)
         .attr("d", path);
 
@@ -86,8 +86,8 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
       countryGroup.selectAll("path")
         .data(countries)
         .enter().append("path")
-        .attr("stroke", "#ffffff")
-        .attr("stroke-width", 0.25)
+        .attr("stroke", "rgba(255,255,255,0.15)")
+        .attr("stroke-width", 0.3)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .style("fill", (_d: any, i: number) => colorScale(20 + (i * 7) % 80))
         .attr("d", path as never);
@@ -96,7 +96,7 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
         .data(routesData)
         .enter().append("path")
         .attr("fill", "none")
-        .attr("stroke", "#e5e7eb")
+        .attr("stroke", "rgba(255,255,255,0.08)")
         .attr("stroke-width", 0.8)
         .attr("stroke-opacity", 0.5)
         .attr("d", path as never);
@@ -105,7 +105,7 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
         .data(routesData)
         .enter().append("path")
         .attr("fill", "none")
-        .attr("stroke", "#0F172A")
+        .attr("stroke", "#7dd3fc")
         .attr("stroke-width", 1.2)
         .attr("stroke-linecap", "round")
         .attr("stroke-opacity", 0.8)
@@ -116,8 +116,8 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
         .data(cities)
         .enter().append("circle")
         .attr("r", 2.2)
-        .attr("fill", "#1a1a1a")
-        .attr("opacity", 0.8);
+        .attr("fill", "#ffffff")
+        .attr("opacity", 0.6);
 
       let pulseOffset = 0;
 

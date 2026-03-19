@@ -83,7 +83,7 @@ export default function PersonaPage({ content }: { content: PersonaContent }) {
             padding: "14px 36px", borderRadius: 10,
             fontSize: 15, fontWeight: 600,
             color: "#fff", textDecoration: "none",
-            background: "var(--teal, #0d9488)",
+            background: "var(--teal, #0F172A)",
             transition: "opacity 0.15s",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.88"; }}
@@ -287,7 +287,7 @@ export default function PersonaPage({ content }: { content: PersonaContent }) {
             padding: "14px 40px", borderRadius: 10,
             fontSize: 15, fontWeight: 600,
             color: "#fff", textDecoration: "none",
-            background: "var(--teal, #0d9488)",
+            background: "var(--teal, #0F172A)",
             transition: "opacity 0.15s",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.88"; }}

@@ -26,7 +26,7 @@ export async function MobileHome() {
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 60 }}>
         <div style={{ padding: "16px 16px 0" }}>
           {/* Logo */}
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#0d9488", marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "#0F172A", marginBottom: 16 }}>
             mederti
           </div>
 

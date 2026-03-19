@@ -86,7 +86,7 @@ const DOT_COLORS: Record<string, string> = {
   de_escalation: "#ca8a04", // amber
   anticipated: "#d97706",   // warning amber
   resolved: "#16a34a",      // green
-  update: "#0d9488",        // teal
+  update: "#0F172A",        // teal
 };
 
 /* ── OG Metadata ── */

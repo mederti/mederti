@@ -212,7 +212,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
               width: 32,
               height: 32,
               borderRadius: 8,
-              background: "rgba(13,148,136,0.1)",
+              background: "rgba(15,23,42,0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -222,7 +222,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
           >
             <Activity
               style={{ width: 16, height: 16, strokeWidth: 1.5 }}
-              color="#0d9488"
+              color="#0F172A"
             />
           </div>
           <div>

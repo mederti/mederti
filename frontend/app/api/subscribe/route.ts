@@ -25,7 +25,7 @@ function welcomeEmailHtml(email: string): string {
 <head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;padding:40px 20px;margin:0">
   <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:36px 40px;border:1px solid #e2e8f0">
-    <div style="font-size:20px;font-weight:700;color:#0d9488;letter-spacing:-0.02em;margin-bottom:20px">
+    <div style="font-size:20px;font-weight:700;color:#0F172A;letter-spacing:-0.02em;margin-bottom:20px">
       Mederti
     </div>
     <h1 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 12px;letter-spacing:-0.02em">
@@ -40,7 +40,7 @@ function welcomeEmailHtml(email: string): string {
       AI-flagged supply risks — straight to your inbox.
     </p>
     <a href="https://mederti.com/dashboard"
-       style="display:inline-block;padding:12px 24px;background:#0d9488;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600">
+       style="display:inline-block;padding:12px 24px;background:#0F172A;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600">
       View the Dashboard →
     </a>
     <div style="margin-top:32px;padding-top:20px;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8">

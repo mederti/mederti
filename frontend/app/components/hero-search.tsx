@@ -91,7 +91,7 @@ export function HeroSearch() {
           border: "1.5px solid var(--app-border-2)",
           borderRadius: 12,
           boxShadow: open
-            ? "0 0 0 3px rgba(13,148,136,0.12), 0 4px 24px rgba(15,23,42,0.08)"
+            ? "0 0 0 3px rgba(15,23,42,0.12), 0 4px 24px rgba(15,23,42,0.08)"
             : "0 2px 12px rgba(15,23,42,0.06)",
           transition: "box-shadow 0.15s",
           overflow: "hidden",

@@ -84,7 +84,7 @@ const DOT_COLORS: Record<string, string> = {
   escalation: "#dc2626",
   de_escalation: "#ca8a04",
   resolved: "#16a34a",
-  update: "#0d9488",
+  update: "#0F172A",
 };
 
 const COUNTRY_NAMES: Record<string, string> = {

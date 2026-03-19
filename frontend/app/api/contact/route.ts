@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const html = `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f8fafc;border-radius:12px;">
-  <div style="font-size:18px;font-weight:700;color:#0d9488;margin-bottom:20px;">Mederti<span style="color:#0f172a;">.</span></div>
+  <div style="font-size:18px;font-weight:700;color:#0F172A;margin-bottom:20px;">Mederti<span style="color:#0f172a;">.</span></div>
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:28px 24px;">
     <table style="width:100%;border-collapse:collapse;font-size:14px;color:#334155;">
       <tr><td style="padding:8px 0;color:#94a3b8;width:90px;vertical-align:top;">From</td><td style="padding:8px 0;font-weight:600;color:#0f172a;">${name.trim()} &lt;${email.trim()}&gt;</td></tr>

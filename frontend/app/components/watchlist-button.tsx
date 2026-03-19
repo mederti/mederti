@@ -123,7 +123,7 @@ export function WatchlistButton({ drugId, hasShortage = true }: WatchlistButtonP
           opacity: loading || toggling ? 0.7 : 1,
           boxShadow: isActive
             ? "0 2px 10px rgba(34,197,94,0.2)"
-            : "0 2px 10px rgba(13,148,136,0.2)",
+            : "0 2px 10px rgba(15,23,42,0.2)",
           transition: "background 0.15s",
         }}
       >

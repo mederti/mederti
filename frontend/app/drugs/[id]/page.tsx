@@ -101,7 +101,7 @@ const DOT_COLORS: Record<string, string> = {
   escalation: "#dc2626",
   de_escalation: "#ca8a04",
   resolved: "#16a34a",
-  update: "#0d9488",
+  update: "#0F172A",
 };
 
 export default async function DrugPage({ params }: Props) {
@@ -115,7 +115,7 @@ export default async function DrugPage({ params }: Props) {
         .select("id, generic_name, brand_names, atc_code, atc_description, drug_class, dosage_forms, strengths, routes_of_administration, therapeutic_category, is_controlled_substance")
         .eq("id", id).single(),
       supabase.from("shortage_events")
-        .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, data_sources(name, abbreviation, country_code)")
+        .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, data_sources(name, abbreviation, country_code)")
         .eq("drug_id", id).order("updated_at", { ascending: false }),
       supabase.from("shortage_status_log")
         .select("id, shortage_event_id, drug_id, old_status, new_status, old_severity, new_severity, changed_at")

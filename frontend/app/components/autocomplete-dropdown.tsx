@@ -5,7 +5,7 @@ import type { AutocompleteItem } from "@/lib/hooks/use-autocomplete";
 const SEV_STYLE: Record<string, { label: string; bg: string; color: string; border: string }> = {
   critical: { label: "CRITICAL", bg: "var(--crit-bg)", color: "var(--crit)", border: "var(--crit-b)" },
   high:     { label: "HIGH",     bg: "var(--high-bg)", color: "var(--high)", border: "var(--high-b)" },
-  active:   { label: "ACTIVE",   bg: "rgba(13,148,136,0.08)", color: "var(--teal)", border: "rgba(13,148,136,0.2)" },
+  active:   { label: "ACTIVE",   bg: "rgba(15,23,42,0.08)", color: "var(--teal)", border: "rgba(15,23,42,0.2)" },
 };
 
 function SeverityBadge({ severity }: { severity: string }) {

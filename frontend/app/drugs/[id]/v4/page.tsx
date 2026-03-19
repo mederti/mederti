@@ -10,6 +10,7 @@ import { buildAiInsightText } from "../build-insight-text";
 import { ShortageForcast } from "../forecast";
 import { V4BellButton } from "./bell-button";
 import { HeaderActions } from "./header-actions";
+import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -98,7 +99,7 @@ const DOT_COLORS: Record<string, string> = {
   escalation: "#dc2626",
   de_escalation: "#ca8a04",
   resolved: "#16a34a",
-  update: "#0d9488",
+  update: "#0F172A",
 };
 
 export default async function DrugPageV4({ params }: Props) {
@@ -112,7 +113,7 @@ export default async function DrugPageV4({ params }: Props) {
         .select("id, generic_name, brand_names, atc_code, atc_description, drug_class, dosage_forms, strengths, routes_of_administration, therapeutic_category, is_controlled_substance")
         .eq("id", id).single(),
       supabase.from("shortage_events")
-        .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, data_sources(name, abbreviation, country_code)")
+        .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, data_sources(name, abbreviation, country_code)")
         .eq("drug_id", id).order("updated_at", { ascending: false }),
       supabase.from("shortage_status_log")
         .select("id, shortage_event_id, drug_id, old_status, new_status, old_severity, new_severity, changed_at")
@@ -272,7 +273,7 @@ export default async function DrugPageV4({ params }: Props) {
   const isAnticipatedOnly = activeShortages.length > 0 && anticipatedShortages.length === activeShortages.length;
 
   /* ── My Country card data ── */
-  const myShortage = userShortage as { status?: string; severity?: string; estimated_resolution_date?: string; start_date?: string; end_date?: string; reason?: string; reason_category?: string; country_code?: string } | undefined;
+  const myShortage = userShortage as { status?: string; severity?: string; estimated_resolution_date?: string; start_date?: string; end_date?: string; reason?: string; reason_category?: string; country_code?: string; notes?: string } | undefined;
   const myStatus = myShortage ? (myShortage.status ?? "active").toLowerCase() : null;
   const myIsAnticipated = myStatus === "anticipated";
   const mySevRaw = myShortage?.severity ?? "medium";
@@ -303,6 +304,13 @@ export default async function DrugPageV4({ params }: Props) {
   if (myShortage && myStatus !== "anticipated" && myShortage.estimated_resolution_date) {
     predictedReturnDate = new Date(myShortage.estimated_resolution_date).toLocaleDateString("en-AU", { month: "short", year: "numeric" });
   }
+
+  /* ── S19A detection across all user-country shortages ── */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userCountryShortages = activeShortages.filter((s: any) => s.country_code?.toUpperCase() === userCountry);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s19aEvent = userCountryShortages.find((s: any) => detectS19A(s.notes));
+  const s19aText = s19aEvent ? getS19AText(s19aEvent.notes) : null;
 
   /* ── Timeline ── */
   const timeline: TimelineEntry[] = [];
@@ -410,6 +418,8 @@ export default async function DrugPageV4({ params }: Props) {
     recallCount: recalls.length,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     shortagesByCountry: countries.map((c: any) => ({ country: c.country, code: c.countryCode, severity: c.severity })),
+    s19aActive: !!s19aText,
+    s19aText,
   };
 
   /* ── Render ── */
@@ -636,6 +646,31 @@ export default async function DrugPageV4({ params }: Props) {
                     </div>
                   )}
                 </div>
+
+                {/* S19A approval badge */}
+                {s19aText && (
+                  <div style={{
+                    marginTop: 12,
+                    background: "var(--ind-bg)",
+                    border: "1px solid var(--ind-b)",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "flex-start",
+                  }}>
+                    <div style={{
+                      fontSize: 10, fontWeight: 600,
+                      textTransform: "uppercase", letterSpacing: "0.08em",
+                      color: "var(--indigo)", flexShrink: 0, marginTop: 1,
+                    }}>
+                      S19A
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-2, var(--app-text-2))", lineHeight: 1.6 }}>
+                      {s19aText}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

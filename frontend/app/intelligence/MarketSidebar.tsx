@@ -177,7 +177,7 @@ export default function MarketSidebar() {
           ))}
           {d.shortageManufacturerCount > 0 && (
             <Link href="/dashboard" style={{
-              display: "block", fontSize: 11, color: "#0d9488",
+              display: "block", fontSize: 11, color: "#0F172A",
               marginTop: 8, textDecoration: "none", fontWeight: 500,
             }}>
               {d.shortageManufacturerCount} of these companies manufacture drugs currently in shortage →

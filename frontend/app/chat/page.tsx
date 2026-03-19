@@ -666,7 +666,7 @@ export default function ChatPage() {
         }
         .chat-input-form:focus-within {
           border-color: var(--teal-b) !important;
-          box-shadow: 0 0 0 3px rgba(13,148,136,0.08) !important;
+          box-shadow: 0 0 0 3px rgba(15,23,42,0.08) !important;
         }
         @media (max-width: 640px) {
           .chat-chip { font-size: 12px !important; padding: 10px 14px !important; }

@@ -15,7 +15,7 @@ function sevBadge(severity: string) {
   const s = severity.toLowerCase();
   if (s === "critical") return { bg: "#dc2626", text: "#fff", label: "CRITICAL" };
   if (s === "high") return { bg: "#d97706", text: "#fff", label: "HIGH" };
-  return { bg: "#0d9488", text: "#fff", label: "ACTIVE" };
+  return { bg: "#0F172A", text: "#fff", label: "ACTIVE" };
 }
 
 export async function GET(
@@ -79,7 +79,7 @@ export async function GET(
               width: 44,
               height: 44,
               borderRadius: 12,
-              background: "#0d9488",
+              background: "#0F172A",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

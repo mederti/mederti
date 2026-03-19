@@ -4,6 +4,7 @@ import { MobileSupplierPage } from "./MobileSupplierPage";
 import { BottomNav } from "./BottomNav";
 import { V4BellButton } from "@/app/drugs/[id]/v4/bell-button";
 import type { SupplierPartner } from "@/lib/suppliers";
+import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 
 const SEV_ORDER = ["critical", "high", "medium", "low"] as const;
 
@@ -63,6 +64,9 @@ export function MobileDrugPage({
   }, countryEvents[0] ?? null);
 
   const hasShortage = !!worstEvent;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s19aEvent = countryEvents.find((e: any) => detectS19A(e.notes));
+  const s19aText = s19aEvent ? getS19AText(s19aEvent.notes) : null;
   const mySev = (worstEvent?.severity ?? "medium").toLowerCase();
   const statusLabel = hasShortage ? sevLabel(mySev) : "In supply";
 
@@ -161,6 +165,31 @@ export function MobileDrugPage({
                 </div>
               )}
             </div>
+
+            {/* S19A approval badge */}
+            {s19aText && (
+              <div style={{
+                marginTop: 12,
+                background: "var(--ind-bg)",
+                border: "1px solid var(--ind-b)",
+                borderRadius: 10,
+                padding: "10px 14px",
+                display: "flex",
+                gap: 10,
+                alignItems: "flex-start",
+              }}>
+                <div style={{
+                  fontSize: 10, fontWeight: 600,
+                  textTransform: "uppercase", letterSpacing: "0.08em",
+                  color: "var(--indigo)", flexShrink: 0, marginTop: 1,
+                }}>
+                  S19A
+                </div>
+                <div style={{ fontSize: 12, color: "var(--app-text-2)", lineHeight: 1.6 }}>
+                  {s19aText}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div style={{

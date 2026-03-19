@@ -20,7 +20,7 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
 
       const colorScale = d3.scaleLinear<string>()
         .domain([0, 100])
-        .range(["#e7f5f4", "#0d9588"]);
+        .range(["#e7f5f4", "#0F172A"]);
 
       const svg = d3.select(container).append("svg")
         .attr("width", width)
@@ -105,7 +105,7 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
         .data(routesData)
         .enter().append("path")
         .attr("fill", "none")
-        .attr("stroke", "#0d9488")
+        .attr("stroke", "#0F172A")
         .attr("stroke-width", 1.2)
         .attr("stroke-linecap", "round")
         .attr("stroke-opacity", 0.8)

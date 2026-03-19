@@ -59,8 +59,8 @@ export default function NewsletterForm() {
         {status === "success" ? (
           <div style={{
             padding: "14px 20px", borderRadius: 8,
-            background: "rgba(13,148,136,0.15)",
-            border: "1px solid rgba(13,148,136,0.3)",
+            background: "rgba(15,23,42,0.15)",
+            border: "1px solid rgba(15,23,42,0.3)",
             color: "var(--teal)", fontSize: 14, fontWeight: 500,
           }}>
             You&apos;re subscribed. Check your inbox.
@@ -92,7 +92,7 @@ export default function NewsletterForm() {
                 style={{
                   padding: "12px 24px", borderRadius: 6,
                   border: "none",
-                  background: status === "loading" ? "rgba(13,148,136,0.5)" : "var(--teal)",
+                  background: status === "loading" ? "rgba(15,23,42,0.5)" : "var(--teal)",
                   color: "#fff", fontSize: 14, fontWeight: 600,
                   cursor: status === "loading" ? "not-allowed" : "pointer",
                 }}

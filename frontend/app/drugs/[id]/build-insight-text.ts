@@ -4,6 +4,7 @@
  * Covers:
  *  - Active (confirmed) shortages
  *  - Anticipated shortages (user country + global)
+ *  - TGA S19A overseas product approvals
  *  - Clean "no shortage" fallback
  */
 
@@ -18,6 +19,7 @@ export interface ShortageRecord {
   start_date?: string;
   end_date?: string;
   estimated_resolution_date?: string;
+  notes?: string;
   data_sources?: { name?: string; abbreviation?: string; country_code?: string };
 }
 
@@ -114,6 +116,22 @@ export function buildAiInsightText({
     // Anticipated in other countries but not user's country
     const anticipatedCountrySet = new Set(anticipated.map((s) => s.country_code));
     text += ` Note: anticipated shortages have been flagged in ${anticipatedCountrySet.size} other countr${anticipatedCountrySet.size !== 1 ? "ies" : "y"}.`;
+  }
+
+  /* ── Append S19A commentary (AU only) ── */
+  const userCountryShortage = activeShortages.find(
+    (s) => s.country_code?.toUpperCase() === userCountry.toUpperCase()
+  );
+  if (userCountryShortage?.notes) {
+    const notesLower = userCountryShortage.notes.toLowerCase();
+    const hasS19A =
+      notesLower.includes("section 19") ||
+      notesLower.includes("s19a") ||
+      (notesLower.includes("overseas") && notesLower.includes("approved for supply")) ||
+      (notesLower.includes("unregistered") && notesLower.includes("approved for supply"));
+    if (hasS19A) {
+      text += ` An overseas-registered product has been approved for supply under Section 19A of the Therapeutic Goods Act.`;
+    }
   }
 
   return text;

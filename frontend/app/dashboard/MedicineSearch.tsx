@@ -39,7 +39,7 @@ export default function MedicineSearch() {
             width: 28,
             height: 28,
             borderRadius: 7,
-            background: "rgba(13,148,136,0.1)",
+            background: "rgba(15,23,42,0.1)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -47,7 +47,7 @@ export default function MedicineSearch() {
         >
           <Search
             style={{ width: 14, height: 14, strokeWidth: 1.5 }}
-            color="#0d9488"
+            color="#0F172A"
           />
         </div>
         <span
@@ -82,7 +82,7 @@ export default function MedicineSearch() {
             width: "100%",
             padding: "9px 36px 9px 36px",
             borderRadius: 8,
-            border: `1.5px solid ${focused ? "#0d9488" : "#e2e8f0"}`,
+            border: `1.5px solid ${focused ? "#0F172A" : "#e2e8f0"}`,
             fontSize: 14,
             color: "#0f172a",
             background: "#f8fafc",
@@ -124,7 +124,7 @@ export default function MedicineSearch() {
               width: 14,
               height: 14,
               strokeWidth: 2,
-              color: "#0d9488",
+              color: "#0F172A",
               animation: "spin 1s linear infinite",
             }}
           />

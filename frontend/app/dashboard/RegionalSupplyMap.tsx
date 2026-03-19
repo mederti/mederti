@@ -72,7 +72,7 @@ interface Props {
   timePeriod?: "24h" | "7d" | "30d" | "90d" | null;
 }
 
-/* ── Teal colour scale: #ccfbf1 (light) → #0d9488 (deep) ── */
+/* ── Teal colour scale: #ccfbf1 (light) → #0F172A (deep) ── */
 function getTealColor(count: number, maxCount: number): string {
   if (count === 0) return "#ccfbf1";
   const ratio = Math.min(count / Math.max(maxCount, 1), 1);
@@ -260,11 +260,11 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
           <div
             style={{
               width: 28, height: 28, borderRadius: 7,
-              background: "rgba(13,148,136,0.1)",
+              background: "rgba(15,23,42,0.1)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <MapPin style={{ width: 14, height: 14, strokeWidth: 1.5 }} color="#0d9488" />
+            <MapPin style={{ width: 14, height: 14, strokeWidth: 1.5 }} color="#0F172A" />
           </div>
           <div>
             <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>

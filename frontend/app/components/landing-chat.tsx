@@ -271,7 +271,7 @@ export default function LandingChatClient() {
                           }}
                           onMouseEnter={(e) => {
                             (e.currentTarget as HTMLElement).style.borderColor = "var(--teal)";
-                            (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(13,148,136,0.12)";
+                            (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(15,23,42,0.12)";
                           }}
                           onMouseLeave={(e) => {
                             (e.currentTarget as HTMLElement).style.borderColor = "var(--app-border)";
@@ -435,7 +435,7 @@ export default function LandingChatClient() {
           borderRadius: files.length > 0 ? "0 0 12px 12px" : 12,
           boxShadow: focused
             ? hasChat
-              ? "0 0 0 3px rgba(13,148,136,0.12), 0 4px 20px rgba(0,0,0,0.06)"
+              ? "0 0 0 3px rgba(15,23,42,0.12), 0 4px 20px rgba(0,0,0,0.06)"
               : "0 0 0 3px rgba(255,255,255,0.06)"
             : hasChat
               ? "0 2px 12px rgba(0,0,0,0.05)"

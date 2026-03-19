@@ -45,7 +45,7 @@ function DrugCard({ drug, altCounts }: { drug: DrugResult; altCounts: Record<str
       padding: "20px 24px", cursor: isCatalogue ? "default" : "pointer",
       transition: "border-color 0.15s, box-shadow 0.15s",
     }}
-      onMouseEnter={e => { if (!isCatalogue) { (e.currentTarget as HTMLElement).style.borderColor = "var(--teal)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 12px rgba(13,148,136,0.1)"; } }}
+      onMouseEnter={e => { if (!isCatalogue) { (e.currentTarget as HTMLElement).style.borderColor = "var(--teal)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 12px rgba(15,23,42,0.1)"; } }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--app-border)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 10 }}>

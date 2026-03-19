@@ -1,11 +1,15 @@
 """
-ANSM — Rappels de Lots Scraper (France)
-────────────────────────────────────────
-Source:  ANSM — Agence nationale de sécurité du médicament et des produits de santé
-URL:     https://ansm.sante.fr/rappels-de-lots
+ANSM — Safety Information / Recalls Scraper (France)
+────────────────────────────────────────────────────
+Source:  ANSM — Agence nationale de sécurité du médicament
+Page:   https://ansm.sante.fr/informations-de-securite/
 
-ANSM publishes lot recall notices on their website. This scraper fetches the
-listing page and individual recall entries.
+The old /rappels-de-lots URL is 404. ANSM consolidated all safety notices
+under /informations-de-securite/ with filters for product type and category.
+
+Strategy: paginate through the medication-filtered listing (productTypes=1),
+parse <article> elements, filter to RAPPEL categories only.
+20 items per page, scrape back to 2020.
 
 Source UUID:  10000000-0000-0000-0000-000000000031
 Country code: FR
@@ -14,204 +18,217 @@ Country code: FR
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime, timezone
+
+import httpx
+from bs4 import BeautifulSoup
 
 from backend.scrapers.base_recall_scraper import BaseRecallScraper
 
 
 class ANSMRecallsScraper(BaseRecallScraper):
-    """Scraper for ANSM France lot recall notices."""
+    """Scraper for ANSM medication recalls / safety notices."""
 
     SOURCE_ID:    str = "10000000-0000-0000-0000-000000000031"
-    SOURCE_NAME:  str = "ANSM — Rappels de Lots (France)"
-    BASE_URL:     str = "https://ansm.sante.fr/rappels-de-lots"
+    SOURCE_NAME:  str = "ANSM — Rappels de lots (France)"
+    BASE_URL:     str = "https://ansm.sante.fr/informations-de-securite/"
+    LIST_URL:     str = (
+        "https://ansm.sante.fr/informations-de-securite/"
+        "?safety_news_filter%5BproductTypes%5D%5B%5D=1&page={page}"
+    )
     COUNTRY:      str = "France"
     COUNTRY_CODE: str = "FR"
 
-    RATE_LIMIT_DELAY: float = 2.0
-    REQUEST_TIMEOUT:  float = 45.0
+    RATE_LIMIT_DELAY: float = 1.0
+    REQUEST_TIMEOUT:  float = 15.0
+    MAX_PAGES:        int = 200  # ~4000 items max
+    CUTOFF_YEAR:      int = 2020
 
     _HEADERS: dict = {
-        "User-Agent":      "Mozilla/5.0 (compatible; Mederti-Scraper/1.0)",
-        "Accept":          "text/html,application/xhtml+xml",
-        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+        "User-Agent": "Mozilla/5.0 (compatible; Mederti-Scraper/1.0)",
+        "Accept":     "text/html",
     }
+
+    # Categories that count as recalls
+    _RECALL_CATEGORIES: frozenset[str] = frozenset([
+        "rappel de produit",
+        "rappel de lot",
+        "retrait de lot",
+        "retrait de produit",
+    ])
 
     # ─────────────────────────────────────────────────────────────────────────
     # fetch()
     # ─────────────────────────────────────────────────────────────────────────
 
-    def fetch(self) -> dict:
-        self.log.info("Fetching ANSM recalls page", extra={"url": self.BASE_URL})
-        try:
-            resp = self._get(self.BASE_URL, headers=self._HEADERS)
-            return {
-                "html": resp.text,
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
-            }
-        except Exception as exc:
-            self.log.error("ANSM fetch failed", extra={"error": str(exc)})
-            return {"html": "", "error": str(exc)}
+    def fetch(self) -> list[dict]:
+        all_records: list[dict] = []
+        stop = False
+
+        with httpx.Client(
+            headers=self._HEADERS,
+            timeout=self.REQUEST_TIMEOUT,
+            follow_redirects=True,
+        ) as client:
+            for page in range(1, self.MAX_PAGES + 1):
+                url = self.LIST_URL.format(page=page)
+                try:
+                    resp = client.get(url)
+                    resp.raise_for_status()
+                except Exception as exc:
+                    self.log.warning("ANSM page fetch failed", extra={
+                        "page": page, "error": str(exc),
+                    })
+                    break
+
+                soup = BeautifulSoup(resp.text, "html.parser")
+                articles = soup.find_all("article", class_="article-item")
+
+                if not articles:
+                    self.log.info("ANSM: no more articles", extra={"page": page})
+                    break
+
+                for article in articles:
+                    rec = self._parse_article(article)
+                    if not rec:
+                        continue
+
+                    # Check cutoff year
+                    year = self._extract_year(rec.get("date", ""))
+                    if year and year < self.CUTOFF_YEAR:
+                        stop = True
+                        break
+
+                    # Filter to recall categories only
+                    cat = rec.get("category", "").lower()
+                    if any(rc in cat for rc in self._RECALL_CATEGORIES):
+                        all_records.append(rec)
+
+                if stop:
+                    self.log.info("ANSM: reached cutoff year", extra={
+                        "page": page, "cutoff": self.CUTOFF_YEAR,
+                    })
+                    break
+
+                if page % 20 == 0:
+                    self.log.info("ANSM page progress", extra={
+                        "page": page, "records": len(all_records),
+                    })
+
+                time.sleep(self.RATE_LIMIT_DELAY)
+
+        self.log.info("ANSM fetch complete", extra={"total": len(all_records)})
+        return all_records
+
+    def _parse_article(self, article) -> dict | None:
+        title_el = article.find("span", class_="article-title")
+        date_el = article.find("span", class_="article-date")
+        cat_el = article.find("span", class_="article-category")
+        link_el = article.find("a")
+
+        title = title_el.get_text(strip=True) if title_el else ""
+        if not title:
+            return None
+
+        return {
+            "title":    title,
+            "date":     date_el.get_text(strip=True) if date_el else "",
+            "category": cat_el.get_text(strip=True) if cat_el else "",
+            "url":      link_el["href"] if link_el and link_el.get("href") else "",
+        }
+
+    @staticmethod
+    def _extract_year(date_str: str) -> int | None:
+        m = re.search(r"(\d{2})/(\d{2})/(\d{4})", date_str)
+        if m:
+            return int(m.group(3))
+        return None
 
     # ─────────────────────────────────────────────────────────────────────────
     # normalize()
     # ─────────────────────────────────────────────────────────────────────────
 
     def normalize(self, raw: dict | list) -> list[dict]:
-        html = raw.get("html", "") if isinstance(raw, dict) else ""
-        if not html:
-            self.log.warning("ANSM: empty HTML response")
-            return []
-
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            self.log.error("beautifulsoup4 not installed")
-            return []
-
-        soup = BeautifulSoup(html, "html.parser")
-        today = datetime.now(timezone.utc).date().isoformat()
+        records = raw if isinstance(raw, list) else []
         normalised: list[dict] = []
+        skipped = 0
 
-        # ANSM recall items appear as article/card elements or list items
-        # Try multiple selectors
-        items = (
-            soup.find_all("article", class_=re.compile(r"recall|product|rappel", re.I)) or
-            soup.find_all("li", class_=re.compile(r"recall|product|rappel|item", re.I)) or
-            soup.find_all(["article", "li", "div"], attrs={"data-type": re.compile(r"recall|rappel", re.I)}) or
-            soup.find_all("div", class_=re.compile(r"card|item|entry|result", re.I))
-        )
-
-        if not items:
-            # Fallback: find all links pointing to recall detail pages
-            items = soup.find_all("a", href=re.compile(r"/rappels-de-lots/", re.I))
-
-        self.log.info("ANSM items found", extra={"count": len(items)})
-
-        for item in items[:200]:
+        for rec in records:
             try:
-                result = self._normalise_item(item, today)
+                result = self._normalise_record(rec)
                 if result:
                     normalised.append(result)
+                else:
+                    skipped += 1
             except Exception as exc:
-                self.log.debug("ANSM item error", extra={"error": str(exc)})
+                skipped += 1
+                self.log.debug("ANSM normalise error", extra={"error": str(exc)})
 
-        # If no items found, do a text-based pass for drug recall hints
-        if not normalised:
-            normalised = self._text_fallback(soup, today)
-
-        self.log.info("ANSM normalisation done", extra={"records": len(normalised)})
+        self.log.info("ANSM normalisation done", extra={
+            "normalised": len(normalised), "skipped": skipped,
+        })
         return normalised
 
-    def _normalise_item(self, item, today: str) -> dict | None:
-        text = item.get_text(" ", strip=True)
-        if not text or len(text) < 10:
+    def _normalise_record(self, rec: dict) -> dict | None:
+        title = rec.get("title", "").strip()
+        if not title:
             return None
 
-        # Drug keywords (French)
-        drug_kw = ["comprimé", "gélule", "injection", "solution", "mg", "flacon", "ampoule",
-                   "médicament", "produit pharmaceutique", "antibiotique", "vaccin"]
-        if not any(kw in text.lower() for kw in drug_kw):
-            return None
+        # Extract product name and manufacturer from title
+        # Typical format: "Product Name – Manufacturer" or "Product Name - Manufacturer"
+        parts = re.split(r"\s*[–—-]\s*", title, maxsplit=1)
+        product_name = parts[0].strip()[:100]
+        manufacturer = parts[1].strip()[:200] if len(parts) > 1 else None
 
-        # Name: first line or title element
-        name_el = item.find(["h2", "h3", "h4", "strong", "a"])
-        name = name_el.get_text(strip=True) if name_el else text[:80]
-        name = re.split(r"[,\-–—\n]", name)[0].strip()[:100]
-        if len(name) < 3:
-            return None
+        # Parse date from "PUBLIÉ LE DD/MM/YYYY"
+        date_str = rec.get("date", "")
+        announced_date = self._parse_date(date_str)
+        if not announced_date:
+            announced_date = datetime.now(timezone.utc).date().isoformat()
 
-        # Date
-        date_el = item.find(attrs={"class": re.compile(r"date|time", re.I)}) or item.find("time")
-        date_raw = ""
-        if date_el:
-            date_raw = date_el.get("datetime", "") or date_el.get_text(strip=True)
-        announced_date = self._parse_date(date_raw) or today
+        # URL
+        url_path = rec.get("url", "")
+        press_url = (
+            f"https://ansm.sante.fr{url_path}"
+            if url_path.startswith("/")
+            else url_path or self.BASE_URL
+        )
 
-        # Lots
-        lots = re.findall(r"\b([A-Z0-9]{4,15})\b", text)
-        lots = [l for l in lots if re.search(r"\d", l)][:10]
-
-        # Link
-        link_el = item.find("a", href=True)
-        press_url = self.BASE_URL
-        if link_el:
-            href = link_el["href"]
-            press_url = f"https://ansm.sante.fr{href}" if href.startswith("/") else href
+        # Recall ref from URL slug
+        recall_ref = url_path.split("/")[-1][:80] if url_path else product_name[:60]
 
         return {
-            "generic_name":     name,
+            "generic_name":     product_name,
             "brand_name":       None,
-            "manufacturer":     None,
+            "manufacturer":     manufacturer,
             "recall_class":     None,
-            "recall_type":      "batch" if lots else None,
-            "reason":           text[:400] if len(text) > 10 else None,
-            "reason_category":  self._map_reason(text),
-            "lot_numbers":      lots,
+            "recall_type":      "batch",  # Rappel de lot = batch recall
+            "reason":           rec.get("category", ""),
+            "reason_category":  "other",
+            "lot_numbers":      [],
             "announced_date":   announced_date,
             "status":           "active",
             "press_release_url": press_url,
-            "confidence_score": 72,
-            "recall_ref":       press_url,
-            "raw_record":       {"text": text[:300], "url": press_url},
+            "confidence_score": 85,
+            "recall_ref":       f"ANSM-{recall_ref}",
+            "raw_record":       rec,
         }
-
-    def _text_fallback(self, soup, today: str) -> list[dict]:
-        results: list[dict] = []
-        drug_kw = ["comprimé", "gélule", "injection", "mg", "ampoule", "médicament"]
-        for p in soup.find_all(["p", "li", "div"]):
-            text = p.get_text(" ", strip=True)
-            if 20 < len(text) < 400 and any(kw in text.lower() for kw in drug_kw):
-                name = text.split()[0:4]
-                results.append({
-                    "generic_name":     " ".join(name)[:60],
-                    "brand_name":       None,
-                    "manufacturer":     None,
-                    "recall_class":     None,
-                    "recall_type":      None,
-                    "reason":           text[:300],
-                    "reason_category":  "other",
-                    "lot_numbers":      [],
-                    "announced_date":   today,
-                    "status":           "active",
-                    "press_release_url": self.BASE_URL,
-                    "confidence_score": 45,
-                    "recall_ref":       text[:60],
-                    "raw_record":       {"text": text[:300]},
-                })
-            if len(results) >= 100:
-                break
-        return results
 
     @staticmethod
     def _parse_date(raw: str) -> str | None:
         if not raw:
             return None
-        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y"):
-            try:
-                return datetime.strptime(raw[:10], fmt[:10]).date().isoformat()
-            except Exception:
-                pass
-        m = re.search(r"\d{4}-\d{2}-\d{2}", raw)
-        return m.group(0) if m else None
+        m = re.search(r"(\d{2})/(\d{2})/(\d{4})", raw)
+        if m:
+            day, month, year = m.groups()
+            return f"{year}-{month}-{day}"
+        return None
 
-    @staticmethod
-    def _map_reason(text: str) -> str | None:
-        lower = text.lower()
-        if any(w in lower for w in ["contamination", "impureté"]):
-            return "contamination"
-        if any(w in lower for w in ["étiquetage", "étiquette", "mention"]):
-            return "mislabelling"
-        if any(w in lower for w in ["dosage", "teneur", "concentration"]):
-            return "subpotency"
-        if any(w in lower for w in ["stérile", "stérilité"]):
-            return "sterility"
-        if any(w in lower for w in ["conditionnement", "emballage"]):
-            return "packaging"
-        if any(w in lower for w in ["particule", "corps étranger"]):
-            return "foreign_matter"
-        return "other"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Standalone entrypoint
+# ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import json, os, sys
@@ -223,12 +240,13 @@ if __name__ == "__main__":
         print("=" * 60); print("DRY RUN — ANSM Recalls"); print("=" * 60)
         scraper = ANSMRecallsScraper(db_client=MagicMock())
         raw = scraper.fetch()
+        print(f"  raw records: {len(raw)}")
         recalls = scraper.normalize(raw)
-        print(f"── Records: {len(recalls)}")
+        print(f"  normalised : {len(recalls)}")
         if recalls:
             print(json.dumps({k: v for k, v in recalls[0].items() if k != "raw_record"}, indent=2, default=str))
         sys.exit(0)
     scraper = ANSMRecallsScraper()
     summary = scraper.run()
     print(json.dumps(summary, indent=2, default=str))
-    sys.exit(0 if summary["status"] == "success" else 1)
+    sys.exit(0 if summary["status"] in ("success", "duplicate") else 1)

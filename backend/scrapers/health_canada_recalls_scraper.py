@@ -95,49 +95,67 @@ class HealthCanadaRecallsScraper(BaseRecallScraper):
         )
         return normalised
 
+    @staticmethod
+    def _g(rec: dict, *keys: str) -> str:
+        """Case-insensitive dict get — HC JSON uses Titlecase keys."""
+        # Build lowercase → value map once per record
+        lower_map = {k.lower(): v for k, v in rec.items() if v}
+        for k in keys:
+            # Try exact key first, then lowercase
+            v = rec.get(k)
+            if v:
+                return str(v)
+            v = lower_map.get(k.lower())
+            if v:
+                return str(v)
+        return ""
+
     def _normalise_record(self, rec: dict) -> dict | None:
         # Filter to drug/health product category
-        category = (
-            rec.get("product_categorycd") or
-            rec.get("product_category") or
-            rec.get("category") or ""
-        ).lower()
+        category = self._g(rec, "Category", "product_categorycd", "product_category").lower()
+        # Also check Organization field (HC uses "Drugs and health products")
+        org = self._g(rec, "Organization").lower()
 
-        title = (rec.get("title") or rec.get("recall_title") or "").lower()
+        title = self._g(rec, "Title", "recall_title").lower()
 
-        is_drug = any(kw in category for kw in self._DRUG_CATEGORIES) or \
-                  any(kw in title for kw in ["drug", "medication", "pharmaceutical", "health product"])
+        is_drug = (
+            any(kw in category for kw in self._DRUG_CATEGORIES) or
+            any(kw in org for kw in self._DRUG_CATEGORIES) or
+            any(kw in title for kw in ["drug", "medication", "pharmaceutical", "health product"])
+        )
 
         if not is_drug:
             return None
 
         # ── Generic name ──────────────────────────────────────────────────────
-        # HC uses "title" as the product name field
-        name_raw = rec.get("title") or rec.get("product_name") or rec.get("name") or ""
+        # HC JSON uses "Product" or "Title" for the product name
+        name_raw = self._g(rec, "Product", "Title", "product_name", "name")
         generic_name = self._clean_name(name_raw)
         if not generic_name:
             return None
 
         # ── Recall class ──────────────────────────────────────────────────────
-        class_raw = (rec.get("recall_class") or rec.get("class") or "").lower()
-        recall_class = self._CLASS_MAP.get(class_raw)
+        class_raw = self._g(rec, "Recall class", "recall_class", "class").lower().strip()
+        # HC uses "Type II" format — map to standard class
+        type_map = {"type i": "I", "type ii": "II", "type iii": "III"}
+        recall_class = self._CLASS_MAP.get(class_raw) or type_map.get(class_raw)
 
         # ── Dates ─────────────────────────────────────────────────────────────
-        date_raw = rec.get("date_published") or rec.get("date") or rec.get("recall_date") or ""
+        date_raw = self._g(rec, "Last updated", "date_published", "date", "recall_date")
         announced_date = self._parse_date(date_raw)
         if not announced_date:
             announced_date = datetime.now(timezone.utc).date().isoformat()
 
         # ── Reason ────────────────────────────────────────────────────────────
-        reason_raw = rec.get("reason") or rec.get("recall_reason") or ""
+        reason_raw = self._g(rec, "Issue", "reason", "recall_reason")
         reason_cat = self._map_reason(reason_raw)
 
         # ── Lot numbers ───────────────────────────────────────────────────────
-        lot_raw = rec.get("lot_numbers") or rec.get("lots") or ""
+        lot_raw = self._g(rec, "lot_numbers", "lots")
         lot_numbers = [l.strip() for l in str(lot_raw).split(",") if l.strip()] if lot_raw else []
 
         # ── Press release URL ─────────────────────────────────────────────────
-        url_slug = rec.get("url") or rec.get("recall_url") or ""
+        url_slug = self._g(rec, "URL", "url", "recall_url")
         press_url = (
             f"https://recalls-rappels.canada.ca{url_slug}"
             if url_slug and url_slug.startswith("/") else
@@ -145,12 +163,12 @@ class HealthCanadaRecallsScraper(BaseRecallScraper):
         )
 
         # ── Recall ref (for dedup) ────────────────────────────────────────────
-        recall_ref = str(rec.get("recall_id") or rec.get("id") or press_url)
+        recall_ref = self._g(rec, "NID", "recall_id", "id") or press_url
 
         return {
             "generic_name":     generic_name,
-            "brand_name":       rec.get("brand_name") or None,
-            "manufacturer":     rec.get("company") or rec.get("manufacturer") or None,
+            "brand_name":       self._g(rec, "brand_name") or None,
+            "manufacturer":     self._g(rec, "Organization", "company", "manufacturer") or None,
             "recall_class":     recall_class,
             "recall_type":      "batch" if lot_numbers else None,
             "reason":           reason_raw or None,

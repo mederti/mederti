@@ -528,22 +528,6 @@ export default function LandingContent({ countryCount }: { countryCount: string 
           </div>
         </div>
 
-        {/* EMAIL CAPTURE — integrated into dark section */}
-        <div id="signup" style={{
-          textAlign: "center", padding: "48px 24px 64px",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          maxWidth: 960, margin: "0 auto",
-        }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 8, letterSpacing: "-0.02em" }}>
-            Get early access
-          </h2>
-          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>
-            Join pharmacists, procurement managers and regulators on the waitlist. Free to start.
-          </p>
-          <div style={{ maxWidth: 420, margin: "0 auto" }}>
-            <EmailCapture />
-          </div>
-        </div>
       </section>
     </div>
   );

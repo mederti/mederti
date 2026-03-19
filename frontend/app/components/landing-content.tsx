@@ -142,14 +142,6 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             }}>
               Searching the world for niche and short-supply drugs never ends. Until now.
             </h2>
-            <p style={{
-              fontSize: 16,
-              color: "rgba(255,255,255,0.6)",
-              margin: 0,
-              textShadow: "0 2px 12px rgba(0,0,0,0.7)",
-            }}>
-              Healthcare providers need a way to easily and quickly find short supply drugs.
-            </p>
           </div>
         </div>
       </section>

@@ -121,7 +121,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
         }}>
           <SpinningGlobe width={812} height={812} />
 
-          {/* Text centred over globe */}
+          {/* Text centred over globe — wider than globe */}
           <div style={{
             position: "absolute",
             top: "50%",
@@ -130,6 +130,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             textAlign: "center",
             zIndex: 3,
             pointerEvents: "none",
+            width: "130%",
           }}>
             <h2 style={{
               fontSize: "clamp(24px, 4vw, 42px)",
@@ -147,7 +148,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
               margin: 0,
               textShadow: "0 2px 12px rgba(0,0,0,0.7)",
             }}>
-              Tracking shortage signals across {countryCount} countries in real time.
+              Healthcare providers need a way to easily and quickly find short supply drugs.
             </p>
           </div>
         </div>

@@ -232,14 +232,19 @@ def get_supabase_client() -> SupabaseClient:
     Uses direct PostgREST HTTP calls (no supabase-py SDK).
     """
     url = os.environ.get("SUPABASE_URL", "").strip()
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        or os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+        or os.environ.get("SUPABASE_KEY", "").strip()
+    )
 
     if not url or not key:
         raise EnvironmentError(
             "Missing required environment variables.\n"
             "  SUPABASE_URL              — your Supabase project URL\n"
             "  SUPABASE_SERVICE_ROLE_KEY — service-role JWT (Settings → API)\n"
-            "Copy .env.example → .env and fill in both values."
+            "Copy .env.example → .env and fill in both values.\n"
+            f"  (checked SUPABASE_SERVICE_ROLE_KEY, SUPABASE_SERVICE_KEY, SUPABASE_KEY)"
         )
 
     return SupabaseClient(url, key)

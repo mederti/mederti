@@ -140,7 +140,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
               margin: "0 0 8px",
               textShadow: "0 2px 20px rgba(0,0,0,0.6), 0 0 60px rgba(7,11,20,0.8)",
             }}>
-              Drug shortages are a<br />global problem.
+              Searching the world for niche and short-supply drugs never ends. Until now.
             </h2>
             <p style={{
               fontSize: 16,

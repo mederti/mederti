@@ -75,6 +75,76 @@ export default function LandingContent({ countryCount }: { countryCount: string 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 0" }}>
 
+      {/* GLOBAL SHORTAGE HEATMAP — dark space (full-bleed breakout) */}
+      <section id="global" style={{
+        position: "relative",
+        background: "#070B14",
+        overflow: "hidden",
+        padding: "80px 24px 60px",
+        marginLeft: "calc(-50vw + 50%)",
+        marginRight: "calc(-50vw + 50%)",
+        width: "100vw",
+      }}>
+        {/* Star field canvas */}
+        <canvas
+          ref={starfieldRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Subtle radial glow behind globe */}
+        <div style={{
+          position: "absolute",
+          left: "50%",
+          top: "55%",
+          transform: "translate(-50%, -50%)",
+          width: 700,
+          height: 700,
+          borderRadius: "50%",
+          background: "radial-gradient(ellipse, rgba(30,58,95,0.4) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }} />
+
+        {/* Heading */}
+        <div style={{ position: "relative", zIndex: 2, textAlign: "center", marginBottom: 8 }}>
+          <h2 style={{
+            fontSize: "clamp(24px, 4vw, 42px)",
+            fontWeight: 700,
+            color: "#FFFFFF",
+            letterSpacing: "-0.025em",
+            margin: 0,
+          }}>
+            Drug shortages are a global problem.
+          </h2>
+        </div>
+
+        {/* Subtitle */}
+        <div style={{ position: "relative", zIndex: 2, textAlign: "center", marginBottom: 32 }}>
+          <p style={{
+            fontSize: 16,
+            color: "rgba(255,255,255,0.45)",
+            margin: 0,
+          }}>
+            Tracking shortage signals across 15 countries in real time.
+          </p>
+        </div>
+
+        {/* Globe */}
+        <div style={{
+          position: "relative", zIndex: 2,
+          display: "flex", justifyContent: "center",
+          maxWidth: 812, margin: "0 auto",
+          filter: "drop-shadow(0 0 40px rgba(125,211,252,0.08))",
+        }}>
+          <SpinningGlobe width={812} height={812} />
+        </div>
+      </section>
+
       {/* PRODUCT PREVIEW */}
       <div style={{ padding: "48px 0 64px" }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
@@ -86,7 +156,7 @@ export default function LandingContent({ countryCount }: { countryCount: string 
             lineHeight: 1.15, letterSpacing: "-0.025em",
             color: "var(--app-text)", margin: "0 auto",
           }}>
-            Built for decisions, not just awareness.
+            Mederti helps you navigate this world.
           </h2>
         </div>
 
@@ -172,76 +242,6 @@ export default function LandingContent({ countryCount }: { countryCount: string 
           </div>
         </div>
       </div>
-
-      {/* GLOBAL SHORTAGE HEATMAP — dark space (full-bleed breakout) */}
-      <section id="global" style={{
-        position: "relative",
-        background: "#070B14",
-        overflow: "hidden",
-        padding: "80px 24px 60px",
-        marginLeft: "calc(-50vw + 50%)",
-        marginRight: "calc(-50vw + 50%)",
-        width: "100vw",
-      }}>
-        {/* Star field canvas */}
-        <canvas
-          ref={starfieldRef}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
-          }}
-        />
-
-        {/* Subtle radial glow behind globe */}
-        <div style={{
-          position: "absolute",
-          left: "50%",
-          top: "55%",
-          transform: "translate(-50%, -50%)",
-          width: 700,
-          height: 700,
-          borderRadius: "50%",
-          background: "radial-gradient(ellipse, rgba(30,58,95,0.4) 0%, transparent 70%)",
-          pointerEvents: "none",
-        }} />
-
-        {/* Heading */}
-        <div style={{ position: "relative", zIndex: 2, textAlign: "center", marginBottom: 8 }}>
-          <h2 style={{
-            fontSize: "clamp(24px, 4vw, 42px)",
-            fontWeight: 700,
-            color: "#FFFFFF",
-            letterSpacing: "-0.025em",
-            margin: 0,
-          }}>
-            Drug shortages are a global problem.
-          </h2>
-        </div>
-
-        {/* Subtitle */}
-        <div style={{ position: "relative", zIndex: 2, textAlign: "center", marginBottom: 32 }}>
-          <p style={{
-            fontSize: 16,
-            color: "rgba(255,255,255,0.45)",
-            margin: 0,
-          }}>
-            Tracking shortage signals across 15 countries in real time.
-          </p>
-        </div>
-
-        {/* Globe */}
-        <div style={{
-          position: "relative", zIndex: 2,
-          display: "flex", justifyContent: "center",
-          maxWidth: 812, margin: "0 auto",
-          filter: "drop-shadow(0 0 40px rgba(125,211,252,0.08))",
-        }}>
-          <SpinningGlobe width={812} height={812} />
-        </div>
-      </section>
 
       {/* WHO IT'S FOR */}
       <section id="who" style={{ padding: "48px 0 64px" }}>

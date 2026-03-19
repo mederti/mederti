@@ -141,7 +141,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
               lineHeight: 1.3,
               textShadow: "0 2px 20px rgba(0,0,0,0.6), 0 0 60px rgba(7,11,20,0.8)",
             }}>
-              Searching the world for niche and short-supply drugs never ends.<br /><br />Until now.
+              Searching the world for niche and short-supply drugs seems impossible.<br /><br />Until now.
             </h2>
           </div>
         </div>

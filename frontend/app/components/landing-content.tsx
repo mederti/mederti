@@ -83,7 +83,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
         position: "relative",
         background: "#070B14",
         overflow: "hidden",
-        padding: "80px 24px 60px",
+        padding: "40px 24px 60px",
         marginLeft: "calc(-50vw + 50%)",
         marginRight: "calc(-50vw + 50%)",
         width: "100vw",
@@ -113,38 +113,43 @@ export default function LandingContent({ countryCount, platformStats }: { countr
           pointerEvents: "none",
         }} />
 
-        {/* Heading */}
-        <div style={{ position: "relative", zIndex: 2, textAlign: "center", marginBottom: 8 }}>
-          <h2 style={{
-            fontSize: "clamp(24px, 4vw, 42px)",
-            fontWeight: 700,
-            color: "#FFFFFF",
-            letterSpacing: "-0.025em",
-            margin: 0,
-          }}>
-            Drug shortages are a global problem.
-          </h2>
-        </div>
-
-        {/* Subtitle */}
-        <div style={{ position: "relative", zIndex: 2, textAlign: "center", marginBottom: 32 }}>
-          <p style={{
-            fontSize: 16,
-            color: "rgba(255,255,255,0.45)",
-            margin: 0,
-          }}>
-            Tracking shortage signals across 15 countries in real time.
-          </p>
-        </div>
-
-        {/* Globe */}
+        {/* Globe + overlaid text */}
         <div style={{
           position: "relative", zIndex: 2,
-          display: "flex", justifyContent: "center",
           maxWidth: 812, margin: "0 auto",
           filter: "drop-shadow(0 0 40px rgba(125,211,252,0.08))",
         }}>
           <SpinningGlobe width={812} height={812} />
+
+          {/* Text centred over globe */}
+          <div style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            textAlign: "center",
+            zIndex: 3,
+            pointerEvents: "none",
+          }}>
+            <h2 style={{
+              fontSize: "clamp(24px, 4vw, 42px)",
+              fontWeight: 700,
+              color: "#FFFFFF",
+              letterSpacing: "-0.025em",
+              margin: "0 0 8px",
+              textShadow: "0 2px 20px rgba(0,0,0,0.6), 0 0 60px rgba(7,11,20,0.8)",
+            }}>
+              Drug shortages are a<br />global problem.
+            </h2>
+            <p style={{
+              fontSize: 16,
+              color: "rgba(255,255,255,0.6)",
+              margin: 0,
+              textShadow: "0 2px 12px rgba(0,0,0,0.7)",
+            }}>
+              Tracking shortage signals across {countryCount} countries in real time.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -214,9 +219,15 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             },
             {
               icon: <Truck size={24} strokeWidth={1.5} color="rgba(255,255,255,0.6)" />,
-              title: "Suppliers",
+              title: "Distributors",
               desc: "Turn shortage intelligence into supply opportunity. See where demand is unmet and where you can step in.",
-              features: ["Portfolio risk intelligence", "Unmet demand signals", "Global regulatory monitoring", "Market gap analysis"],
+              features: ["Portfolio risk intelligence", "Unmet demand signals", "Supply chain visibility", "Market gap analysis"],
+            },
+            {
+              icon: <Factory size={24} strokeWidth={1.5} color="rgba(255,255,255,0.6)" />,
+              title: "Manufacturers",
+              desc: "Monitor global shortages that create demand for your products. Identify markets where supply gaps match your portfolio.",
+              features: ["Demand signal monitoring", "Regulatory pathway guidance", "Competitor supply tracking", "S19A opportunity alerts"],
             },
           ].map((card) => (
             <div key={card.title} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "28px 24px" }}>

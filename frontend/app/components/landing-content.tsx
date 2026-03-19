@@ -326,7 +326,7 @@ export default function LandingContent({ countryCount }: { countryCount: string 
               width: "100%", padding: "11px", borderRadius: 8,
               fontSize: 13, fontWeight: 600, fontFamily: "var(--font-inter), sans-serif",
               cursor: "pointer", textAlign: "center",
-              background: "var(--teal)", border: "none", color: "#fff",
+              background: "#fff", border: "none", color: "var(--teal)",
             }}>
               Start free trial
             </button>

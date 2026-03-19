@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+nixpacksConfigPath = "railway/shortage_cron_daily/nixpacks.toml"
+rootDirectory = "/"
+
+[deploy]
+startCommand = "python railway/shortage_cron_daily/run.py"
+restartPolicyType = "never"
+cronSchedule = "0 2 * * *"

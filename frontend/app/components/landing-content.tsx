@@ -164,7 +164,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             lineHeight: 1.15, letterSpacing: "-0.025em",
             color: "#fff", margin: "0 auto",
           }}>
-            Mederti Finds Short-Supply Medicines Globally.
+            Mederti Tracks &amp; Finds 160k Short-Supply Medicines Globally.
           </h2>
         </div>
 

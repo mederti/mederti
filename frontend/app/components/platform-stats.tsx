@@ -7,7 +7,6 @@ function fmt(n: number): string {
 }
 
 function fmtBig(n: number): string {
-  if (n >= 100000) return `${Math.floor(n / 1000).toLocaleString("en-AU")},000+`;
   return n.toLocaleString("en-AU");
 }
 

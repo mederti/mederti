@@ -154,7 +154,7 @@ export function SpinningGlobe({ width = 600, height = 600 }: { width?: number; h
         if (cancelled) { timer.stop(); return; }
 
         const rotate = projection.rotate();
-        projection.rotate([rotate[0] + 0.15, rotate[1]]);
+        projection.rotate([rotate[0] + 0.35, rotate[1]]);
 
         countryGroup.selectAll("path").attr("d", path as never);
         laneGroup.selectAll("path").attr("d", path as never);

@@ -5,6 +5,7 @@ import { EmailCapture } from "./email-capture";
 import dynamic from "next/dynamic";
 import {
   Pill, Stethoscope, Building2, Landmark, Truck,
+  Factory, Sparkles, AlertTriangle,
 } from "lucide-react";
 import { PlatformStats } from "./platform-stats";
 import type { PlatformStatsData } from "./landing-page-client";
@@ -232,6 +233,103 @@ export default function LandingContent({ countryCount, platformStats }: { countr
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* PRODUCT PREVIEW — dashboard screenshot */}
+      <section id="preview" style={{ padding: "48px 0 64px" }}>
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "#7dd3fc", marginBottom: 10 }}>
+            The product
+          </div>
+          <h2 style={{ fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "#fff", maxWidth: 560, margin: "0 auto 12px" }}>
+            Simple, powerful, easy to use.
+          </h2>
+          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
+            Real-time shortage intelligence, AI early warnings, and recall tracking — all in one view.
+          </p>
+        </div>
+
+        <div style={{
+          border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, overflow: "hidden",
+          background: "rgba(255,255,255,0.03)",
+          boxShadow: "0 8px 48px rgba(0,0,0,0.3)",
+          maxWidth: 1000, margin: "0 auto",
+        }}>
+          {/* Browser bar */}
+          <div style={{
+            background: "rgba(255,255,255,0.04)", padding: "12px 18px",
+            display: "flex", alignItems: "center", gap: 10,
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+          }}>
+            {["#ef4444", "#f97316", "#22c55e"].map((c) => (
+              <span key={c} style={{ width: 10, height: 10, borderRadius: "50%", background: c, display: "inline-block", opacity: 0.7 }} />
+            ))}
+            <span style={{
+              flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 5, padding: "4px 12px", fontSize: 12, color: "rgba(255,255,255,0.4)",
+              fontFamily: "var(--font-dm-mono), monospace", maxWidth: 280,
+            }}>
+              mederti.vercel.app/dashboard
+            </span>
+          </div>
+
+          <div style={{ padding: "24px 28px" }}>
+            {/* KPI row */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
+              {[
+                { label: "Critical shortages", val: "23", delta: "\u2191 4 since last month", accent: "var(--crit)" },
+                { label: "High severity", val: "41", delta: "\u2191 7 since last month", accent: "var(--high)" },
+                { label: "New this month", val: "18", delta: "\u2191 3 vs Feb", accent: "var(--med)" },
+                { label: "AI early warnings", val: "8", delta: "Next 30\u201360 days", accent: "#7dd3fc" },
+              ].map((k) => (
+                <div key={k.label} style={{
+                  background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8, padding: "14px 16px", position: "relative", overflow: "hidden",
+                }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: k.accent }} />
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{k.label}</div>
+                  <div style={{ fontFamily: "var(--font-dm-mono), monospace", fontSize: 26, fontWeight: 500, lineHeight: 1, color: k.accent }}>{k.val}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>{k.delta}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "14px 16px" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Active critical shortages</div>
+                {[
+                  { drug: "Amoxicillin 500mg", sev: "Critical", color: "var(--crit)", bg: "rgba(220,38,38,0.15)" },
+                  { drug: "Cisplatin 1mg/ml", sev: "Critical", color: "var(--crit)", bg: "rgba(220,38,38,0.15)" },
+                  { drug: "Paracetamol IV 10mg/ml", sev: "Critical", color: "var(--crit)", bg: "rgba(220,38,38,0.15)" },
+                  { drug: "Lithium Carbonate 250mg", sev: "High", color: "var(--high)", bg: "rgba(234,88,12,0.15)" },
+                  { drug: "Atorvastatin 40mg", sev: "High", color: "var(--high)", bg: "rgba(234,88,12,0.15)" },
+                ].map((row) => (
+                  <div key={row.drug} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.06)",
+                  }}>
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.75)" }}>{row.drug}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 3, background: row.bg, color: row.color }}>{row.sev}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "14px 16px" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}><AlertTriangle size={10} strokeWidth={1.5} /> Early warning signals</div>
+                {[
+                  { icon: <Factory size={13} strokeWidth={1.5} color="rgba(255,255,255,0.5)" />, text: "Ciprofloxacin 500mg \u2014 Aurobindo facility flagged by FDA inspection", badge: "HIGH RISK", color: "var(--high)", bg: "rgba(234,88,12,0.15)" },
+                  { icon: <Sparkles size={13} strokeWidth={1.5} color="rgba(255,255,255,0.5)" />, text: "Metformin 500mg \u2014 AI pattern match with current 850mg shortage", badge: "AI SIGNAL", color: "#7dd3fc", bg: "rgba(125,211,252,0.12)" },
+                  { icon: <Factory size={13} strokeWidth={1.5} color="rgba(255,255,255,0.5)" />, text: "Flucloxacillin \u2014 NMPA China manufacturing suspension flagged", badge: "HIGH RISK", color: "var(--high)", bg: "rgba(234,88,12,0.15)" },
+                ].map((w) => (
+                  <div key={w.text} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)", alignItems: "flex-start" }}>
+                    <span style={{ flexShrink: 0, marginTop: 1 }}>{w.icon}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", lineHeight: 1.5, flex: 1 }}>{w.text}</span>
+                    <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, background: w.bg, color: w.color, whiteSpace: "nowrap", flexShrink: 0 }}>{w.badge}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

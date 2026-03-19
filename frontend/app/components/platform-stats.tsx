@@ -23,7 +23,7 @@ export function PlatformStats({ stats }: { stats: PlatformStatsData }) {
       label: "Drug listings",
       value: fmtBig(stats.totalCatalogue),
       sub: "Approved drugs tracked globally",
-      badge: "US · CA · AU · GB · EU · JP",
+      badge: "US \u00b7 CA \u00b7 AU \u00b7 GB \u00b7 EU \u00b7 JP",
     },
     {
       label: "Shortage events",
@@ -35,7 +35,7 @@ export function PlatformStats({ stats }: { stats: PlatformStatsData }) {
       label: "Countries monitored",
       value: String(stats.countries),
       sub: "Regulatory authorities",
-      badge: "TGA · FDA · MHRA · EMA + 9",
+      badge: "TGA \u00b7 FDA \u00b7 MHRA \u00b7 EMA + 9",
     },
     {
       label: "Recalls tracked",
@@ -64,92 +64,62 @@ export function PlatformStats({ stats }: { stats: PlatformStatsData }) {
   ];
 
   return (
-    <div style={{
-      background: "#0d1117",
-      borderRadius: 12,
-      overflow: "hidden",
-      border: "1px solid rgba(255,255,255,0.07)",
-      boxShadow: "0 32px 80px rgba(0,0,0,0.5)",
-      maxWidth: 900,
-      margin: "0 auto",
+    <div className="lp-stats-cards" style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(4, 1fr)",
+      gap: 12,
     }}>
-      {/* Fake browser titlebar */}
-      <div style={{
-        background: "#161b24",
-        padding: "12px 16px",
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        borderBottom: "1px solid rgba(255,255,255,0.05)",
-      }}>
-        {["#3a3a3c", "#3a3a3c", "#3a3a3c"].map((c, i) => (
-          <div key={i} style={{ width: 10, height: 10, borderRadius: "50%", background: c }} />
-        ))}
-        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginLeft: 8, fontFamily: "monospace" }}>
-          mederti.vercel.app
-        </span>
-      </div>
-
-      {/* Stats grid */}
-      <div style={{ padding: 20 }}>
-        <div className="lp-stats-cards" style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 10,
+      {cards.map((card, i) => (
+        <div key={i} style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 12,
+          padding: "28px 24px",
         }}>
-          {cards.map((card, i) => (
-            <div key={i} style={{
-              background: "#161b24",
-              borderRadius: 8,
-              padding: "18px 16px",
-              border: "1px solid rgba(255,255,255,0.06)",
+          <div style={{
+            fontSize: 10, fontWeight: 600, textTransform: "uppercase",
+            letterSpacing: "0.1em", color: "rgba(255,255,255,0.35)",
+            marginBottom: 12,
+          }}>
+            {card.label}
+          </div>
+          <div style={{
+            fontSize: 32, fontWeight: 600, color: "#ffffff",
+            letterSpacing: "-0.03em", lineHeight: 1, marginBottom: 6,
+          }}>
+            {card.value}
+          </div>
+          <div style={{
+            fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginTop: 8,
+          }}>
+            {card.sub}
+          </div>
+          {card.live && (
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: 9, fontWeight: 500, marginTop: 12,
+              padding: "3px 8px", borderRadius: 4,
+              border: "1px solid rgba(220,38,38,0.2)",
+              background: "rgba(220,38,38,0.05)",
+              color: "#dc2626",
             }}>
-              <div style={{
-                fontSize: 9, fontWeight: 600, textTransform: "uppercase",
-                letterSpacing: "0.1em", color: "rgba(255,255,255,0.3)",
-                marginBottom: 10,
-              }}>
-                {card.label}
-              </div>
-              <div style={{
-                fontSize: 28, fontWeight: 600, color: "#ffffff",
-                letterSpacing: "-0.03em", lineHeight: 1, marginBottom: 4,
-              }}>
-                {card.value}
-              </div>
-              <div style={{
-                fontSize: 11, color: "rgba(255,255,255,0.3)", lineHeight: 1.4, marginTop: 6,
-              }}>
-                {card.sub}
-              </div>
-              {card.live && (
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  fontSize: 9, fontWeight: 500, marginTop: 8,
-                  padding: "2px 7px", borderRadius: 4,
-                  border: "1px solid rgba(220,38,38,0.2)",
-                  background: "rgba(220,38,38,0.05)",
-                  color: "#dc2626",
-                }}>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#dc2626", display: "inline-block" }} />
-                  Live
-                </div>
-              )}
-              {card.badge && (
-                <div style={{
-                  display: "inline-flex", alignItems: "center",
-                  fontSize: 9, fontWeight: 500, marginTop: 8,
-                  padding: "2px 7px", borderRadius: 4,
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  color: "rgba(255,255,255,0.35)",
-                }}>
-                  {card.badge}
-                </div>
-              )}
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#dc2626", display: "inline-block" }} />
+              Live
             </div>
-          ))}
+          )}
+          {card.badge && (
+            <div style={{
+              display: "inline-flex", alignItems: "center",
+              fontSize: 9, fontWeight: 500, marginTop: 12,
+              padding: "3px 8px", borderRadius: 4,
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.35)",
+            }}>
+              {card.badge}
+            </div>
+          )}
         </div>
-      </div>
+      ))}
     </div>
   );
 }

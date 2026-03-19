@@ -352,7 +352,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             How it works
           </div>
           <h2 style={{ fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "#fff", maxWidth: 560, margin: "0 auto 12px" }}>
-            From regulatory source to actionable intelligence.
+            Global intelligence for Pharmaceutical Shortages.
           </h2>
           <p style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
             Fully automated data pipeline with expert human curation on top.

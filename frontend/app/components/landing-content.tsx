@@ -121,7 +121,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
         }}>
           <SpinningGlobe width={812} height={812} />
 
-          {/* Text centred over globe — wider than globe */}
+          {/* Text centred over globe — contained within globe circle */}
           <div style={{
             position: "absolute",
             top: "50%",
@@ -130,17 +130,18 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             textAlign: "center",
             zIndex: 3,
             pointerEvents: "none",
-            width: "130%",
+            width: "65%",
           }}>
             <h2 style={{
-              fontSize: "clamp(24px, 4vw, 42px)",
+              fontSize: "clamp(20px, 3.2vw, 36px)",
               fontWeight: 700,
               color: "#FFFFFF",
               letterSpacing: "-0.025em",
               margin: "0 0 8px",
+              lineHeight: 1.3,
               textShadow: "0 2px 20px rgba(0,0,0,0.6), 0 0 60px rgba(7,11,20,0.8)",
             }}>
-              Searching the world for niche<br />and short-supply drugs never ends.<br /><br />Until now.
+              Searching the world for niche and short-supply drugs never ends.<br /><br />Until now.
             </h2>
           </div>
         </div>

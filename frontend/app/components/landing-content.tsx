@@ -143,6 +143,7 @@ export default function LandingContent({ countryCount }: { countryCount: string 
 
         <div style={{
           maxWidth: 812, margin: "0 auto", padding: "8px 0 16px",
+          filter: "drop-shadow(0 8px 24px rgba(15,23,42,0.12))",
         }}>
           <SpinningGlobe width={812} height={812} />
         </div>

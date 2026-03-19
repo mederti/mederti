@@ -70,7 +70,13 @@ def run_all():
     log.info("Taking daily status snapshot...")
     try:
         from supabase import create_client
-        sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+        url = os.environ["SUPABASE_URL"]
+        key = (
+            os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+            or os.environ.get("SUPABASE_SERVICE_KEY")
+            or os.environ.get("SUPABASE_KEY", "")
+        )
+        sb = create_client(url, key)
         sb.rpc("take_daily_snapshot").execute()
         log.info("Daily snapshot saved.")
     except Exception as e:

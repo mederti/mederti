@@ -145,39 +145,45 @@ export default function LandingContent({ countryCount }: { countryCount: string 
         </div>
       </section>
 
+    </div>
+
+    {/* ═══ DARK BOTTOM HALF — everything below the globe ═══ */}
+    <div style={{ background: "#070B14" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px" }}>
+
       {/* PRODUCT PREVIEW */}
-      <div style={{ padding: "48px 0 64px" }}>
+      <div style={{ padding: "64px 0" }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "#7dd3fc", marginBottom: 10 }}>
             The platform
           </div>
           <h2 style={{
             fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700,
             lineHeight: 1.15, letterSpacing: "-0.025em",
-            color: "var(--app-text)", margin: "0 auto",
+            color: "#fff", margin: "0 auto",
           }}>
             Mederti helps you navigate this world.
           </h2>
         </div>
 
         <div style={{
-          border: "1px solid var(--app-border)", borderRadius: 14, overflow: "hidden",
-          background: "#fff",
-          boxShadow: "0 8px 48px rgba(15,23,42,0.08), 0 2px 8px rgba(15,23,42,0.04)",
+          border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, overflow: "hidden",
+          background: "rgba(255,255,255,0.03)",
+          boxShadow: "0 8px 48px rgba(0,0,0,0.3)",
           maxWidth: 1000, margin: "0 auto",
         }}>
           {/* Browser bar */}
           <div style={{
-            background: "var(--app-bg)", padding: "12px 18px",
+            background: "rgba(255,255,255,0.04)", padding: "12px 18px",
             display: "flex", alignItems: "center", gap: 10,
-            borderBottom: "1px solid var(--app-border)",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
           }}>
             {["#ef4444", "#f97316", "#22c55e"].map((c) => (
               <span key={c} style={{ width: 10, height: 10, borderRadius: "50%", background: c, display: "inline-block", opacity: 0.7 }} />
             ))}
             <span style={{
-              flex: 1, background: "#fff", border: "1px solid var(--app-border)",
-              borderRadius: 5, padding: "4px 12px", fontSize: 12, color: "var(--app-text-4)",
+              flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 5, padding: "4px 12px", fontSize: 12, color: "rgba(255,255,255,0.4)",
               fontFamily: "var(--font-dm-mono), monospace", maxWidth: 280,
             }}>
               mederti.vercel.app/dashboard
@@ -191,49 +197,49 @@ export default function LandingContent({ countryCount }: { countryCount: string 
                 { label: "Critical shortages", val: "23", delta: "\u2191 4 since last month", accent: "var(--crit)" },
                 { label: "High severity", val: "41", delta: "\u2191 7 since last month", accent: "var(--high)" },
                 { label: "New this month", val: "18", delta: "\u2191 3 vs Feb 2025", accent: "var(--med)" },
-                { label: "AI early warnings", val: "8", delta: "Next 30\u201360 days", accent: "var(--teal)" },
+                { label: "AI early warnings", val: "8", delta: "Next 30\u201360 days", accent: "#7dd3fc" },
               ].map((k) => (
                 <div key={k.label} style={{
-                  background: "var(--app-bg)", border: "1px solid var(--app-border)",
+                  background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
                   borderRadius: 8, padding: "14px 16px", position: "relative", overflow: "hidden",
                 }}>
                   <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: k.accent }} />
-                  <div style={{ fontSize: 10, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{k.label}</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{k.label}</div>
                   <div style={{ fontFamily: "var(--font-dm-mono), monospace", fontSize: 26, fontWeight: 500, lineHeight: 1, color: k.accent }}>{k.val}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-text-4)", marginTop: 4 }}>{k.delta}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>{k.delta}</div>
                 </div>
               ))}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 8, padding: "14px 16px" }}>
-                <div style={{ fontSize: 10, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Active critical shortages</div>
+              <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "14px 16px" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Active critical shortages</div>
                 {[
-                  { drug: "Amoxicillin 500mg", sev: "Critical", color: "var(--crit)", bg: "var(--crit-bg)" },
-                  { drug: "Cisplatin 1mg/ml", sev: "Critical", color: "var(--crit)", bg: "var(--crit-bg)" },
-                  { drug: "Paracetamol IV 10mg/ml", sev: "Critical", color: "var(--crit)", bg: "var(--crit-bg)" },
-                  { drug: "Lithium Carbonate 250mg", sev: "High", color: "var(--high)", bg: "var(--high-bg)" },
-                  { drug: "Atorvastatin 40mg", sev: "High", color: "var(--high)", bg: "var(--high-bg)" },
+                  { drug: "Amoxicillin 500mg", sev: "Critical", color: "var(--crit)", bg: "rgba(220,38,38,0.15)" },
+                  { drug: "Cisplatin 1mg/ml", sev: "Critical", color: "var(--crit)", bg: "rgba(220,38,38,0.15)" },
+                  { drug: "Paracetamol IV 10mg/ml", sev: "Critical", color: "var(--crit)", bg: "rgba(220,38,38,0.15)" },
+                  { drug: "Lithium Carbonate 250mg", sev: "High", color: "var(--high)", bg: "rgba(234,88,12,0.15)" },
+                  { drug: "Atorvastatin 40mg", sev: "High", color: "var(--high)", bg: "rgba(234,88,12,0.15)" },
                 ].map((row) => (
                   <div key={row.drug} style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "7px 0", borderBottom: "1px solid var(--app-border)",
+                    padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.06)",
                   }}>
-                    <span style={{ fontSize: 12, color: "var(--app-text)" }}>{row.drug}</span>
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.75)" }}>{row.drug}</span>
                     <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 3, background: row.bg, color: row.color }}>{row.sev}</span>
                   </div>
                 ))}
               </div>
-              <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 8, padding: "14px 16px" }}>
-                <div style={{ fontSize: 10, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}><AlertTriangle size={10} strokeWidth={1.5} /> Early warning signals</div>
+              <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "14px 16px" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}><AlertTriangle size={10} strokeWidth={1.5} /> Early warning signals</div>
                 {[
-                  { icon: <Factory size={13} strokeWidth={1.5} color="#1a1a1a" />, text: "Ciprofloxacin 500mg \u2014 Aurobindo facility flagged by FDA inspection", badge: "HIGH RISK", color: "var(--high)", bg: "var(--high-bg)" },
-                  { icon: <Sparkles size={13} strokeWidth={1.5} color="#1a1a1a" />, text: "Metformin 500mg \u2014 AI pattern match with current 850mg shortage", badge: "AI SIGNAL", color: "var(--indigo)", bg: "var(--ind-bg)" },
-                  { icon: <Factory size={13} strokeWidth={1.5} color="#1a1a1a" />, text: "Flucloxacillin \u2014 NMPA China manufacturing suspension flagged", badge: "HIGH RISK", color: "var(--high)", bg: "var(--high-bg)" },
+                  { icon: <Factory size={13} strokeWidth={1.5} color="rgba(255,255,255,0.5)" />, text: "Ciprofloxacin 500mg \u2014 Aurobindo facility flagged by FDA inspection", badge: "HIGH RISK", color: "var(--high)", bg: "rgba(234,88,12,0.15)" },
+                  { icon: <Sparkles size={13} strokeWidth={1.5} color="rgba(255,255,255,0.5)" />, text: "Metformin 500mg \u2014 AI pattern match with current 850mg shortage", badge: "AI SIGNAL", color: "#7dd3fc", bg: "rgba(125,211,252,0.12)" },
+                  { icon: <Factory size={13} strokeWidth={1.5} color="rgba(255,255,255,0.5)" />, text: "Flucloxacillin \u2014 NMPA China manufacturing suspension flagged", badge: "HIGH RISK", color: "var(--high)", bg: "rgba(234,88,12,0.15)" },
                 ].map((w) => (
-                  <div key={w.text} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--app-border)", alignItems: "flex-start" }}>
+                  <div key={w.text} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)", alignItems: "flex-start" }}>
                     <span style={{ flexShrink: 0, marginTop: 1 }}>{w.icon}</span>
-                    <span style={{ fontSize: 11, color: "var(--app-text-2)", lineHeight: 1.5, flex: 1 }}>{w.text}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", lineHeight: 1.5, flex: 1 }}>{w.text}</span>
                     <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, background: w.bg, color: w.color, whiteSpace: "nowrap", flexShrink: 0 }}>{w.badge}</span>
                   </div>
                 ))}
@@ -246,13 +252,13 @@ export default function LandingContent({ countryCount }: { countryCount: string 
       {/* WHO IT'S FOR */}
       <section id="who" style={{ padding: "48px 0 64px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "#7dd3fc", marginBottom: 10 }}>
             Who it&apos;s for
           </div>
-          <h2 style={{ fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "var(--app-text)", maxWidth: 560, margin: "0 auto 12px" }}>
+          <h2 style={{ fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "#fff", maxWidth: 560, margin: "0 auto 12px" }}>
             Every part of the supply chain, served differently.
           </h2>
-          <p style={{ fontSize: 15, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
+          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
             Five views of the same data — built for how each user actually works.
           </p>
         </div>
@@ -260,44 +266,44 @@ export default function LandingContent({ countryCount }: { countryCount: string 
         <div className="lp-who-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
           {[
             {
-              icon: <Pill size={24} strokeWidth={1.5} color="#1a1a1a" />,
+              icon: <Pill size={24} strokeWidth={1.5} color="rgba(255,255,255,0.6)" />,
               title: "Pharmacists",
               desc: "Fast answers at the dispensary counter. Is it available? When is it back? What can I use instead?",
               features: ["Real-time availability by country", "AI-matched therapeutic alternatives", "Alert when stock returns", "Mobile-optimised interface"],
             },
             {
-              icon: <Stethoscope size={24} strokeWidth={1.5} color="#1a1a1a" />,
+              icon: <Stethoscope size={24} strokeWidth={1.5} color="rgba(255,255,255,0.6)" />,
               title: "Doctors",
               desc: "Know which drugs are in shortage before you write the script. Avoid the callback from a frustrated pharmacist.",
               features: ["Shortage alerts before you prescribe", "Therapeutic alternatives with dosing", "Country-level availability", "Weekly shortage brief"],
             },
             {
-              icon: <Building2 size={24} strokeWidth={1.5} color="#1a1a1a" />,
+              icon: <Building2 size={24} strokeWidth={1.5} color="rgba(255,255,255,0.6)" />,
               title: "Hospitals",
               desc: "Comprehensive shortage intelligence with source data, confidence scores and procurement guidance.",
               features: ["Full source audit trail", "Manufacturer & supplier data", "Watchlist & bulk alerts", "Exportable reports"],
             },
             {
-              icon: <Landmark size={24} strokeWidth={1.5} color="#1a1a1a" />,
+              icon: <Landmark size={24} strokeWidth={1.5} color="rgba(255,255,255,0.6)" />,
               title: "Governments",
               desc: "Market-wide intelligence. Early warning signals. Policy-ready reporting. Know before the calls come in.",
               features: ["National supply heatmaps", "AI early warning \u2014 30\u201390 day forecasts", "Global comparison view", "One-click ministerial briefings"],
             },
             {
-              icon: <Truck size={24} strokeWidth={1.5} color="#1a1a1a" />,
+              icon: <Truck size={24} strokeWidth={1.5} color="rgba(255,255,255,0.6)" />,
               title: "Suppliers",
               desc: "Turn shortage intelligence into supply opportunity. See where demand is unmet and where you can step in.",
               features: ["Portfolio risk intelligence", "Unmet demand signals", "Global regulatory monitoring", "Market gap analysis"],
             },
           ].map((card) => (
-            <div key={card.title} style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "28px 24px" }}>
+            <div key={card.title} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "28px 24px" }}>
               <div style={{ marginBottom: 12 }}>{card.icon}</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 8, letterSpacing: "-0.01em" }}>{card.title}</div>
-              <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.65, marginBottom: 16 }}>{card.desc}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 8, letterSpacing: "-0.01em" }}>{card.title}</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.65, marginBottom: 16 }}>{card.desc}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {card.features.map((f) => (
-                  <div key={f} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--app-text-3)" }}>
-                    <span style={{ color: "var(--teal)", fontSize: 11, flexShrink: 0 }}>{"\u2192"}</span>
+                  <div key={f} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
+                    <span style={{ color: "#7dd3fc", fontSize: 11, flexShrink: 0 }}>{"\u2192"}</span>
                     {f}
                   </div>
                 ))}
@@ -310,18 +316,18 @@ export default function LandingContent({ countryCount }: { countryCount: string 
       {/* HOW IT WORKS */}
       <section id="how" style={{ padding: "48px 0 64px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "#7dd3fc", marginBottom: 10 }}>
             How it works
           </div>
-          <h2 style={{ fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "var(--app-text)", maxWidth: 560, margin: "0 auto 12px" }}>
+          <h2 style={{ fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "#fff", maxWidth: 560, margin: "0 auto 12px" }}>
             From regulatory source to actionable intelligence.
           </h2>
-          <p style={{ fontSize: 15, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
+          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
             Fully automated data pipeline with expert human curation on top.
           </p>
         </div>
 
-        <div className="lp-steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden" }}>
+        <div className="lp-steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, overflow: "hidden" }}>
           {[
             { num: "01", title: "Collect", desc: "Daily automated scraping of 50+ regulatory bodies \u2014 TGA, FDA, MHRA, EMA, Health Canada and more across 9 countries." },
             { num: "02", title: "Normalise", desc: "Raw data is cleaned, deduplicated, classified by severity and cross-referenced across sources to build confidence scores." },
@@ -330,14 +336,14 @@ export default function LandingContent({ countryCount }: { countryCount: string 
           ].map((step, i) => (
             <div key={step.num} className="lp-step-cell" style={{
               padding: "28px 24px",
-              background: "#fff",
-              borderRight: i < 3 ? "1px solid var(--app-border)" : "none",
+              background: "rgba(255,255,255,0.03)",
+              borderRight: i < 3 ? "1px solid rgba(255,255,255,0.08)" : "none",
             }}>
-              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: "var(--teal)", marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: "#7dd3fc", marginBottom: 16 }}>
                 {step.num}
               </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 10, letterSpacing: "-0.01em" }}>{step.title}</div>
-              <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.65 }}>{step.desc}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 10, letterSpacing: "-0.01em" }}>{step.title}</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.65 }}>{step.desc}</div>
             </div>
           ))}
         </div>
@@ -346,31 +352,31 @@ export default function LandingContent({ countryCount }: { countryCount: string 
       {/* PRICING */}
       <section id="pricing" style={{ padding: "48px 0 64px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "#7dd3fc", marginBottom: 10 }}>
             Pricing
           </div>
-          <h2 style={{ fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "var(--app-text)", maxWidth: 560, margin: "0 auto 12px" }}>
+          <h2 style={{ fontSize: "clamp(24px,3.5vw,36px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "#fff", maxWidth: 560, margin: "0 auto 12px" }}>
             Start free. Scale when it matters.
           </h2>
-          <p style={{ fontSize: 15, color: "var(--app-text-3)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
+          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", maxWidth: 500, lineHeight: 1.65, margin: "0 auto" }}>
             Free for individual pharmacists. Institutional pricing for procurement teams and government.
           </p>
         </div>
 
         <div className="lp-pricing-cards" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, maxWidth: 960, margin: "0 auto" }}>
           {/* Free */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px", textAlign: "left" }}>
-            <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--app-text-4)", marginBottom: 16 }}>Free</div>
-            <div style={{ fontSize: 40, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>
-              $0<span style={{ fontSize: 16, color: "var(--app-text-4)", fontWeight: 400 }}>/mo</span>
+          <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "32px 28px", textAlign: "left" }}>
+            <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>Free</div>
+            <div style={{ fontSize: 40, fontWeight: 700, color: "#fff", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>
+              $0<span style={{ fontSize: 16, color: "rgba(255,255,255,0.35)", fontWeight: 400 }}>/mo</span>
             </div>
-            <div style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 28, paddingBottom: 28, borderBottom: "1px solid var(--app-border)" }}>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 28, paddingBottom: 28, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
               For individual pharmacists and clinicians
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
               {["Drug shortage search", "5 country availability view", "Basic alternative suggestions", "3 drug watchlist alerts", "Weekly shortage brief"].map((f) => (
-                <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--app-text-2)" }}>
-                  <span style={{ color: "var(--teal)", flexShrink: 0 }}>{"\u2713"}</span>
+                <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "rgba(255,255,255,0.6)" }}>
+                  <span style={{ color: "#7dd3fc", flexShrink: 0 }}>{"\u2713"}</span>
                   {f}
                 </div>
               ))}
@@ -379,7 +385,7 @@ export default function LandingContent({ countryCount }: { countryCount: string 
               width: "100%", padding: "11px", borderRadius: 8,
               fontSize: 13, fontWeight: 500, fontFamily: "var(--font-inter), sans-serif",
               cursor: "pointer", textAlign: "center",
-              background: "#fff", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
+              background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)",
             }}>
               Get started free
             </button>
@@ -387,21 +393,21 @@ export default function LandingContent({ countryCount }: { countryCount: string 
 
           {/* Pro */}
           <div style={{
-            background: "var(--app-text)", border: "1px solid var(--app-text)",
+            background: "#fff", border: "1px solid #fff",
             borderRadius: 12, padding: "32px 28px", position: "relative", textAlign: "left",
           }}>
             <div style={{
               position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)",
               fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
-              background: "var(--teal)", color: "#fff", padding: "4px 14px", borderRadius: "0 0 8px 8px",
+              background: "#7dd3fc", color: "#070B14", padding: "4px 14px", borderRadius: "0 0 8px 8px",
             }}>
               Most popular
             </div>
-            <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>Pro</div>
-            <div style={{ fontSize: 40, fontWeight: 700, color: "#fff", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>
-              $800<span style={{ fontSize: 16, color: "rgba(255,255,255,0.4)", fontWeight: 400 }}>/mo</span>
+            <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(0,0,0,0.4)", marginBottom: 16 }}>Pro</div>
+            <div style={{ fontSize: 40, fontWeight: 700, color: "#0F172A", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>
+              $800<span style={{ fontSize: 16, color: "rgba(0,0,0,0.35)", fontWeight: 400 }}>/mo</span>
             </div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 28, paddingBottom: 28, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+            <div style={{ fontSize: 13, color: "rgba(0,0,0,0.45)", marginBottom: 28, paddingBottom: 28, borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
               Per institution {"\u00B7"} hospital, pharmacy group or distributor
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
@@ -410,8 +416,8 @@ export default function LandingContent({ countryCount }: { countryCount: string 
                 "6-hourly data refresh", "AI shortage assistant", "Exportable PDF reports",
                 "Expert curator commentary", "Up to 20 team seats",
               ].map((f) => (
-                <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
-                  <span style={{ color: "var(--teal)", flexShrink: 0 }}>{"\u2713"}</span>
+                <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "rgba(0,0,0,0.65)" }}>
+                  <span style={{ color: "#0F172A", flexShrink: 0 }}>{"\u2713"}</span>
                   {f}
                 </div>
               ))}
@@ -420,17 +426,17 @@ export default function LandingContent({ countryCount }: { countryCount: string 
               width: "100%", padding: "11px", borderRadius: 8,
               fontSize: 13, fontWeight: 600, fontFamily: "var(--font-inter), sans-serif",
               cursor: "pointer", textAlign: "center",
-              background: "#fff", border: "none", color: "var(--teal)",
+              background: "#0F172A", border: "none", color: "#fff",
             }}>
               Start free trial
             </button>
           </div>
 
           {/* Enterprise */}
-          <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "32px 28px", textAlign: "left" }}>
-            <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--app-text-4)", marginBottom: 16 }}>Enterprise</div>
-            <div style={{ fontSize: 34, fontWeight: 700, color: "var(--app-text)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>Custom</div>
-            <div style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 28, paddingBottom: 28, borderBottom: "1px solid var(--app-border)" }}>
+          <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "32px 28px", textAlign: "left" }}>
+            <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>Enterprise</div>
+            <div style={{ fontSize: 34, fontWeight: 700, color: "#fff", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em" }}>Custom</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 28, paddingBottom: 28, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
               For regulators, health ministries and large distributors
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
@@ -439,8 +445,8 @@ export default function LandingContent({ countryCount }: { countryCount: string 
                 "Ministerial briefing generator", "Hourly refresh", "Dedicated data analyst",
                 "API access", "SLA + compliance docs",
               ].map((f) => (
-                <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--app-text-2)" }}>
-                  <span style={{ color: "var(--teal)", flexShrink: 0 }}>{"\u2713"}</span>
+                <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "rgba(255,255,255,0.6)" }}>
+                  <span style={{ color: "#7dd3fc", flexShrink: 0 }}>{"\u2713"}</span>
                   {f}
                 </div>
               ))}
@@ -449,7 +455,7 @@ export default function LandingContent({ countryCount }: { countryCount: string 
               width: "100%", padding: "11px", borderRadius: 8,
               fontSize: 13, fontWeight: 500, fontFamily: "var(--font-inter), sans-serif",
               cursor: "pointer", textAlign: "center",
-              background: "#fff", border: "1px solid var(--app-border-2)", color: "var(--app-text-2)",
+              background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)",
             }}>
               Talk to us {"\u2192"}
             </button>
@@ -457,18 +463,11 @@ export default function LandingContent({ countryCount }: { countryCount: string 
         </div>
       </section>
 
-      {/* WEEKLY BRIEF + EMAIL CAPTURE — dark section (full-bleed) */}
-      <section id="brief" style={{
-        position: "relative",
-        background: "#070B14",
-        padding: "72px 24px 0",
-        marginLeft: "calc(-50vw + 50%)",
-        marginRight: "calc(-50vw + 50%)",
-        width: "100vw",
-      }}>
+      {/* WEEKLY BRIEF */}
+      <section id="brief" style={{ padding: "48px 0 64px" }}>
         <div className="lp-brief-grid" style={{
           display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, alignItems: "center",
-          maxWidth: 960, margin: "0 auto", paddingBottom: 64,
+          maxWidth: 960, margin: "0 auto",
         }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "#7dd3fc", marginBottom: 12 }}>
@@ -527,8 +526,9 @@ export default function LandingContent({ countryCount }: { countryCount: string 
             </div>
           </div>
         </div>
-
       </section>
+
+      </div>
     </div>
   );
 }

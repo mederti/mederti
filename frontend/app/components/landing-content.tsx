@@ -73,6 +73,7 @@ export default function LandingContent({ countryCount }: { countryCount: string 
   }, []);
 
   return (
+    <>
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 0" }}>
 
       {/* GLOBAL SHORTAGE HEATMAP — dark space (full-bleed breakout) */}
@@ -530,5 +531,6 @@ export default function LandingContent({ countryCount }: { countryCount: string 
 
       </div>
     </div>
+    </>
   );
 }

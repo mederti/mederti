@@ -171,7 +171,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             lineHeight: 1.15, letterSpacing: "-0.025em",
             color: "#fff", margin: "0 auto",
           }}>
-            Mederti helps you navigate this world.
+            Mederti Finds Short-Supply Medicines Globally.
           </h2>
         </div>
 

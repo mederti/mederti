@@ -1,11 +1,15 @@
 """
-AIFA — Drug Recalls Scraper (Italy)
-────────────────────────────────────
-Source:  AIFA — Agenzia Italiana del Farmaco
-URL:     https://www.aifa.gov.it/richiami
+AIFA — Quality Defects / Drug Recalls Scraper (Italy)
+─────────────────────────────────────────────────────
+Source:  Agenzia Italiana del Farmaco — Difetti di qualità
+Page:   https://www.aifa.gov.it/en/difetti-di-qualit%C3%A01
 
-AIFA publishes recall notices as HTML news items. This scraper fetches the
-recall listing page and parses entries.
+AIFA publishes quarterly CSV files per year (2016–present). Each CSV
+contains quality defect actions (Ritiro = withdrawal, Divieto = ban, etc.)
+with product name, manufacturer, lot numbers, dates, and PDF links.
+
+Strategy: scrape the landing page for CSV links, download the latest CSV
+per year, parse and normalise all records.
 
 Source UUID:  10000000-0000-0000-0000-000000000032
 Country code: IT
@@ -13,194 +17,230 @@ Country code: IT
 
 from __future__ import annotations
 
+import csv
+import io
 import re
 from datetime import datetime, timezone
+
+import httpx
 
 from backend.scrapers.base_recall_scraper import BaseRecallScraper
 
 
 class AIFARecallsScraper(BaseRecallScraper):
-    """Scraper for AIFA Italy drug recall notices."""
+    """Scraper for AIFA quality defect / recall data."""
 
     SOURCE_ID:    str = "10000000-0000-0000-0000-000000000032"
-    SOURCE_NAME:  str = "AIFA — Drug Recalls (Italy)"
-    BASE_URL:     str = "https://www.aifa.gov.it/richiami"
+    SOURCE_NAME:  str = "AIFA — Difetti di qualità (Italy)"
+    BASE_URL:     str = "https://www.aifa.gov.it/en/difetti-di-qualit%C3%A01"
     COUNTRY:      str = "Italy"
     COUNTRY_CODE: str = "IT"
 
-    RATE_LIMIT_DELAY: float = 2.0
-    REQUEST_TIMEOUT:  float = 45.0
+    RATE_LIMIT_DELAY: float = 1.0
+    REQUEST_TIMEOUT:  float = 20.0
 
     _HEADERS: dict = {
-        "User-Agent":      "Mozilla/5.0 (compatible; Mederti-Scraper/1.0)",
-        "Accept":          "text/html,application/xhtml+xml",
-        "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+        "User-Agent": "Mozilla/5.0 (compatible; Mederti-Scraper/1.0)",
+        "Accept":     "text/html, text/csv, */*",
     }
 
     # ─────────────────────────────────────────────────────────────────────────
     # fetch()
     # ─────────────────────────────────────────────────────────────────────────
 
-    def fetch(self) -> dict:
-        self.log.info("Fetching AIFA recalls", extra={"url": self.BASE_URL})
-        try:
-            resp = self._get(self.BASE_URL, headers=self._HEADERS)
-            return {"html": resp.text, "fetched_at": datetime.now(timezone.utc).isoformat()}
-        except Exception as exc:
-            self.log.error("AIFA fetch failed", extra={"error": str(exc)})
-            return {"html": "", "error": str(exc)}
+    def fetch(self) -> list[dict]:
+        """
+        1. Scrape the quality defects page for CSV download links.
+        2. Pick the latest CSV per year.
+        3. Download and parse each CSV.
+        """
+        all_records: list[dict] = []
+
+        with httpx.Client(
+            headers=self._HEADERS,
+            timeout=self.REQUEST_TIMEOUT,
+            follow_redirects=True,
+        ) as client:
+            # Get the landing page
+            self.log.info("Fetching AIFA quality defects page", extra={"url": self.BASE_URL})
+            resp = client.get(self.BASE_URL)
+            resp.raise_for_status()
+
+            # Extract CSV links
+            csv_links = re.findall(r'href="(/documents/[^"]+\.csv)"', resp.text)
+            if not csv_links:
+                self.log.warning("No CSV links found on AIFA page")
+                return []
+
+            self.log.info("AIFA CSV links found", extra={"count": len(csv_links)})
+
+            # Group by year, keep only the latest per year (first on page = latest)
+            seen_years: set[str] = set()
+            latest_per_year: list[str] = []
+
+            for link in csv_links:
+                year_match = re.search(r'(?:AIFA[_-])(\d{4})', link)
+                if not year_match:
+                    continue
+                year = year_match.group(1)
+                if year not in seen_years:
+                    seen_years.add(year)
+                    latest_per_year.append(link)
+
+            self.log.info("AIFA: downloading latest CSV per year", extra={
+                "years": sorted(seen_years),
+                "files": len(latest_per_year),
+            })
+
+            # Download each CSV
+            for csv_path in latest_per_year:
+                url = f"https://www.aifa.gov.it{csv_path}"
+                try:
+                    csv_resp = client.get(url)
+                    csv_resp.raise_for_status()
+                    records = self._parse_csv(csv_resp.text, url)
+                    all_records.extend(records)
+                    self.log.info("AIFA CSV parsed", extra={
+                        "url": csv_path.split("/")[-1],
+                        "records": len(records),
+                    })
+                except Exception as exc:
+                    self.log.warning("AIFA CSV download failed", extra={
+                        "url": csv_path, "error": str(exc),
+                    })
+
+        self.log.info("AIFA fetch complete", extra={"total": len(all_records)})
+        return all_records
+
+    def _parse_csv(self, text: str, source_url: str) -> list[dict]:
+        """Parse an AIFA quality defects CSV."""
+        records = []
+        reader = csv.DictReader(io.StringIO(text), delimiter=";")
+        for row in reader:
+            if not row.get("Medicinale"):
+                continue
+            records.append({**row, "_source_url": source_url})
+        return records
 
     # ─────────────────────────────────────────────────────────────────────────
     # normalize()
     # ─────────────────────────────────────────────────────────────────────────
 
     def normalize(self, raw: dict | list) -> list[dict]:
-        html = raw.get("html", "") if isinstance(raw, dict) else ""
-        if not html:
-            self.log.warning("AIFA: empty HTML response")
-            return []
-
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            self.log.error("beautifulsoup4 not installed")
-            return []
-
-        soup = BeautifulSoup(html, "html.parser")
-        today = datetime.now(timezone.utc).date().isoformat()
+        records = raw if isinstance(raw, list) else []
         normalised: list[dict] = []
+        skipped = 0
 
-        # AIFA uses various markup structures — try broad selectors
-        items = (
-            soup.find_all("div", class_=re.compile(r"news|article|item|result|card", re.I)) or
-            soup.find_all("article") or
-            soup.find_all("li", class_=re.compile(r"item|result", re.I))
-        )
-
-        if not items:
-            # Fallback: links to recall detail pages
-            items = soup.find_all("a", href=re.compile(r"/richiami?/|richiamo", re.I))
-
-        self.log.info("AIFA items found", extra={"count": len(items)})
-
-        for item in items[:200]:
+        for rec in records:
             try:
-                result = self._normalise_item(item, today)
+                result = self._normalise_record(rec)
                 if result:
                     normalised.append(result)
+                else:
+                    skipped += 1
             except Exception as exc:
-                self.log.debug("AIFA item error", extra={"error": str(exc)})
+                skipped += 1
+                self.log.debug("AIFA normalise error", extra={"error": str(exc)})
 
-        if not normalised:
-            normalised = self._text_fallback(soup, today)
-
-        self.log.info("AIFA normalisation done", extra={"records": len(normalised)})
+        self.log.info("AIFA normalisation done", extra={
+            "normalised": len(normalised), "skipped": skipped,
+        })
         return normalised
 
-    def _normalise_item(self, item, today: str) -> dict | None:
-        text = item.get_text(" ", strip=True)
-        if not text or len(text) < 10:
+    def _normalise_record(self, rec: dict) -> dict | None:
+        name = (rec.get("Medicinale") or "").strip()
+        if not name:
             return None
 
-        drug_kw = ["compressa", "capsula", "iniezione", "soluzione", "mg", "fiala",
-                   "farmaco", "medicinale", "antibiotico", "vaccino"]
-        if not any(kw in text.lower() for kw in drug_kw):
-            return None
+        form = (rec.get("Forma Farmaceutica") or "").strip()
+        full_name = f"{name} {form}".strip() if form else name
 
-        name_el = item.find(["h2", "h3", "h4", "strong", "a"])
-        name = name_el.get_text(strip=True) if name_el else text[:80]
-        name = re.split(r"[,\-–—\n]", name)[0].strip()[:100]
-        if len(name) < 3:
-            return None
+        mah = (rec.get("Titolare AIC") or "").strip() or None
 
-        date_el = item.find("time") or item.find(attrs={"class": re.compile(r"date|time", re.I)})
-        date_raw = ""
-        if date_el:
-            date_raw = date_el.get("datetime", "") or date_el.get_text(strip=True)
-        announced_date = self._parse_date(date_raw) or today
+        lot_raw = rec.get("Numero Lotto") or ""
+        lot_numbers = [l.strip() for l in re.split(r"[,;\-]", lot_raw) if l.strip()] if lot_raw else []
 
-        lots = re.findall(r"\b([A-Z0-9]{4,15})\b", text)
-        lots = [l for l in lots if re.search(r"\d", l)][:10]
+        date_raw = (rec.get("Data Provvedimento") or "").strip()
+        announced_date = self._parse_date(date_raw)
+        if not announced_date:
+            announced_date = datetime.now(timezone.utc).date().isoformat()
 
-        link_el = item.find("a", href=True)
-        press_url = self.BASE_URL
-        if link_el:
-            href = link_el["href"]
-            press_url = f"https://www.aifa.gov.it{href}" if href.startswith("/") else href
+        action = (rec.get("Provvedimento") or "").strip()
+        recall_type = self._map_action(action)
+
+        aic = (rec.get("AIC") or "").strip()
+        recall_ref = f"AIFA-{aic}-{lot_raw.strip()}-{date_raw}" if aic else f"AIFA-{name[:40]}-{date_raw}"
+
+        pdf_link = (rec.get("Link Provvedimento") or "").strip()
+        press_url = pdf_link if pdf_link.startswith("http") else self.BASE_URL
 
         return {
-            "generic_name":     name,
-            "brand_name":       None,
-            "manufacturer":     None,
+            "generic_name":     full_name[:100],
+            "brand_name":       name[:100] if form else None,
+            "manufacturer":     mah[:200] if mah else None,
             "recall_class":     None,
-            "recall_type":      "batch" if lots else None,
-            "reason":           text[:400] or None,
-            "reason_category":  self._map_reason(text),
-            "lot_numbers":      lots,
+            "recall_type":      recall_type,
+            "reason":           f"{action} — AIC {aic}" if aic else action or None,
+            "reason_category":  "other",
+            "lot_numbers":      lot_numbers,
             "announced_date":   announced_date,
             "status":           "active",
             "press_release_url": press_url,
-            "confidence_score": 72,
-            "recall_ref":       press_url,
-            "raw_record":       {"text": text[:300]},
+            "confidence_score": 90,
+            "recall_ref":       recall_ref[:100],
+            "raw_record":       {k: str(v)[:200] for k, v in rec.items() if v},
         }
-
-    def _text_fallback(self, soup, today: str) -> list[dict]:
-        results: list[dict] = []
-        drug_kw = ["compressa", "capsula", "mg", "farmaco", "richiamo"]
-        for p in soup.find_all(["p", "li", "div"]):
-            text = p.get_text(" ", strip=True)
-            if 20 < len(text) < 400 and any(kw in text.lower() for kw in drug_kw):
-                name = " ".join(text.split()[:4])[:60]
-                results.append({
-                    "generic_name":     name,
-                    "brand_name":       None,
-                    "manufacturer":     None,
-                    "recall_class":     None,
-                    "recall_type":      None,
-                    "reason":           text[:300],
-                    "reason_category":  "other",
-                    "lot_numbers":      [],
-                    "announced_date":   today,
-                    "status":           "active",
-                    "press_release_url": self.BASE_URL,
-                    "confidence_score": 45,
-                    "recall_ref":       text[:60],
-                    "raw_record":       {"text": text[:300]},
-                })
-            if len(results) >= 100:
-                break
-        return results
 
     @staticmethod
     def _parse_date(raw: str) -> str | None:
         if not raw:
             return None
-        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y"):
+
+        it_months = {
+            "gen": "01", "feb": "02", "mar": "03", "apr": "04",
+            "mag": "05", "giu": "06", "lug": "07", "ago": "08",
+            "set": "09", "ott": "10", "nov": "11", "dic": "12",
+        }
+
+        m = re.match(r"(\d{1,2})-(\w{3})-(\d{2,4})", raw)
+        if m:
+            day, mon, year = m.groups()
+            month = it_months.get(mon.lower())
+            if month:
+                yr = int(year)
+                if yr < 100:
+                    yr += 2000
+                try:
+                    return f"{yr}-{month}-{int(day):02d}"
+                except Exception:
+                    pass
+
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
             try:
-                return datetime.strptime(raw[:10], fmt[:10]).date().isoformat()
+                return datetime.strptime(raw.strip(), fmt).date().isoformat()
             except Exception:
                 pass
-        m = re.search(r"\d{4}-\d{2}-\d{2}", raw)
-        return m.group(0) if m else None
+
+        iso = re.search(r"\d{4}-\d{2}-\d{2}", raw)
+        return iso.group(0) if iso else None
 
     @staticmethod
-    def _map_reason(text: str) -> str | None:
-        lower = text.lower()
-        if any(w in lower for w in ["contaminazione", "impurità"]):
-            return "contamination"
-        if any(w in lower for w in ["etichett", "etichettatura"]):
-            return "mislabelling"
-        if any(w in lower for w in ["dosaggio", "potenza", "tenore"]):
-            return "subpotency"
-        if any(w in lower for w in ["sterile", "sterilità"]):
-            return "sterility"
-        if any(w in lower for w in ["confezionamento", "imballaggio"]):
-            return "packaging"
-        if any(w in lower for w in ["particelle", "corpo estraneo"]):
-            return "foreign_matter"
-        return "other"
+    def _map_action(action: str) -> str:
+        lower = (action or "").lower()
+        if "ritiro" in lower:
+            return "withdrawal"
+        if "divieto" in lower:
+            return "ban"
+        if "sequestro" in lower:
+            return "seizure"
+        if "revoca" in lower:
+            return "revocation"
+        return "quality_defect"
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Standalone entrypoint
+# ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import json, os, sys
@@ -212,12 +252,13 @@ if __name__ == "__main__":
         print("=" * 60); print("DRY RUN — AIFA Recalls"); print("=" * 60)
         scraper = AIFARecallsScraper(db_client=MagicMock())
         raw = scraper.fetch()
+        print(f"  raw records: {len(raw)}")
         recalls = scraper.normalize(raw)
-        print(f"── Records: {len(recalls)}")
+        print(f"  normalised : {len(recalls)}")
         if recalls:
             print(json.dumps({k: v for k, v in recalls[0].items() if k != "raw_record"}, indent=2, default=str))
         sys.exit(0)
     scraper = AIFARecallsScraper()
     summary = scraper.run()
     print(json.dumps(summary, indent=2, default=str))
-    sys.exit(0 if summary["status"] == "success" else 1)
+    sys.exit(0 if summary["status"] in ("success", "duplicate") else 1)

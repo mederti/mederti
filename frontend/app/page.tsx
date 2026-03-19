@@ -31,12 +31,26 @@ export default async function Home() {
   let totalActive = "8,100";
   let countryCount = "20";
   let sourceCount = "30";
+  let platformStats = {
+    totalCatalogue: 161000,
+    totalShortages: 16853,
+    activeShortages: 9435,
+    anticipatedShortages: 1126,
+    totalRecalls: 17504,
+    countries: 13,
+    sources: 42,
+    scrapers: 39,
+  };
   try {
     const admin = getSupabaseAdmin();
-    const [activeRes, countriesRes, sourcesRes] = await Promise.all([
+    const [activeRes, countriesRes, sourcesRes, totalRes, anticipatedRes, recallsRes, catalogueRes] = await Promise.all([
       admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
       admin.from("shortage_events").select("country_code").eq("status", "active"),
       admin.from("data_sources").select("id", { count: "exact", head: true }),
+      admin.from("shortage_events").select("id", { count: "exact", head: true }),
+      admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "anticipated"),
+      admin.from("recalls").select("id", { count: "exact", head: true }),
+      admin.from("drug_catalogue").select("id", { count: "exact", head: true }),
     ]);
     if (activeRes.count) totalActive = activeRes.count.toLocaleString();
     if (countriesRes.data) {
@@ -44,6 +58,16 @@ export default async function Home() {
       countryCount = String(unique.size);
     }
     if (sourcesRes.count) sourceCount = String(sourcesRes.count);
+    platformStats = {
+      totalCatalogue: catalogueRes.count ?? platformStats.totalCatalogue,
+      totalShortages: totalRes.count ?? platformStats.totalShortages,
+      activeShortages: activeRes.count ?? platformStats.activeShortages,
+      anticipatedShortages: anticipatedRes.count ?? platformStats.anticipatedShortages,
+      totalRecalls: recallsRes.count ?? platformStats.totalRecalls,
+      countries: countriesRes.data ? new Set(countriesRes.data.map((r: { country_code: string }) => r.country_code).filter(Boolean)).size : platformStats.countries,
+      sources: sourcesRes.count ?? platformStats.sources,
+      scrapers: 39,
+    };
   } catch { /* fallback to static */ }
 
   return (
@@ -62,6 +86,7 @@ export default async function Home() {
           .lp-who-grid { grid-template-columns: 1fr !important; }
           .lp-steps-grid { grid-template-columns: repeat(2,1fr) !important; }
           .lp-step-cell { border-right: none !important; }
+          .lp-stats-cards { grid-template-columns: repeat(2,1fr) !important; }
         }
       `}</style>
 
@@ -69,7 +94,7 @@ export default async function Home() {
       <SiteNav />
 
       {/* ── Hero + Chat + Content (all managed by client component) ── */}
-      <LandingPageClient totalActive={totalActive} countryCount={countryCount} sourceCount={sourceCount} />
+      <LandingPageClient totalActive={totalActive} countryCount={countryCount} sourceCount={sourceCount} platformStats={platformStats} />
 
       <SiteFooter />
     </div>

@@ -93,7 +93,18 @@ const SUGGESTIONS = [
 
 /* ── component ─────────────────────────────────────────────────── */
 
-export default function LandingPageClient({ totalActive, countryCount, sourceCount }: { totalActive: string; countryCount: string; sourceCount: string }) {
+export interface PlatformStatsData {
+  totalCatalogue: number;
+  totalShortages: number;
+  activeShortages: number;
+  anticipatedShortages: number;
+  totalRecalls: number;
+  countries: number;
+  sources: number;
+  scrapers: number;
+}
+
+export default function LandingPageClient({ totalActive, countryCount, sourceCount, platformStats }: { totalActive: string; countryCount: string; sourceCount: string; platformStats: PlatformStatsData }) {
   const router = useRouter();
   const [query, setQuery]       = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -903,7 +914,7 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
         </div>
       ) : (
         /* Marketing content */
-        <LandingContent countryCount={countryCount} />
+        <LandingContent countryCount={countryCount} platformStats={platformStats} />
       )}
 
       {/* ── Hidden file inputs ─────────────────────────────── */}

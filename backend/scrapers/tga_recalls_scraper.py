@@ -213,14 +213,12 @@ class TgaRecallsScraper(BaseRecallScraper):
         hc = rec.get("hazard_class", "").lower().strip()
         recall_class = self._CLASS_MAP.get(hc)
 
-        # Action type → recall_type
+        # Action type → recall_type (DB enum: batch, market_withdrawal, or NULL)
         action_type = rec.get("action_type", "").lower()
         if "recall" in action_type:
-            recall_type = "recall"
-        elif "correction" in action_type:
-            recall_type = "correction"
-        elif "alert" in action_type:
-            recall_type = "alert"
+            recall_type = "batch"
+        elif "correction" in action_type or "alert" in action_type:
+            recall_type = None  # not a recall per se
         else:
             recall_type = None
 

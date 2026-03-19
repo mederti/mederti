@@ -225,17 +225,15 @@ class AIFARecallsScraper(BaseRecallScraper):
         return iso.group(0) if iso else None
 
     @staticmethod
-    def _map_action(action: str) -> str:
+    def _map_action(action: str) -> str | None:
+        """Map Italian action type to DB enum (batch, market_withdrawal, or NULL)."""
         lower = (action or "").lower()
         if "ritiro" in lower:
-            return "withdrawal"
-        if "divieto" in lower:
-            return "ban"
-        if "sequestro" in lower:
-            return "seizure"
-        if "revoca" in lower:
-            return "revocation"
-        return "quality_defect"
+            return "batch"  # Ritiro = batch withdrawal
+        if "divieto" in lower or "revoca" in lower:
+            return "market_withdrawal"
+        # sequestro (seizure), other → NULL
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

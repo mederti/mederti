@@ -9,7 +9,7 @@ import {
 
 const SpinningGlobe = dynamic(
   () => import("@/app/components/SpinningGlobe").then(m => m.SpinningGlobe),
-  { ssr: false, loading: () => <div style={{ width: 624, height: 624, background: "#ffffff", borderRadius: "50%", margin: "0 auto" }} /> }
+  { ssr: false, loading: () => <div style={{ width: 812, height: 812, background: "#ffffff", borderRadius: "50%", margin: "0 auto" }} /> }
 );
 
 
@@ -142,9 +142,9 @@ export default function LandingContent({ countryCount }: { countryCount: string 
         </div>
 
         <div style={{
-          maxWidth: 560, margin: "0 auto", padding: "8px 0 16px",
+          maxWidth: 812, margin: "0 auto", padding: "8px 0 16px",
         }}>
-          <SpinningGlobe width={624} height={624} />
+          <SpinningGlobe width={812} height={812} />
         </div>
       </section>
 

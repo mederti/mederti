@@ -1,19 +1,13 @@
 """
-TGA Product Recalls Scraper (Australia)
-────────────────────────────────────────
+TGA Product Recalls Scraper (Australia) — DRAC
+───────────────────────────────────────────────
 Source:  TGA — Therapeutic Goods Administration
-URL:     https://www.tga.gov.au/safety/recalls-and-other-market-actions/market-actions
+System:  DRAC (Database of Recalls, Product Alerts and Product Corrections)
+URL:     https://apps.tga.gov.au/PROD/DRAC/
 
-Data access note
-────────────────
-TGA recalls are published via DRAC (Drug Recall and Adverse Compliance system),
-which is a JavaScript-rendered search interface. As of 2025 all static JSON/CSV
-endpoints have been retired.
-
-The DRAC search UI (https://apps.tga.gov.au/PROD/DRAC/arn-entry.aspx) requires
-Playwright to export data. Until a Playwright-based implementation is complete,
-this scraper attempts the old JSON endpoint as a fallback, then returns 0 records
-gracefully if unavailable.
+Strategy: enumerate detail pages by TGA Action ID (RC-{year}-RN-{num:05d}-1).
+Each detail page is a standalone HTML page with labelled <span> fields.
+Filter to ProductType == "Medicine" only.
 
 Source UUID:  10000000-0000-0000-0000-000000000027  (TGA Recalls, AU)
 Country code: AU
@@ -22,189 +16,286 @@ Country code: AU
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 
 import httpx
 
 from backend.scrapers.base_recall_scraper import BaseRecallScraper
 
 
+class _SpanParser(HTMLParser):
+    """Extract <span id="lbl*"> values from DRAC detail page."""
+
+    def __init__(self):
+        super().__init__()
+        self._current_id: str | None = None
+        self._capture = False
+        self.fields: dict[str, str] = {}
+
+    def handle_starttag(self, tag, attrs):
+        d = dict(attrs)
+        if tag == "span" and (sid := d.get("id", "")).startswith("lbl"):
+            self._current_id = sid
+            self._capture = True
+            self.fields[sid] = ""
+
+    def handle_data(self, data):
+        if self._capture and self._current_id:
+            self.fields[self._current_id] += data
+
+    def handle_endtag(self, tag):
+        if tag == "span" and self._capture:
+            self._capture = False
+
+
 class TgaRecallsScraper(BaseRecallScraper):
-    """Scraper for TGA product recall data (medicine subset)."""
+    """Scraper for TGA DRAC recall data (medicine subset)."""
 
     SOURCE_ID:    str = "10000000-0000-0000-0000-000000000027"
     SOURCE_NAME:  str = "TGA — Product Recalls (Australia)"
-    BASE_URL:     str = "https://www.tga.gov.au/safety/recalls-and-other-market-actions/market-actions"
-    JSON_URL:     str = "https://www.tga.gov.au/sites/default/files/product-recalls.json"
+    BASE_URL:     str = "https://apps.tga.gov.au/PROD/DRAC"
+    DETAIL_URL:   str = "https://apps.tga.gov.au/PROD/DRAC/arn-detail.aspx?k={action_id}"
     COUNTRY:      str = "Australia"
     COUNTRY_CODE: str = "AU"
 
-    RATE_LIMIT_DELAY: float = 2.0
-    REQUEST_TIMEOUT:  float = 60.0
+    RATE_LIMIT_DELAY: float = 0.5
+    REQUEST_TIMEOUT:  float = 15.0
+
+    # How many years back to scan
+    SCAN_YEARS: list[int] = list(range(2020, datetime.now().year + 1))
+    # Max ID to try per year (most years have <1000 total entries)
+    MAX_ID_PER_YEAR: int = 1000
+    # Stop after N consecutive misses within a year
+    MAX_CONSECUTIVE_MISS: int = 40
 
     _HEADERS: dict = {
         "User-Agent":      "Mozilla/5.0 (compatible; Mederti-Scraper/1.0)",
-        "Accept":          "application/json, text/html;q=0.8",
-        "Accept-Language": "en-AU,en;q=0.9",
-        "Referer":         "https://www.tga.gov.au/",
+        "Accept":          "text/html",
+        "Accept-Language":  "en-AU,en;q=0.9",
+    }
+
+    _CLASS_MAP: dict[str, str] = {
+        "class i":   "I",
+        "class ii":  "II",
+        "class iii": "III",
     }
 
     # ─────────────────────────────────────────────────────────────────────────
     # fetch()
     # ─────────────────────────────────────────────────────────────────────────
 
-    def fetch(self) -> dict:
+    def fetch(self) -> list[dict]:
         """
-        Fetch TGA recalls. Tries JSON endpoint first, falls back to HTML.
-
-        Returns:
-            {"records": list[dict], "source": str, "fetched_at": str}
+        Enumerate DRAC detail pages for each year. Return list of parsed records.
+        Only includes Medicine product type.
         """
-        self.log.info("Fetching TGA recalls", extra={"url": self.JSON_URL})
+        all_records: list[dict] = []
+        total_checked = 0
+        total_exist = 0
 
-        # Try JSON feed first
-        try:
-            with httpx.Client(
-                headers=self._HEADERS,
-                timeout=self.REQUEST_TIMEOUT,
-                follow_redirects=True,
-            ) as client:
-                resp = client.get(self.JSON_URL)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    records = data if isinstance(data, list) else data.get("data", data.get("recalls", []))
-                    self.log.info("TGA recalls JSON fetched", extra={"records": len(records)})
-                    return {
-                        "records": records,
-                        "source": "json",
-                        "fetched_at": datetime.now(timezone.utc).isoformat(),
-                    }
-        except Exception as exc:
-            self.log.debug("TGA JSON endpoint not available", extra={"error": str(exc)})
+        with httpx.Client(
+            headers=self._HEADERS,
+            timeout=self.REQUEST_TIMEOUT,
+            follow_redirects=False,
+        ) as client:
+            for year in self.SCAN_YEARS:
+                year_count = 0
+                consecutive_miss = 0
 
-        # Fallback: HTML page
-        try:
-            with httpx.Client(
-                headers={**self._HEADERS, "Accept": "text/html"},
-                timeout=self.REQUEST_TIMEOUT,
-                follow_redirects=True,
-            ) as client:
-                resp = client.get(self.BASE_URL)
-                resp.raise_for_status()
-            self.log.info("TGA recalls HTML fetched", extra={"bytes": len(resp.content)})
-            return {
-                "records": [],
-                "html": resp.text,
-                "source": "html",
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
-            }
-        except Exception as exc:
-            self.log.warning("TGA recalls fetch failed — returning 0 records gracefully",
-                             extra={"error": str(exc)})
+                for num in range(1, self.MAX_ID_PER_YEAR + 1):
+                    action_id = f"RC-{year}-RN-{num:05d}-1"
+                    total_checked += 1
 
-        return {"records": [], "source": "none", "fetched_at": datetime.now(timezone.utc).isoformat()}
+                    try:
+                        resp = client.get(self.DETAIL_URL.format(action_id=action_id))
+                    except Exception:
+                        consecutive_miss += 1
+                        if consecutive_miss >= self.MAX_CONSECUTIVE_MISS:
+                            break
+                        continue
+
+                    if resp.status_code != 200:
+                        consecutive_miss += 1
+                        if consecutive_miss >= self.MAX_CONSECUTIVE_MISS:
+                            break
+                        continue
+
+                    consecutive_miss = 0
+                    total_exist += 1
+
+                    # Parse the detail page
+                    parser = _SpanParser()
+                    parser.feed(resp.text)
+                    f = parser.fields
+
+                    # Only keep Medicine
+                    product_type = f.get("lblProductType", "").strip()
+                    if product_type != "Medicine":
+                        continue
+
+                    year_count += 1
+                    all_records.append({
+                        "action_id":    action_id,
+                        "product_type": product_type,
+                        "product_name": f.get("lblProductName", "").strip(),
+                        "artg_no":      f.get("lblArtgNo", "").strip(),
+                        "action_type":  f.get("lblRecallType", "").strip(),
+                        "action_level": f.get("lblLevel", "").strip(),
+                        "hazard_class": f.get("lblClass", "").strip(),
+                        "reason":       f.get("lblInformation", "").strip(),
+                        "instructions": f.get("lblReason", "").strip(),
+                        "action_date":  f.get("lblRecallDate", "").strip(),
+                        "sponsor":      f.get("lblSponsor", "").strip(),
+                        "contact":      f.get("lblContact", "").strip(),
+                    })
+
+                    # Rate limit
+                    if self.RATE_LIMIT_DELAY > 0:
+                        time.sleep(self.RATE_LIMIT_DELAY)
+
+                self.log.info(
+                    "TGA DRAC year scan",
+                    extra={"year": year, "medicines": year_count},
+                )
+
+        self.log.info(
+            "TGA DRAC fetch complete",
+            extra={
+                "checked": total_checked,
+                "existed": total_exist,
+                "medicines": len(all_records),
+            },
+        )
+        return all_records
 
     # ─────────────────────────────────────────────────────────────────────────
     # normalize()
     # ─────────────────────────────────────────────────────────────────────────
 
     def normalize(self, raw: dict | list) -> list[dict]:
-        """Convert TGA recall records to recall dicts."""
-        source = raw.get("source", "none") if isinstance(raw, dict) else "none"
-        today = datetime.now(timezone.utc).date().isoformat()
+        records = raw if isinstance(raw, list) else []
         normalised: list[dict] = []
+        skipped = 0
 
-        if source == "json":
-            records = raw.get("records", []) if isinstance(raw, dict) else []
-            for item in records:
-                try:
-                    result = self._normalise_json_record(item, today)
-                    if result:
-                        normalised.append(result)
-                except Exception as exc:
-                    self.log.debug("TGA recalls: item error", extra={"error": str(exc)})
-
-        elif source == "html":
+        for rec in records:
             try:
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(raw.get("html", ""), "html.parser")
-                for item in soup.find_all(["article", "li", "tr"]):
-                    text = item.get_text(strip=True)
-                    if not text or len(text) < 10:
-                        continue
-                    if any(w in text.lower() for w in ["medicine", "drug", "tablet", "capsule", "injection"]):
-                        normalised.append({
-                            "generic_name":     text[:80],
-                            "brand_name":       None,
-                            "manufacturer":     None,
-                            "recall_class":     None,
-                            "recall_type":      None,
-                            "reason_category":  "other",
-                            "lot_numbers":      [],
-                            "announced_date":   today,
-                            "status":           "active",
-                            "press_release_url": self.BASE_URL,
-                            "confidence_score": 50,
-                            "recall_ref":       text[:60],
-                            "raw_record":       {"text": text[:300]},
-                        })
+                result = self._normalise_record(rec)
+                if result:
+                    normalised.append(result)
+                else:
+                    skipped += 1
             except Exception as exc:
-                self.log.warning("TGA recalls HTML parse error", extra={"error": str(exc)})
+                skipped += 1
+                self.log.debug("TGA recall normalise error", extra={"error": str(exc)})
 
         self.log.info(
             "TGA recalls normalisation done",
-            extra={"normalised": len(normalised), "source": source},
+            extra={"normalised": len(normalised), "skipped": skipped},
         )
         return normalised
 
-    def _normalise_json_record(self, item: dict, today: str) -> dict | None:
-        # Only process medicine recalls
-        category = (item.get("category") or item.get("type") or "").lower()
-        if category and not any(w in category for w in ["medicine", "drug", "pharmaceutical", "biolog"]):
+    def _normalise_record(self, rec: dict) -> dict | None:
+        name_raw = rec.get("product_name", "")
+        if not name_raw:
             return None
 
-        name = (
-            item.get("product_name") or item.get("productName") or
-            item.get("name") or item.get("title") or ""
-        ).strip()
+        # Clean product name — take first line / first 100 chars
+        name = re.split(r"[\n\r]", name_raw)[0].strip()
+        # Remove batch/lot info from name
+        name = re.sub(r"\b(Batch|Lot|batch|lot)\s*(Number|No|#)?:?\s*.*", "", name).strip()
+        name = name[:100] if len(name) >= 3 else ""
         if not name:
             return None
 
-        date_raw = item.get("recall_date") or item.get("date") or item.get("published") or ""
-        announced_date = self._parse_date(date_raw) or today
+        # Hazard class
+        hc = rec.get("hazard_class", "").lower().strip()
+        recall_class = self._CLASS_MAP.get(hc)
 
-        lot_raw = item.get("lot_numbers") or item.get("batch") or ""
-        lot_numbers = [l.strip() for l in str(lot_raw).split(",") if l.strip()] if lot_raw else []
+        # Action type → recall_type
+        action_type = rec.get("action_type", "").lower()
+        if "recall" in action_type:
+            recall_type = "recall"
+        elif "correction" in action_type:
+            recall_type = "correction"
+        elif "alert" in action_type:
+            recall_type = "alert"
+        else:
+            recall_type = None
+
+        # Date — format is D/MM/YYYY or DD/MM/YYYY
+        date_raw = rec.get("action_date", "")
+        announced_date = self._parse_date(date_raw)
+        if not announced_date:
+            announced_date = datetime.now(timezone.utc).date().isoformat()
+
+        # Reason
+        reason = rec.get("reason", "") or None
+        reason_cat = self._map_reason(reason) if reason else "other"
+
+        # Lot numbers — extract from product name
+        lot_numbers = []
+        lot_match = re.findall(r"(?:Batch|Lot)\s*(?:Number|No|#)?:?\s*([\w\-/]+)", name_raw)
+        if lot_match:
+            lot_numbers = [l.strip() for l in lot_match]
+
+        # URL
+        action_id = rec.get("action_id", "")
+        press_url = self.DETAIL_URL.format(action_id=action_id)
 
         return {
             "generic_name":     name,
-            "brand_name":       item.get("brand_name") or None,
-            "manufacturer":     item.get("sponsor") or item.get("manufacturer") or None,
-            "recall_class":     None,
-            "recall_type":      "batch" if lot_numbers else None,
-            "reason":           item.get("reason") or item.get("recall_reason") or None,
-            "reason_category":  "other",
+            "brand_name":       None,
+            "manufacturer":     rec.get("sponsor") or None,
+            "recall_class":     recall_class,
+            "recall_type":      recall_type,
+            "reason":           (reason[:500] if reason else None),
+            "reason_category":  reason_cat,
             "lot_numbers":      lot_numbers,
             "announced_date":   announced_date,
             "status":           "active",
-            "press_release_url": item.get("url") or self.BASE_URL,
-            "confidence_score": 80,
-            "recall_ref":       item.get("id") or item.get("arn") or name[:40],
-            "raw_record":       item,
+            "press_release_url": press_url,
+            "confidence_score": 90,
+            "recall_ref":       action_id,
+            "raw_record":       rec,
         }
 
     @staticmethod
     def _parse_date(raw: str) -> str | None:
         if not raw:
             return None
-        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%d %B %Y"):
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d %B %Y", "%d-%m-%Y"):
             try:
-                return datetime.strptime(str(raw)[:10], fmt[:10]).date().isoformat()
+                return datetime.strptime(raw.strip(), fmt).date().isoformat()
             except Exception:
                 pass
         m = re.search(r"\d{4}-\d{2}-\d{2}", str(raw))
         return m.group(0) if m else None
 
+    @staticmethod
+    def _map_reason(raw: str) -> str:
+        if not raw:
+            return "other"
+        lower = raw.lower()
+        if any(w in lower for w in ["contamination", "contaminated", "impurity", "impurities"]):
+            return "contamination"
+        if any(w in lower for w in ["label", "labelling", "mislabel", "packaging text"]):
+            return "mislabelling"
+        if any(w in lower for w in ["potency", "subpotent", "dissolution", "strength", "assay"]):
+            return "subpotency"
+        if any(w in lower for w in ["packaging", "container", "seal", "closure", "leak"]):
+            return "packaging"
+        if any(w in lower for w in ["sterile", "sterility", "non-sterile"]):
+            return "sterility"
+        if any(w in lower for w in ["foreign", "particulate", "particles", "matter"]):
+            return "foreign_matter"
+        return "other"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Standalone entrypoint
+# ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import json, os, sys
@@ -213,13 +304,14 @@ if __name__ == "__main__":
     dry_run = os.environ.get("MEDERTI_DRY_RUN", "0").strip() == "1"
     if dry_run:
         from unittest.mock import MagicMock
-        print("=" * 60); print("DRY RUN — TGA Recalls"); print("=" * 60)
+        print("=" * 60); print("DRY RUN — TGA Recalls (DRAC)"); print("=" * 60)
         scraper = TgaRecallsScraper(db_client=MagicMock())
         raw = scraper.fetch()
-        print(f"  source : {raw.get('source')}")
-        print(f"  records: {len(raw.get('records', []))}")
+        print(f"  raw records: {len(raw)}")
         recalls = scraper.normalize(raw)
-        print(f"  recalls: {len(recalls)}")
+        print(f"  normalised : {len(recalls)}")
+        if recalls:
+            print(json.dumps({k: v for k, v in recalls[0].items() if k != "raw_record"}, indent=2, default=str))
         sys.exit(0)
     scraper = TgaRecallsScraper()
     summary = scraper.run()

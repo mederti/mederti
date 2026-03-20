@@ -144,13 +144,17 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
             onClick={() => { setShowUser(v => !v); setShowCountry(false); }}
             style={{
               width: 30, height: 30, borderRadius: "50%",
-              background: "var(--teal)", border: "2px solid var(--app-border)",
+              background: "#e2e8f0", border: "2px solid var(--app-border)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 12, fontWeight: 600, color: "#fff",
-              cursor: "pointer",
+              cursor: "pointer", overflow: "hidden",
             }}
           >
-            {email ? initials : <User {...ICON_STYLE} />}
+            {email ? (
+              <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+                <circle cx="15" cy="11" r="5" fill="#94a3b8"/>
+                <ellipse cx="15" cy="28" rx="10" ry="8" fill="#94a3b8"/>
+              </svg>
+            ) : <User {...ICON_STYLE} />}
           </button>
           {showUser && (
             <div style={{

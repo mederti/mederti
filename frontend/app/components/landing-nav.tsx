@@ -442,11 +442,14 @@ export default function SiteNav() {
                 ) : (
                   <div style={{
                     width: 28, height: 28, borderRadius: "50%",
-                    background: "var(--teal)",
+                    background: "#e2e8f0",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 11, fontWeight: 600, color: "#fff", flexShrink: 0,
+                    flexShrink: 0, overflow: "hidden",
                   }}>
-                    {initials}
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                      <circle cx="14" cy="10" r="5" fill="#94a3b8"/>
+                      <ellipse cx="14" cy="26" rx="10" ry="8" fill="#94a3b8"/>
+                    </svg>
                   </div>
                 )}
                 <span style={{

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
-  Home, Search, Bookmark, TrendingUp,
+  Home, Search, Bookmark, TrendingUp, BarChart3,
   ChevronDown, User, LogOut, Menu, X,
 } from "lucide-react";
 import { useUserProfile } from "@/lib/hooks/use-user-profile";
@@ -14,9 +14,10 @@ import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
 
 /* ── Nav link sets ── */
 const BASE_APP_LINKS = [
-  { href: "/search",    label: "Search",     icon: Search },
-  { href: "/dashboard", label: "Dashboard",  icon: Home },
-  { href: "/watchlist", label: "Watchlist",  icon: Bookmark },
+  { href: "/search",       label: "Search",       icon: Search },
+  { href: "/dashboard",    label: "Dashboard",    icon: Home },
+  { href: "/intelligence", label: "Intelligence", icon: BarChart3 },
+  { href: "/watchlist",    label: "Watchlist",     icon: Bookmark },
 ];
 
 const GUEST_LINKS: { label: string; href: string; style?: "bold" | "regular" | "teal" }[] = [
@@ -48,6 +49,8 @@ export default function SiteNav() {
   const { isSupplier } = useUserProfile();
   const [email, setEmail]             = useState<string | null>(null);
   const [initials, setInitials]       = useState("?");
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl]     = useState<string | null>(null);
   const [country, setCountry]         = useState(() => {
     if (typeof document !== "undefined") {
       const match = document.cookie.match(/(?:^|; )mederti-country=([A-Z]{2})/);
@@ -115,6 +118,15 @@ export default function SiteNav() {
         const e = session.user.email;
         setEmail(e);
         setInitials(e[0].toUpperCase());
+        // Pull display name and avatar from user metadata
+        const meta = session.user.user_metadata ?? {};
+        const name = meta.full_name || meta.name || meta.display_name || null;
+        setDisplayName(name);
+        setAvatarUrl(meta.avatar_url || null);
+        if (name) {
+          // Use first letter of first name
+          setInitials(name.charAt(0).toUpperCase());
+        }
       }
     });
   }, []);
@@ -412,13 +424,37 @@ export default function SiteNav() {
               <button
                 onClick={() => { setShowUser(v => !v); setShowCountry(false); }}
                 style={{
-                  width: 32, height: 32, borderRadius: "50%",
-                  background: "var(--teal)", border: "2px solid var(--app-border)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "4px 12px 4px 4px",
+                  borderRadius: 99,
+                  background: "var(--app-bg-2)",
+                  border: "1px solid var(--app-border)",
+                  cursor: "pointer",
+                  transition: "border-color 0.15s",
                 }}
               >
-                {initials}
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 28, height: 28, borderRadius: "50%",
+                    background: "var(--teal)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 600, color: "#fff", flexShrink: 0,
+                  }}>
+                    {initials}
+                  </div>
+                )}
+                <span style={{
+                  fontSize: 12, fontWeight: 500, color: "var(--app-text-2)",
+                  maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {displayName || email?.split("@")[0] || "Account"}
+                </span>
               </button>
               {showUser && (
                 <div style={{
@@ -428,8 +464,10 @@ export default function SiteNav() {
                   padding: 8, minWidth: 200, zIndex: 200,
                 }}>
                   <div style={{ padding: "8px 12px 12px", borderBottom: "1px solid #e2e8f0", marginBottom: 6 }}>
-                    <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 2 }}>Signed in as</div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: "#0f172a", wordBreak: "break-all" }}>{email}</div>
+                    {displayName && (
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>{displayName}</div>
+                    )}
+                    <div style={{ fontSize: 12, color: "#94a3b8", wordBreak: "break-all" }}>{email}</div>
                   </div>
                   <Link href="/account" onClick={() => setShowUser(false)} style={{
                     display: "flex", alignItems: "center", gap: 8,

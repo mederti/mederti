@@ -25,8 +25,8 @@ function SevBadge({ sev }: { sev: string | null }) {
   return (
     <span style={{
       display: "inline-block",
-      padding: "2px 8px", borderRadius: 20,
-      fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em",
+      padding: "1px 6px", borderRadius: 20,
+      fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
       background: st.bg, color: st.color,
       flexShrink: 0,
     }}>
@@ -132,14 +132,14 @@ export default async function HomePage() {
         .home-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 16px;
+          gap: 12px;
         }
         .home-full { grid-column: 1 / -1; }
         /* Card row base sizes */
-        .home-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--app-bg-2); text-decoration: none; }
+        .home-row { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-bottom: 1px solid var(--app-bg-2); text-decoration: none; }
         .home-row:hover { background: var(--app-bg-2); }
-        .home-row-name { font-size: 13px; font-weight: 500; color: var(--app-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .home-row-meta { font-size: 11px; color: var(--app-text-4); margin-top: 1px; }
+        .home-row-name { font-size: 12px; font-weight: 500; color: var(--app-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .home-row-meta { font-size: 10px; color: var(--app-text-4); margin-top: 0; }
         /* TGA article links */
         .tga-article { display: flex; align-items: flex-start; gap: 10px; padding: 11px 20px; border-bottom: 1px solid var(--app-bg-2); text-decoration: none; }
         .tga-article:hover { background: var(--app-bg-2); }
@@ -239,9 +239,9 @@ export default async function HomePage() {
                   );
                 })}
                 {auTotal > 5 && (
-                  <div style={{ padding: "8px 16px" }}>
+                  <div style={{ padding: "5px 14px" }}>
                     <Link href="/shortages?country=AU&status=active" style={{
-                      fontSize: 12, color: "var(--teal)", fontWeight: 500, textDecoration: "none",
+                      fontSize: 11, color: "var(--teal)", fontWeight: 500, textDecoration: "none",
                     }}>
                       +{auTotal - 5} more shortages →
                     </Link>

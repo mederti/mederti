@@ -292,7 +292,7 @@ export default function V3ChatPanel({
                       setSearching(false);
                       setSearchQuery("");
                       setSearchResults([]);
-                      router.push(`/drugs/${hit.drug_id}/v3`);
+                      router.push(`/drugs/${hit.drug_id}`);
                     }}
                     style={{
                       display: "flex",

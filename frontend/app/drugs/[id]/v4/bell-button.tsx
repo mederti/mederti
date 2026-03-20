@@ -55,7 +55,7 @@ export function V4BellButton({ drugId, hasShortage = true }: V4BellButtonProps) 
     if (loading || toggling) return;
 
     if (!userId) {
-      router.push(`/login?next=/drugs/${drugId}/v4`);
+      router.push(`/login?next=/drugs/${drugId}`);
       return;
     }
 

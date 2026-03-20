@@ -910,7 +910,7 @@ export default async function DrugPage({ params }: Props) {
                   {alternatives.map((alt: any) => (
                     <Link
                       key={alt.alternative_drug_id}
-                      href={`/drugs/${alt.alternative_drug_id}/v4`}
+                      href={`/drugs/${alt.alternative_drug_id}`}
                       style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         padding: "14px 20px",

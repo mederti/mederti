@@ -66,7 +66,7 @@ export function HeaderActions({ drugId, drugName, userCountry, severity }: Heade
     if (loading || toggling) return;
 
     if (!userId) {
-      router.push(`/login?next=/drugs/${drugId}/v4`);
+      router.push(`/login?next=/drugs/${drugId}`);
       return;
     }
 

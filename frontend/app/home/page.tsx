@@ -240,7 +240,6 @@ export default async function HomePage() {
         background: "#fff",
         borderBottom: "1px solid var(--app-border)",
         padding: "36px 24px 32px",
-        minHeight: "calc(100vh - 64px)",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center",
         gap: 20,

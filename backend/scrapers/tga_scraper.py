@@ -277,7 +277,7 @@ class TGAScraper(BaseScraper):
 
         # ── Severity ─────────────────────────────────────────────────────────
         # Must be done before reason so we know if shortage_impact was used as severity
-        severity = self._infer_severity(status, shortage_impact, patient_impact, generic_name)
+        severity = self._infer_severity(status, shortage_impact, patient_impact, generic_name, availability)
 
         # ── Reason / reason_category ─────────────────────────────────────────
         # If shortage_impact was a bare severity label, it's not useful as a reason.
@@ -422,29 +422,46 @@ class TGAScraper(BaseScraper):
         shortage_impact: str,
         patient_impact: str,
         generic_name: str,
+        availability: str = "",
     ) -> str:
         """
         Derive a severity level.
 
-        TGA's shortage_impact field sometimes contains a direct severity label
-        ("High", "Medium", "Low", "Critical"). When it does, use it directly.
-        Otherwise fall back to keyword detection on combined text fields.
-        Resolved shortages always return 'low' (historical context only).
+        PRIORITY ORDER:
+        1. Availability status (most reliable — reflects actual supply)
+        2. TGA's shortage_impact direct label
+        3. Keyword detection on free-text fields
+
+        Availability ALWAYS overrides shortage_impact because TGA often marks
+        a product as "Low" impact but "Unavailable" — pharmacists need to see
+        the actual availability, not the bureaucratic impact assessment.
         """
         if status == "resolved":
             return "low"
 
-        # 1. Direct label match (most records)
+        # 1. Availability is the primary signal — always takes precedence
+        avail = (availability or "").lower().strip()
+        if avail in ("unavailable", "not available", "discontinued"):
+            return "critical"
+        if avail in ("limited", "very limited", "limited availability", "restricted"):
+            return "high"
+
+        # 2. Direct label match from shortage_impact
         direct = shortage_impact.strip().lower()
         if direct in self._DIRECT_SEVERITY_MAP:
             return self._DIRECT_SEVERITY_MAP[direct]
 
-        # 2. Keyword scan on free-text fields
+        # 3. Keyword scan on free-text fields
         combined = f"{shortage_impact} {patient_impact} {generic_name}".lower()
         if any(kw in combined for kw in self._CRITICAL_KEYWORDS):
             return "critical"
         if any(kw in combined for kw in self._HIGH_KEYWORDS):
             return "high"
+
+        # 4. If availability says "available", it's low severity
+        if avail in ("available", "in stock"):
+            return "low"
+
         return "medium"
 
 

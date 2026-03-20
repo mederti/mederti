@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowUp } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
 import { createBrowserClient } from "@/lib/supabase/client";
@@ -256,7 +257,7 @@ function ThinkingIndicator() {
 
 /* ── Main chat page ────────────────────────────────────────── */
 
-export default function ChatPage() {
+function ChatPageInner() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -289,6 +290,18 @@ export default function ChatPage() {
   }, [input]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Handle ?q= param — pre-fill and auto-send
+  const searchParams = useSearchParams();
+  const preloadedRef = useRef(false);
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q && !preloadedRef.current && messages.length === 0) {
+      preloadedRef.current = true;
+      // Small delay so component is fully mounted
+      setTimeout(() => sendMessage(decodeURIComponent(q)), 100);
+    }
+  }, [searchParams, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || streaming) return;
@@ -675,5 +688,13 @@ export default function ChatPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense>
+      <ChatPageInner />
+    </Suspense>
   );
 }

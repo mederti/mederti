@@ -147,7 +147,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             <div style={{
               fontSize: "clamp(22px, 3.5vw, 38px)",
               fontWeight: 700,
-              color: "#7CB9E8",
+              color: "#ffffff",
               letterSpacing: "-0.025em",
               lineHeight: 1.2,
               textAlign: "center",
@@ -178,7 +178,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             lineHeight: 1.15, letterSpacing: "-0.025em",
             color: "#fff", margin: "0 auto",
           }}>
-            Mederti Tracks &amp; Finds {platformStats.totalCatalogue >= 1000 ? `${Math.floor(platformStats.totalCatalogue / 1000)}k` : platformStats.totalCatalogue} Short-Supply Medicines Globally.
+            Mederti Tracks &amp; Finds 8,000 Short-Supply Medicines Globally.
           </h2>
         </div>
 

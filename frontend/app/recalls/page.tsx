@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PackageX, WifiOff } from "lucide-react";
 import { api, RecallListResponse } from "@/lib/api";
+import { truncateDrugName } from "@/lib/utils";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 
@@ -254,7 +255,7 @@ export default async function RecallsPage({ searchParams }: Props) {
                         style={{ textDecoration: "none" }}
                       >
                         <div style={{ fontSize: 14, fontWeight: 500, color: "var(--app-text)", marginBottom: 2 }}>
-                          {row.generic_name}
+                          {truncateDrugName(row.generic_name)}
                           {row.brand_name && (
                             <span style={{ fontSize: 12, fontWeight: 400, color: "var(--app-text-4)", marginLeft: 6 }}>
                               ({row.brand_name})

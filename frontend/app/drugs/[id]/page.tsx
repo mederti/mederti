@@ -13,6 +13,7 @@ import { V4BellButton } from "./v4/bell-button";
 import { HeaderActions } from "./v4/header-actions";
 import { getDevice } from "@/lib/get-device";
 import { MobileDrugPage } from "@/app/components/mobile/MobileDrugPage";
+import { truncateDrugName } from "@/lib/utils";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import { DrugImage } from "./drug-image";
 
@@ -739,7 +740,7 @@ export default async function DrugPage({ params }: Props) {
 
                 {/* Drug name */}
                 <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.025em", color: "var(--app-text)", lineHeight: 1.15, marginBottom: 4 }}>
-                  {drug.generic_name}
+                  {truncateDrugName(drug.generic_name, 120)}
                   {drugStrength && (
                     <span style={{ fontSize: 18, fontWeight: 400, color: "var(--app-text-3)", marginLeft: 8 }}>
                       {drugStrength}
@@ -749,7 +750,7 @@ export default async function DrugPage({ params }: Props) {
 
                 {/* Subtitle */}
                 <div style={{ fontSize: 14, color: "var(--app-text-3)", marginBottom: 6 }}>
-                  {[drug.generic_name.toLowerCase(), drugForm, drugStrength].filter(Boolean).join(" \u00b7 ")}
+                  {[truncateDrugName(drug.generic_name, 120).toLowerCase(), drugForm, drugStrength].filter(Boolean).join(" \u00b7 ")}
                   {drugRoute && ` \u00b7 ${drugRoute}`}
                 </div>
 

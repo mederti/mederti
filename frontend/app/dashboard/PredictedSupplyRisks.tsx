@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { Activity, TrendingUp } from "lucide-react";
+import { truncateDrugName } from "@/lib/utils";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 
 /* ── Flags ── */
@@ -360,7 +361,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {item.drugName}
+                    {truncateDrugName(item.drugName)}
                   </span>
                   {item.trending && (
                     <span

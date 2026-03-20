@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { truncateDrugName } from "@/lib/utils";
 import { Bell } from "lucide-react";
 
 const FLAGS: Record<string, string> = {
@@ -295,7 +296,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {a.drug_name}
+                  {truncateDrugName(a.drug_name)}
                 </div>
 
                 {/* Severity badge */}

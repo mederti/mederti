@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api, type DrugHit, type ShortageEvent } from "@/lib/api";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
+import { truncateDrugName } from "@/lib/utils";
 import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -51,7 +52,7 @@ function DrugCard({ drug, altCounts }: { drug: DrugResult; altCounts: Record<str
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 10 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 4, letterSpacing: "-0.01em" }}>
-            {drug.generic_name}
+            {truncateDrugName(drug.generic_name)}
           </div>
           {drug.brand_names.length > 0 && (
             <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>

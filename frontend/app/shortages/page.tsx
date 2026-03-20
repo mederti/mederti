@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertCircle, WifiOff } from "lucide-react";
 import { api, ShortageListResponse } from "@/lib/api";
+import { truncateDrugName } from "@/lib/utils";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 
@@ -210,7 +211,7 @@ export default async function ShortagesPage({ searchParams }: Props) {
                       <td style={{ padding: "12px 16px", minWidth: 180 }}>
                         <Link href={`/drugs/${row.drug_id}`} style={{ textDecoration: "none" }}>
                           <div style={{ fontSize: 14, fontWeight: 500, color: "var(--app-text)", marginBottom: 2 }}>
-                            {row.generic_name}
+                            {truncateDrugName(row.generic_name)}
                           </div>
                           {row.brand_names?.[0] && (
                             <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>

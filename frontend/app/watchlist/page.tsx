@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Bookmark, LogIn, Search, Trash2 } from "lucide-react";
+import { truncateDrugName } from "@/lib/utils";
 import { createBrowserClient } from "@/lib/supabase/client";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
@@ -229,7 +230,7 @@ export default function WatchlistPage() {
                 {/* Drug name */}
                 <Link href={`/drugs/${item.drug_id}`} style={{ textDecoration: "none" }}>
                   <div style={{ fontSize: 14, fontWeight: 500, color: "var(--app-text)" }}>
-                    {item.generic_name ?? `Drug ${item.drug_id.slice(0, 8)}\u2026`}
+                    {truncateDrugName(item.generic_name ?? `Drug ${item.drug_id.slice(0, 8)}\u2026`)}
                   </div>
                 </Link>
 

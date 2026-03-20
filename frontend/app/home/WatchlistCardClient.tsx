@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { truncateDrugName } from "@/lib/utils";
 import { Bookmark, Bell, ExternalLink, LogIn } from "lucide-react";
 
 interface WatchItem {
@@ -145,7 +146,7 @@ export default function WatchlistCardClient() {
               fontSize: 13, fontWeight: 500, color: "var(--app-text)",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
-              {item.generic_name ?? `Drug ${item.drug_id.slice(0, 8)}…`}
+              {truncateDrugName(item.generic_name ?? `Drug ${item.drug_id.slice(0, 8)}…`)}
             </div>
             {item.brand_names?.[0] && (
               <div style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>

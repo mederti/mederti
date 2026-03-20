@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { api, ShortageRow, SummaryResponse } from "@/lib/api";
+import { truncateDrugName } from "@/lib/utils";
 import Link from "next/link";
 import {
   AlertCircle, Bell, ChevronRight,
@@ -226,7 +227,7 @@ export default async function HomePage() {
                   return (
                     <Link key={row.shortage_id} href={`/drugs/${row.drug_id}`} className="home-row" style={{ alignItems: "center" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="home-row-name">{row.generic_name}</div>
+                        <div className="home-row-name">{truncateDrugName(row.generic_name)}</div>
                         {row.reason_category && (
                           <div className="home-row-meta">
                             {row.reason_category.replace(/_/g, " ")}

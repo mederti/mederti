@@ -5,6 +5,7 @@ import { BottomNav } from "./BottomNav";
 import { V4BellButton } from "@/app/drugs/[id]/v4/bell-button";
 import type { SupplierPartner } from "@/lib/suppliers";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
+import { truncateDrugName } from "@/lib/utils";
 
 const SEV_ORDER = ["critical", "high", "medium", "low"] as const;
 
@@ -110,7 +111,7 @@ export function MobileDrugPage({
             &larr; Search results
           </a>
           <div style={{ fontSize: 20, fontWeight: 600, color: "var(--app-text)", marginTop: 6, letterSpacing: "-0.02em" }}>
-            {drug.generic_name}{" "}
+            {truncateDrugName(drug.generic_name)}{" "}
             <span style={{ fontWeight: 400, color: "var(--app-text-3)", fontSize: 16 }}>{drugStrength}</span>
           </div>
           <div style={{ fontSize: 11, color: "var(--app-text-4)", marginTop: 2 }}>

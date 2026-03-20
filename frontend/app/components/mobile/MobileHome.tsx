@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { BottomNav } from "./BottomNav";
+import { truncateDrugName } from "@/lib/utils";
 
 export async function MobileHome() {
   // Fetch critical shortages for AU
@@ -61,7 +62,7 @@ export async function MobileHome() {
                   border: "1px solid var(--app-border)",
                   borderRadius: 10,
                 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)" }}>{s.drug_name}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)" }}>{truncateDrugName(s.drug_name)}</span>
                   <span style={{
                     fontSize: 11, fontWeight: 500,
                     color: s.severity === "critical" ? "var(--crit)" : "var(--high)",

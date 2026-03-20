@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowUp } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { TopicalChip } from "./TopicalChip";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -490,6 +491,7 @@ export default function ChatPage() {
                 gap: 8,
                 width: "100%", maxWidth: 640,
               }}>
+                <TopicalChip onSelect={sendMessage} />
                 {SUGGESTED_QUERIES.map((q) => (
                   <button
                     key={q}

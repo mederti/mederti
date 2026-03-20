@@ -133,16 +133,30 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             width: "65%",
           }}>
             <h2 style={{
-              fontSize: "clamp(20px, 3.2vw, 36px)",
+              fontSize: "clamp(22px, 3.5vw, 38px)",
               fontWeight: 700,
               color: "#FFFFFF",
               letterSpacing: "-0.025em",
-              margin: "0 0 8px",
-              lineHeight: 1.3,
+              margin: 0,
+              lineHeight: 1.2,
+              textAlign: "center",
               textShadow: "0 2px 20px rgba(0,0,0,0.6), 0 0 60px rgba(7,11,20,0.8)",
             }}>
-              Searching the world for niche and short-supply drugs seems impossible.<br /><br />Until now.
+              Searching the world for niche and short-supply drugs often seemed impossible.
             </h2>
+            <div style={{
+              fontSize: "clamp(22px, 3.5vw, 38px)",
+              fontWeight: 700,
+              color: "#FFFFFF",
+              letterSpacing: "-0.025em",
+              lineHeight: 1.2,
+              textAlign: "center",
+              marginTop: 8,
+              opacity: 0.5,
+              textShadow: "0 2px 20px rgba(0,0,0,0.6), 0 0 60px rgba(7,11,20,0.8)",
+            }}>
+              Until now.
+            </div>
           </div>
         </div>
       </section>
@@ -164,7 +178,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             lineHeight: 1.15, letterSpacing: "-0.025em",
             color: "#fff", margin: "0 auto",
           }}>
-            Mederti Tracks &amp; Finds 160k Short-Supply Medicines Globally.
+            Mederti Tracks &amp; Finds {platformStats.totalCatalogue >= 1000 ? `${Math.floor(platformStats.totalCatalogue / 1000)}k` : platformStats.totalCatalogue} Short-Supply Medicines Globally.
           </h2>
         </div>
 

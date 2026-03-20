@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
-import { AutocompleteDropdown } from "@/app/components/autocomplete-dropdown";
+import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
 
 const SUGGESTED = [
   "Amoxicillin",
@@ -109,12 +109,17 @@ export default function HomeSearchClient() {
         </form>
 
         {/* Autocomplete dropdown */}
-        {ac.isOpen && ac.items.length > 0 && (
+        {ac.isOpen && (
           <AutocompleteDropdown
             items={ac.items}
             cursor={ac.cursor}
             loading={ac.loading}
-            listboxId={ac.inputProps["aria-controls"]}
+            query={ac.query}
+            listId={ac.inputProps["aria-controls"]}
+            onSelect={(item) => {
+              router.push(item.href);
+            }}
+            onHover={() => {}}
           />
         )}
       </div>

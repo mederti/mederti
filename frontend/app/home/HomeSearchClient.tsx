@@ -1,13 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X, Clock } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
 import { AutocompleteDropdown } from "@/app/components/autocomplete-dropdown";
-
-const STORAGE_KEY = "mederti_recent_searches";
-const MAX_RECENT = 3;
 
 const SUGGESTED = [
   "Amoxicillin",
@@ -18,39 +15,12 @@ const SUGGESTED = [
   "Cisplatin",
 ];
 
-function getRecent(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveRecent(term: string) {
-  if (typeof window === "undefined") return;
-  try {
-    const existing = getRecent().filter((t) => t.toLowerCase() !== term.toLowerCase());
-    const updated = [term, ...existing].slice(0, MAX_RECENT);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  } catch {
-    // ignore
-  }
-}
-
 export default function HomeSearchClient() {
-  const [recent, setRecent] = useState<string[]>([]);
   const router = useRouter();
-
-  useEffect(() => {
-    setRecent(getRecent());
-  }, []);
 
   function doSearch(q: string) {
     const term = q.trim();
     if (!term) return;
-    saveRecent(term);
     router.push(`/chat?q=${encodeURIComponent(term)}`);
   }
 
@@ -59,7 +29,6 @@ export default function HomeSearchClient() {
     debounceMs: 200,
     limit: 8,
     onSelect: (item) => {
-      saveRecent(item.name);
       router.push(item.href);
     },
     onSubmit: (q) => doSearch(q),
@@ -168,37 +137,6 @@ export default function HomeSearchClient() {
         ))}
       </div>
 
-      {/* Recent searches */}
-      {recent.length > 0 && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          flexWrap: "wrap", justifyContent: "center",
-        }}>
-          <span style={{
-            display: "flex", alignItems: "center", gap: 4,
-            fontSize: 12, color: "var(--app-text-4)", flexShrink: 0,
-          }}>
-            <Clock style={{ width: 12, height: 12, strokeWidth: 1.5 }} />
-            Recent:
-          </span>
-          {recent.map((r) => (
-            <button
-              key={r}
-              onClick={() => doSearch(r)}
-              style={{
-                ...chipStyle,
-                background: "var(--app-bg-2)",
-                fontSize: 12,
-                padding: "5px 12px",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--app-text-4)"; e.currentTarget.style.color = "var(--app-text)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--app-border)"; e.currentTarget.style.color = "var(--app-text-3)"; }}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

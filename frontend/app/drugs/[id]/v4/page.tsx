@@ -140,6 +140,10 @@ export default async function DrugPageV4({ params }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recalls = recallsRes.status === "fulfilled" ? ((recallsRes.value as any).data ?? []) : [];
 
+  // Upstream supply signals — FDA enforcement actions against India/China manufacturers
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let upstreamSignals: any[] = [];
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let products: any[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,6 +154,22 @@ export default async function DrugPageV4({ params }: Props) {
       .select("id, product_name, trade_name, strength, dosage_form, route, country, registry_status, sponsors(name)")
       .ilike("product_name", `%${drug.generic_name}%`)
       .limit(30);
+    // Fetch upstream signals — FDA enforcement against India/China manufacturers for this drug
+    const { data: signalData } = await supabase
+      .from("recalls")
+      .select("manufacturer, reason, announced_date, raw_data")
+      .ilike("generic_name", `%${drug.generic_name.split(" ")[0]}%`)
+      .eq("country_code", "US")
+      .contains("raw_data", { _upstream_signal: true })
+      .order("announced_date", { ascending: false })
+      .limit(5);
+    upstreamSignals = (signalData ?? []).map((s: any) => ({
+      manufacturer: s.manufacturer,
+      reason: s.reason,
+      announced_date: s.announced_date,
+      signal_country: s.raw_data?._signal_country ?? "IN",
+    }));
+
     products = prodData ?? [];
     if (products.length > 0) {
       const productIds = products.map((p: { id: string }) => p.id);
@@ -750,6 +770,7 @@ export default async function DrugPageV4({ params }: Props) {
                 activeShortages: activeShortages as { country_code?: string; status?: string; severity?: string; reason?: string; start_date?: string; estimated_resolution_date?: string; data_sources?: { name?: string; abbreviation?: string } }[],
                 userCountry,
                 affectedCountries: affectedCountries as Set<string>,
+                upstreamSignals: upstreamSignals.length > 0 ? upstreamSignals : undefined,
               })}
             </p>
 

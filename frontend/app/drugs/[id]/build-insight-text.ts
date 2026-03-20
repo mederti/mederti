@@ -23,11 +23,19 @@ export interface ShortageRecord {
   data_sources?: { name?: string; abbreviation?: string; country_code?: string };
 }
 
+export interface UpstreamSignal {
+  manufacturer?: string;
+  reason?: string;
+  announced_date?: string;
+  signal_country?: string; // "IN" | "CN"
+}
+
 export interface InsightTextParams {
   drugName: string;
   activeShortages: ShortageRecord[];
   userCountry: string;
   affectedCountries: Set<string>;
+  upstreamSignals?: UpstreamSignal[];
 }
 
 /* ── Helpers ── */
@@ -65,6 +73,7 @@ export function buildAiInsightText({
   activeShortages,
   userCountry,
   affectedCountries,
+  upstreamSignals,
 }: InsightTextParams): string {
   const confirmed = activeShortages.filter(
     (s) => s.status?.toLowerCase() !== "anticipated"
@@ -116,6 +125,18 @@ export function buildAiInsightText({
     // Anticipated in other countries but not user's country
     const anticipatedCountrySet = new Set(anticipated.map((s) => s.country_code));
     text += ` Note: anticipated shortages have been flagged in ${anticipatedCountrySet.size} other countr${anticipatedCountrySet.size !== 1 ? "ies" : "y"}.`;
+  }
+
+  /* ── Append upstream supply signal commentary ── */
+  if (upstreamSignals && upstreamSignals.length > 0) {
+    const inCount = upstreamSignals.filter((s) => s.signal_country === "IN").length;
+    const cnCount = upstreamSignals.filter((s) => s.signal_country === "CN").length;
+    const origins = [inCount > 0 ? "India" : "", cnCount > 0 ? "China" : ""]
+      .filter(Boolean)
+      .join(" and ");
+    const most = upstreamSignals[0];
+    const reasonSnip = most.reason ? most.reason.slice(0, 80) : "quality issue";
+    text += ` Upstream supply risk: ${upstreamSignals.length} FDA enforcement action${upstreamSignals.length !== 1 ? "s" : ""} against ${origins} manufacturer${upstreamSignals.length !== 1 ? "s" : ""} of this drug. Most recent: ${most.manufacturer ?? "manufacturer"} \u2014 ${reasonSnip}.`;
   }
 
   /* ── Append S19A commentary (AU only) ── */

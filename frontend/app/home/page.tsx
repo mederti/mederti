@@ -48,18 +48,18 @@ function CardHeader({
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "14px 20px", borderBottom: "1px solid var(--app-border)",
+      padding: "10px 16px", borderBottom: "1px solid var(--app-border)",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
         <div style={{
-          width: 28, height: 28, borderRadius: 7,
+          width: 24, height: 24, borderRadius: 6,
           background: `${iconColor}18`,
           display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0,
         }}>
-          <Icon style={{ width: 14, height: 14, strokeWidth: 1.5 }} color={iconColor} />
+          <Icon style={{ width: 12, height: 12, strokeWidth: 1.5 }} color={iconColor} />
         </div>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--app-text)" }}>
           {title}
         </span>
       </div>
@@ -136,10 +136,10 @@ export default async function HomePage() {
         }
         .home-full { grid-column: 1 / -1; }
         /* Card row base sizes */
-        .home-row { display: flex; align-items: center; gap: 12px; padding: 13px 20px; border-bottom: 1px solid var(--app-bg-2); text-decoration: none; }
+        .home-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--app-bg-2); text-decoration: none; }
         .home-row:hover { background: var(--app-bg-2); }
-        .home-row-name { font-size: 14px; font-weight: 500; color: var(--app-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .home-row-meta { font-size: 12px; color: var(--app-text-4); margin-top: 2px; }
+        .home-row-name { font-size: 13px; font-weight: 500; color: var(--app-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .home-row-meta { font-size: 11px; color: var(--app-text-4); margin-top: 1px; }
         /* TGA article links */
         .tga-article { display: flex; align-items: flex-start; gap: 10px; padding: 11px 20px; border-bottom: 1px solid var(--app-bg-2); text-decoration: none; }
         .tga-article:hover { background: var(--app-bg-2); }
@@ -239,9 +239,9 @@ export default async function HomePage() {
                   );
                 })}
                 {auTotal > 5 && (
-                  <div style={{ padding: "10px 20px" }}>
+                  <div style={{ padding: "8px 16px" }}>
                     <Link href="/shortages?country=AU&status=active" style={{
-                      fontSize: 13, color: "var(--teal)", fontWeight: 500, textDecoration: "none",
+                      fontSize: 12, color: "var(--teal)", fontWeight: 500, textDecoration: "none",
                     }}>
                       +{auTotal - 5} more shortages →
                     </Link>

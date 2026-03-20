@@ -171,7 +171,7 @@ export default function SiteNav() {
       }}>
 
         {/* ── Left: Logo ── */}
-        <Link href={loggedIn ? "/dashboard" : "/"} style={{
+        <Link href={loggedIn ? "/home" : "/"} style={{
           display: "flex", alignItems: "center",
           textDecoration: "none", flexShrink: 0,
         }}>

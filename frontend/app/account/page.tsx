@@ -91,6 +91,9 @@ export default function AccountPage() {
   const [role, setRole] = useState<string>("default");
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleSaved, setRoleSaved] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameSaved, setNameSaved] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -102,6 +105,9 @@ export default function AccountPage() {
         // Fetch user profile for role
         supabase.from("user_profiles").select("role").eq("user_id", session.user.id).single()
           .then(({ data }) => { if (data?.role) setRole(data.role); });
+        // Load display name from user metadata
+        const meta = session.user.user_metadata ?? {};
+        setDisplayName(meta.full_name || meta.name || meta.display_name || "");
       }
     });
   }, []);
@@ -162,6 +168,18 @@ export default function AccountPage() {
     setTimeout(() => setRoleSaved(false), 2000);
   }
 
+  async function saveName() {
+    if (!user) return;
+    setNameSaving(true);
+    setNameSaved(false);
+    await supabase.auth.updateUser({
+      data: { full_name: displayName.trim() },
+    });
+    setNameSaving(false);
+    setNameSaved(true);
+    setTimeout(() => setNameSaved(false), 2000);
+  }
+
   const inputStyle = {
     width: "100%", padding: "10px 12px", borderRadius: 8,
     border: "1px solid var(--app-border)", fontSize: 14,
@@ -212,8 +230,13 @@ export default function AccountPage() {
                 {(user.email?.[0] ?? "U").toUpperCase()}
               </div>
               <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", marginBottom: 2 }}>
-                {user.email}
+                {displayName || user.email}
               </div>
+              {displayName && (
+                <div style={{ fontSize: 12, color: "var(--app-text-4)", marginBottom: 2, wordBreak: "break-all" }}>
+                  {user.email}
+                </div>
+              )}
               <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>
                 Member since {new Date(user.created_at).toLocaleDateString("en-AU", { month: "short", year: "numeric" })}
               </div>
@@ -456,6 +479,41 @@ export default function AccountPage() {
                 </h2>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+                  {/* Display name */}
+                  <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>Display name</div>
+                    <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 16 }}>
+                      Your name and organisation, visible in the nav bar and on enquiries.
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input
+                        style={inputStyle}
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        placeholder="e.g. John @ Terry White Kew"
+                      />
+                      <button
+                        onClick={saveName}
+                        disabled={nameSaving}
+                        style={{
+                          padding: "10px 20px", borderRadius: 8,
+                          fontSize: 13, fontWeight: 600,
+                          background: "var(--teal)", color: "#fff",
+                          border: "none", cursor: nameSaving ? "wait" : "pointer",
+                          flexShrink: 0,
+                          fontFamily: "var(--font-inter), sans-serif",
+                        }}
+                      >
+                        {nameSaving ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                    {nameSaved && (
+                      <div style={{ fontSize: 12, color: "var(--teal)", marginTop: 10, fontWeight: 500 }}>
+                        Name updated — refresh to see it in the nav bar.
+                      </div>
+                    )}
+                  </div>
+
                   {/* Email */}
                   <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 16 }}>Email address</div>

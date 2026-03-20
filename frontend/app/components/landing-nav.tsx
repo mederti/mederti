@@ -120,7 +120,7 @@ export default function SiteNav() {
         setInitials(e[0].toUpperCase());
         // Pull display name and avatar from user metadata
         const meta = session.user.user_metadata ?? {};
-        const name = meta.full_name || meta.name || meta.display_name || null;
+        const name = meta.full_name || meta.name || meta.display_name || "Rob @ Mederti";
         setDisplayName(name);
         setAvatarUrl(meta.avatar_url || null);
         if (name) {

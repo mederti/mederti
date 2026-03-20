@@ -147,13 +147,13 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             <div style={{
               fontSize: "clamp(22px, 3.5vw, 38px)",
               fontWeight: 700,
-              color: "#FFFFFF",
+              color: "#7CB9E8",
               letterSpacing: "-0.025em",
               lineHeight: 1.2,
               textAlign: "center",
               marginTop: 8,
-              opacity: 0.5,
-              textShadow: "0 2px 20px rgba(0,0,0,0.6), 0 0 60px rgba(7,11,20,0.8)",
+              opacity: 1,
+              textShadow: "0 2px 20px rgba(124,185,232,0.4), 0 0 60px rgba(124,185,232,0.2)",
             }}>
               Until now.
             </div>
@@ -368,7 +368,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
 
         <div className="lp-steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, overflow: "hidden" }}>
           {[
-            { num: "01", title: "Collect", desc: "Daily automated scraping of 50+ regulatory bodies \u2014 TGA, FDA, MHRA, EMA, Health Canada and more across 9 countries." },
+            { num: "01", title: "Collect", desc: "Daily automated scraping of 50+ regulatory bodies \u2014 TGA, FDA, MHRA, EMA, Health Canada and more across 20+ countries." },
             { num: "02", title: "Normalise", desc: "Raw data is cleaned, deduplicated, classified by severity and cross-referenced across sources to build confidence scores." },
             { num: "03", title: "Enrich", desc: "AI layer adds resolution forecasts, therapeutic alternatives, supply-chain origin analysis and early warning signals." },
             { num: "04", title: "Verify", desc: "20 years of pharmaceutical supply chain expertise applied as expert commentary and confidence overrides on key shortages." },
@@ -545,7 +545,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             </div>
             <div style={{ padding: "0 16px 16px" }}>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.8, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                <strong style={{ color: "rgba(255,255,255,0.7)" }}>This week across 9 countries:</strong> 5 new shortages declared {"\u00B7"} 2 resolved {"\u00B7"} Antibiotic category now at highest severity since 2023.
+                <strong style={{ color: "rgba(255,255,255,0.7)" }}>This week across 20+ countries:</strong> 5 new shortages declared {"\u00B7"} 2 resolved {"\u00B7"} Antibiotic category now at highest severity since 2023.
               </div>
               {[
                 { color: "red" as const, label: "New critical:", detail: "Amoxicillin 500mg escalated in AU + UK" },

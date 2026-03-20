@@ -1,0 +1,42 @@
+# Mederti — Global Pharmaceutical Shortage Intelligence
+
+Mederti is a real-time pharmaceutical shortage tracking platform covering 20+ countries and 161,000+ approved drugs.
+
+## What this site contains
+
+- Real-time drug shortage status for 20+ countries including Australia, United States, Canada, United Kingdom, EU, Japan, Italy, Spain, Germany, France, Norway, Finland, Switzerland, Singapore, New Zealand, Netherlands, Ireland, Sweden, Austria, Belgium
+- Historical shortage data going back to 2003 (Australia), 2006 (United States), 2008 (Canada)
+- 17,000+ shortage events tracked across all markets
+- 23,000+ drug recall records across 7 countries
+- Individual product-level shortage data (ARTG numbers for Australia, DIN for Canada, PL numbers for UK)
+- TGA S19A approval notices for Australian shortage management
+- Upstream supply signals from Indian and Chinese manufacturer enforcement actions
+- AI-powered shortage forecasting (30/90/180 day probability)
+- Therapeutic alternatives for drugs in shortage
+
+## Data sources
+
+TGA (Australia), FDA (United States), Health Canada, MHRA (United Kingdom), EMA (European Union), PMDA (Japan), BfArM (Germany), ANSM (France), AIFA (Italy), AEMPS (Spain), Swissmedic (Switzerland), NoMA (Norway), Fimea (Finland), HSA (Singapore), Medsafe (New Zealand), Farmanco/KNMP (Netherlands), HPRA (Ireland)
+
+## Update frequency
+
+Shortage data: Every 4 hours for AU/US/CA, daily for all other markets
+Recall data: Every 6 hours
+Data accuracy: Audited weekly against live regulatory sources
+
+## Key pages
+
+- /drugs/{id} — Individual drug shortage status, alternatives, recalls, and supply forecasting
+- /search — Search 161,000+ drugs by name with shortage status
+- /shortages — Browse all active shortages filterable by country, severity, and status
+- /recalls — Browse drug recalls filterable by country and class
+- /dashboard — Global shortage KPIs, heatmap, and timeline
+
+## Usage
+
+This data is intended to help healthcare professionals, pharmacists, hospital systems, and researchers understand pharmaceutical supply chain status. All data is sourced directly from official regulatory authorities.
+
+## Contact
+
+For data licensing or API access: hello@mederti.com
+Site: https://mederti.vercel.app

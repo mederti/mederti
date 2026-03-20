@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -17,6 +18,81 @@ import { DrugImage } from "./drug-image";
 
 interface Props {
   params: Promise<{ id: string }>;
+}
+
+/* ── SEO: dynamic metadata ── */
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = getSupabaseAdmin();
+
+  const [drugRes, shortageRes] = await Promise.all([
+    supabase
+      .from("drugs")
+      .select("generic_name, drug_class")
+      .eq("id", id)
+      .single(),
+    supabase
+      .from("shortage_events")
+      .select("status, severity, country_code")
+      .eq("drug_id", id)
+      .eq("status", "active")
+      .order("severity", { ascending: true })
+      .limit(1)
+      .single(),
+  ]);
+
+  const drug = drugRes.data;
+  const shortage = shortageRes.data;
+
+  if (!drug) {
+    // Try catalogue fallback
+    const { data: cat } = await supabase
+      .from("drug_catalogue")
+      .select("generic_name")
+      .eq("id", id)
+      .single();
+    const name = cat?.generic_name ?? "Drug";
+    return {
+      title: `${name} Supply Status — Mederti`,
+      description: `${name} supply status and shortage history. Tracked by Mederti in real time across 20+ countries.`,
+      alternates: { canonical: `https://mederti.vercel.app/drugs/${id}` },
+    };
+  }
+
+  const drugName = drug.generic_name;
+  const hasShortage = !!shortage;
+  const country = shortage?.country_code ?? "";
+  const severity = shortage?.severity ?? "";
+  const year = new Date().getFullYear();
+
+  const title = hasShortage
+    ? `${drugName} Shortage ${country} ${year} — Mederti`
+    : `${drugName} Supply Status — Mederti`;
+
+  const description = hasShortage
+    ? `${drugName} is currently in ${severity} shortage in ${country}. Track real-time supply status, alternatives, and expected return dates on Mederti.`
+    : `${drugName} supply status, shortage history, and availability across 20+ countries. Tracked by Mederti in real time.`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: `https://mederti.vercel.app/drugs/${id}`,
+      siteName: "Mederti",
+      type: "website",
+      images: [{ url: `https://mederti.vercel.app/api/og/drug/${id}`, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
+    alternates: {
+      canonical: `https://mederti.vercel.app/drugs/${id}`,
+    },
+  };
 }
 
 /* ── Flag icon helper ── */
@@ -530,9 +606,48 @@ export default async function DrugPage({ params }: Props) {
     );
   }
 
+  /* ── SEO: JSON-LD + AI summary ── */
+  const affectedCountryNames = ([...affectedCountries] as string[]).map(c => COUNTRY_NAMES[c] ?? c);
+  const sourceNames = [...sourceSet];
+  const hasShortage = activeShortages.length > 0;
+  const lastVerified = latestUpdate ? new Date(latestUpdate).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }) : new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+  const estimatedReturn = activeShortages[0]?.estimated_resolution_date
+    ? new Date(activeShortages[0].estimated_resolution_date).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Drug",
+    name: drug.generic_name,
+    description: `${drug.generic_name} supply status and shortage information across 20+ countries.`,
+    url: `https://mederti.vercel.app/drugs/${id}`,
+    ...(drug.drug_class ? { drugClass: drug.drug_class } : {}),
+    additionalProperty: [
+      { "@type": "PropertyValue", name: "shortageStatus", value: hasShortage ? "active shortage" : "in normal supply" },
+      { "@type": "PropertyValue", name: "countriesAffected", value: affectedCountryNames.join(", ") || "none" },
+      { "@type": "PropertyValue", name: "lastUpdated", value: new Date().toISOString() },
+    ],
+    publisher: { "@type": "Organization", name: "Mederti", url: "https://mederti.vercel.app" },
+  };
+
   /* ── Render ── */
   return (
     <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
+      {/* JSON-LD structured data */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      {/* AI-readable summary — visually hidden but crawlable */}
+      <div style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}>
+        <p>
+          {drug.generic_name} supply status as of {lastVerified}:{" "}
+          {hasShortage
+            ? `${drug.generic_name} is currently in ${worstSeverity} shortage in ${affectedCountryNames.join(", ")}. `
+            : `${drug.generic_name} is in normal supply with no active shortages reported. `}
+          {activeShortages.length > 0 && `${activeShortages.length} shortage events are currently active across ${affectedCountries.size} countries. `}
+          {estimatedReturn && `Expected return to normal supply: ${estimatedReturn}. `}
+          {sourceNames.length > 0 && `Data sourced from official regulatory authorities including ${sourceNames.join(", ")}. `}
+          Last verified: {lastVerified}. Source: Mederti (mederti.vercel.app).
+        </p>
+      </div>
       <style>{`
         @keyframes v3blink { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
         @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.3 } }

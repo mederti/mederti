@@ -18,14 +18,18 @@ const dmMono = DM_Mono({
 const SITE_URL = "https://mederti.vercel.app";
 
 export const metadata: Metadata = {
-  title: "Mederti — Global Pharmaceutical Shortage Intelligence",
+  title: {
+    default: "Mederti — Global Drug Shortage Intelligence Platform",
+    template: "%s",
+  },
   description:
-    "Real-time drug shortage intelligence across 13 countries. Search shortages, find alternatives, get alerted when stock returns.",
+    "Real-time pharmaceutical shortage tracking across 20+ countries. 161,000+ drugs monitored. TGA, FDA, MHRA, EMA and 38 more regulatory sources. Used by pharmacists, hospitals, and health systems.",
+  keywords: ["drug shortage", "medicine shortage", "pharmaceutical shortage", "TGA shortage", "FDA drug shortage", "MHRA shortage", "medicine availability", "drug recall"],
   metadataBase: new URL(SITE_URL),
   openGraph: {
-    title: "Mederti — Global Pharmaceutical Shortage Intelligence",
+    title: "Mederti — Global Drug Shortage Intelligence",
     description:
-      "Real-time drug shortage intelligence across 13 countries. Search shortages, find alternatives, get alerted when stock returns.",
+      "Track drug shortages across 20+ countries in real time. 161,000+ drugs monitored from 42 regulatory sources.",
     url: SITE_URL,
     siteName: "Mederti",
     type: "website",
@@ -40,9 +44,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Mederti — Global Pharmaceutical Shortage Intelligence",
+    title: "Mederti — Global Drug Shortage Intelligence",
     description:
-      "Real-time drug shortage intelligence across 13 countries. Search shortages, find alternatives, get alerted when stock returns.",
+      "Track drug shortages across 20+ countries in real time. 161,000+ drugs monitored from 42 regulatory sources.",
     images: [`${SITE_URL}/api/og`],
   },
 };

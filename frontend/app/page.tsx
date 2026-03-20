@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import SiteNav from "./components/landing-nav";
 import SiteFooter from "./components/site-footer";
 import LandingPageClient from "./components/landing-page-client";
@@ -8,6 +9,24 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getDevice } from "@/lib/get-device";
 
 export const revalidate = 300; // 5 min ISR
+
+export const metadata: Metadata = {
+  title: "Mederti — Global Drug Shortage Intelligence Platform",
+  description:
+    "Real-time pharmaceutical shortage tracking across 20+ countries. 161,000+ drugs monitored. TGA, FDA, MHRA, EMA and 38 more regulatory sources. Used by pharmacists, hospitals, and health systems.",
+  keywords: ["drug shortage", "medicine shortage", "pharmaceutical shortage", "TGA shortage", "FDA drug shortage", "MHRA shortage", "medicine availability"],
+  openGraph: {
+    title: "Mederti — Global Drug Shortage Intelligence",
+    description:
+      "Track drug shortages across 20+ countries in real time. 161,000+ drugs monitored from 42 regulatory sources.",
+    url: "https://mederti.vercel.app",
+    siteName: "Mederti",
+    type: "website",
+  },
+  alternates: {
+    canonical: "https://mederti.vercel.app",
+  },
+};
 
 export default async function Home() {
   // If logged in, redirect to /home

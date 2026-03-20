@@ -13,6 +13,7 @@ import { HeaderActions } from "./v4/header-actions";
 import { getDevice } from "@/lib/get-device";
 import { MobileDrugPage } from "@/app/components/mobile/MobileDrugPage";
 import { getPartnerForCountry } from "@/lib/suppliers";
+import { DrugImage } from "./drug-image";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -592,22 +593,8 @@ export default async function DrugPage({ params }: Props) {
             >
               {/* LEFT — Drug Identity */}
               <div style={{ flex: 1, display: "flex", gap: 20 }}>
-                {/* Drug icon placeholder */}
-                <div style={{
-                  width: 80, height: 80, minWidth: 80,
-                  borderRadius: 14,
-                  background: "var(--teal-bg, #f0fdfa)",
-                  border: "1px solid var(--teal-b, #99f6e4)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  alignSelf: "flex-start",
-                  marginTop: 6,
-                }}>
-                  {/* Pill/capsule icon */}
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
-                    <path d="M5.5 18.5l13-13a4.24 4.24 0 0 0-6-6l-13 13a4.24 4.24 0 1 0 6 6z" />
-                    <line x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
-                  </svg>
-                </div>
+                {/* Drug product image from DailyMed */}
+                <DrugImage genericName={drug.generic_name} />
 
                 <div style={{ flex: 1 }}>
                 {/* Badges */}

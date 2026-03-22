@@ -34,19 +34,19 @@ export function PlatformStats({ stats }: { stats: PlatformStatsData }) {
       label: "Countries monitored",
       value: String(stats.countries),
       sub: "Regulatory authorities",
-      badge: "TGA \u00b7 FDA \u00b7 MHRA \u00b7 EMA + 18",
+      badge: "TGA \u00b7 FDA \u00b7 MHRA \u00b7 EMA + 27",
     },
     {
       label: "Recalls tracked",
       value: fmt(stats.totalRecalls),
-      sub: "Across 7 markets",
+      sub: "Across 11 markets",
       live: true,
     },
     {
       label: "Regulatory sources",
       value: String(stats.sources),
       sub: "Live data sources aggregated",
-      badge: `${Math.min(stats.sources, 26)} active`,
+      badge: `${stats.sources} active`,
     },
     {
       label: "Anticipated shortages",

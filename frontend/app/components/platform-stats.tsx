@@ -19,9 +19,9 @@ export function PlatformStats({ stats }: { stats: PlatformStatsData }) {
       live: true,
     },
     {
-      label: "Drug listings",
+      label: "Shortage listings",
       value: fmtBig(stats.totalCatalogue),
-      sub: "Approved drugs tracked globally",
+      sub: "Product-level shortage records",
       badge: "US \u00b7 CA \u00b7 AU \u00b7 GB \u00b7 EU \u00b7 JP",
     },
     {

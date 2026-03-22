@@ -51,7 +51,7 @@ export default async function Home() {
   let countryCount = "22";
   let sourceCount = "31";
   let platformStats = {
-    totalCatalogue: 160986,
+    totalCatalogue: 216509,
     totalShortages: 18971,
     activeShortages: 12943,
     anticipatedShortages: 1373,
@@ -69,7 +69,7 @@ export default async function Home() {
       admin.from("shortage_events").select("id", { count: "exact", head: true }),
       admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "anticipated"),
       admin.from("recalls").select("id", { count: "exact", head: true }),
-      admin.from("drug_catalogue").select("id", { count: "exact", head: true }),
+      admin.from("drug_products").select("id", { count: "exact", head: true }),
     ]);
     if (activeRes.count) totalActive = activeRes.count.toLocaleString();
     if (countriesRes.data) {

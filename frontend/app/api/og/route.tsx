@@ -77,9 +77,9 @@ export async function GET() {
           }}
         >
           {[
-            { n: "13", label: "Countries" },
-            { n: "8,000+", label: "Active Shortages" },
-            { n: "40+", label: "Regulatory Sources" },
+            { n: "22", label: "Countries" },
+            { n: "12,900+", label: "Active Shortages" },
+            { n: "47", label: "Scrapers Running" },
           ].map((s) => (
             <div
               key={s.label}

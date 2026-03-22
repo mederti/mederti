@@ -51,7 +51,7 @@ export default async function Home() {
   let countryCount = "22";
   let sourceCount = "31";
   let platformStats = {
-    totalCatalogue: 10211,
+    totalCatalogue: 160986,
     totalShortages: 18971,
     activeShortages: 12943,
     anticipatedShortages: 1373,
@@ -85,7 +85,7 @@ export default async function Home() {
       totalRecalls: recallsRes.count ?? platformStats.totalRecalls,
       countries: countriesRes.data ? new Set(countriesRes.data.map((r: { country_code: string }) => r.country_code).filter(Boolean)).size : platformStats.countries,
       sources: sourcesRes.count ?? platformStats.sources,
-      scrapers: 39,
+      scrapers: 47,
     };
   } catch { /* fallback to static */ }
 

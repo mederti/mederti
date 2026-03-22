@@ -64,7 +64,7 @@ export default async function Home() {
     const admin = getSupabaseAdmin();
     const [activeRes, countriesRes, sourcesRes, totalRes, anticipatedRes, recallsRes, catalogueRes] = await Promise.all([
       admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
-      admin.from("shortage_events").select("country_code").eq("status", "active"),
+      admin.from("data_sources").select("country_code").eq("is_active", true),
       admin.from("data_sources").select("id", { count: "exact", head: true }),
       admin.from("shortage_events").select("id", { count: "exact", head: true }),
       admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "anticipated"),

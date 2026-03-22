@@ -27,19 +27,19 @@ export function PlatformStats({ stats }: { stats: PlatformStatsData }) {
     {
       label: "Shortage events",
       value: fmt(stats.totalShortages),
-      sub: "Historical records from 2015",
+      sub: "Historical records from 2003",
       badge: "Updated daily",
     },
     {
       label: "Countries monitored",
       value: String(stats.countries),
       sub: "Regulatory authorities",
-      badge: "TGA \u00b7 FDA \u00b7 MHRA \u00b7 EMA + 9",
+      badge: "TGA \u00b7 FDA \u00b7 MHRA \u00b7 EMA + 18",
     },
     {
       label: "Recalls tracked",
       value: fmt(stats.totalRecalls),
-      sub: "Across 6 markets",
+      sub: "Across 7 markets",
       live: true,
     },
     {

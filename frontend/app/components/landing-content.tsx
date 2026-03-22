@@ -178,7 +178,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             lineHeight: 1.15, letterSpacing: "-0.025em",
             color: "#fff", margin: "0 auto",
           }}>
-            Mederti Tracks &amp; Finds 8,000 Short-Supply Medicines Globally.
+            Mederti Tracks &amp; Finds 10,000+ Short-Supply Medicines Globally.
           </h2>
         </div>
 
@@ -368,7 +368,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
 
         <div className="lp-steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, overflow: "hidden" }}>
           {[
-            { num: "01", title: "Collect", desc: "Daily automated scraping of 50+ regulatory bodies \u2014 TGA, FDA, MHRA, EMA, Health Canada and more across 20+ countries." },
+            { num: "01", title: "Collect", desc: "Daily automated scraping of 47 regulatory bodies \u2014 TGA, FDA, MHRA, EMA, Health Canada, PMDA and more across 22 countries." },
             { num: "02", title: "Normalise", desc: "Raw data is cleaned, deduplicated, classified by severity and cross-referenced across sources to build confidence scores." },
             { num: "03", title: "Enrich", desc: "AI layer adds resolution forecasts, therapeutic alternatives, supply-chain origin analysis and early warning signals." },
             { num: "04", title: "Verify", desc: "20 years of pharmaceutical supply chain expertise applied as expert commentary and confidence overrides on key shortages." },
@@ -545,7 +545,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
             </div>
             <div style={{ padding: "0 16px 16px" }}>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.8, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                <strong style={{ color: "rgba(255,255,255,0.7)" }}>This week across 20+ countries:</strong> 5 new shortages declared {"\u00B7"} 2 resolved {"\u00B7"} Antibiotic category now at highest severity since 2023.
+                <strong style={{ color: "rgba(255,255,255,0.7)" }}>This week across 22 countries:</strong> 5 new shortages declared {"\u00B7"} 2 resolved {"\u00B7"} Antibiotic category now at highest severity since 2023.
               </div>
               {[
                 { color: "red" as const, label: "New critical:", detail: "Amoxicillin 500mg escalated in AU + UK" },

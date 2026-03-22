@@ -47,18 +47,18 @@ export default async function Home() {
   }
 
   // Fetch live stats from Supabase (same source as dashboard)
-  let totalActive = "8,100";
-  let countryCount = "20";
-  let sourceCount = "30";
+  let totalActive = "12,943";
+  let countryCount = "22";
+  let sourceCount = "31";
   let platformStats = {
-    totalCatalogue: 161000,
-    totalShortages: 16853,
-    activeShortages: 9435,
-    anticipatedShortages: 1126,
-    totalRecalls: 17504,
-    countries: 13,
-    sources: 42,
-    scrapers: 39,
+    totalCatalogue: 10211,
+    totalShortages: 18971,
+    activeShortages: 12943,
+    anticipatedShortages: 1373,
+    totalRecalls: 23380,
+    countries: 22,
+    sources: 31,
+    scrapers: 47,
   };
   try {
     const admin = getSupabaseAdmin();

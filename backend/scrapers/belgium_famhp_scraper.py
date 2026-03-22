@@ -2,18 +2,18 @@
 Belgium FAMHP Drug Supply Problem Scraper
 ─────────────────────────────────────────
 Source:  Federal Agency for Medicines and Health Products (FAMHP)
-URL:     https://www.famhp.be/en/human_use/medicines/medicines/supply_problems
+API:     https://pharmastatus.be/api/packs/info/public
+URL:     https://pharmastatus.be
 
-The FAMHP publishes supply problem notifications for medicines marketed in
-Belgium. The English-language page lists current supply problems as HTML
-table rows or structured list items. This scraper fetches the page, parses
-the tabular/list data with BeautifulSoup, and normalises each entry into
-the standard Mederti shortage event format.
+Belgium migrated shortage data to PharmaStatus (pharmastatus.be), a dedicated
+platform with a public REST API. This scraper fetches active unavailabilities
+via the JSON API, paginates through results (100 per page), and normalises
+each entry into the standard Mederti shortage event format.
 
 Data source UUID:  10000000-0000-0000-0000-000000000047
 Country:           Belgium
 Country code:      BE
-Confidence:        87/100 (official regulator, structured data)
+Confidence:        90/100 (official structured JSON API)
 
 Cron:  Every 24 hours
 """
@@ -24,7 +24,7 @@ import re
 from datetime import date, datetime, timezone
 from typing import Any
 
-from bs4 import BeautifulSoup
+import httpx
 
 from backend.scrapers.base_scraper import BaseScraper, ScraperError
 from backend.utils.reason_mapper import map_reason_category
@@ -32,27 +32,40 @@ from backend.utils.reason_mapper import map_reason_category
 
 class BelgiumFamhpScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000047"
-    SOURCE_NAME: str  = "Federal Agency for Medicines and Health Products — Supply Problems"
-    BASE_URL: str     = "https://www.famhp.be/en/human_use/medicines/medicines/supply_problems"
+    SOURCE_NAME: str  = "Federal Agency for Medicines and Health Products — PharmaStatus"
+    BASE_URL: str     = "https://pharmastatus.be"
+    API_URL: str      = "https://pharmastatus.be/api/packs/info/public"
     COUNTRY: str      = "Belgium"
     COUNTRY_CODE: str = "BE"
 
-    RATE_LIMIT_DELAY: float = 2.0
+    RATE_LIMIT_DELAY: float = 1.0
     REQUEST_TIMEOUT: float  = 60.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    SCRAPER_VERSION: str    = "2.0.0"
+    PAGE_SIZE: int          = 100
 
-    # FAMHP status keywords (English page)
-    _STATUS_MAP: dict[str, str] = {
-        "available":        "resolved",
-        "resolved":         "resolved",
-        "unavailable":      "active",
-        "supply problem":   "active",
-        "shortage":         "active",
-        "limited":          "active",
-        "anticipated":      "anticipated",
-    }
+    # PharmaStatus notification statuses to fetch
+    ACTIVE_STATUSES: list[str] = [
+        "unavailable",
+        "limited_availability",
+        "interruption_commercialisation",
+    ]
 
-    # FAMHP reason keywords -> reason_category
+    # Severity from PharmaStatus impact score
+    @staticmethod
+    def _impact_to_severity(impact: Any) -> str:
+        try:
+            score = float(impact)
+        except (TypeError, ValueError):
+            return "medium"
+        if score >= 30:
+            return "critical"
+        if score >= 20:
+            return "high"
+        if score >= 10:
+            return "medium"
+        return "low"
+
+    # Reason keywords -> reason_category
     _REASON_MAP: dict[str, str] = {
         "manufacturing":        "manufacturing_issue",
         "production":           "manufacturing_issue",
@@ -76,206 +89,56 @@ class BelgiumFamhpScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        Fetch the FAMHP supply problems page and parse tabular/list data.
-
-        Strategy:
-        1. GET the English supply problems page.
-        2. Parse with BeautifulSoup, looking for HTML tables first.
-        3. Fall back to structured list/div elements if no table is found.
+        Fetch active drug unavailabilities from the PharmaStatus public API.
+        Paginates through all results (100 per page).
         """
         self.log.info("Scrape started", extra={
             "source": self.SOURCE_NAME,
-            "url": self.BASE_URL,
+            "url": self.API_URL,
         })
 
-        resp = self._get(self.BASE_URL)
-        soup = BeautifulSoup(resp.text, "html.parser")
+        all_records: list[dict] = []
+        start_row = 0
 
-        # Strategy 1: look for HTML tables with shortage data
-        records = self._parse_tables(soup)
-        if records:
+        while True:
+            params = {
+                "startRow": start_row,
+                "endRow": start_row + self.PAGE_SIZE,
+            }
+
+            resp = self._get(self.API_URL, params=params)
+            data = resp.json()
+
+            rows = data.get("data") or data.get("rows") or []
+            if not rows:
+                break
+
+            all_records.extend(rows)
             self.log.info(
-                "FAMHP table parse complete",
-                extra={"records": len(records)},
+                "PharmaStatus page fetched",
+                extra={"start_row": start_row, "page_records": len(rows), "total_so_far": len(all_records)},
             )
-            return records
 
-        # Strategy 2: look for structured list/div elements
-        records = self._parse_list_items(soup)
-        if records:
-            self.log.info(
-                "FAMHP list parse complete",
-                extra={"records": len(records)},
-            )
-            return records
+            # Check if we've got all records — totalRows is per-row
+            total = rows[0].get("totalRows", 0) if rows else 0
+            if len(all_records) >= total or len(rows) < self.PAGE_SIZE:
+                break
 
-        # Strategy 3: look for links to detail pages and scrape those
-        records = self._parse_detail_links(soup)
+            start_row += self.PAGE_SIZE
+            self._enforce_rate_limit()
+
         self.log.info(
-            "FAMHP detail-link parse complete",
-            extra={"records": len(records)},
+            "PharmaStatus fetch complete",
+            extra={"total_records": len(all_records)},
         )
-        return records
-
-    def _parse_tables(self, soup: BeautifulSoup) -> list[dict]:
-        """Extract records from HTML <table> elements on the FAMHP page."""
-        records: list[dict] = []
-
-        tables = soup.find_all("table")
-        for table in tables:
-            # Read headers
-            headers: list[str] = []
-            header_row = table.find("thead")
-            if header_row:
-                for th in header_row.find_all(["th", "td"]):
-                    headers.append(th.get_text(strip=True).lower())
-            else:
-                first_row = table.find("tr")
-                if first_row:
-                    for cell in first_row.find_all(["th", "td"]):
-                        headers.append(cell.get_text(strip=True).lower())
-
-            if not headers:
-                continue
-
-            # Check if this table looks like shortage data
-            has_drug_col = any(
-                kw in h
-                for h in headers
-                for kw in ("name", "medicine", "drug", "product", "inn",
-                           "substance", "active", "denomination")
-            )
-            if not has_drug_col:
-                continue
-
-            # Parse data rows
-            tbody = table.find("tbody") or table
-            for tr in tbody.find_all("tr"):
-                cells = tr.find_all(["td", "th"])
-                if len(cells) < 2:
-                    continue
-
-                row: dict[str, str] = {}
-                for i, cell in enumerate(cells):
-                    key = headers[i] if i < len(headers) else f"col_{i}"
-                    row[key] = cell.get_text(strip=True)
-
-                # Skip header-like rows
-                if any(
-                    row.get(h, "").lower() == h
-                    for h in headers
-                    if h
-                ):
-                    continue
-
-                if any(v.strip() for v in row.values()):
-                    records.append(row)
-
-        return records
-
-    def _parse_list_items(self, soup: BeautifulSoup) -> list[dict]:
-        """
-        Extract records from structured <div> or <li> elements that contain
-        supply problem notices (e.g., a list of medicine names with dates).
-        """
-        records: list[dict] = []
-
-        # Look for common CMS patterns: views-row, field-content, etc.
-        view_rows = soup.select(
-            ".view-content .views-row, "
-            ".view-content .views-table tbody tr, "
-            "article.node, "
-            ".field-content"
-        )
-
-        for row in view_rows:
-            text = row.get_text(" ", strip=True)
-            if len(text) < 5:
-                continue
-
-            rec: dict[str, str] = {"raw_text": text}
-
-            # Try to extract structured fields from child elements
-            title_el = row.select_one(
-                ".views-field-title, .field-name-title, h3, h4, strong"
-            )
-            if title_el:
-                rec["medicine_name"] = title_el.get_text(strip=True)
-
-            date_el = row.select_one(
-                ".views-field-field-date, .date-display-single, time"
-            )
-            if date_el:
-                rec["date"] = date_el.get_text(strip=True)
-                if date_el.get("datetime"):
-                    rec["date_iso"] = date_el["datetime"]
-
-            status_el = row.select_one(
-                ".views-field-field-status, .field-name-field-status"
-            )
-            if status_el:
-                rec["status"] = status_el.get_text(strip=True)
-
-            reason_el = row.select_one(
-                ".views-field-field-reason, .field-name-field-reason"
-            )
-            if reason_el:
-                rec["reason"] = reason_el.get_text(strip=True)
-
-            if rec.get("medicine_name") or rec.get("raw_text"):
-                records.append(rec)
-
-        return records
-
-    def _parse_detail_links(self, soup: BeautifulSoup) -> list[dict]:
-        """
-        Discover links to individual supply problem detail pages and
-        extract basic info from the link text and surrounding context.
-        """
-        records: list[dict] = []
-
-        # Look for links within the main content area
-        content_area = (
-            soup.select_one("#content, .region-content, main, article")
-            or soup
-        )
-
-        for link in content_area.find_all("a", href=True):
-            href = link["href"]
-            text = link.get_text(strip=True)
-
-            # Filter for links that look like medicine/supply-problem detail pages
-            if not text or len(text) < 3:
-                continue
-            if any(
-                kw in href.lower()
-                for kw in ("supply", "shortage", "medicine", "product", "unavailab")
-            ):
-                rec: dict[str, str] = {
-                    "medicine_name": text,
-                    "detail_url": href if href.startswith("http") else f"https://www.famhp.be{href}",
-                }
-
-                # Check surrounding text for date patterns
-                parent = link.parent
-                if parent:
-                    parent_text = parent.get_text(" ", strip=True)
-                    date_match = re.search(
-                        r'(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})', parent_text
-                    )
-                    if date_match:
-                        rec["date"] = date_match.group(1)
-
-                records.append(rec)
-
-        return records
+        return all_records
 
     # ─────────────────────────────────────────────────────────────────────────
     # normalize()
     # ─────────────────────────────────────────────────────────────────────────
 
     def normalize(self, raw: list[dict]) -> list[dict]:
-        """Normalize FAMHP records into standard shortage event dicts."""
+        """Normalize PharmaStatus records into standard shortage event dicts."""
         self.log.info(
             "Normalising FAMHP records",
             extra={"source": self.SOURCE_NAME, "raw_count": len(raw)},
@@ -306,118 +169,114 @@ class BelgiumFamhpScraper(BaseScraper):
         return normalised
 
     def _normalise_record(self, rec: dict, today: str) -> dict | None:
-        """Convert a single FAMHP record to a normalised shortage event dict."""
-        # -- Drug name extraction --
-        generic_name = (
-            rec.get("medicine_name")
-            or rec.get("name")
-            or rec.get("inn")
-            or rec.get("substance")
-            or rec.get("active substance")
-            or rec.get("product")
-            or rec.get("denomination")
-            or rec.get("medicine")
-            or rec.get("drug")
-            or ""
-        )
-        if isinstance(generic_name, str):
-            generic_name = generic_name.strip()
-        else:
-            generic_name = str(generic_name).strip()
+        """
+        Convert a single PharmaStatus API record to normalised shortage events.
 
-        # If no structured name, try to extract from raw_text
-        if not generic_name and rec.get("raw_text"):
-            # Take the first meaningful segment (before date/status info)
-            raw_text = rec["raw_text"]
-            parts = re.split(r'\s*[-|:]\s*', raw_text, maxsplit=1)
-            generic_name = parts[0].strip()[:100]
+        Each record (pack) may have multiple notifications in notARR.
+        We take the most recent active notification if one exists.
+        """
+        import json as _json
+
+        # -- Drug name extraction --
+        # activeSubstancesLongEn is a JSON string like '["Lorazepam"]'
+        generic_name = ""
+        for lang in ("En", "Fr", "Nl"):
+            raw_subs = rec.get(f"activeSubstancesLong{lang}") or ""
+            if raw_subs:
+                try:
+                    subs_list = _json.loads(raw_subs) if isinstance(raw_subs, str) else raw_subs
+                    if isinstance(subs_list, list) and subs_list:
+                        generic_name = ", ".join(str(s) for s in subs_list)
+                        break
+                except (ValueError, TypeError):
+                    pass
+
+        # Fallback: extract from atcCode field (e.g. "N05BA06 Lorazepam")
+        if not generic_name:
+            atc_raw = rec.get("atcCode") or ""
+            parts = atc_raw.split(" ", 1)
+            if len(parts) == 2:
+                generic_name = parts[1].strip()
 
         if not generic_name:
             return None
 
-        # -- Brand / trade name --
-        brand_name = (
-            rec.get("trade name")
-            or rec.get("brand")
-            or rec.get("product name")
-            or ""
-        )
-        if isinstance(brand_name, str):
-            brand_name = brand_name.strip()
-        else:
-            brand_name = str(brand_name).strip()
+        # -- Brand name from prescriptionName --
+        brand_name = (rec.get("prescriptionName") or "").strip()
+        brand_names = [brand_name] if brand_name else []
 
-        brand_names = [brand_name] if brand_name and brand_name != generic_name else []
+        # -- Find the most relevant notification from notARR --
+        notifications = rec.get("notARR") or []
+        active_notif = None
+        for notif in notifications:
+            ns = (notif.get("notificationStatus") or "").lower()
+            if ns in ("unavailable", "limited_availability", "interruption_commercialisation",
+                       "stop_commercialisation"):
+                active_notif = notif
+                break
+        # If no active notification, take the first one
+        if not active_notif and notifications:
+            active_notif = notifications[0]
+        if not active_notif:
+            active_notif = {}
 
         # -- Status --
-        raw_status = str(
-            rec.get("status")
-            or rec.get("availability")
-            or ""
-        ).strip().lower()
+        notif_status = (active_notif.get("notificationStatus") or "").lower()
+        if notif_status in ("unavailable", "limited_availability", "interruption_commercialisation",
+                             "stop_commercialisation"):
+            status = "active"
+        elif notif_status in ("available",):
+            status = "resolved"
+        else:
+            status = "active"
 
-        status = "active"
-        for key, mapped_status in self._STATUS_MAP.items():
-            if key in raw_status:
-                status = mapped_status
-                break
+        # -- Severity from impact score --
+        severity = self._impact_to_severity(active_notif.get("impact"))
 
         # -- Reason --
-        raw_reason = str(
-            rec.get("reason")
-            or rec.get("cause")
-            or rec.get("motif")
-            or ""
-        ).strip()
-
-        reason_category = self._map_reason(raw_reason)
+        raw_reason = (active_notif.get("notificationReason") or "").strip()
+        additional = (active_notif.get("additionalInfo") or "").strip()
+        reason_text = additional if additional else raw_reason
+        reason_category = self._map_reason(reason_text)
 
         # -- Dates --
-        raw_date = (
-            rec.get("date_iso")
-            or rec.get("date")
-            or rec.get("start date")
-            or rec.get("notification date")
-            or rec.get("start")
-            or ""
-        )
-        start_date = self._parse_date(raw_date) or today
-
-        raw_end = (
-            rec.get("end date")
-            or rec.get("resolution date")
-            or rec.get("estimated end")
-            or ""
-        )
-        end_date = self._parse_date(raw_end) if status == "resolved" else None
-        estimated_resolution = self._parse_date(raw_end) if status == "active" else None
+        start_date = self._parse_date(active_notif.get("startDate")) or today
+        presumed_end = self._parse_date(active_notif.get("presumedEndDate"))
+        end_date = self._parse_date(active_notif.get("endDate")) if status == "resolved" else None
+        estimated_resolution = presumed_end if status == "active" else None
 
         # -- Source URL --
-        source_url = rec.get("detail_url") or self.BASE_URL
+        pack_id = rec.get("packId")
+        source_url = f"{self.BASE_URL}/detail/{pack_id}" if pack_id else self.BASE_URL
 
         # -- Notes --
         notes_parts: list[str] = []
-        for key in ("manufacturer", "company", "agent", "holder", "registration"):
-            val = rec.get(key)
-            if val and str(val).strip():
-                notes_parts.append(f"{key.title()}: {str(val).strip()}")
-        if rec.get("raw_text") and not rec.get("medicine_name"):
-            notes_parts.append(f"Source text: {rec['raw_text'][:150]}")
+        company = (rec.get("packCompanyName") or "").strip()
+        if company:
+            notes_parts.append(f"Company: {company}")
+        atc = (rec.get("atcCode") or "").strip()
+        if atc:
+            notes_parts.append(f"ATC: {atc}")
+        auth_nr = (rec.get("authorisationNumber") or "").strip()
+        if auth_nr:
+            notes_parts.append(f"Auth: {auth_nr}")
+        if reason_text:
+            notes_parts.append(f"Reason: {reason_text[:150]}")
         notes = "; ".join(notes_parts) or None
 
         return {
             "generic_name":              generic_name.title(),
             "brand_names":               brand_names,
             "status":                    status,
-            "severity":                  "medium",
-            "reason":                    raw_reason or None,
+            "severity":                  severity,
+            "reason":                    reason_text or None,
             "reason_category":           reason_category,
             "start_date":                start_date,
             "end_date":                  end_date,
             "estimated_resolution_date": estimated_resolution,
             "source_url":                source_url,
             "notes":                     notes,
-            "source_confidence_score":   87,
+            "source_confidence_score":   90,
             "raw_record":                rec,
         }
 
@@ -433,12 +292,11 @@ class BelgiumFamhpScraper(BaseScraper):
         for key, cat in self._REASON_MAP.items():
             if key in lower:
                 return cat
-        # Fallback to centralized mapper
         return map_reason_category(raw)
 
     @staticmethod
     def _parse_date(raw: Any) -> str | None:
-        """Parse various FAMHP date formats to ISO-8601 date string."""
+        """Parse various date formats to ISO-8601 date string."""
         if raw is None:
             return None
         if isinstance(raw, datetime):
@@ -449,14 +307,14 @@ class BelgiumFamhpScraper(BaseScraper):
         if not raw_str or raw_str in ("-", "N/A", "null", "None", ""):
             return None
 
-        # Try ISO format first (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
+        # ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
         if "T" in raw_str:
             raw_str = raw_str[:10]
         iso_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', raw_str)
         if iso_match:
             return raw_str
 
-        # Try European format DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+        # European format DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
         eu_match = re.match(
             r'^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$', raw_str
         )
@@ -501,13 +359,13 @@ if __name__ == "__main__":
 
         print("=" * 60)
         print("DRY RUN MODE  (MEDERTI_DRY_RUN=1)")
-        print("Fetches live FAMHP data but makes NO database writes.")
+        print("Fetches live PharmaStatus data but makes NO database writes.")
         print("Set MEDERTI_DRY_RUN=0 to run against Supabase.")
         print("=" * 60)
 
         scraper = BelgiumFamhpScraper(db_client=MagicMock())
 
-        print("\n-- Fetching from FAMHP ...")
+        print("\n-- Fetching from PharmaStatus API ...")
         raw = scraper.fetch()
         print(f"-- Raw records received : {len(raw)}")
 

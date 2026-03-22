@@ -1,13 +1,15 @@
 """
 Portugal INFARMED Drug Shortage / Discontinuation Scraper
 ─────────────────────────────────────────────────────────
-Source:  INFARMED — Gestão de Descontinuações e Rupturas
-URL:     https://www.infarmed.pt/web/infarmed/entidades/medicamentos-de-uso-humano/monitorizacao-do-mercado/gestao-de-descontinuacoes-e-rupturas
+Source:  INFARMED — Gestão da Disponibilidade do Medicamento
+URL:     https://www.infarmed.pt/web/infarmed/gestao-da-disponibilidade-do-medicamento
 
 INFARMED (National Authority of Medicines and Health Products) publishes
 information on drug supply disruptions and discontinuations in Portugal.
-The page is in Portuguese. Data may appear as an HTML table, as a
-downloadable Excel/CSV file, or as structured list items.
+The page is in Portuguese. Data appears in two forms:
+    1. Highlighted shortage narratives under "Situações de escassez em monitorização"
+    2. A downloadable Excel file: the "Lista de exportação temporariamente suspensa"
+       (export-suspended list) which contains structured drug shortage data.
 
 Portuguese key terms:
     descontinuação temporária   = temporary discontinuation → active
@@ -42,18 +44,17 @@ from backend.utils.reason_mapper import map_reason_category
 
 class PortugalInfarmedScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000048"
-    SOURCE_NAME: str  = "INFARMED — Gestão de Descontinuações e Rupturas"
+    SOURCE_NAME: str  = "INFARMED — Gestão da Disponibilidade do Medicamento"
     BASE_URL: str     = (
-        "https://www.infarmed.pt/web/infarmed/entidades/"
-        "medicamentos-de-uso-humano/monitorizacao-do-mercado/"
-        "gestao-de-descontinuacoes-e-rupturas"
+        "https://www.infarmed.pt/web/infarmed/"
+        "gestao-da-disponibilidade-do-medicamento"
     )
     COUNTRY: str      = "Portugal"
     COUNTRY_CODE: str = "PT"
 
     RATE_LIMIT_DELAY: float = 2.0
     REQUEST_TIMEOUT: float  = 60.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    SCRAPER_VERSION: str    = "2.0.0"
 
     # Portuguese status keywords -> standard status
     _STATUS_MAP: dict[str, str] = {
@@ -135,10 +136,11 @@ class PortugalInfarmedScraper(BaseScraper):
         Fetch INFARMED shortage/discontinuation data.
 
         Strategy:
-        1. GET the main page, look for downloadable files (Excel/CSV links).
-        2. If a download link is found, fetch and parse the file.
-        3. Otherwise, parse HTML tables on the page.
-        4. Fall back to structured list/div parsing.
+        1. GET the main page and parse highlighted shortage entries
+           from the "Situações de escassez em monitorização" section.
+        2. Look for the export-suspended list Excel file on the page,
+           download and parse it for structured drug shortage data.
+        3. Fall back to HTML table parsing if neither yields results.
         """
         self.log.info("Scrape started", extra={
             "source": self.SOURCE_NAME,
@@ -148,73 +150,234 @@ class PortugalInfarmedScraper(BaseScraper):
         resp = self._get(self.BASE_URL)
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Strategy 1: look for Excel/CSV download links
-        records = self._try_download_files(soup)
-        if records:
-            self.log.info(
-                "INFARMED file download parse complete",
-                extra={"records": len(records)},
-            )
-            return records
+        records: list[dict] = []
 
-        # Strategy 2: parse HTML tables
-        records = self._parse_tables(soup)
-        if records:
+        # Strategy 1: parse highlighted shortage narratives
+        highlighted = self._parse_highlighted_shortages(soup)
+        if highlighted:
             self.log.info(
-                "INFARMED table parse complete",
-                extra={"records": len(records)},
+                "INFARMED highlighted shortages parsed",
+                extra={"records": len(highlighted)},
             )
-            return records
+            records.extend(highlighted)
 
-        # Strategy 3: parse structured list/div elements
-        records = self._parse_list_items(soup)
+        # Strategy 2: download and parse export-suspended Excel file
+        excel_records = self._try_export_suspended_excel(soup)
+        if excel_records:
+            self.log.info(
+                "INFARMED export-suspended Excel parsed",
+                extra={"records": len(excel_records)},
+            )
+            records.extend(excel_records)
+
+        # Strategy 3: fall back to HTML tables on the page
+        if not records:
+            table_records = self._parse_tables(soup)
+            if table_records:
+                self.log.info(
+                    "INFARMED table parse complete",
+                    extra={"records": len(table_records)},
+                )
+                records.extend(table_records)
+
         self.log.info(
-            "INFARMED list parse complete",
-            extra={"records": len(records)},
+            "INFARMED fetch complete",
+            extra={"total_records": len(records)},
         )
         return records
 
-    def _try_download_files(self, soup: BeautifulSoup) -> list[dict]:
+    def _parse_highlighted_shortages(self, soup: BeautifulSoup) -> list[dict]:
         """
-        Look for links to Excel (.xlsx, .xls) or CSV files on the page.
-        If found, download and parse the first suitable file.
+        Parse the "Situações de escassez em monitorização" section from
+        the main INFARMED availability page.  This section contains
+        narrative descriptions of drugs currently in shortage.
         """
-        file_links: list[str] = []
+        records: list[dict] = []
 
-        for link in soup.find_all("a", href=True):
-            href = link["href"].lower()
-            text = link.get_text(strip=True).lower()
+        # Use .journal-content-article first (the full-content container);
+        # other selectors may match small fragments on this Liferay page.
+        article = (
+            soup.select_one(".journal-content-article")
+            or soup.select_one("#content")
+            or soup.select_one("main")
+        )
+        if not article:
+            self.log.info("No article content found on INFARMED page")
+            return records
 
-            # Match file download links by extension or keyword
-            if any(ext in href for ext in (".xlsx", ".xls", ".csv")):
-                file_links.append(link["href"])
-            elif any(
-                kw in text
-                for kw in ("download", "descarregar", "ficheiro", "excel",
-                           "lista", "tabela")
-            ):
-                if any(ext in href for ext in (".xlsx", ".xls", ".csv")):
-                    file_links.append(link["href"])
+        text = article.get_text(separator="\n", strip=True)
+        lines = text.split("\n")
 
-        if not file_links:
-            self.log.info("No downloadable files found on INFARMED page")
+        # Find the "Situações de escassez em monitorização" section
+        start_idx = None
+        for i, line in enumerate(lines):
+            if "escassez em monitorização" in line.lower():
+                start_idx = i + 1
+                break
+
+        if start_idx is None:
+            self.log.info("No 'Situações de escassez' section found")
+            return records
+
+        # Parse drug entries until we hit a section-end marker
+        end_markers = {"ruturas", "faltas", "cessação de comercialização"}
+        section_lines: list[str] = []
+        for i in range(start_idx, len(lines)):
+            if lines[i].strip().lower() in end_markers:
+                break
+            section_lines.append(lines[i])
+
+        # Identify drug entry blocks: a heading followed by description lines
+        current_heading: str | None = None
+        current_desc_lines: list[str] = []
+
+        for line in section_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            # A heading is a short line (drug name / category title) that
+            # doesn't start with typical narrative markers or link text.
+            # Must be at least 4 chars and not just a number/punctuation.
+            is_heading = (
+                4 <= len(stripped) < 80
+                and not stripped.startswith((
+                    "A ", "O ", "Os ", "Esta ", "Em ", "No ", "Sobre ",
+                    "Consulte", "Circular", "EMA", "Orientações",
+                    "Indisponibilidade", "Recomendações", "Dificuldade",
+                    "EU ", "Shortage", "(", "ou ",
+                ))
+                and "poderá consultar" not in stripped.lower()
+                and "http" not in stripped.lower()
+                and not stripped.replace(".", "").replace(",", "").isdigit()
+            )
+
+            if is_heading and current_heading is not None:
+                # Save previous entry
+                desc = " ".join(current_desc_lines).strip()
+                if desc:
+                    records.append(self._build_highlighted_record(
+                        current_heading, desc,
+                    ))
+                current_heading = stripped
+                current_desc_lines = []
+            elif is_heading and current_heading is None:
+                current_heading = stripped
+            else:
+                current_desc_lines.append(stripped)
+
+        # Don't forget the last entry
+        if current_heading and current_desc_lines:
+            desc = " ".join(current_desc_lines).strip()
+            if desc:
+                records.append(self._build_highlighted_record(
+                    current_heading, desc,
+                ))
+
+        return records
+
+    def _build_highlighted_record(self, heading: str, description: str) -> dict:
+        """Build a record dict from a highlighted shortage heading + description."""
+        # Map common headings to INN names
+        heading_to_drugs: dict[str, list[str]] = {
+            "agonistas do recetor da glp-1": ["semaglutide", "dulaglutide"],
+            "pancreatina":                   ["pancreatin"],
+            "quetiapina":                    ["quetiapine"],
+            "estriol":                       ["estriol"],
+            "metilfenidato":                 ["methylphenidate"],
+            "sucralfato":                    ["sucralfate"],
+        }
+
+        heading_lower = heading.lower()
+        drugs: list[str] | None = None
+        for key, drug_list in heading_to_drugs.items():
+            if key in heading_lower:
+                drugs = drug_list
+                break
+
+        # Extract brand names from description
+        brand_pattern = re.findall(
+            r'(?:medicamento[s]?\s+)([A-Z][a-zà-ú]+(?:\s+[A-Z][a-zà-ú]*)*)',
+            description,
+        )
+        brand_names = list(dict.fromkeys(
+            b.strip() for b in brand_pattern if len(b) > 2
+        ))
+
+        # Determine reason from description text
+        desc_lower = description.lower()
+        reason: str | None = None
+        if any(kw in desc_lower for kw in ("produção", "producao", "fabrico", "fabricação")):
+            reason = "Manufacturing constraints"
+        elif any(kw in desc_lower for kw in ("procura", "demanda", "prescrição")):
+            reason = "Increased demand"
+        elif "abastecimento" in desc_lower:
+            reason = "Supply difficulty"
+
+        return {
+            "_source":          "highlighted",
+            "heading":          heading,
+            "description":      description[:500],
+            "dci":              drugs[0] if drugs else heading,
+            "brand_names":      brand_names[:5],
+            "additional_drugs": drugs[1:] if drugs and len(drugs) > 1 else [],
+            "reason":           reason,
+        }
+
+    def _try_export_suspended_excel(self, soup: BeautifulSoup) -> list[dict]:
+        """
+        Find and download the "Lista de exportação temporariamente suspensa"
+        Excel file from the INFARMED page.  This is a structured list of
+        drugs whose export is restricted due to shortages.
+        """
+        article = (
+            soup.select_one(".journal-content-article")
+            or soup.select_one("#content")
+            or soup.select_one("main")
+        )
+        if not article:
             return []
 
-        # Try to download and parse each file link
-        for file_url in file_links:
-            full_url = urljoin(self.BASE_URL, file_url)
-            try:
-                if file_url.lower().endswith(".csv"):
-                    return self._parse_csv_download(full_url)
-                else:
-                    return self._parse_excel_download(full_url)
-            except Exception as exc:
-                self.log.warning(
-                    "Failed to parse INFARMED download",
-                    extra={"url": full_url, "error": str(exc)},
-                )
+        # Find the export-suspended list download link
+        target_url: str | None = None
+        for a in article.find_all("a", href=True):
+            href = a["href"]
+            text = a.get_text(strip=True).lower()
+            if "/documents/" in href and (
+                "exportação temporariamente suspensa" in text
+                or "exportacao temporariamente suspensa" in text
+                or ("lista em vigor" in text and "9423565" in href)
+            ):
+                target_url = href
+                break
 
-        return []
+        if not target_url:
+            # Fallback: any "lista em vigor" document link
+            for a in article.find_all("a", href=True):
+                href = a["href"]
+                text = a.get_text(strip=True).lower()
+                if "/documents/" in href and "lista em vigor" in text:
+                    target_url = href
+                    break
+
+        if not target_url:
+            self.log.info("No export-suspended Excel link found on INFARMED page")
+            return []
+
+        full_url = urljoin(self.BASE_URL, target_url)
+        self.log.info(
+            "Fetching INFARMED export-suspended Excel",
+            extra={"url": full_url},
+        )
+
+        try:
+            return self._parse_excel_download(full_url)
+        except Exception as exc:
+            self.log.warning(
+                "Failed to parse INFARMED export-suspended Excel",
+                extra={"url": full_url, "error": str(exc)},
+            )
+            return []
 
     def _parse_excel_download(self, url: str) -> list[dict]:
         """Download and parse an Excel file from INFARMED."""
@@ -228,27 +391,38 @@ class PortugalInfarmedScraper(BaseScraper):
             read_only=True,
             data_only=True,
         )
-        ws = wb.active
 
-        # Read headers from row 1
-        headers: list[str] = []
-        for cell in ws[1]:
-            headers.append(str(cell.value or "").strip().lower())
-
-        self.log.info(
-            "INFARMED Excel headers",
-            extra={"headers": headers, "rows": ws.max_row},
-        )
-
-        # Read data rows
         records: list[dict] = []
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            rec = {}
-            for h, v in zip(headers, row):
-                if h:
-                    rec[h] = v
-            if any(v for v in rec.values() if v is not None and str(v).strip()):
-                records.append(rec)
+
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            self.log.info(
+                "Processing INFARMED Excel sheet",
+                extra={"sheet": sheet_name, "rows": ws.max_row},
+            )
+
+            # Read headers from row 1
+            headers: list[str] = []
+            for cell in ws[1]:
+                headers.append(str(cell.value or "").strip().lower())
+
+            self.log.info(
+                "INFARMED Excel headers",
+                extra={"sheet": sheet_name, "headers": headers},
+            )
+
+            # Read data rows
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                rec: dict[str, Any] = {"_source": "excel", "_sheet": sheet_name}
+                for h, v in zip(headers, row):
+                    if h:
+                        rec[h] = v
+                if any(
+                    v for v in rec.values()
+                    if v is not None and str(v).strip()
+                    and v not in ("excel", sheet_name)
+                ):
+                    records.append(rec)
 
         wb.close()
 
@@ -257,31 +431,6 @@ class PortugalInfarmedScraper(BaseScraper):
             extra={"records": len(records)},
         )
         return records
-
-    def _parse_csv_download(self, url: str) -> list[dict]:
-        """Download and parse a CSV file from INFARMED."""
-        import csv
-
-        self.log.info("Fetching INFARMED CSV file", extra={"url": url})
-        resp = self._get(url)
-
-        # Try common delimiters
-        text = resp.text
-        for delimiter in [";", ",", "\t"]:
-            try:
-                reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
-                records = [row for row in reader if any(v.strip() for v in row.values())]
-                if records and len(records[0]) > 1:
-                    self.log.info(
-                        "INFARMED CSV parsed",
-                        extra={"records": len(records), "delimiter": repr(delimiter)},
-                    )
-                    # Lowercase all keys for consistency
-                    return [{k.lower().strip(): v for k, v in rec.items()} for rec in records]
-            except Exception:
-                continue
-
-        return []
 
     def _parse_tables(self, soup: BeautifulSoup) -> list[dict]:
         """Extract records from HTML <table> elements on the INFARMED page."""
@@ -322,7 +471,7 @@ class PortugalInfarmedScraper(BaseScraper):
                 if len(cells) < 2:
                     continue
 
-                row: dict[str, str] = {}
+                row: dict[str, str] = {"_source": "table"}
                 for i, cell in enumerate(cells):
                     key = headers[i] if i < len(headers) else f"col_{i}"
                     row[key] = cell.get_text(strip=True)
@@ -335,69 +484,8 @@ class PortugalInfarmedScraper(BaseScraper):
                 ):
                     continue
 
-                if any(v.strip() for v in row.values()):
+                if any(v.strip() for v in row.values() if isinstance(v, str)):
                     records.append(row)
-
-        return records
-
-    def _parse_list_items(self, soup: BeautifulSoup) -> list[dict]:
-        """
-        Extract records from structured elements on the page (CMS patterns,
-        Liferay portlet structures commonly used by Portuguese government sites).
-        """
-        records: list[dict] = []
-
-        # Liferay / INFARMED patterns
-        selectors = [
-            ".journal-content-article table tr",
-            ".portlet-body table tr",
-            ".asset-content table tr",
-            ".web-content-article table tr",
-            ".taglib-text table tr",
-            "article table tr",
-            ".entry-content table tr",
-        ]
-
-        for selector in selectors:
-            rows = soup.select(selector)
-            if rows:
-                # Try to use the first row as headers
-                header_cells = rows[0].find_all(["th", "td"])
-                headers = [c.get_text(strip=True).lower() for c in header_cells]
-
-                for tr in rows[1:]:
-                    cells = tr.find_all(["td", "th"])
-                    if len(cells) < 2:
-                        continue
-                    row: dict[str, str] = {}
-                    for i, cell in enumerate(cells):
-                        key = headers[i] if i < len(headers) else f"col_{i}"
-                        row[key] = cell.get_text(strip=True)
-
-                    if any(v.strip() for v in row.values()):
-                        records.append(row)
-
-                if records:
-                    return records
-
-        # Fallback: look for any structured text blocks
-        content_area = (
-            soup.select_one(
-                ".journal-content-article, .portlet-body, "
-                ".asset-content, #content, main, article"
-            )
-            or soup
-        )
-
-        for el in content_area.find_all(["li", "p", "div"]):
-            text = el.get_text(" ", strip=True)
-            # Look for entries that contain drug-like patterns (INN names)
-            if len(text) >= 10 and re.search(
-                r'(?:descontinua|ruptura|rutura|indisponível|indisponivel)',
-                text,
-                re.IGNORECASE,
-            ):
-                records.append({"raw_text": text})
 
         return records
 
@@ -415,14 +503,22 @@ class PortugalInfarmedScraper(BaseScraper):
         normalised: list[dict] = []
         skipped = 0
         today = date.today().isoformat()
+        seen_drugs: set[str] = set()
 
         for rec in raw:
             try:
-                result = self._normalise_record(rec, today)
-                if result is None:
+                source = rec.get("_source", "unknown")
+                if source == "highlighted":
+                    results = self._normalise_highlighted(rec, today, seen_drugs)
+                elif source == "excel":
+                    results = self._normalise_excel(rec, today, seen_drugs)
+                else:
+                    results = self._normalise_legacy(rec, today, seen_drugs)
+
+                if not results:
                     skipped += 1
                     continue
-                normalised.append(result)
+                normalised.extend(results)
             except Exception as exc:
                 skipped += 1
                 self.log.warning(
@@ -432,14 +528,166 @@ class PortugalInfarmedScraper(BaseScraper):
 
         self.log.info(
             "Normalisation done",
-            extra={"total": len(raw), "normalised": len(normalised), "skipped": skipped},
+            extra={
+                "total": len(raw),
+                "normalised": len(normalised),
+                "skipped": skipped,
+            },
         )
         return normalised
 
+    def _normalise_highlighted(
+        self, rec: dict, today: str, seen: set[str],
+    ) -> list[dict]:
+        """Normalise a highlighted shortage entry (narrative section)."""
+        results: list[dict] = []
+
+        dci = rec.get("dci", "")
+        if not dci:
+            return []
+
+        # Build list of drug names to create events for
+        drug_names = [dci]
+        for extra in rec.get("additional_drugs", []):
+            if extra and extra != dci:
+                drug_names.append(extra)
+
+        for drug_name in drug_names:
+            key = drug_name.strip().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+
+            brand_names = rec.get("brand_names", [])
+            raw_reason = rec.get("reason", "")
+            reason_category = (
+                self._map_reason(raw_reason) if raw_reason else "unknown"
+            )
+
+            # Build notes from description
+            desc = rec.get("description", "")
+            heading = rec.get("heading", "")
+            notes_parts: list[str] = []
+            if heading:
+                notes_parts.append(f"Category: {heading}")
+            if desc:
+                notes_parts.append(f"Details: {desc[:200]}")
+
+            results.append({
+                "generic_name":              drug_name.strip().title(),
+                "brand_names":               brand_names,
+                "status":                    "active",
+                "severity":                  "medium",
+                "reason":                    raw_reason or None,
+                "reason_category":           reason_category,
+                "start_date":                today,
+                "end_date":                  None,
+                "estimated_resolution_date": None,
+                "source_url":                self.BASE_URL,
+                "notes":                     "; ".join(notes_parts) or None,
+                "source_confidence_score":   86,
+                "raw_record":                rec,
+            })
+
+        return results
+
+    def _normalise_excel(
+        self, rec: dict, today: str, seen: set[str],
+    ) -> list[dict]:
+        """Normalise an Excel row from the export-suspended list."""
+        # Column names may vary between sheets; try common patterns
+        generic_name = str(
+            rec.get("dci/substância ativa")
+            or rec.get("dci/substancia ativa")
+            or rec.get("dci")
+            or rec.get("substância ativa")
+            or rec.get("substancia ativa")
+            or ""
+        ).strip()
+
+        if not generic_name:
+            return []
+
+        key = generic_name.lower()
+        if key in seen:
+            return []
+        seen.add(key)
+
+        brand_name = str(
+            rec.get("nome comercial") or rec.get("nome") or ""
+        ).strip()
+        brand_names = (
+            [brand_name]
+            if brand_name and brand_name.lower() != key
+            else []
+        )
+
+        dosage = str(rec.get("dosagem") or rec.get("dose") or "").strip()
+        form = str(
+            rec.get("forma farmacêutica")
+            or rec.get("forma farmaceutica")
+            or rec.get("forma")
+            or ""
+        ).strip()
+        holder = str(
+            rec.get("titular de aim") or rec.get("titular") or ""
+        ).strip()
+        reg_num = str(
+            rec.get("número de registo")
+            or rec.get("numero de registo")
+            or ""
+        ).strip()
+        desc_cits = str(
+            rec.get("descrição cits") or rec.get("descricao cits") or ""
+        ).strip()
+        sheet = rec.get("_sheet", "")
+
+        notes_parts: list[str] = []
+        if holder:
+            notes_parts.append(f"Holder: {holder}")
+        if dosage:
+            notes_parts.append(f"Dosage: {dosage}")
+        if form:
+            notes_parts.append(f"Form: {form}")
+        if desc_cits:
+            notes_parts.append(f"Presentation: {desc_cits}")
+        if reg_num:
+            notes_parts.append(f"Reg: {reg_num}")
+        if sheet:
+            notes_parts.append(f"Source: Export-suspended list ({sheet})")
+
+        return [{
+            "generic_name":              generic_name.strip().title(),
+            "brand_names":               brand_names,
+            "status":                    "active",
+            "severity":                  "medium",
+            "reason":                    "Export restricted due to shortage",
+            "reason_category":           "supply_chain",
+            "start_date":                today,
+            "end_date":                  None,
+            "estimated_resolution_date": None,
+            "source_url":                self.BASE_URL,
+            "notes":                     "; ".join(notes_parts) or None,
+            "source_confidence_score":   86,
+            "raw_record":                rec,
+        }]
+
+    def _normalise_legacy(
+        self, rec: dict, today: str, seen: set[str],
+    ) -> list[dict]:
+        """Normalise a record from table parsing (legacy fallback)."""
+        result = self._normalise_record(rec, today)
+        if result is None:
+            return []
+        key = result["generic_name"].lower()
+        if key in seen:
+            return []
+        seen.add(key)
+        return [result]
+
     def _normalise_record(self, rec: dict, today: str) -> dict | None:
-        """Convert a single INFARMED record to a normalised shortage event dict."""
+        """Convert a single INFARMED record to a normalised shortage event."""
         # -- Drug name extraction --
-        # Try Portuguese column names first, then English fallbacks
         generic_name = (
             rec.get("dci")
             or rec.get("inn")
@@ -464,7 +712,6 @@ class PortugalInfarmedScraper(BaseScraper):
         # If no structured name, try raw_text extraction
         if not generic_name and rec.get("raw_text"):
             raw_text = rec["raw_text"]
-            # Try to get the first segment before a known Portuguese keyword
             parts = re.split(
                 r'\s*[-–|:]\s*(?=descontinua|ruptura|rutura|indisponível|indisponivel)',
                 raw_text,
@@ -490,7 +737,11 @@ class PortugalInfarmedScraper(BaseScraper):
         else:
             brand_name = str(brand_name).strip()
 
-        brand_names = [brand_name] if brand_name and brand_name != generic_name else []
+        brand_names = (
+            [brand_name]
+            if brand_name and brand_name != generic_name
+            else []
+        )
 
         # -- Status --
         raw_status = str(
@@ -503,7 +754,6 @@ class PortugalInfarmedScraper(BaseScraper):
             or ""
         ).strip().lower()
 
-        # Also check raw_text for status clues
         if not raw_status and rec.get("raw_text"):
             raw_status = rec["raw_text"].lower()
 
@@ -525,7 +775,6 @@ class PortugalInfarmedScraper(BaseScraper):
 
         reason_category = self._map_reason(raw_reason)
 
-        # If the status text itself indicates discontinuation, set the category
         if reason_category == "unknown" and any(
             kw in raw_status
             for kw in ("descontinua", "definitiva", "withdrawal", "retirada")
@@ -560,7 +809,9 @@ class PortugalInfarmedScraper(BaseScraper):
             or ""
         )
         end_date = self._parse_date(raw_end) if status == "resolved" else None
-        estimated_resolution = self._parse_date(raw_end) if status == "active" else None
+        estimated_resolution = (
+            self._parse_date(raw_end) if status == "active" else None
+        )
 
         # -- Dosage / presentation --
         dosage = str(
@@ -591,7 +842,6 @@ class PortugalInfarmedScraper(BaseScraper):
         if dosage:
             notes_parts.append(f"Presentation: {dosage}")
 
-        # Registration / AIM number
         aim_num = str(
             rec.get("nº aim")
             or rec.get("n aim")

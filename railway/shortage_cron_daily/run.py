@@ -41,6 +41,13 @@ SHORTAGE_KEYS = [
     "sahpra",
     "nafdac",
     "sfda",
+    # Phase 10: Newly fixed scrapers (Mar 2026)
+    "greece_eof",           # 264 records — PDF from eof.gr
+    "turkey_titck",         # ~15 records — supply dept announcements
+    "belgium_famhp",        # 13,000+ records — PharmaStatus API
+    "malaysia_npra",        # 168 records — safety alerts
+    "portugal_infarmed",    # 30 records — shortage monitoring + Excel
+    "uae_mohap",            # 11 records — EDE (ede.gov.ae)
 ]
 
 if __name__ == "__main__":

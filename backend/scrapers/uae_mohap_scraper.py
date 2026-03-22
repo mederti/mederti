@@ -1,12 +1,13 @@
 """
-UAE MOHAP Drug Shortage Scraper
--------------------------------
-Source:  Ministry of Health and Prevention UAE - Drug Shortage Notifications
-URL:     https://www.mohap.gov.ae/
+UAE MOHAP / EDE Drug Shortage Scraper
+--------------------------------------
+Source:  Ministry of Health and Prevention UAE + Emirates Drug Establishment
+URL:     https://www.mohap.gov.ae/ , https://www.ede.gov.ae/
 
-The UAE Ministry of Health and Prevention (MOHAP) publishes drug-related
-notices including shortage notifications and supply disruption alerts on
-their website. Content is bilingual (English/Arabic).
+MOHAP transferred pharmaceutical regulatory services to the Emirates Drug
+Establishment (EDE) in late 2025.  This scraper now pulls news from both
+the EDE news page and MOHAP media-centre, filtering for pharmaceutical
+supply / shortage / recall / availability notices.
 
 Data source UUID:  10000000-0000-0000-0000-000000000055
 Country:           United Arab Emirates
@@ -29,18 +30,30 @@ from backend.utils.reason_mapper import map_reason_category
 class UAEMOHAPScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000055"
     SOURCE_NAME: str  = "Ministry of Health and Prevention UAE \u2014 Drug Shortage Notifications"
-    BASE_URL: str     = "https://www.mohap.gov.ae/"
+    BASE_URL: str     = "https://www.ede.gov.ae/"
     COUNTRY: str      = "United Arab Emirates"
     COUNTRY_CODE: str = "AE"
 
     RATE_LIMIT_DELAY: float = 2.0
     REQUEST_TIMEOUT: float  = 60.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    SCRAPER_VERSION: str    = "2.0.0"
 
-    # Pharmaceutical notices / circulars page
-    NOTICES_URL: str = "https://www.mohap.gov.ae/en/services/pharmacy"
+    # EDE news page (primary — EDE took over drug regulation from MOHAP)
+    EDE_NEWS_URL: str = "https://www.ede.gov.ae/en/news"
 
-    # Known MOHAP shortage reasons -> reason_category
+    # MOHAP media centre news (secondary — still publishes health news)
+    MOHAP_NEWS_URL: str = (
+        "https://mohap.gov.ae/en/digital-participation/media-center/news"
+    )
+
+    # MOHAP pharmaceutical-product withdrawal notices
+    MOHAP_WITHDRAWAL_URL: str = (
+        "https://mohap.gov.ae/en/w/"
+        "ministry-of-health-and-prevention-withdraws-pharmaceutical-"
+        "products-due-to-non-compliance-with-approved-specifications"
+    )
+
+    # Known MOHAP/EDE shortage reasons -> reason_category
     _REASON_MAP: dict[str, str] = {
         "manufacturing issue":       "manufacturing_issue",
         "manufacturing delay":       "manufacturing_issue",
@@ -64,9 +77,12 @@ class UAEMOHAPScraper(BaseScraper):
         "registration":              "regulatory_action",
         "recall":                    "regulatory_action",
         "withdrawal":                "regulatory_action",
+        "non-compliance":            "regulatory_action",
         "discontinuation":           "discontinuation",
         "discontinued":              "discontinuation",
         "market withdrawal":         "discontinuation",
+        "monopoly":                  "supply_chain",
+        "stockpile":                 "supply_chain",
     }
 
     # Keywords indicating drug shortage / supply issues
@@ -85,6 +101,12 @@ class UAEMOHAPScraper(BaseScraper):
         "medication",
         "stock",
         "out of stock",
+        "monopoly",
+        "stockpile",
+        "availability",
+        "secure",
+        "manufacturing",
+        "production",
     ]
 
     # -------------------------------------------------------------------------
@@ -93,103 +115,206 @@ class UAEMOHAPScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        Fetch MOHAP drug shortage notices.
-
-        Strategy:
-        1. GET the MOHAP pharmaceutical notices page.
-        2. Parse HTML with BeautifulSoup for notice items.
-        3. Filter for drug shortage / supply related notices.
+        Fetch drug shortage / pharmaceutical supply notices from:
+          1. EDE news page (ede.gov.ae)
+          2. MOHAP media-centre news
+          3. MOHAP pharmaceutical withdrawal page
         """
         self.log.info("Scrape started", extra={
             "source": self.SOURCE_NAME,
-            "url": self.NOTICES_URL,
+            "urls": [self.EDE_NEWS_URL, self.MOHAP_NEWS_URL],
         })
 
         records: list[dict] = []
 
+        # 1. EDE news
         try:
-            resp = self._get(self.NOTICES_URL)
-            records = self._parse_notices_page(resp.text)
+            resp = self._get(self.EDE_NEWS_URL)
+            ede_records = self._parse_news_page(
+                resp.text,
+                base_domain="https://www.ede.gov.ae",
+                source_label="EDE",
+            )
+            records.extend(ede_records)
+            self.log.info("EDE news parsed", extra={"records": len(ede_records)})
         except Exception as exc:
             self.log.warning(
-                "Failed to fetch MOHAP notices page",
-                extra={"error": str(exc), "url": self.NOTICES_URL},
+                "Failed to fetch EDE news page",
+                extra={"error": str(exc), "url": self.EDE_NEWS_URL},
             )
-            raise ScraperError(f"MOHAP fetch failed: {exc}") from exc
+
+        # 2. MOHAP media-centre news
+        try:
+            resp = self._get(self.MOHAP_NEWS_URL)
+            mohap_records = self._parse_news_page(
+                resp.text,
+                base_domain="https://mohap.gov.ae",
+                source_label="MOHAP",
+            )
+            records.extend(mohap_records)
+            self.log.info("MOHAP news parsed", extra={"records": len(mohap_records)})
+        except Exception as exc:
+            self.log.warning(
+                "Failed to fetch MOHAP news page",
+                extra={"error": str(exc), "url": self.MOHAP_NEWS_URL},
+            )
+
+        # 3. MOHAP withdrawal notice page
+        try:
+            resp = self._get(self.MOHAP_WITHDRAWAL_URL)
+            withdrawal_records = self._parse_withdrawal_page(resp.text)
+            records.extend(withdrawal_records)
+            self.log.info(
+                "MOHAP withdrawal page parsed",
+                extra={"records": len(withdrawal_records)},
+            )
+        except Exception as exc:
+            self.log.warning(
+                "Failed to fetch MOHAP withdrawal page",
+                extra={"error": str(exc), "url": self.MOHAP_WITHDRAWAL_URL},
+            )
+
+        if not records:
+            raise ScraperError(
+                "No records fetched from any UAE source (EDE / MOHAP)"
+            )
 
         self.log.info(
-            "MOHAP fetch complete",
-            extra={"records": len(records)},
+            "UAE fetch complete",
+            extra={"total_records": len(records)},
         )
         return records
 
-    def _parse_notices_page(self, html: str) -> list[dict]:
-        """Parse the MOHAP notices page HTML for shortage-related notices."""
+    def _parse_news_page(
+        self,
+        html: str,
+        base_domain: str,
+        source_label: str,
+    ) -> list[dict]:
+        """Parse an EDE or MOHAP news page for pharmaceutical-related articles."""
         from bs4 import BeautifulSoup
 
         soup = BeautifulSoup(html, "lxml")
         records: list[dict] = []
 
-        # Look for notice/announcement list items
-        # MOHAP uses various structures for their notices
-        notice_elements = (
-            soup.select(".news-item")
-            or soup.select(".announcement-item")
-            or soup.select(".circular-item")
-            or soup.select("article")
-            or soup.select(".card")
-            or soup.select(".list-group-item")
-            or soup.select("table tbody tr")
-        )
+        # Collect all links that point to article pages (/w/ prefix)
+        article_links = soup.find_all("a", href=re.compile(r'/w/'))
 
-        if not notice_elements:
-            # Fallback: look for links containing shortage-related keywords
-            notice_elements = soup.find_all("a", href=True)
+        seen_urls: set[str] = set()
+        for link in article_links:
+            href = link.get("href", "")
+            if not href or href in seen_urls:
+                continue
 
-        for el in notice_elements:
-            text = el.get_text(separator=" ", strip=True)
+            # Build full URL
+            if href.startswith("/"):
+                full_url = f"{base_domain}{href}"
+            elif href.startswith("http"):
+                full_url = href
+            else:
+                continue
+
+            seen_urls.add(href)
+
+            # Get the link text (article title)
+            text = link.get_text(separator=" ", strip=True)
+            if not text or len(text) < 5:
+                # Try parent element for title text
+                parent = link.find_parent(["div", "article", "li", "section"])
+                if parent:
+                    text = parent.get_text(separator=" ", strip=True)
+
+            if not text:
+                continue
+
             text_lower = text.lower()
 
-            # Filter: only keep notices related to drug shortages
+            # Filter: only keep notices related to pharma / drug supply
             if not any(kw in text_lower for kw in self._SHORTAGE_KEYWORDS):
                 continue
 
-            # Extract link
-            link = None
-            if el.name == "a":
-                link = el.get("href", "")
-            else:
-                link_tag = el.find("a", href=True)
-                if link_tag:
-                    link = link_tag.get("href", "")
-
-            if link and not link.startswith("http"):
-                link = f"https://www.mohap.gov.ae{link}"
-
-            # Extract date if present
+            # Extract date if present near the link
             raw_date = None
-            date_el = el.find(class_=re.compile(r"date|time|publish", re.IGNORECASE))
-            if date_el:
-                raw_date = date_el.get_text(strip=True)
-            else:
-                # Try to find a date pattern (DD/MM/YYYY, DD-MM-YYYY, or YYYY-MM-DD)
-                date_match = re.search(
-                    r'(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{4})', text
+            parent = link.find_parent(["div", "article", "li", "section"])
+            if parent:
+                date_el = parent.find(
+                    class_=re.compile(r"date|time|publish", re.IGNORECASE)
                 )
-                if date_match:
-                    raw_date = date_match.group(0)
+                if date_el:
+                    raw_date = date_el.get_text(strip=True)
+                else:
+                    date_match = re.search(
+                        r'(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{4})',
+                        parent.get_text(),
+                    )
+                    if date_match:
+                        raw_date = date_match.group(0)
 
             records.append({
                 "title": text[:500],
-                "url": link or self.NOTICES_URL,
+                "url": full_url,
                 "date": raw_date,
                 "raw_text": text,
+                "source_label": source_label,
             })
 
         self.log.info(
-            "Parsed MOHAP notices",
-            extra={"total_elements": len(notice_elements), "shortage_notices": len(records)},
+            f"Parsed {source_label} news",
+            extra={
+                "total_links": len(seen_urls),
+                "pharma_notices": len(records),
+            },
         )
+        return records
+
+    def _parse_withdrawal_page(self, html: str) -> list[dict]:
+        """Parse the MOHAP pharmaceutical product withdrawal page."""
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(html, "lxml")
+        records: list[dict] = []
+
+        # Look for list items, table rows, or paragraphs with product info
+        content_area = (
+            soup.find("div", class_=re.compile(r"journal-content|article-body|web-content"))
+            or soup.find("main")
+            or soup
+        )
+
+        # Look for lists of withdrawn products
+        list_items = content_area.find_all(["li", "tr", "p"])
+        for item in list_items:
+            text = item.get_text(separator=" ", strip=True)
+            text_lower = text.lower()
+
+            if not any(
+                kw in text_lower
+                for kw in [
+                    "withdraw", "recall", "non-compliance",
+                    "pharmaceutical", "drug", "medicine", "product",
+                ]
+            ):
+                continue
+
+            if len(text) < 10:
+                continue
+
+            raw_date = None
+            date_match = re.search(
+                r'(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{4})',
+                text,
+            )
+            if date_match:
+                raw_date = date_match.group(0)
+
+            records.append({
+                "title": text[:500],
+                "url": self.MOHAP_WITHDRAWAL_URL,
+                "date": raw_date,
+                "raw_text": text,
+                "source_label": "MOHAP-Withdrawal",
+            })
+
         return records
 
     # -------------------------------------------------------------------------
@@ -197,9 +322,9 @@ class UAEMOHAPScraper(BaseScraper):
     # -------------------------------------------------------------------------
 
     def normalize(self, raw: list[dict]) -> list[dict]:
-        """Normalize MOHAP records into standard shortage event dicts."""
+        """Normalize UAE records into standard shortage event dicts."""
         self.log.info(
-            "Normalising MOHAP records",
+            "Normalising UAE records",
             extra={"source": self.SOURCE_NAME, "raw_count": len(raw)},
         )
 
@@ -217,7 +342,7 @@ class UAEMOHAPScraper(BaseScraper):
             except Exception as exc:
                 skipped += 1
                 self.log.warning(
-                    "Failed to normalise MOHAP record",
+                    "Failed to normalise UAE record",
                     extra={"error": str(exc), "rec": str(rec)[:200]},
                 )
 
@@ -228,7 +353,7 @@ class UAEMOHAPScraper(BaseScraper):
         return normalised
 
     def _normalise_record(self, rec: dict, today: str) -> dict | None:
-        """Convert a single MOHAP record to a normalised shortage event dict."""
+        """Convert a single UAE record to a normalised shortage event dict."""
         title = rec.get("title", "").strip()
         raw_text = rec.get("raw_text", "").strip()
 
@@ -265,6 +390,9 @@ class UAEMOHAPScraper(BaseScraper):
 
         # -- Notes --
         notes_parts: list[str] = []
+        source_label = rec.get("source_label", "")
+        if source_label:
+            notes_parts.append(f"Source: {source_label}")
         if raw_reason:
             notes_parts.append(f"Reason: {raw_reason}")
         notes_parts.append(f"Title: {title[:200]}")
@@ -289,7 +417,7 @@ class UAEMOHAPScraper(BaseScraper):
     # -------------------------------------------------------------------------
 
     def _map_reason(self, raw: str) -> str:
-        """Map MOHAP reason string to canonical reason_category."""
+        """Map UAE reason string to canonical reason_category."""
         if not raw:
             return "unknown"
         lower = raw.strip().lower()
@@ -306,17 +434,18 @@ class UAEMOHAPScraper(BaseScraper):
             return "resolved"
         if any(w in lower for w in ("anticipated", "expected", "upcoming", "potential")):
             return "anticipated"
+        if any(w in lower for w in ("secure", "sufficient", "stable")):
+            return "resolved"
         return "active"
 
     def _extract_drug_name(self, text: str) -> str:
         """
-        Extract a drug name (INN) from MOHAP notice text.
+        Extract a drug name (INN) from UAE notice text.
 
         Looks for uppercase or capitalized drug name patterns typical
         in English pharmaceutical notices.
         """
         # Look for words that look like drug names (capitalized Latin sequences)
-        # Drug names are typically in title case or uppercase
         matches = re.findall(
             r'\b([A-Z][A-Za-z]{2,}(?:\s+[A-Z][A-Za-z]+)*)\b', text
         )
@@ -324,9 +453,23 @@ class UAEMOHAPScraper(BaseScraper):
         stopwords = {
             "Ministry", "Health", "Prevention", "Drug", "Shortage",
             "Notice", "Notification", "Circular", "Alert", "Update",
-            "United", "Arab", "Emirates", "UAE", "MOHAP", "The",
+            "United", "Arab", "Emirates", "UAE", "MOHAP", "EDE", "The",
             "Pharmaceutical", "Product", "Supply", "Available",
             "Important", "Urgent", "Information", "Please", "Dear",
+            "Establishment", "Strategic", "Stockpile", "Secure",
+            "Sufficient", "National", "Field", "Visits", "Conducts",
+            "Manufacturers", "Inspect", "Production", "Capacity",
+            "Future", "Expansion", "Plans", "Breaks", "Monopoly",
+            "Medical", "Products", "Country", "Mubadala", "Limited",
+            "Sign", "Develop", "Manufacturing", "Innovation",
+            "Showcases", "Insilico", "Project", "Signs", "Advance",
+            "Cooperation", "Agreement", "Association", "World",
+            "Expo", "Strengthens", "International", "Partnerships",
+            "Organ", "Chip", "Launch", "Officially", "Unveil",
+            "Initiatives", "Zayed", "Humanitarian", "Day", "Reinforces",
+            "Enduring", "Commitment", "Giving", "Serving", "Humanity",
+            "Saeed", "Mubarak", "Hajeri", "Holds", "Bilateral",
+            "Meetings", "Partners", "Launches", "News", "Services",
         }
         for match in matches:
             if match not in stopwords and len(match) > 2:
@@ -335,7 +478,6 @@ class UAEMOHAPScraper(BaseScraper):
 
     def _extract_brand_name(self, text: str) -> str:
         """Extract brand/trade name from text if present."""
-        # Look for text in quotes or parentheses
         quoted = re.search(r'["\u201c]([^"\u201d]+)["\u201d]', text)
         if quoted:
             return quoted.group(1).strip()
@@ -352,6 +494,7 @@ class UAEMOHAPScraper(BaseScraper):
             "manufacturing issue":   "Manufacturing issue",
             "manufacturing delay":   "Manufacturing delay",
             "production issue":      "Production issue",
+            "production capacity":   "Production capacity concern",
             "supply chain":          "Supply chain disruption",
             "supply disruption":     "Supply disruption",
             "import delay":          "Import delay",
@@ -363,8 +506,12 @@ class UAEMOHAPScraper(BaseScraper):
             "logistics":             "Logistics issue",
             "recall":                "Product recall",
             "regulatory":            "Regulatory action",
+            "non-compliance":        "Non-compliance withdrawal",
+            "withdrawal":            "Product withdrawal",
             "discontinuation":       "Discontinuation",
             "discontinued":          "Discontinuation",
+            "monopoly":              "Market monopoly concern",
+            "stockpile":             "Strategic stockpile update",
         }
 
         for phrase, english in reason_phrases.items():
@@ -436,13 +583,13 @@ if __name__ == "__main__":
 
         print("=" * 60)
         print("DRY RUN MODE  (MEDERTI_DRY_RUN=1)")
-        print("Fetches live MOHAP data but makes NO database writes.")
+        print("Fetches live EDE/MOHAP data but makes NO database writes.")
         print("Set MEDERTI_DRY_RUN=0 to run against Supabase.")
         print("=" * 60)
 
         scraper = UAEMOHAPScraper(db_client=MagicMock())
 
-        print("\n-- Fetching from MOHAP ...")
+        print("\n-- Fetching from EDE + MOHAP ...")
         raw = scraper.fetch()
         print(f"-- Raw records received : {len(raw)}")
 

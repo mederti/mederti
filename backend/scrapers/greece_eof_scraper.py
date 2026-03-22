@@ -2,12 +2,18 @@
 Greece EOF National Organisation for Medicines — Drug Shortages Scraper
 ───────────────────────────────────────────────────────────────────────
 Source:  EOF — Ethnikos Organismos Farmakon (National Organisation for Medicines)
-URL:     https://www.eof.gr/
+URL:     https://www.eof.gr/eparkeia-agoras/
 
-The Greek National Organisation for Medicines (EOF) publishes drug shortage
-notifications and alerts on its website. EOF is the Hellenic equivalent of
-the EMA at national level. Shortage notices may appear as announcements,
-downloadable PDFs, or HTML tables under the /web/guest/notifications section.
+EOF publishes a PDF listing pharmaceutical products with limited availability.
+The PDF is updated periodically and contains a table with columns:
+    Barcode | Περιγραφή | ATC | Δραστική ουσία | Τρόπος Διάθεσης |
+    Κάτοχος άδειας | Ημ. έναρξης | Ημ. λήξης | Αιτία | Εναλλακτικές
+
+This scraper:
+  1. GETs the shortage landing page at /eparkeia-agoras/
+  2. Finds the PDF link containing ΛΙΣΤΑ-ΦΑΡΜΑΚΕΥΤΙΚΩΝ-ΣΚΕΥΑΣΜΑΤΩΝ-ΠΕΡΙΟΡΙΣΜΕΝΗΣ-ΔΙΑΘΕΣΙΜΟΤΗΤΑΣ
+  3. Downloads and parses the PDF with pdfplumber
+  4. Returns structured records
 
 Key Greek terms:
     έλλειψη / elleipsi      = shortage           → status: active
@@ -29,7 +35,9 @@ Cron:  Every 24 hours (EOF updates infrequently)
 
 from __future__ import annotations
 
+import io
 import re
+import urllib.parse
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -43,71 +51,82 @@ from backend.utils.reason_mapper import map_reason_category
 class GreeceEOFScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000050"
     SOURCE_NAME: str  = "National Organisation for Medicines — Drug Shortages"
-    BASE_URL: str     = "https://www.eof.gr/"
+    BASE_URL: str     = "https://www.eof.gr/eparkeia-agoras/"
     COUNTRY: str      = "Greece"
     COUNTRY_CODE: str = "GR"
 
     RATE_LIMIT_DELAY: float = 2.0
-    REQUEST_TIMEOUT: float  = 30.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    REQUEST_TIMEOUT: float  = 60.0   # PDF can be large
+    SCRAPER_VERSION: str    = "2.0.0"
 
-    # Common EOF sub-pages for shortage/notification data
-    _SHORTAGE_PATHS: list[str] = [
-        "web/guest/notifications",
-        "web/guest/shortages",
-        "web/guest/ellipseis",
-        "web/guest/announcements",
-    ]
+    # PDF link pattern — the shortage list PDF
+    _SHORTAGE_PDF_PATTERN: str = (
+        "ΛΙΣΤΑ-ΦΑΡΜΑΚΕΥΤΙΚΩΝ-ΣΚΕΥΑΣΜΑΤΩΝ-ΠΕΡΙΟΡΙΣΜΕΝΗΣ-ΔΙΑΘΕΣΙΜΟΤΗΤΑΣ"
+    )
 
-    # Greek status keywords → canonical status
-    _STATUS_MAP: dict[str, str] = {
-        "έλλειψη":      "active",
-        "ελλειψη":      "active",
-        "elleipsi":     "active",
-        "ανάκληση":     "active",
-        "ανακληση":     "active",
-        "αναστολή":     "active",
-        "αναστολη":     "active",
-        "μη διαθέσιμο": "active",
-        "μη διαθεσιμο": "active",
-        "διαθέσιμο":    "resolved",
-        "διαθεσιμο":    "resolved",
-        "αναμένεται":   "anticipated",
-        "αναμενεται":   "anticipated",
-        "προσωρινή":    "anticipated",
-        "προσωρινη":    "anticipated",
+    # Canonical column keys used internally
+    _COL_BARCODE      = "barcode"
+    _COL_DESCRIPTION  = "description"
+    _COL_ATC          = "atc"
+    _COL_SUBSTANCE    = "substance"
+    _COL_DISPENSING   = "dispensing"
+    _COL_MAH          = "mah"
+    _COL_START_DATE   = "start_date"
+    _COL_END_DATE     = "end_date"
+    _COL_REASON       = "reason"
+    _COL_ALTERNATIVES = "alternatives"
+
+    # Map raw header substrings to canonical column names
+    _HEADER_MAP: dict[str, str] = {
+        "barcode":      _COL_BARCODE,
+        "περιγραφή":    _COL_DESCRIPTION,
+        "περιγραφη":    _COL_DESCRIPTION,
+        "atc":          _COL_ATC,
+        "δραστική":     _COL_SUBSTANCE,
+        "δραστικη":     _COL_SUBSTANCE,
+        "τρόπος":       _COL_DISPENSING,
+        "τροπος":       _COL_DISPENSING,
+        "κάτοχος":      _COL_MAH,
+        "κατοχος":      _COL_MAH,
+        "έναρξη":       _COL_START_DATE,
+        "εναρξη":       _COL_START_DATE,
+        "λήξη":         _COL_END_DATE,
+        "ληξη":         _COL_END_DATE,
+        "αιτία":        _COL_REASON,
+        "αιτια":        _COL_REASON,
+        "εναλλακτικ":   _COL_ALTERNATIVES,
     }
 
     # Greek reason keywords → canonical reason_category
     _REASON_MAP: dict[str, str] = {
-        "παραγωγή":                "manufacturing_issue",
-        "παραγωγη":                "manufacturing_issue",
-        "κατασκευή":               "manufacturing_issue",
-        "κατασκευη":               "manufacturing_issue",
-        "ποιότητα":                "manufacturing_issue",
-        "ποιοτητα":                "manufacturing_issue",
+        "παραγωγ":                 "manufacturing_issue",
+        "κατασκευ":                "manufacturing_issue",
+        "ποιοτικ":                 "manufacturing_issue",
+        "ποιότητ":                 "manufacturing_issue",
         "πρώτη ύλη":               "raw_material",
         "πρωτη υλη":               "raw_material",
         "δραστική ουσία":          "raw_material",
         "δραστικη ουσια":          "raw_material",
         "ζήτηση":                  "demand_surge",
         "ζητηση":                  "demand_surge",
-        "αυξημένη ζήτηση":        "demand_surge",
-        "αυξημενη ζητηση":        "demand_surge",
-        "εφοδιαστική αλυσίδα":    "supply_chain",
-        "εφοδιαστικη αλυσιδα":    "supply_chain",
-        "παγκόσμια έλλειψη":      "supply_chain",
-        "παγκοσμια ελλειψη":      "supply_chain",
-        "εισαγωγή":               "distribution",
-        "εισαγωγη":               "distribution",
-        "διανομή":                 "distribution",
-        "διανομη":                 "distribution",
+        "αυξημέν":                 "demand_surge",
+        "αυξημεν":                 "demand_surge",
+        "εφοδιαστικ":              "supply_chain",
+        "παγκόσμι":                "supply_chain",
+        "παγκοσμι":                "supply_chain",
+        "εισαγωγ":                 "distribution",
+        "διανομ":                  "distribution",
+        "καθυστέρηση":             "supply_chain",
+        "καθυστερηση":             "supply_chain",
         "απόσυρση":                "discontinuation",
         "αποσυρση":                "discontinuation",
-        "διακοπή κυκλοφορίας":    "discontinuation",
-        "διακοπη κυκλοφοριας":    "discontinuation",
+        "διακοπή":                 "discontinuation",
+        "διακοπη":                 "discontinuation",
         "ρυθμιστικ":               "regulatory_action",
         "κανονιστικ":              "regulatory_action",
+        "ανάκληση":                "regulatory_action",
+        "ανακληση":                "regulatory_action",
+        "εμπορικ":                 "commercial",
     }
 
     # -------------------------------------------------------------------------
@@ -116,238 +135,162 @@ class GreeceEOFScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        Fetch EOF shortage/notification pages.
-
-        Strategy:
-        1. GET the base EOF URL and known sub-pages for shortage data.
-        2. Parse HTML with BeautifulSoup looking for tables or structured lists.
-        3. Aggregate all shortage-related records found.
+        Fetch the EOF shortage PDF:
+        1. GET the landing page at /eparkeia-agoras/
+        2. Find the shortage list PDF link
+        3. Download and parse the PDF with pdfplumber
+        4. Return rows as list[dict]
         """
         self.log.info("Scrape started", extra={
             "source": self.SOURCE_NAME,
             "url": self.BASE_URL,
         })
 
-        all_records: list[dict] = []
+        # Step 1: Get the landing page
+        try:
+            resp = self._get(self.BASE_URL)
+        except Exception as exc:
+            raise ScraperError(f"Failed to fetch EOF landing page: {exc}") from exc
 
-        # Try main page first
-        records = self._fetch_page(self.BASE_URL)
-        all_records.extend(records)
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Try known sub-pages for shortage data
-        for path in self._SHORTAGE_PATHS:
-            url = f"{self.BASE_URL.rstrip('/')}/{path}"
-            try:
-                page_records = self._fetch_page(url)
-                all_records.extend(page_records)
-            except Exception as exc:
-                self.log.debug(
-                    f"EOF sub-page not accessible: {path}",
-                    extra={"error": str(exc)},
-                )
+        # Step 2: Find the shortage PDF link
+        pdf_url = self._find_shortage_pdf_link(soup)
+        if not pdf_url:
+            raise ScraperError(
+                "Could not find shortage PDF link on EOF page. "
+                f"Pattern: {self._SHORTAGE_PDF_PATTERN}"
+            )
+
+        self.log.info("Found shortage PDF link", extra={"pdf_url": pdf_url[:120]})
+
+        # Step 3: Download and parse the PDF
+        records = self._download_and_parse_pdf(pdf_url)
 
         self.log.info(
             "EOF fetch complete",
-            extra={"total_records": len(all_records)},
+            extra={"total_records": len(records), "pdf_url": pdf_url[:120]},
         )
-        return all_records
-
-    def _fetch_page(self, url: str) -> list[dict]:
-        """Fetch a single EOF page and extract shortage records."""
-        try:
-            resp = self._get(url)
-            html = resp.text
-        except (httpx.TimeoutException, httpx.ConnectTimeout, httpx.ConnectError) as exc:
-            self.log.warning(
-                "EOF connection/timeout error",
-                extra={"error": str(exc), "url": url},
-            )
-            return []
-        except httpx.HTTPStatusError as exc:
-            self.log.warning(
-                "EOF HTTP error",
-                extra={"status": exc.response.status_code, "url": url},
-            )
-            return []
-
-        self.log.debug(
-            "EOF page fetched",
-            extra={"bytes": len(html), "status": resp.status_code, "url": url},
-        )
-
-        soup = BeautifulSoup(html, "html.parser")
-
-        # Try HTML tables
-        records = self._parse_html_tables(soup, url)
-        if records:
-            return records
-
-        # Try structured announcement lists
-        records = self._parse_announcement_list(soup, url)
-        if records:
-            return records
-
-        # Try downloadable attachments (Excel/CSV)
-        records = self._parse_download_links(soup, url)
-        if records:
-            return records
-
-        return []
-
-    def _parse_html_tables(self, soup: BeautifulSoup, source_url: str) -> list[dict]:
-        """
-        Parse HTML tables for drug shortage data.
-
-        Expected columns may include (Greek):
-            Α/Α, Ονομασία, Δραστική Ουσία, Μορφή, Δοσολογία, Κατάσταση, Αιτία
-        """
-        tables = soup.find_all("table")
-        if not tables:
-            return []
-
-        records: list[dict] = []
-        for table in tables:
-            rows = table.find_all("tr")
-            if len(rows) < 2:
-                continue
-
-            # Extract headers from first row
-            header_row = rows[0]
-            headers: list[str] = []
-            for th in header_row.find_all(["th", "td"]):
-                headers.append(th.get_text(strip=True).lower())
-
-            if not headers:
-                continue
-
-            # Check if this looks like a drug shortage table (Greek or English)
-            header_text = " ".join(headers)
-            if not any(kw in header_text for kw in (
-                "φάρμακο", "φαρμακο", "ονομασία", "ονομασια",
-                "δραστική", "δραστικη", "έλλειψ", "ελλειψ",
-                "drug", "medicine", "shortage", "substance",
-            )):
-                continue
-
-            # Parse data rows
-            for row in rows[1:]:
-                cells = row.find_all(["td", "th"])
-                if not cells:
-                    continue
-                rec: dict[str, str] = {"_source_url": source_url}
-                for i, cell in enumerate(cells):
-                    key = headers[i] if i < len(headers) else f"col_{i}"
-                    rec[key] = cell.get_text(strip=True)
-                if any(v.strip() for k, v in rec.items() if k != "_source_url"):
-                    records.append(rec)
-
         return records
 
-    def _parse_announcement_list(self, soup: BeautifulSoup, source_url: str) -> list[dict]:
-        """
-        Parse structured announcement/notification lists for shortage data.
-        EOF may publish shortage notifications as news items or announcements.
-        """
-        records: list[dict] = []
+    def _find_shortage_pdf_link(self, soup: BeautifulSoup) -> str | None:
+        """Find the shortage list PDF URL from the landing page."""
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            # Check both the raw href and URL-decoded version
+            decoded = urllib.parse.unquote(href)
+            if (self._SHORTAGE_PDF_PATTERN in decoded
+                    or self._SHORTAGE_PDF_PATTERN in href):
+                if href.startswith("/"):
+                    return f"https://www.eof.gr{href}"
+                if href.startswith("http"):
+                    return href
+                return f"https://www.eof.gr/{href}"
+        return None
 
-        # Look for announcement containers with shortage-related content
-        shortage_keywords = [
-            "έλλειψη", "ελλειψη", "shortage", "ανάκληση", "ανακληση",
-            "αναστολή", "αναστολη", "φάρμακο", "φαρμακο",
-        ]
-
-        # Search in article/news containers
-        for container in soup.find_all(["article", "div", "li"], class_=True):
-            text = container.get_text(strip=True).lower()
-            if any(kw in text for kw in shortage_keywords):
-                # Extract title/heading
-                title_el = container.find(["h2", "h3", "h4", "a", "strong"])
-                if title_el:
-                    title = title_el.get_text(strip=True)
-                    # Extract date if present
-                    date_el = container.find(["time", "span"], class_=lambda c: c and "date" in str(c).lower())
-                    date_text = date_el.get_text(strip=True) if date_el else ""
-
-                    records.append({
-                        "title":       title,
-                        "date":        date_text,
-                        "full_text":   container.get_text(strip=True)[:500],
-                        "_source_url": source_url,
-                    })
-
-        return records
-
-    def _parse_download_links(self, soup: BeautifulSoup, source_url: str) -> list[dict]:
-        """
-        Look for downloadable Excel/CSV attachments on the page.
-        """
-        links = soup.find_all("a", href=True)
-        for link in links:
-            href = link["href"]
-            link_text = link.get_text(strip=True).lower()
-            # Look for Excel or CSV file links
-            if any(ext in href.lower() for ext in (".xlsx", ".xls", ".csv")):
-                return self._fetch_excel_attachment(href)
-            # Greek download keywords
-            if any(kw in link_text for kw in ("λήψη", "ληψη", "κατέβασμα", "κατεβασμα", "download")):
-                if any(ext in href.lower() for ext in (".xlsx", ".xls", ".csv")):
-                    return self._fetch_excel_attachment(href)
-        return []
-
-    def _fetch_excel_attachment(self, url: str) -> list[dict]:
-        """Download and parse an Excel attachment linked from the EOF page."""
+    def _download_and_parse_pdf(self, pdf_url: str) -> list[dict]:
+        """Download a PDF and extract table rows using pdfplumber."""
         try:
-            import io
-            import openpyxl
-
-            # Handle relative URLs
-            if url.startswith("/"):
-                url = f"https://www.eof.gr{url}"
-
-            self.log.info("Fetching EOF Excel attachment", extra={"url": url})
-            resp = self._get(url)
-
-            wb = openpyxl.load_workbook(
-                io.BytesIO(resp.content),
-                read_only=True,
-                data_only=True,
+            import pdfplumber
+        except ImportError:
+            raise ScraperError(
+                "pdfplumber is required for the Greece EOF scraper. "
+                "Install it with: pip install pdfplumber"
             )
-            ws = wb.active
 
-            # Read headers from row 1
-            headers: list[str] = []
-            for cell in ws[1]:
-                headers.append(str(cell.value or "").strip())
-
-            records: list[dict] = []
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                rec = {}
-                for h, v in zip(headers, row):
-                    if h:
-                        rec[h] = v
-                if any(v for v in rec.values() if v is not None and str(v).strip()):
-                    records.append(rec)
-
-            wb.close()
-            self.log.info(
-                "EOF Excel parsed",
-                extra={"records": len(records), "headers": headers},
-            )
-            return records
-
+        try:
+            resp = self._get(pdf_url)
         except Exception as exc:
-            self.log.warning(
-                "EOF Excel attachment fetch/parse failed",
-                extra={"error": str(exc), "url": url},
+            raise ScraperError(f"Failed to download PDF: {exc}") from exc
+
+        self.log.info("PDF downloaded", extra={"bytes": len(resp.content)})
+
+        records: list[dict] = []
+        col_names: list[str] | None = None
+
+        try:
+            pdf = pdfplumber.open(io.BytesIO(resp.content))
+        except Exception as exc:
+            raise ScraperError(f"Failed to open PDF: {exc}") from exc
+
+        try:
+            for page_idx, page in enumerate(pdf.pages):
+                tables = page.extract_tables()
+                if not tables:
+                    continue
+
+                for table in tables:
+                    for row_idx, row in enumerate(table):
+                        if not row or all(cell is None for cell in row):
+                            continue
+
+                        # Clean cells: collapse whitespace, strip
+                        cleaned = [
+                            re.sub(r'\s+', ' ', (cell or "").strip())
+                            for cell in row
+                        ]
+
+                        # Detect header row (contains "Barcode")
+                        if any("Barcode" in c for c in cleaned if c):
+                            col_names = self._map_headers(cleaned)
+                            continue
+
+                        # Skip title rows (only first cell has content)
+                        if sum(1 for c in cleaned if c) <= 1:
+                            continue
+
+                        # Skip rows before we have identified the headers
+                        if col_names is None:
+                            continue
+
+                        # Build record dict
+                        rec: dict[str, str] = {"_source_url": pdf_url}
+                        for i, cell in enumerate(cleaned):
+                            if i < len(col_names):
+                                rec[col_names[i]] = cell
+                            else:
+                                rec[f"col_{i}"] = cell
+
+                        # Only keep rows that have a substance or description
+                        if (rec.get(self._COL_SUBSTANCE)
+                                or rec.get(self._COL_DESCRIPTION)):
+                            records.append(rec)
+
+            self.log.info(
+                "PDF parsed",
+                extra={
+                    "pages": len(pdf.pages),
+                    "records": len(records),
+                    "columns": col_names,
+                },
             )
-            return []
+        finally:
+            pdf.close()
+
+        return records
+
+    def _map_headers(self, raw_headers: list[str]) -> list[str]:
+        """Map raw PDF header text to canonical column names."""
+        mapped: list[str] = []
+        for h in raw_headers:
+            h_lower = h.lower()
+            found = False
+            for key, col_name in self._HEADER_MAP.items():
+                if key in h_lower:
+                    mapped.append(col_name)
+                    found = True
+                    break
+            if not found:
+                safe = re.sub(r'[^a-z0-9_]', '_', h_lower)[:30] if h else f"col_{len(mapped)}"
+                mapped.append(safe)
+        return mapped
 
     # -------------------------------------------------------------------------
     # normalize()
     # -------------------------------------------------------------------------
 
     def normalize(self, raw: list[dict]) -> list[dict]:
-        """Normalize EOF records into standard shortage event dicts."""
+        """Normalize EOF PDF records into standard shortage event dicts."""
         self.log.info(
             "Normalising EOF records",
             extra={"source": self.SOURCE_NAME, "raw_count": len(raw)},
@@ -378,106 +321,96 @@ class GreeceEOFScraper(BaseScraper):
         return normalised
 
     def _normalise_record(self, rec: dict, today: str) -> dict | None:
-        """Convert a single EOF record to a normalised shortage event dict."""
+        """Convert a single EOF PDF record to a normalised shortage event dict."""
         source_url = rec.pop("_source_url", self.BASE_URL)
 
-        # -- Drug name extraction --
-        # Try multiple possible Greek column names
-        generic_name = (
-            rec.get("δραστική ουσία")
-            or rec.get("δραστικη ουσια")
-            or rec.get("δραστική")
-            or rec.get("δραστικη")
-            or rec.get("ονομασία")
-            or rec.get("ονομασια")
-            or rec.get("active substance")
-            or rec.get("substance")
-            or rec.get("inn")
-            or rec.get("title")
-            or rec.get("name")
-            or ""
-        )
-        if isinstance(generic_name, str):
-            generic_name = generic_name.strip()
-        else:
-            generic_name = str(generic_name).strip()
-
+        # -- Drug name: use active substance (INN) --
+        generic_name = (rec.get(self._COL_SUBSTANCE) or "").strip()
         if not generic_name:
             return None
 
-        # If name is from announcement title, try to extract drug name
-        if len(generic_name) > 100:
-            # Likely a full announcement — try to extract drug reference
-            extracted = self._extract_drug_from_text(generic_name)
-            if extracted:
-                generic_name = extracted
+        # -- Brand / trade name from product description --
+        description = (rec.get(self._COL_DESCRIPTION) or "").strip()
+        brand_name = ""
+        if description:
+            # Extract brand name: first word(s) before dosage form abbreviation
+            # e.g. "CYTOTEC TABLET 200MCG/TAB BTX42" → "CYTOTEC"
+            m = re.match(
+                r'^([A-Z][A-Z0-9/\- ]*?)(?:\s+(?:TABLET|TAB|CAP|GR\.CAP|F\.C\.TAB|'
+                r'CON\.R\.TAB|SOL|INJ|SUSP|CR\.TAB|MOD\.R\.TAB|EY\.DRO|OR\.SOL|'
+                r'C\.TAB|AMP|VIAL|CREAM|OINT|PATCH|SPRAY|INHALER|PD\.SOL|'
+                r'SOL\.INF|SOL\.INJ|SOL\.PER|LYO|PREFILLED|SUPP|SYR|'
+                r'NASPR|EF\.TAB|PS\.INJ|XR\.TAB|PR\.TAB|M\.R\.TAB|'
+                r'EAR|OPH|ORAL|RECT|VAG|TOPICAL|NASAL|CUT|PD|'
+                r'\d+\s*MG|\d+\s*MCG|\d+\s*G/|\d+\s*ML|BT))',
+                description,
+                re.IGNORECASE,
+            )
+            if m:
+                brand_name = m.group(1).strip()
             else:
-                return None  # Cannot extract meaningful drug name
+                parts = description.split()
+                if parts:
+                    brand_name = parts[0]
 
-        # -- Trade / brand name --
-        trade_name = (
-            rec.get("εμπορική ονομασία")
-            or rec.get("εμπορικη ονομασια")
-            or rec.get("trade name")
-            or rec.get("brand")
-            or ""
+        brand_names = (
+            [brand_name]
+            if brand_name and brand_name.upper() != generic_name.upper()
+            else []
         )
-        if isinstance(trade_name, str):
-            trade_name = trade_name.strip()
-        else:
-            trade_name = str(trade_name).strip()
 
-        brand_names = [trade_name] if trade_name and trade_name != generic_name else []
+        # -- ATC code --
+        atc_code = (rec.get(self._COL_ATC) or "").strip()
 
         # -- Shortage reason --
-        raw_reason = (
-            rec.get("αιτία")
-            or rec.get("αιτια")
-            or rec.get("λόγος")
-            or rec.get("λογος")
-            or rec.get("reason")
-            or rec.get("cause")
-            or ""
-        )
-        if isinstance(raw_reason, str):
-            raw_reason = raw_reason.strip()
-        else:
-            raw_reason = str(raw_reason).strip()
-
+        raw_reason = (rec.get(self._COL_REASON) or "").strip()
         reason_category = self._map_reason(raw_reason)
 
-        # -- Start date --
-        raw_start = (
-            rec.get("ημερομηνία")
-            or rec.get("ημερομηνια")
-            or rec.get("date")
-            or rec.get("ημ/νία")
-            or rec.get("ημ/νια")
-        )
+        # -- Dates --
+        raw_start = rec.get(self._COL_START_DATE)
         start_date = self._parse_date(raw_start) or today
 
-        # -- Status --
-        raw_status = (
-            rec.get("κατάσταση")
-            or rec.get("κατασταση")
-            or rec.get("status")
-            or rec.get("full_text")
-            or ""
-        )
-        status = self._map_status(str(raw_status))
+        raw_end = rec.get(self._COL_END_DATE)
+        end_date = self._parse_date(raw_end)
 
-        # -- Dosage / form info for notes --
-        dosage = str(rec.get("δοσολογία") or rec.get("δοσολογια") or rec.get("dosage") or "").strip()
-        form = str(rec.get("μορφή") or rec.get("μορφη") or rec.get("form") or "").strip()
+        # -- Status: resolved if end_date is in the past --
+        status = "active"
+        if end_date:
+            try:
+                end_dt = date.fromisoformat(end_date)
+                if end_dt < date.today():
+                    status = "resolved"
+            except ValueError:
+                pass
+
+        # -- Marketing authorization holder --
+        mah = (rec.get(self._COL_MAH) or "").strip()
+
+        # -- Dispensing type --
+        dispensing = (rec.get(self._COL_DISPENSING) or "").strip()
+
+        # -- Alternatives --
+        alternatives = (rec.get(self._COL_ALTERNATIVES) or "").strip()
+
+        # -- Barcode --
+        barcode = (rec.get(self._COL_BARCODE) or "").strip()
 
         # -- Build notes --
         notes_parts: list[str] = []
-        if form:
-            notes_parts.append(f"Form: {form}")
-        if dosage:
-            notes_parts.append(f"Dosage: {dosage}")
+        if description:
+            notes_parts.append(f"Product: {description}")
+        if atc_code:
+            notes_parts.append(f"ATC: {atc_code}")
+        if mah:
+            notes_parts.append(f"MAH: {mah}")
+        if dispensing:
+            notes_parts.append(f"Dispensing: {dispensing}")
         if raw_reason:
             notes_parts.append(f"Reason (GR): {raw_reason}")
+        if alternatives:
+            notes_parts.append(f"Alternatives: {alternatives}")
+        if barcode:
+            notes_parts.append(f"Barcode: {barcode}")
         notes = "; ".join(notes_parts) or None
 
         return {
@@ -488,6 +421,7 @@ class GreeceEOFScraper(BaseScraper):
             "reason":                    raw_reason or None,
             "reason_category":           reason_category,
             "start_date":                start_date,
+            "end_date":                  end_date,
             "source_url":                source_url,
             "notes":                     notes,
             "source_confidence_score":   82,
@@ -497,16 +431,6 @@ class GreeceEOFScraper(BaseScraper):
     # -------------------------------------------------------------------------
     # Private helpers
     # -------------------------------------------------------------------------
-
-    def _map_status(self, raw: str) -> str:
-        """Map Greek status string to canonical status."""
-        if not raw:
-            return "active"
-        lower = raw.strip().lower()
-        for key, status in self._STATUS_MAP.items():
-            if key in lower:
-                return status
-        return "active"
 
     def _map_reason(self, raw: str) -> str:
         """Map Greek reason string to canonical reason_category."""
@@ -520,40 +444,22 @@ class GreeceEOFScraper(BaseScraper):
         return map_reason_category(raw)
 
     @staticmethod
-    def _extract_drug_from_text(text: str) -> str | None:
-        """
-        Attempt to extract a drug/substance name from a longer announcement text.
-        Looks for patterns like Latin INN names (capitalized single/double words)
-        that are commonly used even in Greek announcements.
-        """
-        if not text:
-            return None
-
-        # INN names are typically Latin-script words within Greek text
-        # Look for capitalized Latin words of sufficient length
-        latin_words = re.findall(r'\b[A-Z][a-zA-Z]{3,}\b', text)
-        if latin_words:
-            # Return the first substantial Latin-script word as likely INN
-            return latin_words[0]
-
-        return None
-
-    @staticmethod
     def _parse_date(raw: Any) -> str | None:
         """Parse various date formats to ISO-8601 date string."""
         if raw is None:
             return None
         if isinstance(raw, datetime):
             return raw.date().isoformat()
-        if isinstance(raw, date):
+        if isinstance(raw, date) and not isinstance(raw, datetime):
             return raw.isoformat()
         raw_str = str(raw).strip()
         if not raw_str or raw_str in ("-", "N/A", "null", "None", ""):
             return None
 
-        # Try Greek/European date formats: DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY
+        # Try Greek/European date formats: DD/MM/YY, DD/MM/YYYY, DD.MM.YYYY
         for pattern, fmt in [
-            (r"^\d{2}/\d{2}/\d{4}$", "%d/%m/%Y"),
+            (r"^\d{2}/\d{2}/\d{2}$",   "%d/%m/%y"),
+            (r"^\d{2}/\d{2}/\d{4}$",   "%d/%m/%Y"),
             (r"^\d{2}\.\d{2}\.\d{4}$", "%d.%m.%Y"),
             (r"^\d{2}-\d{2}-\d{4}$",   "%d-%m-%Y"),
             (r"^\d{4}-\d{2}-\d{2}$",   "%Y-%m-%d"),
@@ -628,6 +534,12 @@ if __name__ == "__main__":
             print("\n-- Reason category breakdown:")
             for k, v in sorted(reason_counts.items()):
                 print(f"   {str(k):30s} {v}")
+
+            # Show sample drug names
+            print("\n-- Sample drug names (first 10):")
+            for e in events[:10]:
+                brand = e["brand_names"][0] if e["brand_names"] else "-"
+                print(f"   {e['generic_name']:30s} [{brand}] ({e['status']}) start={e['start_date']}")
 
         print("\n-- Dry run complete. No writes made to Supabase.")
         sys.exit(0)

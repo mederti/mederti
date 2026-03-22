@@ -46,7 +46,7 @@ class MalaysiaNPRAScraper(BaseScraper):
     SCRAPER_VERSION: str    = "1.0.0"
 
     # NPRA notices / announcements page
-    NOTICES_URL: str = "https://www.npra.gov.my/index.php/en/informationen/safety-alerts-main"
+    NOTICES_URL: str = "https://www.npra.gov.my/index.php/en/health-professionals/safety-alertsen.html"
 
     # Known NPRA shortage reasons -> reason_category
     _REASON_MAP: dict[str, str] = {
@@ -144,71 +144,70 @@ class MalaysiaNPRAScraper(BaseScraper):
         return records
 
     def _parse_notices_page(self, html: str) -> list[dict]:
-        """Parse the NPRA notices page HTML for shortage/availability notices."""
+        """Parse the NPRA safety alerts page (SPPageBuilder with year tabs)."""
         from bs4 import BeautifulSoup
 
         soup = BeautifulSoup(html, "lxml")
         records: list[dict] = []
+        seen_urls: set[str] = set()
 
-        # Look for notice/announcement list items
-        # NPRA uses Joomla-based layout with various structures
-        notice_elements = (
-            soup.select(".category-list .page-header a")
-            or soup.select(".items-row")
-            or soup.select("article")
-            or soup.select(".list-group-item")
-            or soup.select(".news-item")
-            or soup.select("table tbody tr")
-            or soup.select(".cat-list-row0, .cat-list-row1")
-        )
-
-        if not notice_elements:
-            # Fallback: look for links containing shortage-related keywords
-            notice_elements = soup.find_all("a", href=True)
-
-        for el in notice_elements:
-            text = el.get_text(separator=" ", strip=True)
-            text_lower = text.lower()
-
-            # Filter: only keep notices related to drug shortages / availability
-            if not any(kw in text_lower for kw in self._SHORTAGE_KEYWORDS):
+        # Find all links that match the safety-alerts pattern
+        # URL pattern: /safety-alerts-YYYY/NNNNNNN-drug-name-...
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            if "/safety-alerts-" not in href.lower():
                 continue
 
-            # Extract link
-            link = None
-            if el.name == "a":
-                link = el.get("href", "")
-            else:
-                link_tag = el.find("a", href=True)
-                if link_tag:
-                    link = link_tag.get("href", "")
+            text = a_tag.get_text(strip=True)
+            if not text or len(text) < 5:
+                continue
+            # Skip nav/header links
+            if text.lower() in ("safety alerts", "english (uk)"):
+                continue
 
-            if link and not link.startswith("http"):
-                link = f"https://www.npra.gov.my{link}"
+            # Make absolute URL
+            url = href if href.startswith("http") else f"https://www.npra.gov.my{href}"
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
 
-            # Extract date if present
-            raw_date = None
-            date_el = el.find(class_=re.compile(r"date|time|publish|created", re.IGNORECASE))
-            if date_el:
-                raw_date = date_el.get_text(strip=True)
-            else:
-                # Try to find a date pattern (DD/MM/YYYY, DD-MM-YYYY, or YYYY-MM-DD)
-                date_match = re.search(
-                    r'(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{4})', text
-                )
-                if date_match:
-                    raw_date = date_match.group(0)
+            # Extract year from URL path (safety-alerts-YYYY)
+            year_match = re.search(r'safety-alerts-(\d{4})', href)
+            year = year_match.group(1) if year_match else None
+
+            # Extract drug name from URL slug
+            # Pattern: /NNNNNNN-drug-name-risk-of-something.html
+            slug_match = re.search(r'/\d+-(.+?)(?:\.html)?$', href)
+            drug_name = ""
+            reason_from_slug = ""
+            if slug_match:
+                slug = slug_match.group(1).replace("-", " ")
+                # Drug name is typically the first part before risk/safety phrases
+                for sep in ("risk of", "safety update", "potential risk",
+                            "contraindication", "recall", "withdrawal",
+                            "precaution", "warning", "restriction",
+                            "and biosimilar", "interaction"):
+                    if sep in slug.lower():
+                        parts = slug.lower().split(sep, 1)
+                        drug_name = parts[0].strip().title()
+                        reason_from_slug = (sep + parts[1]).strip()
+                        break
+                if not drug_name:
+                    # Use the link text as drug name (it's usually cleaner)
+                    drug_name = text.split(":")[0].strip() if ":" in text else text[:80]
 
             records.append({
                 "title": text[:500],
-                "url": link or self.NOTICES_URL,
-                "date": raw_date,
+                "drug_name": drug_name or text.split(":")[0].strip()[:80],
+                "url": url,
+                "year": year,
+                "reason_from_slug": reason_from_slug,
                 "raw_text": text,
             })
 
         self.log.info(
-            "Parsed NPRA notices",
-            extra={"total_elements": len(notice_elements), "shortage_notices": len(records)},
+            "Parsed NPRA safety alerts",
+            extra={"total_links": len(records)},
         )
         return records
 
@@ -256,12 +255,13 @@ class MalaysiaNPRAScraper(BaseScraper):
             return None
 
         # -- Drug name extraction --
-        generic_name = self._extract_drug_name(title)
+        generic_name = rec.get("drug_name") or ""
+        if not generic_name:
+            generic_name = self._extract_drug_name(title)
         if not generic_name:
             generic_name = self._extract_drug_name(raw_text)
         if not generic_name:
-            # Use the title itself as the drug reference
-            generic_name = title[:100]
+            generic_name = title.split(":")[0].strip()[:100] if ":" in title else title[:100]
 
         # -- Brand names --
         brand_names: list[str] = []
@@ -270,7 +270,7 @@ class MalaysiaNPRAScraper(BaseScraper):
             brand_names.append(brand)
 
         # -- Reason extraction --
-        raw_reason = self._extract_reason(raw_text)
+        raw_reason = rec.get("reason_from_slug") or self._extract_reason(raw_text)
         reason_category = self._map_reason(raw_reason)
 
         # -- Start date --

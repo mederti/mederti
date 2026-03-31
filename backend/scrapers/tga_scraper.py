@@ -77,7 +77,8 @@ class TGAScraper(BaseScraper):
     _STATUS_MAP: dict[str, str] = {
         "C": "active",
         "R": "resolved",
-        "D": "resolved",   # Discontinued — no longer available; treat as resolved
+        "D": "active",     # Discontinued — product withdrawn; still an active supply disruption
+        "A": "resolved",   # Archived — old record, no longer relevant
     }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -300,6 +301,9 @@ class TGAScraper(BaseScraper):
                 patient_impact,
                 mgmt_action_raw,
             )
+            # Override: discontinued products always get discontinuation category
+            if raw_status == "D":
+                reason_category = "discontinuation"
             # Prefer free-text fields for reason — availability is a status field,
             # not a reason, so it is stored in notes instead.
             reason = (
@@ -441,9 +445,10 @@ class TGAScraper(BaseScraper):
 
         # 1. Availability is the primary signal — always takes precedence
         avail = (availability or "").lower().strip()
-        if avail in ("unavailable", "not available", "discontinued"):
+        if avail in ("unavailable", "not available", "discontinued", "emergency supply only"):
             return "critical"
-        if avail in ("limited", "very limited", "limited availability", "restricted"):
+        if avail in ("limited", "very limited", "limited availability", "restricted",
+                     "reduction in supply until supply is exhausted"):
             return "high"
 
         # 2. Direct label match from shortage_impact

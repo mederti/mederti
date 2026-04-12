@@ -30,7 +30,7 @@ export const REPORTS: InsightCard[] = [
     category: "report",
     title: "Global Pharmaceutical Shortage Report \u2014 Q1 2026",
     date: "March 2026",
-    description: "Quarterly analysis of shortage trends across 13 countries, covering severity distribution, resolution timelines, and the most-affected therapeutic classes.",
+    description: "Quarterly analysis of shortage trends across 22 countries, covering severity distribution, resolution timelines, and the most-affected therapeutic classes.",
     readTime: "18 min read",
     isPro: true,
   },

@@ -13,12 +13,12 @@ export const revalidate = 300; // 5 min ISR
 export const metadata: Metadata = {
   title: "Mederti — Global Drug Shortage Intelligence Platform",
   description:
-    "Real-time pharmaceutical shortage tracking across 20+ countries. 161,000+ drugs monitored. TGA, FDA, MHRA, EMA and 38 more regulatory sources. Used by pharmacists, hospitals, and health systems.",
+    "Real-time pharmaceutical shortage tracking across 20+ countries. 216,000+ drugs monitored. TGA, FDA, MHRA, EMA and 43 more regulatory sources. Used by pharmacists, hospitals, and health systems.",
   keywords: ["drug shortage", "medicine shortage", "pharmaceutical shortage", "TGA shortage", "FDA drug shortage", "MHRA shortage", "medicine availability"],
   openGraph: {
     title: "Mederti — Global Drug Shortage Intelligence",
     description:
-      "Track drug shortages across 20+ countries in real time. 161,000+ drugs monitored from 42 regulatory sources.",
+      "Track drug shortages across 20+ countries in real time. 216,000+ drugs monitored from 47 regulatory sources.",
     url: "https://mederti.vercel.app",
     siteName: "Mederti",
     type: "website",
@@ -47,17 +47,17 @@ export default async function Home() {
   }
 
   // Fetch live stats from Supabase (same source as dashboard)
-  let totalActive = "12,943";
+  let totalActive = "15,132";
   let countryCount = "22";
-  let sourceCount = "31";
+  let sourceCount = "47";
   let platformStats = {
     totalCatalogue: 216509,
-    totalShortages: 18971,
-    activeShortages: 12943,
-    anticipatedShortages: 1373,
-    totalRecalls: 23380,
+    totalShortages: 21550,
+    activeShortages: 15132,
+    anticipatedShortages: 1444,
+    totalRecalls: 23495,
     countries: 22,
-    sources: 31,
+    sources: 47,
     scrapers: 47,
   };
   try {

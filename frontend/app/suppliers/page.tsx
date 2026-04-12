@@ -20,7 +20,7 @@ const content: PersonaContent = {
     {
       icon: "\uD83D\uDCE1",
       title: "Unmet demand signals",
-      desc: "Identify drugs currently in shortage across 13 countries where demand is unmet and supply is needed. See severity, affected countries, and how long the shortage has persisted.",
+      desc: "Identify drugs currently in shortage across 22 countries where demand is unmet and supply is needed. See severity, affected countries, and how long the shortage has persisted.",
     },
     {
       icon: "\uD83C\uDF10",

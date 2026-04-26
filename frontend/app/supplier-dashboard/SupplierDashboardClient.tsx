@@ -801,16 +801,39 @@ export default function SupplierDashboardClient() {
 
       {/* Header */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 24px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 0" }}>
           <h1 style={{
             fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 700,
             letterSpacing: "-0.02em", color: "#0f172a", margin: 0,
           }}>
             Supplier Dashboard
           </h1>
-          <p style={{ fontSize: 14, color: "#64748b", margin: "8px 0 0", lineHeight: 1.5 }}>
-            Supply opportunity intelligence and portfolio risk monitoring.
+          <p style={{ fontSize: 14, color: "#64748b", margin: "8px 0 20px", lineHeight: 1.5 }}>
+            Supply opportunity intelligence, real-time buyer enquiries, and inventory broadcast.
           </p>
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 28, marginTop: 16 }}>
+            <span style={{
+              fontSize: 13, fontWeight: 600, color: "#0f172a",
+              paddingBottom: 12, borderBottom: "2px solid #0f172a",
+              cursor: "default",
+            }}>Intelligence</span>
+            <Link href="/supplier-dashboard/inbox" style={{
+              fontSize: 13, fontWeight: 500, color: "#64748b",
+              paddingBottom: 12, borderBottom: "2px solid transparent",
+              textDecoration: "none",
+            }}>Enquiry Inbox</Link>
+            <Link href="/supplier-dashboard/inventory" style={{
+              fontSize: 13, fontWeight: 500, color: "#64748b",
+              paddingBottom: 12, borderBottom: "2px solid transparent",
+              textDecoration: "none",
+            }}>Inventory Broadcast</Link>
+            <Link href="/supplier-dashboard/profile" style={{
+              fontSize: 13, fontWeight: 500, color: "#64748b",
+              paddingBottom: 12, borderBottom: "2px solid transparent",
+              textDecoration: "none",
+            }}>Profile</Link>
+          </div>
         </div>
       </div>
 

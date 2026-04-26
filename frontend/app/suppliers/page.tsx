@@ -4,8 +4,8 @@ const content: PersonaContent = {
   heroHeadline: "Turn shortage intelligence into supply opportunity.",
   heroSub:
     "Mederti gives pharmaceutical suppliers real-time visibility of where demand is unmet, which drugs are at risk, and where you can step in.",
-  heroCta: "Get started free",
-  heroCtaHref: "/signup",
+  heroCta: "List your stock free",
+  heroCtaHref: "/signup?role=supplier&next=/supplier-dashboard/profile",
 
   problemHeadline: "You\u2019re reacting to a market you could be leading.",
   problemText:
@@ -50,8 +50,8 @@ const content: PersonaContent = {
   quoteRole: "Pharmaceutical Distributor",
 
   ctaHeadline: "The shortage market moves fast. Be ahead of it.",
-  ctaButton: "Get started free",
-  ctaHref: "/signup",
+  ctaButton: "List your stock free",
+  ctaHref: "/signup?role=supplier&next=/supplier-dashboard/profile",
 };
 
 export default function SuppliersPage() {

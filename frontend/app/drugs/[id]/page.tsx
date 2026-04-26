@@ -16,6 +16,7 @@ import { MobileDrugPage } from "@/app/components/mobile/MobileDrugPage";
 import { truncateDrugName } from "@/lib/utils";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import { DrugImage } from "./drug-image";
+import AvailableSuppliers from "./AvailableSuppliers";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -864,6 +865,9 @@ export default async function DrugPage({ params }: Props) {
 
             {/* ═══ 2. SHORTAGE FORECAST ═══ */}
             <ShortageForcast shortages={shortages} userCountry={userCountry} drugName={drug.generic_name} />
+
+            {/* ═══ 2.5 AVAILABLE SUPPLIERS (marketplace) ═══ */}
+            <AvailableSuppliers drugId={id} drugName={drug.generic_name} />
 
             {/* ═══ 3. SHORTAGE REPORTS BY COUNTRY ═══ */}
             <div id="country-list" style={{ marginBottom: 20 }}>

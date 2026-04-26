@@ -43,9 +43,14 @@ export default function SupplierInventoryClient() {
   const [adding, setAdding] = useState(false);
 
   // Add form state
-  const [drugQ, setDrugQ] = useState("");
-  const [selectedDrug, setSelectedDrug] = useState<{ id: string; generic_name: string } | null>(null);
-  const { results: drugSuggestions, loading: searching } = useAutocomplete(drugQ);
+  const [selectedDrug, setSelectedDrug] = useState<{ id: string; name: string } | null>(null);
+  const autocomplete = useAutocomplete({
+    onSelect: (item) => {
+      setSelectedDrug({ id: item.id, name: item.name });
+      autocomplete.clear();
+    },
+    limit: 6,
+  });
   const [countries, setCountries] = useState<string[]>([]);
   const [quantity, setQuantity] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
@@ -70,7 +75,7 @@ export default function SupplierInventoryClient() {
 
   function resetForm() {
     setSelectedDrug(null);
-    setDrugQ("");
+    autocomplete.clear();
     setCountries([]);
     setQuantity("");
     setUnitPrice("");
@@ -187,29 +192,37 @@ export default function SupplierInventoryClient() {
             </label>
             {selectedDrug ? (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--teal-bg)", border: "1px solid var(--teal-b)", borderRadius: 6 }}>
-                <span style={{ fontSize: 14, fontWeight: 500 }}>{selectedDrug.generic_name}</span>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>{selectedDrug.name}</span>
                 <button onClick={() => setSelectedDrug(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--teal)" }}>
                   <X size={14} />
                 </button>
               </div>
             ) : (
-              <>
+              <div ref={autocomplete.containerRef} style={{ position: "relative" }}>
                 <div style={{ position: "relative" }}>
-                  <Search size={14} color="var(--app-text-4)" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                  <Search size={14} color="var(--app-text-4)" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
                   <input
                     type="text"
-                    value={drugQ}
-                    onChange={e => setDrugQ(e.target.value)}
+                    {...autocomplete.inputProps}
                     placeholder="Search by drug name…"
                     style={{ width: "100%", padding: "10px 12px 10px 36px", fontSize: 14, border: "1px solid var(--app-border)", borderRadius: 6, background: "var(--app-bg)", color: "var(--app-text)" }}
                   />
                 </div>
-                <AutocompleteDropdown
-                  results={drugSuggestions}
-                  loading={searching}
-                  onSelect={(r) => { setSelectedDrug({ id: r.id, generic_name: r.generic_name }); setDrugQ(""); }}
-                />
-              </>
+                {autocomplete.isOpen && (
+                  <AutocompleteDropdown
+                    items={autocomplete.items}
+                    cursor={autocomplete.cursor}
+                    loading={autocomplete.loading}
+                    query={autocomplete.query}
+                    listId={autocomplete.inputProps["aria-controls"]}
+                    onSelect={(item) => {
+                      setSelectedDrug({ id: item.id, name: item.name });
+                      autocomplete.clear();
+                    }}
+                    onHover={() => {}}
+                  />
+                )}
+              </div>
             )}
           </div>
 

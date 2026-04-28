@@ -125,7 +125,10 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
     minChars: 2,
     debounceMs: 200,
     limit: 8,
-    onSelect: (item) => router.push(item.href),
+    onSelect: (item) => {
+      // Unauth users on landing — redirect via login back to the drug page
+      router.push(`/login?next=${encodeURIComponent(item.href)}`);
+    },
     onSubmit: () => handleSubmit(),
     enabled: !hasChat,
   });
@@ -178,110 +181,14 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
     const q = (overrideQuery ?? query).trim();
     if (!q && files.length === 0) return;
 
-    const userMsg: ChatMessage = {
-      id: uid(), role: "user",
-      text: q || `Uploaded ${files.length} file${files.length > 1 ? "s" : ""}`,
-      files: files.length > 0 ? [...files] : undefined,
-      ts: Date.now(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setQuery("");
-    setFiles([]);
-    setLoading(true);
-
-    try {
-      if (userMsg.files && userMsg.files.length > 0 && !q) {
-        // Check for spreadsheet files → enter bulk upload mode
-        const spreadsheetFile = rawFiles.find((f) =>
-          /\.(csv|tsv|xlsx|xls)$/i.test(f.name)
-        );
-        if (spreadsheetFile) {
-          setBulkFile(spreadsheetFile);
-          setRawFiles([]);
-          setLoading(false);
-          return;
-        }
-        // Non-spreadsheet files → "coming soon"
-        await new Promise((r) => setTimeout(r, 600));
-        const fileNames = userMsg.files.map((f) => f.name).join(", ");
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: uid(), role: "assistant",
-            text: `I've received your file${userMsg.files!.length > 1 ? "s" : ""}: ${fileNames}.\n\nBulk drug shortage lookups from uploaded files are coming soon. In the meantime, type any drug name to search our database of ${totalActive}+ shortage records across ${sourceCount} regulatory sources.`,
-            ts: Date.now(),
-          },
-        ]);
-      } else {
-        // Build message history for the chat API
-        const chatHistory = [
-          ...messages.map((m) => ({ role: m.role, content: m.text })),
-          { role: "user" as const, content: q },
-        ];
-
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: chatHistory }),
-        });
-
-        if (!res.ok) throw new Error(`Chat API returned ${res.status}`);
-
-        const assistantId = uid();
-        setMessages((prev) => [...prev, { id: assistantId, role: "assistant", text: "", ts: Date.now() }]);
-
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        if (!reader) throw new Error("No response body");
-
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          // Process complete SSE lines
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const event = JSON.parse(line.slice(6));
-              if (event.type === "text") {
-                setMessages((prev) => prev.map((m) =>
-                  m.id === assistantId ? { ...m, text: m.text + event.content } : m
-                ));
-              } else if (event.type === "drugs") {
-                setMessages((prev) => prev.map((m) =>
-                  m.id === assistantId ? { ...m, drugs: [...(m.drugs ?? []), ...event.data] } : m
-                ));
-              } else if (event.type === "shortages") {
-                setMessages((prev) => prev.map((m) =>
-                  m.id === assistantId ? { ...m, shortages: [...(m.shortages ?? []), ...event.data] } : m
-                ));
-              } else if (event.type === "summary") {
-                setMessages((prev) => prev.map((m) =>
-                  m.id === assistantId ? { ...m, summary: event.data } : m
-                ));
-              }
-            } catch { /* skip malformed SSE lines */ }
-          }
-        }
-      }
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uid(), role: "assistant",
-          text: "Sorry, I couldn't reach the AI assistant right now. Please try again in a moment.",
-          ts: Date.now(),
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }, [query, files, totalActive, messages]);
+    // Auth-gate: the landing page renders only for unauthenticated users
+    // (authed users are redirected to /home server-side). Send them to login
+    // with the search query preserved as a return-to URL.
+    const next = q
+      ? `/chat?q=${encodeURIComponent(q)}`
+      : `/chat`;
+    router.push(`/login?next=${encodeURIComponent(next)}`);
+  }, [query, files, router]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     // When autocomplete is active, let it handle keyboard events
@@ -481,7 +388,7 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
               loading={ac.loading}
               query={query}
               listId={ac.inputProps["aria-controls"]}
-              onSelect={(item) => { ac.setIsOpen(false); router.push(item.href); }}
+              onSelect={(item) => { ac.setIsOpen(false); router.push(`/login?next=${encodeURIComponent(item.href)}`); }}
               onHover={() => {}}
             />
           )}

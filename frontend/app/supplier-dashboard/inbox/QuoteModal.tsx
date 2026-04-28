@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X, Send, CheckCircle2 } from "lucide-react";
+import QuoteCoaching from "./QuoteCoaching";
 
 interface Enquiry {
   id: string;
@@ -78,11 +79,14 @@ export default function QuoteModal({ enquiry, onClose, onSubmitted }: QuoteModal
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: "white", borderRadius: 14, maxWidth: 640, width: "100%",
-          maxHeight: "90vh", overflowY: "auto",
+          background: "white", borderRadius: 14, maxWidth: 1080, width: "100%",
+          maxHeight: "92vh", overflowY: "auto",
           boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+          display: "grid", gridTemplateColumns: submitted ? "1fr" : "1fr 320px",
         }}
       >
+        {/* LEFT COLUMN — form */}
+        <div>
         {/* Header */}
         <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--app-border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
@@ -248,6 +252,13 @@ export default function QuoteModal({ enquiry, onClose, onSubmitted }: QuoteModal
               </div>
             </div>
           </>
+        )}
+        </div>
+        {/* RIGHT COLUMN — AI Quote Coach (hidden on success state) */}
+        {!submitted && (
+          <aside style={{ background: "#0F172A", padding: 20, borderLeft: "1px solid var(--app-border)" }}>
+            <QuoteCoaching enquiryId={enquiry.id} />
+          </aside>
         )}
       </div>
     </div>

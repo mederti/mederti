@@ -5,6 +5,7 @@ import SiteFooter from "@/app/components/site-footer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import MarketSidebar from "./MarketSidebar";
 import NewsletterForm from "./NewsletterForm";
+import IntelligenceBriefing from "./IntelligenceBriefing";
 import {
   REPORTS, ARTICLES, DATA_RELEASES, MEDIA,
   CATEGORY_STYLE,
@@ -127,6 +128,11 @@ export default async function IntelligencePage() {
         }}>
           {/* Main content column */}
           <div className="intel-main-col" style={{ flex: "1 1 0%", minWidth: 0 }}>
+
+        {/* ─── DAILY AI BRIEFING (The Pharma Brief) ─── */}
+        <div style={{ paddingTop: 36 }}>
+          <IntelligenceBriefing />
+        </div>
 
         {/* ─── HERO: lead article + sidebar stack ─── */}
         <section className="intel-hero" style={{

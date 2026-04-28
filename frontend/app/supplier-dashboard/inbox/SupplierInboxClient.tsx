@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Inbox, AlertTriangle, Mail, Building, Globe, Lock, ArrowRight, CheckCircle2, Send } from "lucide-react";
 import QuoteModal from "./QuoteModal";
+import StrategicNote from "./StrategicNote";
 
 const FLAGS: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", CA: "🇨🇦", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹",
@@ -277,6 +278,9 @@ export default function SupplierInboxClient() {
                     </button>
                   )}
                 </div>
+
+                {/* AI strategic note (lazy-loaded) */}
+                <StrategicNote enquiryId={e.id} />
               </div>
             );
           })}

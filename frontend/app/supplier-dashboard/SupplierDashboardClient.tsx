@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import MarketSidebar from "@/app/intelligence/MarketSidebar";
+import MorningBriefing from "./MorningBriefing";
 import { useUserProfile } from "@/lib/hooks/use-user-profile";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
 import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
@@ -917,6 +918,7 @@ export default function SupplierDashboardClient() {
             ) : (
               /* Full dashboard */
               <>
+                <MorningBriefing />
                 <SupplyOpportunities />
                 <MarketGapAnalysis />
                 <DemandSignals />

@@ -45,17 +45,36 @@ export async function GET(req: Request) {
 
   // Pull data context — global, not supplier-specific
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const today = new Date().toISOString().slice(0, 10);
+  const sixtyDaysAhead = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
 
   const [
     activeRes,
     criticalRes,
     recentRes,
     crossCountryRes,
+    upcomingEventsRes,
+    activeTrialsRes,
   ] = await Promise.all([
     sb.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
     sb.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active").eq("severity", "critical"),
     sb.from("shortage_events").select("id", { count: "exact", head: true }).gte("created_at", sevenDaysAgo),
     sb.from("shortage_events").select("drug_id, country_code, severity, reason_category").eq("status", "active"),
+    sb.from("regulatory_events")
+      .select("event_type, event_date, generic_name, sponsor, description, source_country")
+      .eq("outcome", "scheduled")
+      .gte("event_date", today)
+      .lte("event_date", sixtyDaysAhead)
+      .order("event_date", { ascending: true })
+      .limit(15),
+    sb.from("clinical_trials")
+      .select("intervention_name, sponsor, primary_completion_date, conditions")
+      .in("phase", ["Phase 3", "Phase 4"])
+      .in("overall_status", ["RECRUITING", "ACTIVE_NOT_RECRUITING"])
+      .gte("primary_completion_date", today)
+      .lte("primary_completion_date", new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10))
+      .order("primary_completion_date", { ascending: true })
+      .limit(10),
   ]);
 
   // Compute cross-country signals
@@ -106,6 +125,24 @@ INDUSTRY CONTEXT
 - Switzerland reported 3,129 active shortages in Q1 — the most per capita globally
 - Regulatory action (GMP holds, plant suspensions) is now the #1 cause of shortages globally — surpassing demand spikes and traditional supply chain disruption combined
 - Indian and Chinese API plant inspections are tightening: this manifests as cross-country shortages 60-90 days later
+
+UPCOMING REGULATORY EVENTS (next 60 days)
+==========================================
+${(upcomingEventsRes.data ?? []).length === 0 ? "(no events on file yet — calendar feeds populating)" :
+  (upcomingEventsRes.data ?? []).slice(0, 10).map((e) => {
+    const r = e as { event_date: string; event_type: string; generic_name: string | null; sponsor: string | null; source_country: string | null; description: string | null };
+    return `- ${r.event_date} | ${r.source_country} ${r.event_type} | ${r.generic_name ?? "?"} | ${r.sponsor ?? "?"} | ${(r.description ?? "").slice(0, 80)}`;
+  }).join("\n")
+}
+
+ACTIVE PHASE III/IV TRIALS COMPLETING IN NEXT 6 MONTHS
+========================================================
+${(activeTrialsRes.data ?? []).length === 0 ? "(no trials matching catalogue yet)" :
+  (activeTrialsRes.data ?? []).slice(0, 8).map((t) => {
+    const r = t as { intervention_name: string | null; sponsor: string | null; primary_completion_date: string; conditions: string[] | null };
+    return `- ${r.primary_completion_date} | ${r.intervention_name ?? "?"} | ${r.sponsor ?? "?"} | ${(r.conditions ?? []).slice(0, 2).join(", ")}`;
+  }).join("\n")
+}
 `;
 
   const systemPrompt = `You write the daily Mederti pharmaceutical supply briefing in the editorial voice of The Economist's "The World in Brief".

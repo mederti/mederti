@@ -17,6 +17,7 @@ import { truncateDrugName } from "@/lib/utils";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import { DrugImage } from "./drug-image";
 import AvailableSuppliers from "./AvailableSuppliers";
+import PipelineRegulatory from "./PipelineRegulatory";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -868,6 +869,9 @@ export default async function DrugPage({ params }: Props) {
 
             {/* ═══ 2.5 AVAILABLE SUPPLIERS (marketplace) ═══ */}
             <AvailableSuppliers drugId={id} drugName={drug.generic_name} />
+
+            {/* ═══ 2.6 PIPELINE & REGULATORY CALENDAR ═══ */}
+            <PipelineRegulatory drugId={id} />
 
             {/* ═══ 3. SHORTAGE REPORTS BY COUNTRY ═══ */}
             <div id="country-list" style={{ marginBottom: 20 }}>

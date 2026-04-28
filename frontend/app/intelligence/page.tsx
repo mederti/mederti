@@ -134,6 +134,21 @@ export default async function IntelligencePage() {
           <IntelligenceBriefing />
         </div>
 
+        {/* ─── REGULATORY CALENDAR LINK ─── */}
+        <div style={{ marginBottom: 32, padding: 18, background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 4 }}>
+              Regulatory calendar
+            </div>
+            <div style={{ fontSize: 14, color: "var(--app-text-3)" }}>
+              Upcoming FDA AdComm, EMA CHMP opinions, MHRA decisions, Phase III completions — all in one place.
+            </div>
+          </div>
+          <Link href="/intelligence/calendar" style={{ padding: "10px 18px", background: "var(--app-text)", color: "white", borderRadius: 6, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            Open calendar →
+          </Link>
+        </div>
+
         {/* ─── HERO: lead article + sidebar stack ─── */}
         <section className="intel-hero" style={{
           display: "grid", gridTemplateColumns: "1fr 340px",

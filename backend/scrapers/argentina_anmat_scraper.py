@@ -30,13 +30,14 @@ from backend.utils.reason_mapper import map_reason_category
 class ArgentinaANMATScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000051"
     SOURCE_NAME: str  = "ANMAT — Alertas de Medicamentos"
-    BASE_URL: str     = "https://www.argentina.gob.ar/anmat/alertas"
+    BASE_URL: str     = "https://www.argentina.gob.ar/anmat/alertas/medicamentos"
+    NOTICIAS_URL: str = "https://www.argentina.gob.ar/anmat/alertas/medicamentos/noticias"
     COUNTRY: str      = "Argentina"
     COUNTRY_CODE: str = "AR"
 
     RATE_LIMIT_DELAY: float = 2.0
     REQUEST_TIMEOUT: float  = 60.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    SCRAPER_VERSION: str    = "2.0.0"
 
     # Spanish reason keywords -> reason_category
     _REASON_MAP: dict[str, str] = {
@@ -78,52 +79,59 @@ class ArgentinaANMATScraper(BaseScraper):
         Fetch ANMAT drug alert data.
 
         Strategy:
-        1. GET the main alerts page.
-        2. Parse the HTML for alert list items (links + titles).
-        3. Follow individual alert links to get detail if available.
+        1. GET the paginated noticias listing (all medicine alerts).
+        2. Parse panel cards with <time> and <h3> children.
+        3. Fall back to main page if noticias fails.
         """
         from bs4 import BeautifulSoup
 
         self.log.info("Scrape started", extra={
             "source": self.SOURCE_NAME,
-            "url": self.BASE_URL,
+            "url": self.NOTICIAS_URL,
         })
 
-        resp = self._get(self.BASE_URL)
-        soup = BeautifulSoup(resp.text, "html.parser")
-
         records: list[dict] = []
+        seen_urls: set[str] = set()
 
-        # ANMAT alerts page uses article/card elements with links to individual alerts.
-        # Look for common patterns: <article>, <li> with links, or <div class="view-content"> items.
-        alert_containers = (
-            soup.select("article.node--type-alerta")
-            or soup.select(".view-content .views-row")
-            or soup.select(".item-list li")
-            or soup.select("article")
-        )
-
-        self.log.info(
-            "Found alert containers on page",
-            extra={"count": len(alert_containers)},
-        )
-
-        for container in alert_containers:
+        # Paginate through the noticias listing
+        for page_num in range(20):  # Cap at 20 pages
+            url = f"{self.NOTICIAS_URL}?page={page_num}" if page_num > 0 else self.NOTICIAS_URL
             try:
-                record = self._parse_alert_container(container, soup)
-                if record:
-                    records.append(record)
+                resp = self._get(url)
+                soup = BeautifulSoup(resp.text, "html.parser")
+                page_records = self._parse_panel_cards(soup, seen_urls)
+
+                if not page_records:
+                    self.log.info(
+                        "No more records on page",
+                        extra={"page": page_num},
+                    )
+                    break
+
+                records.extend(page_records)
+                self.log.info(
+                    "Parsed ANMAT noticias page",
+                    extra={"page": page_num, "records_on_page": len(page_records)},
+                )
             except Exception as exc:
                 self.log.warning(
-                    "Failed to parse alert container",
+                    "Failed to fetch ANMAT noticias page",
+                    extra={"page": page_num, "error": str(exc)},
+                )
+                break
+
+        # Fallback: try the main page if noticias produced nothing
+        if not records:
+            self.log.info("Noticias empty, trying main page")
+            try:
+                resp = self._get(self.BASE_URL)
+                soup = BeautifulSoup(resp.text, "html.parser")
+                records = self._parse_panel_cards(soup, seen_urls)
+            except Exception as exc:
+                self.log.warning(
+                    "Main page fallback also failed",
                     extra={"error": str(exc)},
                 )
-
-        # If no structured containers found, try to extract from any links
-        # that look like alert detail pages
-        if not records:
-            self.log.info("No structured containers found, trying link-based extraction")
-            records = self._extract_from_links(soup)
 
         self.log.info(
             "ANMAT fetch complete",
@@ -131,83 +139,51 @@ class ArgentinaANMATScraper(BaseScraper):
         )
         return records
 
-    def _parse_alert_container(self, container, soup) -> dict | None:
-        """Parse a single alert container element into a raw record dict."""
-        # Extract title
-        title_el = (
-            container.select_one("h2 a")
-            or container.select_one("h3 a")
-            or container.select_one(".field--name-title a")
-            or container.select_one("a")
-        )
-        if not title_el:
-            return None
-
-        title = title_el.get_text(strip=True)
-        if not title:
-            return None
-
-        href = title_el.get("href", "")
-        if href and not href.startswith("http"):
-            href = f"https://www.argentina.gob.ar{href}"
-
-        # Extract date if available
-        date_el = (
-            container.select_one(".field--name-field-fecha")
-            or container.select_one("time")
-            or container.select_one(".date-display-single")
-            or container.select_one(".views-field-created")
-        )
-        date_text = ""
-        if date_el:
-            date_text = date_el.get_text(strip=True)
-            # Also check datetime attribute on <time> elements
-            if date_el.name == "time" and date_el.get("datetime"):
-                date_text = date_el["datetime"]
-
-        # Extract summary/description if available
-        summary_el = (
-            container.select_one(".field--name-body")
-            or container.select_one(".views-field-body")
-            or container.select_one("p")
-        )
-        summary = summary_el.get_text(strip=True) if summary_el else ""
-
-        return {
-            "title": title,
-            "url": href,
-            "date": date_text,
-            "summary": summary,
-        }
-
-    def _extract_from_links(self, soup) -> list[dict]:
-        """Fallback: extract alerts from any links on the page that point to alert detail pages."""
+    def _parse_panel_cards(self, soup, seen_urls: set[str]) -> list[dict]:
+        """Parse panel card elements into raw record dicts."""
         records: list[dict] = []
-        seen_urls: set[str] = set()
 
-        for link in soup.select("a[href]"):
-            href = link.get("href", "")
-            # Look for links that appear to be individual alert/notice pages
-            if not any(kw in href.lower() for kw in
-                       ("/alerta", "/disposicion", "/comunicado", "/nota")):
+        # ANMAT uses <a class="panel panel-default"> cards with <time> and <h3>
+        panels = soup.select("a.panel.panel-default")
+        if not panels:
+            # Fallback: try other common card patterns
+            panels = (
+                soup.select(".views-row a[href]")
+                or soup.select("article a[href]")
+                or soup.select(".item-list li a[href]")
+            )
+
+        for panel in panels:
+            href = panel.get("href", "")
+            if not href:
                 continue
-
             if href and not href.startswith("http"):
                 href = f"https://www.argentina.gob.ar{href}"
-
             if href in seen_urls:
                 continue
             seen_urls.add(href)
 
-            title = link.get_text(strip=True)
+            # Extract title from <h3> or text
+            title_el = panel.select_one("h3") or panel.select_one("h2")
+            title = title_el.get_text(strip=True) if title_el else panel.get_text(strip=True)
             if not title or len(title) < 5:
                 continue
+
+            # Extract date from <time datetime="...">
+            date_text = ""
+            time_el = panel.select_one("time")
+            if time_el:
+                date_text = time_el.get("datetime", "") or time_el.get_text(strip=True)
+
+            # Extract summary from <p> if present
+            summary_el = panel.select_one("p")
+            summary = summary_el.get_text(strip=True) if summary_el else ""
 
             records.append({
                 "title": title,
                 "url": href,
-                "date": "",
-                "summary": "",
+                "date": date_text,
+                "summary": summary,
             })
 
         return records
@@ -383,8 +359,20 @@ class ArgentinaANMATScraper(BaseScraper):
         if any(kw in text_lower for kw in ("calidad", "defecto")):
             return ("Defecto de calidad (quality defect)", "active")
 
-        # Resolved
-        if any(kw in text_lower for kw in ("resuelto", "normalizado", "restablecido")):
+        # Recovery / seizure
+        if any(kw in text_lower for kw in ("recupero", "decomiso")):
+            return ("Recupero de producto (product recovery)", "active")
+
+        # Ban / prohibition
+        if any(kw in text_lower for kw in ("prohibe", "prohibio", "prohibió")):
+            return ("Prohibicion (prohibition)", "active")
+
+        # Licence revocation
+        if any(kw in text_lower for kw in ("baja de habilitacion", "baja de habilitación")):
+            return ("Baja de habilitacion (licence revocation)", "active")
+
+        # Lifted / resolved
+        if any(kw in text_lower for kw in ("resuelto", "normalizado", "restablecido", "levanto", "levantó")):
             return ("Resuelto (resolved)", "resolved")
 
         return ("Alerta de medicamento", "active")
@@ -430,6 +418,12 @@ class ArgentinaANMATScraper(BaseScraper):
         raw_str = str(raw).strip()
         if not raw_str or raw_str in ("-", "N/A", "null", "None"):
             return None
+
+        # Fast-path for YYYY-MM-DD HH:MM:SS from <time datetime>
+        match = re.match(r'^(\d{4}-\d{2}-\d{2})', raw_str)
+        if match:
+            return match.group(1)
+
         try:
             from dateutil import parser as dtparser
             dt = dtparser.parse(raw_str, dayfirst=True)  # Argentine dates are DD/MM/YYYY

@@ -1,12 +1,15 @@
 """
-Malaysia NPRA Drug Shortage Scraper
-------------------------------------
-Source:  National Pharmaceutical Regulatory Agency - Product Availability
-URL:     https://www.npra.gov.my/
+Malaysia NPRA Drug Safety & Shortage Scraper
+---------------------------------------------
+Source:  National Pharmaceutical Regulatory Agency - Safety Alerts
+URL:     https://www.npra.gov.my/index.php/en/health-professionals/safety-alertsen.html
 
 The Malaysian National Pharmaceutical Regulatory Agency (NPRA) publishes
-product availability notices, drug shortage alerts, and supply disruption
-notifications. Content is bilingual (Malay/English).
+drug safety alerts, product recalls, and medicine shortage information.
+Content is bilingual (Malay/English).
+
+The safety alerts page lists alerts by year (tabs), each linking to an
+individual article with the drug name and safety concern in the URL slug.
 
 Data source UUID:  10000000-0000-0000-0000-000000000056
 Country:           Malaysia
@@ -36,17 +39,19 @@ from backend.utils.reason_mapper import map_reason_category
 
 class MalaysiaNPRAScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000056"
-    SOURCE_NAME: str  = "National Pharmaceutical Regulatory Agency \u2014 Product Availability"
+    SOURCE_NAME: str  = "National Pharmaceutical Regulatory Agency \u2014 Safety Alerts"
     BASE_URL: str     = "https://www.npra.gov.my/"
     COUNTRY: str      = "Malaysia"
     COUNTRY_CODE: str = "MY"
 
     RATE_LIMIT_DELAY: float = 2.0
     REQUEST_TIMEOUT: float  = 60.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    SCRAPER_VERSION: str    = "2.0.0"
 
-    # NPRA notices / announcements page
-    NOTICES_URL: str = "https://www.npra.gov.my/index.php/en/health-professionals/safety-alertsen.html"
+    # NPRA safety alerts page (replaces dead /informationen/safety-alerts-main URL)
+    SAFETY_ALERTS_URL: str = (
+        "https://www.npra.gov.my/index.php/en/health-professionals/safety-alertsen.html"
+    )
 
     # Known NPRA shortage reasons -> reason_category
     _REASON_MAP: dict[str, str] = {
@@ -82,7 +87,7 @@ class MalaysiaNPRAScraper(BaseScraper):
         "pemberhentian":              "discontinuation",
     }
 
-    # Keywords indicating drug shortage / supply issues (English + Malay)
+    # Keywords indicating drug shortage / supply / safety issues (English + Malay)
     _SHORTAGE_KEYWORDS: list[str] = [
         "shortage",
         "supply",
@@ -98,6 +103,9 @@ class MalaysiaNPRAScraper(BaseScraper):
         "product availability",
         "stock",
         "out of stock",
+        "risk",
+        "safety",
+        "alert",
         # Malay terms
         "kekurangan",
         "bekalan",
@@ -113,27 +121,27 @@ class MalaysiaNPRAScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        Fetch NPRA drug availability / shortage notices.
+        Fetch NPRA drug safety alerts.
 
         Strategy:
-        1. GET the NPRA safety alerts / notices page.
-        2. Parse HTML with BeautifulSoup for notice items.
-        3. Filter for drug shortage / availability related notices.
+        1. GET the NPRA safety alerts page (SPPageBuilder tabs by year).
+        2. Parse HTML with BeautifulSoup for alert item links.
+        3. Each link slug contains the drug name and safety concern.
         """
         self.log.info("Scrape started", extra={
             "source": self.SOURCE_NAME,
-            "url": self.NOTICES_URL,
+            "url": self.SAFETY_ALERTS_URL,
         })
 
         records: list[dict] = []
 
         try:
-            resp = self._get(self.NOTICES_URL)
-            records = self._parse_notices_page(resp.text)
+            resp = self._get(self.SAFETY_ALERTS_URL)
+            records = self._parse_safety_alerts_page(resp.text)
         except Exception as exc:
             self.log.warning(
-                "Failed to fetch NPRA notices page",
-                extra={"error": str(exc), "url": self.NOTICES_URL},
+                "Failed to fetch NPRA safety alerts page",
+                extra={"error": str(exc), "url": self.SAFETY_ALERTS_URL},
             )
             raise ScraperError(f"NPRA fetch failed: {exc}") from exc
 
@@ -143,71 +151,77 @@ class MalaysiaNPRAScraper(BaseScraper):
         )
         return records
 
-    def _parse_notices_page(self, html: str) -> list[dict]:
-        """Parse the NPRA safety alerts page (SPPageBuilder with year tabs)."""
+    def _parse_safety_alerts_page(self, html: str) -> list[dict]:
+        """Parse the NPRA safety alerts page HTML.
+
+        The page uses SPPageBuilder with year-based tabs. Each tab contains
+        links to individual safety alert articles. The link URLs follow the
+        pattern:
+            /index.php/en/component/content/article/.../safety-alerts-YYYY/
+            NNNNN-drug-name-safety-concern.html?Itemid=1391
+
+        The link text is the full alert title (drug name + safety concern).
+        """
         from bs4 import BeautifulSoup
 
         soup = BeautifulSoup(html, "lxml")
         records: list[dict] = []
         seen_urls: set[str] = set()
 
-        # Find all links that match the safety-alerts pattern
-        # URL pattern: /safety-alerts-YYYY/NNNNNNN-drug-name-...
-        for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"]
-            if "/safety-alerts-" not in href.lower():
+        # Find all links that point to safety alert articles
+        alert_links = soup.find_all(
+            "a", href=re.compile(r"safety-alerts-\d{4}/")
+        )
+
+        if not alert_links:
+            # Fallback: broader search for any article links
+            alert_links = soup.find_all(
+                "a", href=re.compile(r"/component/content/article/")
+            )
+
+        for link in alert_links:
+            href = link.get("href", "")
+            text = link.get_text(separator=" ", strip=True)
+
+            if not text or not href:
                 continue
 
-            text = a_tag.get_text(strip=True)
-            if not text or len(text) < 5:
-                continue
-            # Skip nav/header links
-            if text.lower() in ("safety alerts", "english (uk)"):
-                continue
+            # Build full URL
+            if not href.startswith("http"):
+                url = f"https://www.npra.gov.my{href}"
+            else:
+                url = href
 
-            # Make absolute URL
-            url = href if href.startswith("http") else f"https://www.npra.gov.my{href}"
-            if url in seen_urls:
+            # Deduplicate
+            # Strip query params for dedup
+            url_base = url.split("?")[0]
+            if url_base in seen_urls:
                 continue
-            seen_urls.add(url)
+            seen_urls.add(url_base)
 
-            # Extract year from URL path (safety-alerts-YYYY)
-            year_match = re.search(r'safety-alerts-(\d{4})', href)
+            # Extract year from URL path
+            year_match = re.search(r"safety-alerts-(\d{4})", href)
             year = year_match.group(1) if year_match else None
 
-            # Extract drug name from URL slug
-            # Pattern: /NNNNNNN-drug-name-risk-of-something.html
-            slug_match = re.search(r'/\d+-(.+?)(?:\.html)?$', href)
-            drug_name = ""
-            reason_from_slug = ""
-            if slug_match:
-                slug = slug_match.group(1).replace("-", " ")
-                # Drug name is typically the first part before risk/safety phrases
-                for sep in ("risk of", "safety update", "potential risk",
-                            "contraindication", "recall", "withdrawal",
-                            "precaution", "warning", "restriction",
-                            "and biosimilar", "interaction"):
-                    if sep in slug.lower():
-                        parts = slug.lower().split(sep, 1)
-                        drug_name = parts[0].strip().title()
-                        reason_from_slug = (sep + parts[1]).strip()
-                        break
-                if not drug_name:
-                    # Use the link text as drug name (it's usually cleaner)
-                    drug_name = text.split(":")[0].strip() if ":" in text else text[:80]
+            # Extract drug name from URL slug (last path segment)
+            # Pattern: /NNNNN-drug-name-safety-concern.html
+            # Use the last segment to avoid matching earlier path parts
+            last_segment = href.split("?")[0].rsplit("/", 1)[-1]
+            slug_match = re.match(r"\d+-(.+?)\.html", last_segment)
+            slug = slug_match.group(1) if slug_match else ""
 
             records.append({
                 "title": text[:500],
-                "drug_name": drug_name or text.split(":")[0].strip()[:80],
                 "url": url,
+                "date": f"{year}-01-01" if year else None,
                 "year": year,
-                "reason_from_slug": reason_from_slug,
+                "slug": slug,
                 "raw_text": text,
             })
 
         self.log.info(
             "Parsed NPRA safety alerts",
-            extra={"total_links": len(records)},
+            extra={"total_links": len(alert_links), "unique_alerts": len(records)},
         )
         return records
 
@@ -250,18 +264,20 @@ class MalaysiaNPRAScraper(BaseScraper):
         """Convert a single NPRA record to a normalised shortage event dict."""
         title = rec.get("title", "").strip()
         raw_text = rec.get("raw_text", "").strip()
+        slug = rec.get("slug", "")
 
         if not title:
             return None
 
         # -- Drug name extraction --
-        generic_name = rec.get("drug_name") or ""
+        generic_name = self._extract_drug_name_from_slug(slug)
         if not generic_name:
             generic_name = self._extract_drug_name(title)
         if not generic_name:
             generic_name = self._extract_drug_name(raw_text)
         if not generic_name:
-            generic_name = title.split(":")[0].strip()[:100] if ":" in title else title[:100]
+            # Use the title itself as the drug reference
+            generic_name = title[:100]
 
         # -- Brand names --
         brand_names: list[str] = []
@@ -270,7 +286,9 @@ class MalaysiaNPRAScraper(BaseScraper):
             brand_names.append(brand)
 
         # -- Reason extraction --
-        raw_reason = rec.get("reason_from_slug") or self._extract_reason(raw_text)
+        raw_reason = self._extract_reason(raw_text)
+        if not raw_reason:
+            raw_reason = self._extract_reason_from_slug(slug)
         reason_category = self._map_reason(raw_reason)
 
         # -- Start date --
@@ -334,6 +352,98 @@ class MalaysiaNPRAScraper(BaseScraper):
             return "anticipated"
         return "active"
 
+    def _extract_drug_name_from_slug(self, slug: str) -> str:
+        """
+        Extract a drug name from a URL slug like:
+            denosumab-prolia-and-biosimilars-multi-vertebral-fractures-...
+            palbociclib-risk-of-venous-thromboembolism
+            linezolid-risk-of-rhabdomyolysis
+
+        Takes the first word(s) before common safety/risk phrases.
+        """
+        if not slug:
+            return ""
+
+        # Replace hyphens with spaces for parsing
+        text = slug.replace("-", " ")
+
+        # Cut at common safety-related phrases
+        cut_phrases = [
+            "risk of", "new safety", "updated measures", "information updates",
+            "restrictions of use", "reminder on", "reports of", "interaction with",
+            "new identified risk", "new contraindication", "product recall",
+            "withdrawal of", "interference with", "severe cutaneous",
+            "increased risk", "birth defects", "updated information",
+            "ischaemic", "thrombocytopenia", "risk of",
+            "multi vertebral", "kounis syndrome",
+        ]
+
+        for phrase in cut_phrases:
+            idx = text.lower().find(phrase)
+            if idx > 0:
+                text = text[:idx].strip()
+                break
+
+        # Clean up common non-drug words from the remaining text
+        words = text.split()
+        stop_words = {
+            "and", "or", "the", "a", "an", "with", "for", "in", "on",
+            "use", "containing", "products", "new", "safety", "measure",
+        }
+
+        # Take words until we hit a stop word (but keep at least the first word)
+        drug_words: list[str] = []
+        for i, word in enumerate(words):
+            if i > 0 and word.lower() in stop_words:
+                break
+            drug_words.append(word)
+
+        result = " ".join(drug_words).strip()
+
+        # Clean up trailing/leading artifacts
+        result = re.sub(r"\s+", " ", result).strip()
+
+        return result
+
+    def _extract_reason_from_slug(self, slug: str) -> str:
+        """Extract a safety reason from a URL slug."""
+        if not slug:
+            return ""
+
+        text = slug.replace("-", " ").lower()
+
+        reason_patterns = {
+            "risk of rhabdomyolysis":     "Risk of rhabdomyolysis",
+            "risk of venous thromboembolism": "Risk of venous thromboembolism",
+            "risk of hepatotoxicity":     "Risk of hepatotoxicity",
+            "risk of anaphylaxis":        "Risk of anaphylaxis",
+            "risk of peripheral neuropathy": "Risk of peripheral neuropathy",
+            "risk of oesophageal":        "Risk of oesophageal dysfunction",
+            "risk of seizures":           "Risk of seizures",
+            "risk of birth defects":      "Risk of birth defects",
+            "risk of dysphagia":          "Risk of dysphagia",
+            "risk of priapism":           "Risk of priapism",
+            "product recall":             "Product recall",
+            "withdrawal":                 "Product withdrawal",
+            "birth defects":              "Risk of birth defects",
+            "liver injury":               "Risk of liver injury",
+            "reactivation":               "Virus reactivation",
+            "interaction":                "Drug interaction",
+            "discontinuation":            "Discontinuation risk",
+            "contraindication":           "New contraindication",
+        }
+
+        for pattern, reason in reason_patterns.items():
+            if pattern in text:
+                return reason
+
+        # Generic: extract "risk of X"
+        risk_match = re.search(r"risk of (\w[\w\s]{2,30})", text)
+        if risk_match:
+            return f"Risk of {risk_match.group(1).strip()}"
+
+        return ""
+
     def _extract_drug_name(self, text: str) -> str:
         """
         Extract a drug name (INN) from NPRA notice text.
@@ -353,6 +463,9 @@ class MalaysiaNPRAScraper(BaseScraper):
             "The", "Important", "Urgent", "Information", "Please",
             "Dear", "Kementerian", "Kesihatan", "Ubat", "Produk",
             "Ketersediaan", "Bekalan", "Makluman", "Peringatan",
+            "Risk", "New", "Updated", "Measures", "Restrictions",
+            "Reminder", "Reports", "Interaction", "Strengthened",
+            "Warnings", "Use",
         }
         for match in matches:
             if match not in stopwords and len(match) > 2:

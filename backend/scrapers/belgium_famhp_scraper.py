@@ -2,29 +2,33 @@
 Belgium FAMHP Drug Supply Problem Scraper
 ─────────────────────────────────────────
 Source:  Federal Agency for Medicines and Health Products (FAMHP)
-API:     https://pharmastatus.be/api/packs/info/public
-URL:     https://pharmastatus.be
+        via the PharmaStatus public API
+URL:    https://pharmastatus.be/api/packs/info/public
 
-Belgium migrated shortage data to PharmaStatus (pharmastatus.be), a dedicated
-platform with a public REST API. This scraper fetches active unavailabilities
-via the JSON API, paginates through results (100 per page), and normalises
-each entry into the standard Mederti shortage event format.
+PharmaStatus is the official FAMHP platform that publishes real-time
+medicine unavailability data for Belgium. This scraper fetches structured
+JSON via the public REST API (no authentication required), filtering for
+human-use medicines with status "unavailable" or "limited_availability".
+
+The old FAMHP HTML page at famhp.be/en/human_use/medicines/medicines/supply_problems
+returned 404 as of early 2026 after a site restructure. PharmaStatus
+(pharmastatus.be) is now the canonical data source.
 
 Data source UUID:  10000000-0000-0000-0000-000000000047
 Country:           Belgium
 Country code:      BE
-Confidence:        90/100 (official structured JSON API)
+Confidence:        90/100 (official regulator, structured JSON API)
 
 Cron:  Every 24 hours
 """
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime, timezone
 from typing import Any
-
-import httpx
+from urllib.parse import quote
 
 from backend.scrapers.base_scraper import BaseScraper, ScraperError
 from backend.utils.reason_mapper import map_reason_category
@@ -33,54 +37,58 @@ from backend.utils.reason_mapper import map_reason_category
 class BelgiumFamhpScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000047"
     SOURCE_NAME: str  = "Federal Agency for Medicines and Health Products — PharmaStatus"
-    BASE_URL: str     = "https://pharmastatus.be"
-    API_URL: str      = "https://pharmastatus.be/api/packs/info/public"
+    BASE_URL: str     = "https://pharmastatus.be/api/packs/info/public"
     COUNTRY: str      = "Belgium"
     COUNTRY_CODE: str = "BE"
 
     RATE_LIMIT_DELAY: float = 1.0
-    REQUEST_TIMEOUT: float  = 60.0
+    REQUEST_TIMEOUT: float  = 90.0
     SCRAPER_VERSION: str    = "2.0.0"
-    PAGE_SIZE: int          = 100
 
-    # PharmaStatus notification statuses to fetch
-    ACTIVE_STATUSES: list[str] = [
+    # Page size for the PharmaStatus API (server-side limit is 100)
+    PAGE_SIZE: int = 100
+
+    # PharmaStatus notification statuses we want
+    SHORTAGE_STATUSES: list[str] = [
         "unavailable",
         "limited_availability",
         "interruption_commercialisation",
     ]
 
-    # Severity from PharmaStatus impact score
-    @staticmethod
-    def _impact_to_severity(impact: Any) -> str:
-        try:
-            score = float(impact)
-        except (TypeError, ValueError):
-            return "medium"
-        if score >= 30:
-            return "critical"
-        if score >= 20:
-            return "high"
-        if score >= 10:
-            return "medium"
-        return "low"
+    # Map PharmaStatus notificationStatus -> Mederti status
+    _STATUS_MAP: dict[str, str] = {
+        "unavailable":                    "active",
+        "limited_availability":           "active",
+        "interruption_commercialisation": "active",
+        "available":                      "resolved",
+        "stop_commercialisation":         "resolved",
+    }
 
-    # Reason keywords -> reason_category
+    # Map PharmaStatus Dutch/English reason text -> reason_category
     _REASON_MAP: dict[str, str] = {
-        "manufacturing":        "manufacturing_issue",
+        "productie":            "manufacturing_issue",
         "production":           "manufacturing_issue",
+        "manufacturing":        "manufacturing_issue",
+        "fabrication":          "manufacturing_issue",
+        "kwaliteit":            "manufacturing_issue",
         "quality":              "manufacturing_issue",
         "gmp":                  "manufacturing_issue",
+        "grondstof":            "raw_material",
         "raw material":         "raw_material",
         "active substance":     "raw_material",
+        "actief bestanddeel":   "raw_material",
+        "vraag":                "demand_surge",
         "demand":               "demand_surge",
         "supply chain":         "supply_chain",
-        "logistics":            "supply_chain",
+        "logisti":              "supply_chain",
+        "distributie":          "distribution",
         "distribution":         "distribution",
+        "stopzetting":          "discontinuation",
         "discontinu":           "discontinuation",
         "withdrawal":           "discontinuation",
         "regulatory":           "regulatory_action",
-        "commercial":           "supply_chain",
+        "regulat":              "regulatory_action",
+        "commerc":              "supply_chain",
     }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -89,47 +97,67 @@ class BelgiumFamhpScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        Fetch active drug unavailabilities from the PharmaStatus public API.
-        Paginates through all results (100 per page).
+        Fetch all currently unavailable / limited-availability human medicines
+        from the PharmaStatus public API.
+
+        The API supports pagination via startRow/endRow query params.
+        We paginate through all results to get the complete list.
         """
         self.log.info("Scrape started", extra={
             "source": self.SOURCE_NAME,
-            "url": self.API_URL,
+            "url": self.BASE_URL,
         })
 
         all_records: list[dict] = []
-        start_row = 0
+        start_row = 1
+        total_count: int | None = None
+
+        search_filter = json.dumps({
+            "notificationStatusARR": self.SHORTAGE_STATUSES,
+            "usage": "human",
+        })
 
         while True:
+            end_row = start_row + self.PAGE_SIZE - 1
+
             params = {
-                "startRow": start_row,
-                "endRow": start_row + self.PAGE_SIZE,
+                "startRow": str(start_row),
+                "endRow": str(end_row),
+                "searchSTR": search_filter,
+                "language": "en",
             }
 
-            resp = self._get(self.API_URL, params=params)
-            data = resp.json()
-
-            rows = data.get("data") or data.get("rows") or []
-            if not rows:
-                break
-
-            all_records.extend(rows)
-            self.log.info(
-                "PharmaStatus page fetched",
-                extra={"start_row": start_row, "page_records": len(rows), "total_so_far": len(all_records)},
+            self.log.debug(
+                "Fetching PharmaStatus page",
+                extra={"start_row": start_row, "end_row": end_row},
             )
 
-            # Check if we've got all records — totalRows is per-row
-            total = rows[0].get("totalRows", 0) if rows else 0
-            if len(all_records) >= total or len(rows) < self.PAGE_SIZE:
+            data = self._get_json(self.BASE_URL, params=params)
+
+            if not data.get("success"):
+                raise ScraperError(
+                    f"PharmaStatus API returned success=false: {data}"
+                )
+
+            items = data.get("data", [])
+            if total_count is None:
+                total_count = data.get("count", 0)
+                self.log.info(
+                    "PharmaStatus reports total unavailable items",
+                    extra={"total_count": total_count},
+                )
+
+            all_records.extend(items)
+
+            # Check if we've fetched all records
+            if not items or start_row + len(items) > total_count:
                 break
 
             start_row += self.PAGE_SIZE
-            self._enforce_rate_limit()
 
         self.log.info(
             "PharmaStatus fetch complete",
-            extra={"total_records": len(all_records)},
+            extra={"records": len(all_records), "total_reported": total_count},
         )
         return all_records
 
@@ -140,7 +168,7 @@ class BelgiumFamhpScraper(BaseScraper):
     def normalize(self, raw: list[dict]) -> list[dict]:
         """Normalize PharmaStatus records into standard shortage event dicts."""
         self.log.info(
-            "Normalising FAMHP records",
+            "Normalising PharmaStatus records",
             extra={"source": self.SOURCE_NAME, "raw_count": len(raw)},
         )
 
@@ -158,8 +186,12 @@ class BelgiumFamhpScraper(BaseScraper):
             except Exception as exc:
                 skipped += 1
                 self.log.warning(
-                    "Failed to normalise FAMHP record",
-                    extra={"error": str(exc), "rec": str(rec)[:200]},
+                    "Failed to normalise PharmaStatus record",
+                    extra={
+                        "error": str(exc),
+                        "packId": rec.get("packId"),
+                        "prescriptionName": str(rec.get("prescriptionName", ""))[:100],
+                    },
                 )
 
         self.log.info(
@@ -169,99 +201,111 @@ class BelgiumFamhpScraper(BaseScraper):
         return normalised
 
     def _normalise_record(self, rec: dict, today: str) -> dict | None:
-        """
-        Convert a single PharmaStatus API record to normalised shortage events.
-
-        Each record (pack) may have multiple notifications in notARR.
-        We take the most recent active notification if one exists.
-        """
-        import json as _json
+        """Convert a single PharmaStatus pack record to a normalised shortage event dict."""
 
         # -- Drug name extraction --
-        # activeSubstancesLongEn is a JSON string like '["Lorazepam"]'
+        # activeSubstancesLongEn is a JSON-encoded list like '["Nivolumab"]'
         generic_name = ""
-        for lang in ("En", "Fr", "Nl"):
-            raw_subs = rec.get(f"activeSubstancesLong{lang}") or ""
-            if raw_subs:
+        for lang_key in ("activeSubstancesLongEn", "activeSubstancesLongFr", "activeSubstancesLongNl"):
+            raw_substances = rec.get(lang_key, "")
+            if raw_substances:
                 try:
-                    subs_list = _json.loads(raw_subs) if isinstance(raw_subs, str) else raw_subs
-                    if isinstance(subs_list, list) and subs_list:
-                        generic_name = ", ".join(str(s) for s in subs_list)
+                    substances = json.loads(raw_substances)
+                    if substances and isinstance(substances, list):
+                        generic_name = "; ".join(s.strip() for s in substances if s.strip())
                         break
-                except (ValueError, TypeError):
-                    pass
+                except (json.JSONDecodeError, TypeError):
+                    continue
 
-        # Fallback: extract from atcCode field (e.g. "N05BA06 Lorazepam")
+        # Fallback: extract from ATC code (e.g. "L01FF01 Nivolumab")
         if not generic_name:
-            atc_raw = rec.get("atcCode") or ""
-            parts = atc_raw.split(" ", 1)
-            if len(parts) == 2:
-                generic_name = parts[1].strip()
+            atc = rec.get("atcCode", "")
+            if atc and " " in atc:
+                generic_name = atc.split(" ", 1)[1].strip()
 
         if not generic_name:
             return None
 
-        # -- Brand name from prescriptionName --
-        brand_name = (rec.get("prescriptionName") or "").strip()
-        brand_names = [brand_name] if brand_name else []
+        # -- Brand / trade name from prescriptionName --
+        brand_name = rec.get("prescriptionName", "").strip()
+        # Extract just the brand portion (before dosage info)
+        if brand_name:
+            # e.g. "Opdivo 10 mg/ml inf. opl. (conc.) i.v. flac. 24 ml" -> "Opdivo"
+            brand_short = re.split(r'\s+\d', brand_name, maxsplit=1)[0].strip()
+            brand_names = [brand_short] if brand_short and brand_short.lower() != generic_name.lower() else []
+        else:
+            brand_names = []
 
-        # -- Find the most relevant notification from notARR --
-        notifications = rec.get("notARR") or []
-        active_notif = None
-        for notif in notifications:
-            ns = (notif.get("notificationStatus") or "").lower()
-            if ns in ("unavailable", "limited_availability", "interruption_commercialisation",
-                       "stop_commercialisation"):
-                active_notif = notif
+        # -- Get the most relevant notification from notARR --
+        notifications = rec.get("notARR", [])
+        if not notifications:
+            return None
+
+        # Pick the first notification that is an active shortage
+        notif = notifications[0]
+        for n in notifications:
+            ns = n.get("notificationStatus", "")
+            if ns in ("unavailable", "limited_availability", "interruption_commercialisation"):
+                notif = n
                 break
-        # If no active notification, take the first one
-        if not active_notif and notifications:
-            active_notif = notifications[0]
-        if not active_notif:
-            active_notif = {}
 
         # -- Status --
-        notif_status = (active_notif.get("notificationStatus") or "").lower()
-        if notif_status in ("unavailable", "limited_availability", "interruption_commercialisation",
-                             "stop_commercialisation"):
-            status = "active"
-        elif notif_status in ("available",):
-            status = "resolved"
-        else:
-            status = "active"
+        raw_status = notif.get("notificationStatus", "").lower()
+        status = self._STATUS_MAP.get(raw_status, "active")
 
-        # -- Severity from impact score --
-        severity = self._impact_to_severity(active_notif.get("impact"))
+        # If none of the notifications are active shortage, skip
+        if status == "resolved":
+            return None
+
+        # -- Severity based on impact score --
+        impact = notif.get("impact", 0)
+        if impact is None:
+            impact = 0
+        if impact >= 30:
+            severity = "critical"
+        elif impact >= 20:
+            severity = "high"
+        elif impact >= 10:
+            severity = "medium"
+        else:
+            severity = "low"
 
         # -- Reason --
-        raw_reason = (active_notif.get("notificationReason") or "").strip()
-        additional = (active_notif.get("additionalInfo") or "").strip()
-        reason_text = additional if additional else raw_reason
-        reason_category = self._map_reason(reason_text)
+        raw_reason = (notif.get("notificationReason") or "").strip()
+        reason_category = self._map_reason(raw_reason)
 
         # -- Dates --
-        start_date = self._parse_date(active_notif.get("startDate")) or today
-        presumed_end = self._parse_date(active_notif.get("presumedEndDate"))
-        end_date = self._parse_date(active_notif.get("endDate")) if status == "resolved" else None
+        start_date = self._parse_iso_date(notif.get("startDate")) or today
+        end_date_str = self._parse_iso_date(notif.get("endDate"))
+        presumed_end = self._parse_iso_date(notif.get("presumedEndDate"))
+
+        end_date = end_date_str if status == "resolved" else None
         estimated_resolution = presumed_end if status == "active" else None
 
-        # -- Source URL --
+        # -- Source URL (link to detail page on PharmaStatus) --
         pack_id = rec.get("packId")
-        source_url = f"{self.BASE_URL}/detail/{pack_id}" if pack_id else self.BASE_URL
+        source_url = f"https://pharmastatus.be/human/medical-products/{pack_id}" if pack_id else self.BASE_URL
 
         # -- Notes --
         notes_parts: list[str] = []
         company = (rec.get("packCompanyName") or "").strip()
         if company:
             notes_parts.append(f"Company: {company}")
+        auth_num = (rec.get("authorisationNumber") or "").strip()
+        if auth_num:
+            notes_parts.append(f"Auth: {auth_num}")
         atc = (rec.get("atcCode") or "").strip()
         if atc:
             notes_parts.append(f"ATC: {atc}")
-        auth_nr = (rec.get("authorisationNumber") or "").strip()
-        if auth_nr:
-            notes_parts.append(f"Auth: {auth_nr}")
-        if reason_text:
-            notes_parts.append(f"Reason: {reason_text[:150]}")
+        impact_str = (notif.get("impactString") or "").strip()
+        if impact_str:
+            notes_parts.append(f"Impact: {impact_str}")
+        additional = notif.get("additionalInfo")
+        if additional and str(additional).strip():
+            notes_parts.append(f"Info: {str(additional).strip()[:200]}")
+        cnk = (rec.get("cnkCode") or "").strip()
+        if cnk:
+            notes_parts.append(f"CNK: {cnk}")
         notes = "; ".join(notes_parts) or None
 
         return {
@@ -269,7 +313,7 @@ class BelgiumFamhpScraper(BaseScraper):
             "brand_names":               brand_names,
             "status":                    status,
             "severity":                  severity,
-            "reason":                    reason_text or None,
+            "reason":                    raw_reason or None,
             "reason_category":           reason_category,
             "start_date":                start_date,
             "end_date":                  end_date,
@@ -285,36 +329,35 @@ class BelgiumFamhpScraper(BaseScraper):
     # ─────────────────────────────────────────────────────────────────────────
 
     def _map_reason(self, raw: str) -> str:
-        """Map FAMHP reason string to canonical reason_category."""
+        """Map PharmaStatus reason string to canonical reason_category."""
         if not raw:
             return "unknown"
         lower = raw.strip().lower()
         for key, cat in self._REASON_MAP.items():
             if key in lower:
                 return cat
+        # Fallback to centralized mapper
         return map_reason_category(raw)
 
     @staticmethod
-    def _parse_date(raw: Any) -> str | None:
-        """Parse various date formats to ISO-8601 date string."""
+    def _parse_iso_date(raw: Any) -> str | None:
+        """Parse ISO-8601 datetime string to date string (YYYY-MM-DD)."""
         if raw is None:
             return None
-        if isinstance(raw, datetime):
-            return raw.date().isoformat()
-        if isinstance(raw, date) and not isinstance(raw, datetime):
-            return raw.isoformat()
         raw_str = str(raw).strip()
         if not raw_str or raw_str in ("-", "N/A", "null", "None", ""):
             return None
 
-        # ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
+        # Handle ISO format like "2026-04-27T00:00:00.000Z"
         if "T" in raw_str:
             raw_str = raw_str[:10]
+
+        # Validate YYYY-MM-DD
         iso_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', raw_str)
         if iso_match:
             return raw_str
 
-        # European format DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+        # Try European format DD/MM/YYYY or DD-MM-YYYY
         eu_match = re.match(
             r'^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$', raw_str
         )
@@ -328,14 +371,6 @@ class BelgiumFamhpScraper(BaseScraper):
             except ValueError:
                 pass
 
-        # Fallback: dateutil parser
-        try:
-            from dateutil import parser as dtparser
-            dt = dtparser.parse(raw_str, dayfirst=True)
-            return dt.date().isoformat()
-        except (ValueError, ImportError):
-            pass
-
         return None
 
 
@@ -344,7 +379,6 @@ class BelgiumFamhpScraper(BaseScraper):
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    import json
     import os
     import sys
 
@@ -365,7 +399,7 @@ if __name__ == "__main__":
 
         scraper = BelgiumFamhpScraper(db_client=MagicMock())
 
-        print("\n-- Fetching from PharmaStatus API ...")
+        print("\n-- Fetching from PharmaStatus ...")
         raw = scraper.fetch()
         print(f"-- Raw records received : {len(raw)}")
 

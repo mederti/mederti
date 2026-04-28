@@ -26,7 +26,7 @@ import hashlib
 import json
 import time
 from abc import ABC, abstractmethod
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 import httpx
@@ -255,63 +255,6 @@ class BaseScraper(ABC):
             patch["error_message"] = error[:2000]  # Postgres TEXT is unlimited but guard anyway
 
         self.db.table("raw_scrapes").update(patch).eq("id", raw_scrape_id).execute()
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Verified-at refresh (duplicate payloads)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _refresh_verified_at(self) -> None:
-        """
-        Bump last_verified_at on all active/anticipated/stale shortage_events
-        for this data source.  Called when the raw payload is unchanged
-        (duplicate) so that cleanup_stale does not decay records whose
-        source genuinely has not changed.
-
-        Also restores 'stale' records back to 'active' — if the source
-        payload hasn't changed, previously-active records are still valid.
-        """
-        now = datetime.now(timezone.utc).isoformat()
-        try:
-            # Refresh active/anticipated records
-            result = (
-                self.db.table("shortage_events")
-                .update({"last_verified_at": now})
-                .eq("data_source_id", self.SOURCE_ID)
-                .in_("status", ["active", "anticipated"])
-                .execute()
-            )
-            touched = len(result.data) if result.data else 0
-
-            # Restore stale records back to active — the source data
-            # hasn't changed, so these were wrongly decayed by
-            # cleanup_stale.  Only restore records that went stale
-            # recently (within 30 days) to avoid resurrecting old data.
-            stale_cutoff = (
-                datetime.now(timezone.utc) - timedelta(days=30)
-            ).isoformat()
-            restored = (
-                self.db.table("shortage_events")
-                .update({"last_verified_at": now, "status": "active"})
-                .eq("data_source_id", self.SOURCE_ID)
-                .eq("status", "stale")
-                .gt("updated_at", stale_cutoff)
-                .execute()
-            )
-            restored_count = len(restored.data) if restored.data else 0
-
-            self.log.info(
-                "Refreshed last_verified_at on duplicate scrape",
-                extra={
-                    "source": self.SOURCE_NAME,
-                    "touched": touched,
-                    "restored_from_stale": restored_count,
-                },
-            )
-        except Exception as exc:
-            self.log.warning(
-                "Failed to refresh last_verified_at",
-                extra={"source": self.SOURCE_NAME, "error": str(exc)},
-            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Drug resolution
@@ -593,10 +536,34 @@ class BaseScraper(ABC):
                     "Skipping normalisation — payload unchanged",
                     extra={"source": self.SOURCE_NAME},
                 )
-                # Touch last_verified_at on existing records to prevent
-                # cleanup_stale from marking them stale while the source
-                # data genuinely hasn't changed.
-                self._refresh_verified_at()
+                # Still refresh last_verified_at so records don't go stale.
+                # Also re-activate any records that went stale while the
+                # scraper was returning duplicate payloads.
+                now_iso = datetime.now(timezone.utc).isoformat()
+                try:
+                    # Refresh active/anticipated records
+                    self.db.table("shortage_events").update({
+                        "last_verified_at": now_iso,
+                    }).eq("data_source_id", self.SOURCE_ID).in_(
+                        "status", ["active", "anticipated"]
+                    ).execute()
+                    # Re-activate stale records (they were active before
+                    # mark_stale_shortages() demoted them)
+                    self.db.table("shortage_events").update({
+                        "status": "active",
+                        "last_verified_at": now_iso,
+                    }).eq("data_source_id", self.SOURCE_ID).eq(
+                        "status", "stale"
+                    ).execute()
+                    self.log.info(
+                        "Refreshed last_verified_at and re-activated stale records (duplicate payload)",
+                        extra={"source": self.SOURCE_NAME},
+                    )
+                except Exception as refresh_exc:
+                    self.log.warning(
+                        "Could not refresh last_verified_at on duplicate",
+                        extra={"error": str(refresh_exc), "source": self.SOURCE_NAME},
+                    )
                 return summary
 
             # ── 3. Normalize ──────────────────────────────────────────────────

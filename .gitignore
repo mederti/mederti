@@ -71,3 +71,4 @@ htmlcov/
 
 # Supabase local
 supabase/.temp/
+.vercel

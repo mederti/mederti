@@ -23,13 +23,13 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "Real-time pharmaceutical shortage tracking across 20+ countries. 161,000+ drugs monitored. TGA, FDA, MHRA, EMA and 38 more regulatory sources. Used by pharmacists, hospitals, and health systems.",
+    "Real-time pharmaceutical shortage tracking across 20+ countries. 216,000+ drugs monitored. TGA, FDA, MHRA, EMA and 43 more regulatory sources. Used by pharmacists, hospitals, and health systems.",
   keywords: ["drug shortage", "medicine shortage", "pharmaceutical shortage", "TGA shortage", "FDA drug shortage", "MHRA shortage", "medicine availability", "drug recall"],
   metadataBase: new URL(SITE_URL),
   openGraph: {
     title: "Mederti — Global Drug Shortage Intelligence",
     description:
-      "Track drug shortages across 20+ countries in real time. 161,000+ drugs monitored from 42 regulatory sources.",
+      "Track drug shortages across 20+ countries in real time. 216,000+ drugs monitored from 47 regulatory sources.",
     url: SITE_URL,
     siteName: "Mederti",
     type: "website",
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Mederti — Global Drug Shortage Intelligence",
     description:
-      "Track drug shortages across 20+ countries in real time. 161,000+ drugs monitored from 42 regulatory sources.",
+      "Track drug shortages across 20+ countries in real time. 216,000+ drugs monitored from 47 regulatory sources.",
     images: [`${SITE_URL}/api/og`],
   },
 };

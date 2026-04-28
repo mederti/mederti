@@ -5,6 +5,7 @@ import SiteFooter from "@/app/components/site-footer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import MarketSidebar from "./MarketSidebar";
 import NewsletterForm from "./NewsletterForm";
+import IntelligenceBriefing from "./IntelligenceBriefing";
 import {
   REPORTS, ARTICLES, DATA_RELEASES, MEDIA,
   CATEGORY_STYLE,
@@ -127,6 +128,26 @@ export default async function IntelligencePage() {
         }}>
           {/* Main content column */}
           <div className="intel-main-col" style={{ flex: "1 1 0%", minWidth: 0 }}>
+
+        {/* ─── DAILY AI BRIEFING (The Pharma Brief) ─── */}
+        <div style={{ paddingTop: 36 }}>
+          <IntelligenceBriefing />
+        </div>
+
+        {/* ─── REGULATORY CALENDAR LINK ─── */}
+        <div style={{ marginBottom: 32, padding: 18, background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 4 }}>
+              Regulatory calendar
+            </div>
+            <div style={{ fontSize: 14, color: "var(--app-text-3)" }}>
+              Upcoming FDA AdComm, EMA CHMP opinions, MHRA decisions, Phase III completions — all in one place.
+            </div>
+          </div>
+          <Link href="/intelligence/calendar" style={{ padding: "10px 18px", background: "var(--app-text)", color: "white", borderRadius: 6, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            Open calendar →
+          </Link>
+        </div>
 
         {/* ─── HERO: lead article + sidebar stack ─── */}
         <section className="intel-hero" style={{

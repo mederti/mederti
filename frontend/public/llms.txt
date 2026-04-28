@@ -1,12 +1,12 @@
 # Mederti — Global Pharmaceutical Shortage Intelligence
 
-Mederti is a real-time pharmaceutical shortage tracking platform covering 20+ countries and 161,000+ approved drugs.
+Mederti is a real-time pharmaceutical shortage tracking platform covering 22 countries and 216,000+ approved drugs.
 
 ## What this site contains
 
-- Real-time drug shortage status for 20+ countries including Australia, United States, Canada, United Kingdom, EU, Japan, Italy, Spain, Germany, France, Norway, Finland, Switzerland, Singapore, New Zealand, Netherlands, Ireland, Sweden, Austria, Belgium
+- Real-time drug shortage status for 22 countries including Australia, United States, Canada, United Kingdom, EU, Japan, Italy, Spain, Germany, France, Norway, Finland, Switzerland, Singapore, New Zealand, Netherlands, Ireland, Belgium, Greece, Malaysia, Portugal, UAE
 - Historical shortage data going back to 2003 (Australia), 2006 (United States), 2008 (Canada)
-- 17,000+ shortage events tracked across all markets
+- 21,500+ shortage events tracked across all markets
 - 23,000+ drug recall records across 7 countries
 - Individual product-level shortage data (ARTG numbers for Australia, DIN for Canada, PL numbers for UK)
 - TGA S19A approval notices for Australian shortage management
@@ -16,7 +16,7 @@ Mederti is a real-time pharmaceutical shortage tracking platform covering 20+ co
 
 ## Data sources
 
-TGA (Australia), FDA (United States), Health Canada, MHRA (United Kingdom), EMA (European Union), PMDA (Japan), BfArM (Germany), ANSM (France), AIFA (Italy), AEMPS (Spain), Swissmedic (Switzerland), NoMA (Norway), Fimea (Finland), HSA (Singapore), Medsafe (New Zealand), Farmanco/KNMP (Netherlands), HPRA (Ireland)
+TGA (Australia), FDA (United States), Health Canada, MHRA (United Kingdom), EMA (European Union), MHLW (Japan), BfArM (Germany), ANSM (France), AIFA (Italy), AEMPS (Spain), Swissmedic (Switzerland), NoMA (Norway), Fimea (Finland), HSA (Singapore), Medsafe (New Zealand), KNMP (Netherlands), HPRA (Ireland), FAMHP/PharmaStatus (Belgium), EOF (Greece), NPRA (Malaysia), INFARMED (Portugal), EDE (UAE)
 
 ## Update frequency
 
@@ -27,7 +27,7 @@ Data accuracy: Audited weekly against live regulatory sources
 ## Key pages
 
 - /drugs/{id} — Individual drug shortage status, alternatives, recalls, and supply forecasting
-- /search — Search 161,000+ drugs by name with shortage status
+- /search — Search 216,000+ drugs by name with shortage status
 - /shortages — Browse all active shortages filterable by country, severity, and status
 - /recalls — Browse drug recalls filterable by country and class
 - /dashboard — Global shortage KPIs, heatmap, and timeline

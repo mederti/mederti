@@ -4,8 +4,8 @@ const content: PersonaContent = {
   heroHeadline: "Turn shortage intelligence into supply opportunity.",
   heroSub:
     "Mederti gives pharmaceutical suppliers real-time visibility of where demand is unmet, which drugs are at risk, and where you can step in.",
-  heroCta: "Get started free",
-  heroCtaHref: "/signup",
+  heroCta: "List your stock free",
+  heroCtaHref: "/signup?role=supplier&next=/supplier-dashboard/onboarding",
 
   problemHeadline: "You\u2019re reacting to a market you could be leading.",
   problemText:
@@ -20,7 +20,7 @@ const content: PersonaContent = {
     {
       icon: "\uD83D\uDCE1",
       title: "Unmet demand signals",
-      desc: "Identify drugs currently in shortage across 13 countries where demand is unmet and supply is needed. See severity, affected countries, and how long the shortage has persisted.",
+      desc: "Identify drugs currently in shortage across 22 countries where demand is unmet and supply is needed. See severity, affected countries, and how long the shortage has persisted.",
     },
     {
       icon: "\uD83C\uDF10",
@@ -50,8 +50,8 @@ const content: PersonaContent = {
   quoteRole: "Pharmaceutical Distributor",
 
   ctaHeadline: "The shortage market moves fast. Be ahead of it.",
-  ctaButton: "Get started free",
-  ctaHref: "/signup",
+  ctaButton: "List your stock free",
+  ctaHref: "/signup?role=supplier&next=/supplier-dashboard/onboarding",
 };
 
 export default function SuppliersPage() {

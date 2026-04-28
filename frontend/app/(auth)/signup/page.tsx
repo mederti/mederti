@@ -11,6 +11,7 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/home";
+  const role = searchParams.get("role"); // e.g. "supplier"
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,11 +36,12 @@ function SignupForm() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}${next}`,
+        data: role ? { role } : undefined,
       },
     });
     setLoading(false);
@@ -47,6 +49,18 @@ function SignupForm() {
     if (error) {
       setError(error.message);
     } else {
+      // Save role to user_profiles immediately if provided (so it's set even before email confirm)
+      if (role && data.user?.id) {
+        try {
+          await fetch("/api/user/role", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ role }),
+          });
+        } catch {
+          // non-blocking
+        }
+      }
       setDone(true);
     }
   }
@@ -95,10 +109,12 @@ function SignupForm() {
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <p style={{ fontSize: 18, fontWeight: 600, color: "var(--app-text)", marginTop: 0, marginBottom: 4 }}>
-            Create your account
+            {role === "supplier" ? "Sign up as a supplier" : "Create your account"}
           </p>
           <p style={{ fontSize: 13, color: "var(--app-text-4)", margin: 0 }}>
-            Free for individual pharmacists and clinicians
+            {role === "supplier"
+              ? "Free \u2014 list your stock and receive buyer enquiries"
+              : "Free for individual pharmacists and clinicians"}
           </p>
         </div>
 

@@ -1,24 +1,117 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient as createSupabaseSsr } from "@supabase/ssr";
 
 const MOBILE_UA_REGEX =
   /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
 
-export function middleware(req: NextRequest) {
+/**
+ * Routes that DO NOT require authentication.
+ * Everything else (the actual product) requires a signed-in user.
+ *
+ * Marketing / persona pages stay public for SEO and acquisition.
+ * Auth pages stay public so users can log in / sign up.
+ */
+const PUBLIC_PATHS: ReadonlyArray<string> = [
+  "/",                    // landing
+  "/about",
+  "/pricing",
+  "/contact",
+  "/privacy",
+  "/terms",
+  "/login",
+  "/signup",
+  "/auth",                // any auth callback paths
+  "/forgot-password",
+  "/reset-password",
+  // Persona / marketing pages
+  "/pharmacists",
+  "/hospitals",
+  "/doctors",
+  "/government",
+  "/governments",
+  "/suppliers",           // and /suppliers/directory, /suppliers/[slug] (public discovery)
+  // Public APIs that are safe to expose
+  // (handled separately below — we let middleware skip /api/* via matcher)
+];
+
+/**
+ * Returns true if the request path is public (no auth required).
+ */
+function isPublic(pathname: string): boolean {
+  // Exact root
+  if (pathname === "/") return true;
+  // Exact matches and prefix matches
+  for (const p of PUBLIC_PATHS) {
+    if (p === "/") continue;
+    if (pathname === p) return true;
+    if (pathname.startsWith(p + "/")) return true;
+  }
+  return false;
+}
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
   const ua = req.headers.get("user-agent") ?? "";
   const isMobile = MOBILE_UA_REGEX.test(ua);
 
   const res = NextResponse.next();
 
-  // Set cookie so client components can read it without flash
+  // Set device cookie (preserved from existing behaviour)
   res.cookies.set("mederti-device", isMobile ? "mobile" : "desktop", {
     path: "/",
-    maxAge: 60 * 60 * 24, // 24 hours
+    maxAge: 60 * 60 * 24,
     sameSite: "lax",
   });
+
+  // ── Skip auth gating for public paths ──
+  if (isPublic(pathname)) {
+    return res;
+  }
+
+  // ── Auth check via Supabase SSR ──
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_ANON_KEY ??
+    "";
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // If env not configured, fall through (don't break local dev)
+    return res;
+  }
+
+  const supabase = createSupabaseSsr(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return req.cookies.getAll();
+      },
+      setAll(cookies) {
+        cookies.forEach(({ name, value, options }) => {
+          res.cookies.set(name, value, options);
+        });
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    // Build login redirect with return URL
+    const returnUrl = pathname + req.nextUrl.search;
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("next", returnUrl);
+    return NextResponse.redirect(loginUrl);
+  }
 
   return res;
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // Skip API routes, static, image optimisation, favicons, robots, sitemap, llms.txt
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|llms.txt|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf|otf|eot)).*)",
+  ],
 };

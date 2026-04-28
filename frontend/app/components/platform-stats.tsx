@@ -19,9 +19,9 @@ export function PlatformStats({ stats }: { stats: PlatformStatsData }) {
       live: true,
     },
     {
-      label: "Shortage listings",
+      label: "Drug listings",
       value: fmtBig(stats.totalCatalogue),
-      sub: "Product-level shortage records",
+      sub: "Approved drugs tracked globally",
       badge: "US \u00b7 CA \u00b7 AU \u00b7 GB \u00b7 EU \u00b7 JP",
     },
     {
@@ -34,12 +34,12 @@ export function PlatformStats({ stats }: { stats: PlatformStatsData }) {
       label: "Countries monitored",
       value: String(stats.countries),
       sub: "Regulatory authorities",
-      badge: "TGA \u00b7 FDA \u00b7 MHRA \u00b7 EMA + 27",
+      badge: "TGA \u00b7 FDA \u00b7 MHRA \u00b7 EMA + 43",
     },
     {
       label: "Recalls tracked",
       value: fmt(stats.totalRecalls),
-      sub: "Across 11 markets",
+      sub: "Across 7 markets",
       live: true,
     },
     {

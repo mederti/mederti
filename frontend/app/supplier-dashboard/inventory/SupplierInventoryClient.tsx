@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Package, Plus, Trash2, Search, X, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Package, Plus, Trash2, Search, X, ArrowRight, CheckCircle2, Upload } from "lucide-react";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
 import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
+import BulkUploadModal from "./BulkUploadModal";
 
 const FLAGS: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", CA: "🇨🇦", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸",
@@ -40,6 +41,7 @@ export default function SupplierInventoryClient() {
   const [loading, setLoading] = useState(true);
   const [profileRequired, setProfileRequired] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
   const [adding, setAdding] = useState(false);
 
   // Add form state
@@ -166,19 +168,39 @@ export default function SupplierInventoryClient() {
             Drugs you list here appear on shortage pages so buyers can find you. <strong style={{ color: "var(--app-text)" }}>{items.length}</strong> active listings.
           </p>
         </div>
-        <button
-          onClick={() => setShowAdd(s => !s)}
-          style={{
-            padding: "10px 18px", fontSize: 13, fontWeight: 600,
-            background: showAdd ? "var(--app-bg)" : "var(--teal)",
-            color: showAdd ? "var(--app-text)" : "white",
-            border: showAdd ? "1px solid var(--app-border)" : "none",
-            borderRadius: 6, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8,
-          }}
-        >
-          {showAdd ? <><X size={14} /> Cancel</> : <><Plus size={14} /> Add stock listing</>}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowBulk(true)}
+            style={{
+              padding: "10px 16px", fontSize: 13, fontWeight: 600,
+              background: "white", color: "var(--app-text)",
+              border: "1px solid var(--app-border)", borderRadius: 6,
+              cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8,
+            }}
+          >
+            <Upload size={14} /> Bulk import CSV
+          </button>
+          <button
+            onClick={() => setShowAdd(s => !s)}
+            style={{
+              padding: "10px 18px", fontSize: 13, fontWeight: 600,
+              background: showAdd ? "var(--app-bg)" : "var(--teal)",
+              color: showAdd ? "var(--app-text)" : "white",
+              border: showAdd ? "1px solid var(--app-border)" : "none",
+              borderRadius: 6, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8,
+            }}
+          >
+            {showAdd ? <><X size={14} /> Cancel</> : <><Plus size={14} /> Add single listing</>}
+          </button>
+        </div>
       </div>
+
+      {showBulk && (
+        <BulkUploadModal
+          onClose={() => setShowBulk(false)}
+          onComplete={() => { setShowBulk(false); loadItems(); }}
+        />
+      )}
 
       {/* Add form */}
       {showAdd && (

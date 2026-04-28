@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Inbox, AlertTriangle, Mail, Building, Globe, Lock, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Inbox, AlertTriangle, Mail, Building, Globe, Lock, ArrowRight, CheckCircle2, Send } from "lucide-react";
+import QuoteModal from "./QuoteModal";
 
 const FLAGS: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", CA: "🇨🇦", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹",
@@ -53,14 +54,17 @@ export default function SupplierInboxClient() {
   const [data, setData] = useState<InboxResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "critical" | "urgent">("all");
+  const [quoteFor, setQuoteFor] = useState<Enquiry | null>(null);
 
-  useEffect(() => {
+  function refresh() {
     fetch("/api/supplier/inbox")
       .then(r => r.json())
       .then(setData)
       .catch(() => setData({ enquiries: [], profile_required: true }))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { refresh(); }, []);
 
   if (loading) {
     return (
@@ -245,14 +249,47 @@ export default function SupplierInboxClient() {
                 </div>
 
                 {e.message && (
-                  <div style={{ padding: 12, background: "var(--app-bg)", borderRadius: 6, fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.5 }}>
+                  <div style={{ padding: 12, background: "var(--app-bg)", borderRadius: 6, fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.5, marginBottom: 12 }}>
                     {e.message}
                   </div>
                 )}
+
+                {/* Quote action */}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: e.message ? 0 : 4 }}>
+                  {e.already_quoted ? (
+                    <span style={{
+                      fontSize: 12, fontWeight: 600, padding: "8px 14px",
+                      background: "var(--low-bg)", color: "var(--low)",
+                      borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 6,
+                    }}>
+                      <CheckCircle2 size={13} /> Quote submitted
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setQuoteFor(e)}
+                      style={{
+                        padding: "8px 14px", fontSize: 13, fontWeight: 600,
+                        background: "var(--teal)", color: "white", border: "none", borderRadius: 6,
+                        cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      <Send size={13} /> Submit quote
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* Quote modal */}
+      {quoteFor && (
+        <QuoteModal
+          enquiry={quoteFor}
+          onClose={() => setQuoteFor(null)}
+          onSubmitted={() => { setQuoteFor(null); refresh(); }}
+        />
       )}
     </div>
   );

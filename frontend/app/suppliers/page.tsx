@@ -5,7 +5,7 @@ const content: PersonaContent = {
   heroSub:
     "Mederti gives pharmaceutical suppliers real-time visibility of where demand is unmet, which drugs are at risk, and where you can step in.",
   heroCta: "List your stock free",
-  heroCtaHref: "/signup?role=supplier&next=/supplier-dashboard/profile",
+  heroCtaHref: "/signup?role=supplier&next=/supplier-dashboard/onboarding",
 
   problemHeadline: "You\u2019re reacting to a market you could be leading.",
   problemText:
@@ -51,7 +51,7 @@ const content: PersonaContent = {
 
   ctaHeadline: "The shortage market moves fast. Be ahead of it.",
   ctaButton: "List your stock free",
-  ctaHref: "/signup?role=supplier&next=/supplier-dashboard/profile",
+  ctaHref: "/signup?role=supplier&next=/supplier-dashboard/onboarding",
 };
 
 export default function SuppliersPage() {

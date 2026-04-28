@@ -125,6 +125,10 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "aemps_recalls":         ("backend.scrapers.aemps_recalls_scraper",         "AEMPSRecallsScraper"),
     "medsafe_recalls":       ("backend.scrapers.medsafe_recalls_scraper",       "MedsafeRecallsScraper"),
     "hsa_recalls":           ("backend.scrapers.hsa_recalls_scraper",           "HSARecallsScraper"),
+    # Pipeline & regulatory calendar scrapers
+    "fda_adcomm":            ("backend.scrapers.fda_adcomm_scraper",            "FDAAdcommScraper"),
+    "ema_chmp":              ("backend.scrapers.ema_chmp_scraper",              "EMAChmpScraper"),
+    "clinicaltrials":        ("backend.scrapers.clinicaltrials_scraper",        "ClinicalTrialsScraper"),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

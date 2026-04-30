@@ -11,6 +11,8 @@ import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import HomeSearchClient from "./HomeSearchClient";
 import WatchlistCardClient from "./WatchlistCardClient";
+import PredictiveSignals from "@/app/components/PredictiveSignals";
+import { cookies } from "next/headers";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -203,6 +205,11 @@ export default async function HomePage() {
             </Link>
           ))}
         </div>
+      </div>
+
+      {/* ── Predictive signals (cross-country lead indicator) ─────────────── */}
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 24px 0" }}>
+        <PredictiveSignals country={(await cookies()).get("mederti-country")?.value?.toUpperCase() || "AU"} limit={6} />
       </div>
 
       {/* ── Card grid ────────────────────────────────────────────────────── */}

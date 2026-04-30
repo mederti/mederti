@@ -145,16 +145,16 @@ THIS SUPPLIER
 - Tier: ${(profile as { tier: string }).tier}
 `;
 
-  const userPrompt = `Generate a strategic note on this single enquiry.
+  const userPrompt = `Write a strategic note on this single enquiry. Strict Economist house style.
 
 ${dataContext}
 
 Output JSON:
 
 {
-  "buyer_interpretation": "1-2 sentences interpreting what this enquiry signals about the buyer's situation. Read between the lines on urgency + quantity + organisation type.",
-  "win_factors": ["3-4 short bullet phrases — the things that will determine whether this supplier wins this deal"],
-  "competitive_landscape": "1-2 sentences naming the competitive dynamic. How crowded? How differentiated does this supplier need to be?",
+  "buyer_interpretation": "Two sentences. What this enquiry signals about the buyer's situation. Past tense for what they did, present for what they need. No 'we should', no hedge adverbs. Open with a noun.",
+  "win_factors": ["3-4 short noun phrases. Each starts with a noun, not a verb. Examples: 'Verified status', 'Sub-24h response', 'Local stock', 'Price under £18 per pack'. Not 'Should respond quickly'."],
+  "competitive_landscape": "Two sentences. How crowded the market is, what the supplier must beat. Cite the competitor count. Plain words.",
   "recommended_response_time_hours": 4,
   "confidence": "high" | "medium" | "low"
 }

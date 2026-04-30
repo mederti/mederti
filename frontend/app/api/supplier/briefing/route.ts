@@ -64,11 +64,16 @@ export async function GET(req: Request) {
   }
 
   // ── Build the data context ──
+  const today = new Date().toISOString().slice(0, 10);
+  const sixtyDaysAhead = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
   const [
     inventoryRes,
     recentEnquiriesRes,
     sevenDayShortagesRes,
     portfolioShortagesRes,
+    portfolioFacilitiesRes,
+    upcomingEventsRes,
+    nhsConcessionsRes,
   ] = await Promise.all([
     sb.from("supplier_inventory")
       .select("drug_id, countries, status")
@@ -88,6 +93,23 @@ export async function GET(req: Request) {
     sb.from("shortage_events")
       .select("drug_id, country_code, severity, status, reason_category")
       .in("status", ["active", "anticipated"]),
+    sb.from("manufacturing_facilities")
+      .select("facility_name, country, last_inspection_classification, oai_count_5y, warning_letter_count_5y, last_inspection_date")
+      .or("last_inspection_classification.eq.OAI,warning_letter_count_5y.gt.0")
+      .order("last_inspection_date", { ascending: false })
+      .limit(8),
+    sb.from("regulatory_events")
+      .select("event_type, event_date, generic_name, sponsor, source_country")
+      .eq("outcome", "scheduled")
+      .gte("event_date", today)
+      .lte("event_date", sixtyDaysAhead)
+      .order("event_date", { ascending: true })
+      .limit(12),
+    sb.from("drug_pricing_history")
+      .select("country, pack_price, currency, product_name, effective_date")
+      .eq("price_type", "concession")
+      .order("effective_date", { ascending: false })
+      .limit(10),
   ]);
 
   const portfolioDrugIds = new Set(((inventoryRes.data ?? []) as { drug_id: string }[]).map((i) => i.drug_id));
@@ -180,6 +202,31 @@ GLOBAL CONTEXT (for foresight)
 - Critical-severity shortages globally: 1,026
 - Top global root cause: regulatory_action (33% of all active shortages)
 - 368 drugs are simultaneously short in 3+ countries (upstream API failure)
+
+UPCOMING REGULATORY EVENTS (60 days, all markets)
+==================================================
+${(upcomingEventsRes.data ?? []).length === 0 ? "(none on file)" :
+  (upcomingEventsRes.data ?? []).slice(0, 8).map((e) => {
+    const r = e as { event_date: string; event_type: string; generic_name: string | null; sponsor: string | null; source_country: string | null };
+    return `- ${r.event_date} | ${r.source_country} ${r.event_type} | ${r.generic_name ?? "?"} | ${r.sponsor ?? "?"}`;
+  }).join("\n")}
+
+MANUFACTURING QUALITY SIGNALS (FDA OAI / warning letters)
+==========================================================
+${(portfolioFacilitiesRes.data ?? []).length === 0 ? "(none on file yet)" :
+  (portfolioFacilitiesRes.data ?? []).slice(0, 6).map((f) => {
+    const r = f as { facility_name: string; country: string; last_inspection_classification: string; oai_count_5y: number; warning_letter_count_5y: number };
+    return `- ${r.country} | ${r.facility_name} | ${r.last_inspection_classification} | ${r.oai_count_5y} OAI / ${r.warning_letter_count_5y} warning letters (5y)`;
+  }).join("\n")}
+OAI = "Official Action Indicated" — these classifications precede FDA shortages by 60-90 days.
+
+UK NHS PRICE CONCESSIONS (early shortage signal)
+=================================================
+${(nhsConcessionsRes.data ?? []).length === 0 ? "(none ingested yet)" :
+  (nhsConcessionsRes.data ?? []).slice(0, 6).map((p) => {
+    const r = p as { product_name: string; pack_price: number | null; currency: string; effective_date: string };
+    return `- ${r.effective_date} | ${r.product_name} | ${r.currency} ${r.pack_price ?? "?"}`;
+  }).join("\n")}
 `;
 
   const userPrompt = `Generate today's briefing for this supplier.

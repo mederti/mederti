@@ -92,7 +92,7 @@ export function SupplierDrawer({
               background: "var(--app-bg-2)", border: "1px solid var(--app-border)",
               cursor: "pointer", color: "var(--app-text-3)", fontSize: 14,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "Inter, sans-serif",
+              fontFamily: "var(--font-inter), sans-serif",
             }}>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M2 2l8 8M10 2l-8 8" />
@@ -159,7 +159,7 @@ export function SupplierDrawer({
             <button onClick={onClose} style={{
               marginTop: 24, padding: "10px 24px", borderRadius: 8,
               background: "var(--teal)", color: "#fff", border: "none",
-              fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "Inter, sans-serif",
+              fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "var(--font-inter), sans-serif",
             }}>
               Done
             </button>
@@ -190,7 +190,7 @@ export function SupplierDrawer({
                     width: "100%", padding: "8px 10px", borderRadius: 8,
                     border: "1px solid var(--app-border)", fontSize: 12,
                     color: "var(--app-text)", background: "var(--app-bg)",
-                    fontFamily: "Inter, sans-serif", outline: "none",
+                    fontFamily: "var(--font-inter), sans-serif", outline: "none",
                     boxSizing: "border-box",
                   }}
                 />
@@ -205,7 +205,7 @@ export function SupplierDrawer({
                     return (
                       <button key={u} onClick={() => setUrgency(u.toLowerCase())} style={{
                         padding: "8px 4px", borderRadius: 8, fontSize: 12,
-                        cursor: "pointer", fontFamily: "Inter, sans-serif",
+                        cursor: "pointer", fontFamily: "var(--font-inter), sans-serif",
                         border: `1px solid ${active ? "var(--teal-b)" : "var(--app-border)"}`,
                         background: active ? "var(--teal-bg)" : "var(--app-bg)",
                         color: active ? "var(--teal)" : "var(--app-text-3)",
@@ -229,7 +229,7 @@ export function SupplierDrawer({
                     width: "100%", padding: "8px 10px", borderRadius: 8,
                     border: "1px solid var(--app-border)", fontSize: 12,
                     color: "var(--app-text)", background: "var(--app-bg)",
-                    fontFamily: "Inter, sans-serif", outline: "none",
+                    fontFamily: "var(--font-inter), sans-serif", outline: "none",
                     boxSizing: "border-box",
                   }}
                 />
@@ -248,7 +248,7 @@ export function SupplierDrawer({
                     width: "100%", padding: "8px 10px", borderRadius: 8,
                     border: "1px solid var(--app-border)", fontSize: 12,
                     color: "var(--app-text)", background: "var(--app-bg)",
-                    fontFamily: "Inter, sans-serif", height: 80, resize: "none", outline: "none",
+                    fontFamily: "var(--font-inter), sans-serif", height: 80, resize: "none", outline: "none",
                     boxSizing: "border-box",
                   }}
                 />
@@ -268,7 +268,7 @@ export function SupplierDrawer({
                   border: "none", color: "#fff",
                   fontSize: 14, fontWeight: 600,
                   cursor: submitting ? "not-allowed" : "pointer",
-                  fontFamily: "Inter, sans-serif", marginBottom: 8,
+                  fontFamily: "var(--font-inter), sans-serif", marginBottom: 8,
                 }}
               >
                 {submitting ? "Sending..." : `Send enquiry to ${partner.name}`}

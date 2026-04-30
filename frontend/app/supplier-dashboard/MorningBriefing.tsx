@@ -101,7 +101,7 @@ export default function MorningBriefing() {
               {new Date(data.generated_for_date || Date.now()).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}
             </span>
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.4, margin: 0, color: "white", maxWidth: 820, fontFamily: "Georgia, serif" }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.4, margin: 0, color: "white", maxWidth: 820, fontFamily: "var(--font-inter), sans-serif" }}>
             {data.market_pulse}
           </h2>
         </div>

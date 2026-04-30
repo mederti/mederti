@@ -80,7 +80,7 @@ export default function RegulatoryCalendarClient() {
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 8, display: "inline-flex", alignItems: "center", gap: 6 }}>
           <CalendarDays size={13} /> Regulatory Calendar
         </div>
-        <h1 style={{ fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 12, fontFamily: "Georgia, serif" }}>
+        <h1 style={{ fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 12, fontFamily: "var(--font-inter), sans-serif" }}>
           What's coming next.
         </h1>
         <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.6, maxWidth: 760 }}>

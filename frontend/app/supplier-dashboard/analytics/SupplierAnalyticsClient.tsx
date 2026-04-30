@@ -105,7 +105,7 @@ export default function SupplierAnalyticsClient() {
             <strong style={{ color: "white", fontSize: 16 }}>{data.conversion_rate}</strong>.
           </div>
         </div>
-        <div style={{ fontSize: 56, fontWeight: 700, fontFamily: "Georgia, serif", color: "#5EEAD4" }}>
+        <div style={{ fontSize: 56, fontWeight: 700, fontFamily: "var(--font-inter), sans-serif", color: "#5EEAD4" }}>
           {data.conversion_rate}%
         </div>
       </div>

@@ -91,7 +91,7 @@ export default function IntelligenceBriefing() {
             <span style={{ fontSize: 11, color: "#94A3B8" }}>·</span>
             <span style={{ fontSize: 11, color: "#64748B" }}>by Mederti</span>
           </div>
-          <div style={{ fontSize: 13, color: "#475569", fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+          <div style={{ fontSize: 13, color: "#475569", fontFamily: "var(--font-inter), sans-serif", fontStyle: "italic" }}>
             {formatDate(generatedAt)} · catch up on the global pharmaceutical supply stories that matter
           </div>
         </div>
@@ -119,7 +119,7 @@ export default function IntelligenceBriefing() {
           background: "var(--teal-bg, #f0fdfa)",
           borderLeft: "3px solid var(--teal)",
           marginBottom: 28,
-          fontFamily: "Georgia, serif",
+          fontFamily: "var(--font-inter), sans-serif",
           fontSize: 17,
           lineHeight: 1.5,
           color: "var(--app-text)",
@@ -150,7 +150,7 @@ export default function IntelligenceBriefing() {
 
             <p style={{
               margin: 0,
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-inter), sans-serif",
               fontSize: 16.5,
               lineHeight: 1.65,
               color: "#1E293B",
@@ -179,7 +179,7 @@ export default function IntelligenceBriefing() {
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", color: "#0F172A", textTransform: "uppercase", marginBottom: 12 }}>
             Watch list — next 30 days
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontFamily: "Georgia, serif", fontSize: 14, color: "#475569" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontFamily: "var(--font-inter), sans-serif", fontSize: 14, color: "#475569" }}>
             {data.watch_list.slice(0, 8).map((w, i, arr) => (
               <span key={i}>
                 {w}{i < arr.length - 1 ? "  ·" : ""}

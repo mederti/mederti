@@ -99,13 +99,13 @@ export default function SoWhatInsight({ drugId }: { drugId: string }) {
       <div style={{
         fontSize: 13, fontWeight: 700, color: "white",
         marginBottom: 8, lineHeight: 1.35,
-        fontFamily: "Georgia, serif",
+        fontFamily: "var(--font-inter), sans-serif",
       }}>
         {data.headline}
       </div>
 
       {/* Body */}
-      <div style={{ fontSize: 12.5, color: "#CADCFC", lineHeight: 1.6, fontFamily: "Georgia, serif" }}>
+      <div style={{ fontSize: 12.5, color: "#CADCFC", lineHeight: 1.6, fontFamily: "var(--font-inter), sans-serif" }}>
         {data.body}
       </div>
 

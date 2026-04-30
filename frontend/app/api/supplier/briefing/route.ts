@@ -229,7 +229,7 @@ ${(nhsConcessionsRes.data ?? []).length === 0 ? "(none ingested yet)" :
   }).join("\n")}
 `;
 
-  const userPrompt = `Generate today's briefing for this supplier.
+  const userPrompt = `Write today's briefing for this supplier in strict Economist house style.
 
 ${dataContext}
 
@@ -237,30 +237,41 @@ Output JSON in this exact shape:
 
 {
   "generated_for_date": "YYYY-MM-DD",
-  "market_pulse": "1-2 sentence headline of what matters most this week for THIS supplier specifically. McKinsey voice — name the trend, name the implication.",
+  "market_pulse": "Two sentences. First: the most consequential thing this supplier should know today. Second: the implication. Active voice, plain words, named actor. No first person.",
   "insights": [
     {
-      "headline": "Short, decisive — under 12 words",
-      "body": "2-4 sentences. Name the pattern, name the implication, give a number. End with a forward-looking statement.",
+      "headline": "3-7 word noun phrase. A drug, country, regulator, or facility. Examples: 'Cisplatin shortages', 'India's CDSCO audits', 'Pfizer's Sanford plant'. Not a sentence.",
+      "body": "Three sentences as one paragraph. (1) What happened — past tense, named actor, one number. (2) The most telling supporting fact — places, names, magnitudes. (3) What it means now — present tense, plain words. Never start a sentence with 'This'. Never use 'trajectory', 'leverage', 'key', 'critical', 'major', 'transformative', 'stakeholders', 'going forward'. 60-100 words.",
       "signal_strength": "high" | "medium" | "low",
-      "recommended_action": "Specific, time-bound action the supplier should take this week.",
+      "recommended_action": "One sentence, declarative, active voice. Names the action, the drug or market, and the time window. Example: 'Increase Indian-API stock cover to 90 days for cisplatin and pemetrexed.' Not 'Should consider proactively...'",
       "related_drug_ids": ["drug-id-1"],
       "related_country_codes": ["XX", "YY"]
     }
-    // 3-5 insights total, ranked by signal_strength desc
+    // 3-5 insights, ordered most consequential first.
   ],
   "watch_list": [
-    "Specific signals to monitor over the next 30 days (5-8 short bullet phrases)"
+    "5-8 phrases. Each begins with a noun. Each names a specific drug, regulator, place or date. Examples: 'Hyderabad API spot prices', 'AIFA June meeting', 'Cisplatin restoration in the United States'."
   ]
 }
 
-Rules:
-- Tailor to THIS supplier's territory and portfolio. Generic insights are useless.
-- If the supplier has no recent enquiries, lead with portfolio risk insights instead.
-- If the supplier has cross-country signals in their portfolio, those are critical — surface as high-signal insights.
-- Use real numbers from the data. Don't invent.
-- Foresight is mandatory. Every insight must have a forward-looking implication ("expect", "trajectory").
-- The supplier is reading this Monday morning over coffee. Make every word count.`;
+DISCIPLINE:
+- Tailor to THIS supplier's territory and portfolio. Generic insights waste the reader's time.
+- If there are no recent enquiries, lead with portfolio risk.
+- If there are cross-country signals in the supplier's portfolio, those open the briefing.
+- Use real numbers from the data. Never invent.
+- Round large numbers (1,864 → "about 1,800") unless the precise figure is the news.
+- Maximum two figures per paragraph.
+- The supplier reads this Monday morning over coffee. Cut anything that does not pay its way.
+
+NEVER PRODUCE TEXT LIKE:
+- "Stakeholders should be aware of the increasingly critical trajectory..."
+- "The implications of this development are profound..."
+- "Going forward, suppliers must proactively leverage..."
+- "It is worth noting that the situation has evolved significantly..."
+
+PRODUCE TEXT LIKE:
+- "AIFA, Italy's medicines authority, opened 1,864 shortage cases this year, more than the United States. Cefazolin, doxorubicin and pemetrexed account for one in three of them. The Italian wholesale book is the most exposed in Europe."
+- "Pfizer's Sanford plant received an OAI classification on April 12th, the third in five years. Two of the firm's antibiotic lines are made there. Buyers in the United States and Britain should expect tightening within 60 days."`;
 
   const briefing = await generateJson<DailyBriefing>({
     system: STRATEGIST_PERSONA,

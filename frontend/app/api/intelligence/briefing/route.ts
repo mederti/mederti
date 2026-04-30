@@ -55,6 +55,8 @@ export async function GET(req: Request) {
     crossCountryRes,
     upcomingEventsRes,
     activeTrialsRes,
+    facilityOaiRes,
+    nhsConcessionsRes,
   ] = await Promise.all([
     sb.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
     sb.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active").eq("severity", "critical"),
@@ -74,6 +76,16 @@ export async function GET(req: Request) {
       .gte("primary_completion_date", today)
       .lte("primary_completion_date", new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10))
       .order("primary_completion_date", { ascending: true })
+      .limit(10),
+    sb.from("manufacturing_facilities")
+      .select("facility_name, country, last_inspection_classification, last_inspection_date, oai_count_5y, warning_letter_count_5y")
+      .or("last_inspection_classification.eq.OAI,warning_letter_count_5y.gt.0")
+      .order("last_inspection_date", { ascending: false })
+      .limit(8),
+    sb.from("drug_pricing_history")
+      .select("country, pack_price, currency, pack_description, effective_date, product_name")
+      .eq("price_type", "concession")
+      .order("effective_date", { ascending: false })
       .limit(10),
   ]);
 
@@ -143,6 +155,26 @@ ${(activeTrialsRes.data ?? []).length === 0 ? "(no trials matching catalogue yet
     return `- ${r.primary_completion_date} | ${r.intervention_name ?? "?"} | ${r.sponsor ?? "?"} | ${(r.conditions ?? []).slice(0, 2).join(", ")}`;
   }).join("\n")
 }
+
+MANUFACTURING QUALITY SIGNALS (FDA OAI / warning letters)
+==========================================================
+${(facilityOaiRes.data ?? []).length === 0 ? "(no manufacturing risk signals on file yet)" :
+  (facilityOaiRes.data ?? []).slice(0, 6).map((f) => {
+    const r = f as { facility_name: string; country: string; last_inspection_classification: string; oai_count_5y: number; warning_letter_count_5y: number };
+    return `- ${r.country} | ${r.facility_name} | ${r.last_inspection_classification} | ${r.oai_count_5y} OAI / ${r.warning_letter_count_5y} warning letters (5y)`;
+  }).join("\n")
+}
+These are leading indicators — OAI classification + warning letters typically precede FDA shortages by 60-90 days.
+
+UK NHS PRICE CONCESSIONS (early shortage signal)
+=================================================
+${(nhsConcessionsRes.data ?? []).length === 0 ? "(no concessions ingested yet — pending NHS Drug Tariff)" :
+  (nhsConcessionsRes.data ?? []).slice(0, 8).map((p) => {
+    const r = p as { product_name: string; pack_description: string | null; pack_price: number | null; currency: string; effective_date: string };
+    return `- ${r.effective_date} | ${r.product_name} | ${r.pack_description ?? ""} | ${r.currency} ${r.pack_price ?? "?"}`;
+  }).join("\n")
+}
+A concession is a temporary price uplift NHS pays when wholesalers can't source at tariff. Concession volume is the most reliable forward indicator of GB community-pharmacy shortages.
 `;
 
   const systemPrompt = `You write the daily Mederti pharmaceutical supply briefing in the editorial voice of The Economist's "The World in Brief".

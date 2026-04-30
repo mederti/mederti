@@ -18,6 +18,7 @@ import { getPartnerForCountry } from "@/lib/suppliers";
 import { DrugImage } from "./drug-image";
 import AvailableSuppliers from "./AvailableSuppliers";
 import PipelineRegulatory from "./PipelineRegulatory";
+import SupplyChainResilience from "./SupplyChainResilience";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -872,6 +873,9 @@ export default async function DrugPage({ params }: Props) {
 
             {/* ═══ 2.6 PIPELINE & REGULATORY CALENDAR ═══ */}
             <PipelineRegulatory drugId={id} />
+
+            {/* ═══ 2.7 SUPPLY CHAIN RESILIENCE ═══ */}
+            <SupplyChainResilience drugId={id} />
 
             {/* ═══ 3. SHORTAGE REPORTS BY COUNTRY ═══ */}
             <div id="country-list" style={{ marginBottom: 20 }}>

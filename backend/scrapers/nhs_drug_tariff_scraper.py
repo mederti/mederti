@@ -31,7 +31,7 @@ from backend.scrapers.base_scraper import BaseScraper
 class NHSDrugTariffScraper(BaseScraper):
     SOURCE_ID:    str = "10000000-0000-0000-0000-000000000090"
     SOURCE_NAME:  str = "NHS Drug Tariff + Price Concessions"
-    BASE_URL:     str = "https://www.nhsbsa.nhs.uk/pharmacies-gp-practices-and-appliance-contractors/dispensing-contractors-information/price-concessions"
+    BASE_URL:     str = "https://www.nhsbsa.nhs.uk/pharmacies-gp-practices-and-appliance-contractors/drug-tariff"
     COUNTRY:      str = "United Kingdom"
     COUNTRY_CODE: str = "GB"
 

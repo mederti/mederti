@@ -133,17 +133,26 @@ Output JSON:
   "suggested_price_range_low": null or number (per-unit),
   "suggested_price_range_high": null or number (per-unit),
   "currency": "AUD" | "USD" | "EUR" | "GBP" | null,
-  "pricing_rationale": "1-2 sentences explaining the suggested range. Reference the shortage severity and competitive landscape.",
+  "pricing_rationale": "Two sentences. Why this range. Reference the shortage severity and the competitor count. Plain words. No hedge adverbs.",
   "win_probability_pct": 0-100,
-  "response_timing_advice": "1 sentence: when should they quote? Why?",
-  "differentiators_to_highlight": ["2-4 short phrases — what to emphasise in the quote message to win"],
+  "response_timing_advice": "One sentence. Declarative. 'Quote within four hours.' Not 'You should consider responding quickly going forward.'",
+  "differentiators_to_highlight": ["2-4 noun phrases. Each starts with a noun. Examples: 'Verified status', '48h delivery from local depot', 'Batch certificate on request'. Never 'Should emphasise...' or 'Leverage your...'."],
   "confidence": "high" | "medium" | "low"
 }
 
-Rules:
-- If you have no price benchmarks, set suggested_price_range to null and explain why in pricing_rationale.
-- Win probability should reflect: shortage severity (critical = higher win), urgency (urgent = higher), verified status (yes = higher), competitor count (more = lower).
-- Response timing: critical/urgent enquiries → quote within 4 hours wins disproportionately.`;
+DISCIPLINE:
+- If you have no price benchmarks, set suggested_price_range to null and explain in plain words.
+- Win probability reflects: shortage severity (critical = higher), urgency (urgent = higher), verified status (yes = higher), competitor count (more = lower).
+- Response timing: critical or urgent enquiries → quote within four hours wins disproportionately.
+- Banned words: leverage, key (adj), trajectory, going forward, stakeholders, transformative, robust, proactively.
+
+POSITIVE EXAMPLE:
+- pricing_rationale: "Cisplatin is short in nine countries and the Australian wholesale book is empty. Two competitors quote in this market and only one is verified. The upper band is justified."
+- response_timing_advice: "Quote within four hours. Critical-urgency enquiries close to the first verified responder."
+
+NEGATIVE EXAMPLE (do not produce):
+- "It's worth noting that going forward, the increasingly critical shortage trajectory suggests..."
+- "You should leverage your verified status to proactively address stakeholder concerns..."`;
 
   const coaching = await generateJson<QuoteCoaching>({
     system: STRATEGIST_PERSONA,

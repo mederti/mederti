@@ -97,21 +97,28 @@ Buyer enquiries on Mederti in last 30 days: ${enquiryCount30d ?? 0}
 Output JSON:
 
 {
-  "trajectory_summary": "2-3 sentences. What's the shape of the shortage curve? Is severity rising or fading? Use forward language.",
+  "trajectory_summary": "Three sentences. (1) Where supply stands now — past tense, named numbers. (2) The most telling supporting fact — countries, dates, magnitudes. (3) What it means for the next 60-90 days — present tense, plain words. Banned: trajectory, leverage, key (adj), going forward, stakeholders, transformative.",
   "forecast_30d": { "direction": "improving|stable|worsening", "probability_pct": 0-100 },
   "forecast_90d": { "direction": "improving|stable|worsening", "probability_pct": 0-100 },
-  "upstream_signals": ["3-5 concrete upstream signals to watch — API supplier issues, regulatory action patterns, etc."],
+  "upstream_signals": ["3-5 phrases. Each begins with a noun. Examples: 'Indian API plant audits', 'Ranbaxy import alerts', 'CHMP June meeting outcomes'. Not 'Watch for...' or 'Monitor...'."],
   "buyer_demand_signal": "strong" | "moderate" | "weak",
-  "recommended_stock_action": "1-2 sentences: should the supplier stock more of this drug, hold position, or reduce? Be decisive.",
+  "recommended_stock_action": "One sentence. Declarative. 'Increase stock cover to 90 days.' / 'Hold current position.' / 'Reduce exposure to one month.' Not 'Should consider proactively...'.",
   "confidence": "high" | "medium" | "low"
 }
 
-Rules:
-- "Improving" = shortage easing, demand softening
-- "Worsening" = more countries affected, severity escalating
-- "Stable" = no clear directional change
-- Probability_pct is your confidence the named direction will be the actual outcome.
-- Stock action must be decisive: "stock 3-month buffer", "hold current position", "reduce exposure".`;
+DISCIPLINE:
+- "Improving" = shortage easing, demand softening, fewer countries affected.
+- "Worsening" = more countries affected, severity rising.
+- "Stable" = no clear directional change.
+- probability_pct is your confidence the named direction will be the actual outcome.
+- If the data is thin, say so plainly. "Supply is stable. Little forward signal worth flagging." That is a legitimate answer.
+
+POSITIVE EXAMPLE:
+- trajectory_summary: "Cisplatin is short in nine countries, including Italy, France and Germany. Three of nine cite manufacturing failure at the same Indian plant. The European wholesale book will tighten further in the next 60 days."
+- recommended_stock_action: "Increase Indian-API stock cover to 90 days for cisplatin and pemetrexed."
+
+NEGATIVE EXAMPLE (do not produce):
+- "The trajectory of this drug's supply situation is increasingly critical, with stakeholders facing significant pressure going forward..."`;
 
   const foresight = await generateJson<DrugForesight>({
     system: STRATEGIST_PERSONA,

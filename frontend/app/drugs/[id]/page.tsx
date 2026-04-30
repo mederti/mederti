@@ -19,6 +19,7 @@ import { DrugImage } from "./drug-image";
 import AvailableSuppliers from "./AvailableSuppliers";
 import PipelineRegulatory from "./PipelineRegulatory";
 import SupplyChainResilience from "./SupplyChainResilience";
+import SoWhatInsight from "./SoWhatInsight";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -688,9 +689,14 @@ export default async function DrugPage({ params }: Props) {
       {/* ═══ TWO-COLUMN LAYOUT ═══ */}
       <div className="v3-cols" style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
 
-        {/* ── LEFT COLUMN (30%) — Chat ── */}
+        {/* ── LEFT COLUMN (30%) — So What insight + Chat ── */}
         <div className="v3-left" style={{ width: "25%", minWidth: 280, borderRight: "1px solid var(--app-border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <V3ChatPanel drugId={id} drugContext={drugContext} openingMessage={openingMessage} />
+          <div style={{ padding: "14px 14px 0", flexShrink: 0 }}>
+            <SoWhatInsight drugId={id} />
+          </div>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <V3ChatPanel drugId={id} drugContext={drugContext} openingMessage={openingMessage} />
+          </div>
         </div>
 
         {/* ── RIGHT COLUMN (70%) — Drug Detail ── */}

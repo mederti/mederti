@@ -129,6 +129,10 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "fda_adcomm":            ("backend.scrapers.fda_adcomm_scraper",            "FDAAdcommScraper"),
     "ema_chmp":              ("backend.scrapers.ema_chmp_scraper",              "EMAChmpScraper"),
     "clinicaltrials":        ("backend.scrapers.clinicaltrials_scraper",        "ClinicalTrialsScraper"),
+    # Supply intelligence layer (Tier A from data-source assessment)
+    "nhs_drug_tariff":       ("backend.scrapers.nhs_drug_tariff_scraper",       "NHSDrugTariffScraper"),
+    "fda_inspections":       ("backend.scrapers.fda_inspections_scraper",       "FDAInspectionsScraper"),
+    "drugs_at_fda":          ("backend.scrapers.drugs_at_fda_scraper",          "DrugsAtFDAScraper"),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -10,7 +10,9 @@ import SiteFooter from "@/app/components/site-footer";
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/home";
+  // After email confirm, send users to onboarding so we can profile them
+  // before they land in the product. Caller can override with ?next=/whatever.
+  const next = searchParams.get("next") ?? "/onboarding";
   const role = searchParams.get("role"); // e.g. "supplier"
 
   const [email, setEmail] = useState("");

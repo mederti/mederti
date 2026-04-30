@@ -106,6 +106,35 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // ── Onboarding gate ──
+  // If the user is signed in but hasn't finished onboarding, bounce them
+  // to /onboarding. We allow them to stay on /onboarding itself, /account
+  // (so they can fix anything there), and any /api/* (skipped via matcher).
+  if (
+    pathname !== "/onboarding" &&
+    !pathname.startsWith("/account") &&
+    !pathname.startsWith("/auth")
+  ) {
+    // Cheap async check: read the onboarding flag from user_profiles.
+    // We use the same Supabase SSR client so RLS lets the user see their own row.
+    try {
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("onboarding_done")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (profile && profile.onboarding_done === false) {
+        return NextResponse.redirect(new URL("/onboarding", req.url));
+      }
+      // If no row yet, also send them to onboarding so we can create it
+      if (!profile) {
+        return NextResponse.redirect(new URL("/onboarding", req.url));
+      }
+    } catch {
+      // If the lookup fails, don't block the user — fall through.
+    }
+  }
+
   return res;
 }
 

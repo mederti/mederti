@@ -31,10 +31,25 @@ function LoginForm() {
     setLoading(false);
     if (error) {
       setError(error.message);
-    } else {
-      router.push(next);
-      router.refresh();
+      return;
     }
+
+    // If the user hasn't finished the profiling questions yet, send them
+    // through onboarding before they hit the product.
+    let target = next;
+    if (next === "/home") {
+      try {
+        const r = await fetch("/api/user/profile");
+        if (r.ok) {
+          const d = await r.json();
+          if (!d?.profile?.onboarding_done) target = "/onboarding";
+        }
+      } catch {
+        /* non-blocking */
+      }
+    }
+    router.push(target);
+    router.refresh();
   }
 
   async function handleMagicLink(e: React.FormEvent) {

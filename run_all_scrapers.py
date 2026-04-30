@@ -133,6 +133,8 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "nhs_drug_tariff":       ("backend.scrapers.nhs_drug_tariff_scraper",       "NHSDrugTariffScraper"),
     "fda_inspections":       ("backend.scrapers.fda_inspections_scraper",       "FDAInspectionsScraper"),
     "drugs_at_fda":          ("backend.scrapers.drugs_at_fda_scraper",          "DrugsAtFDAScraper"),
+    "mhra_gmdp":             ("backend.scrapers.eudragmdp_scraper",             "EudraGMDPScraper"),
+    "edqm_cep":              ("backend.scrapers.edqm_cep_scraper",              "EDQMCEPScraper"),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

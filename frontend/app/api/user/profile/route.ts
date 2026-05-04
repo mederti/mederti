@@ -69,14 +69,22 @@ export async function GET() {
   const admin = getSupabaseAdmin();
 
   // Resilient: try the full select, fall back to the legacy columns if
-  // migration 025 hasn't been applied to this DB yet.
-  let { data, error } = await admin
-    .from("user_profiles")
-    .select(
-      "role, countries, use_case, org_size, therapy_areas, company_name, onboarding_done, onboarding_done_at, created_at"
-    )
-    .eq("user_id", userId)
-    .maybeSingle();
+  // migration 025 hasn't been applied to this DB yet. Type as a loose
+  // record so the legacy retry can be re-assigned without a TS clash.
+  let data: Record<string, unknown> | null = null;
+  let error: { message?: string } | null = null;
+
+  {
+    const r = await admin
+      .from("user_profiles")
+      .select(
+        "role, countries, use_case, org_size, therapy_areas, company_name, onboarding_done, onboarding_done_at, created_at"
+      )
+      .eq("user_id", userId)
+      .maybeSingle();
+    data = r.data as Record<string, unknown> | null;
+    error = r.error;
+  }
 
   if (error) {
     const msg = (error.message ?? "").toLowerCase();
@@ -86,7 +94,7 @@ export async function GET() {
         .select("role, company_name, created_at")
         .eq("user_id", userId)
         .maybeSingle();
-      data = retry.data;
+      data = retry.data as Record<string, unknown> | null;
       error = retry.error;
     }
   }
@@ -179,11 +187,20 @@ export async function POST(req: Request) {
     "onboarding_done", "onboarding_done_at",
   ];
 
-  let { data, error } = await admin
-    .from("user_profiles")
-    .upsert(update, { onConflict: "user_id" })
-    .select()
-    .maybeSingle();
+  // Type as a loose record so the legacy retry can be re-assigned
+  // without a TS clash on the narrower full-schema return type.
+  let data: Record<string, unknown> | null = null;
+  let error: { message?: string } | null = null;
+
+  {
+    const r = await admin
+      .from("user_profiles")
+      .upsert(update, { onConflict: "user_id" })
+      .select()
+      .maybeSingle();
+    data = r.data as Record<string, unknown> | null;
+    error = r.error;
+  }
 
   if (error) {
     const msg = error.message ?? "";
@@ -209,7 +226,7 @@ export async function POST(req: Request) {
         .upsert(legacyUpdate, { onConflict: "user_id" })
         .select()
         .maybeSingle();
-      data = retry.data;
+      data = retry.data as Record<string, unknown> | null;
       error = retry.error;
     }
   }

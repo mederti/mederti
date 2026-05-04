@@ -116,8 +116,21 @@ export default function OnboardingPage() {
   const [useCase, setUseCase]         = useState<UseCase | null>(null);
   const [orgSize, setOrgSize]         = useState<OrgSize | null>(null);
   const [therapyAreas, setTherapyAreas] = useState<string[]>([]);
+  // Phase of the final-step submit so we can show better copy than "Saving…"
+  // once the API call has returned and we're waiting on the destination
+  // page to render.
+  const [phase, setPhase] = useState<"idle" | "saving" | "redirecting">("idle");
 
   const TOTAL_STEPS = 5;
+
+  // Prefetch the most likely destination as soon as we know the role +
+  // use-case. By the time the user clicks Finish, the RSC payload for
+  // /home or /supplier-dashboard is already warm.
+  useEffect(() => {
+    if (step >= 3 && (role || useCase)) {
+      try { router.prefetch(landingPathFor(role, useCase)); } catch { /* noop */ }
+    }
+  }, [step, role, useCase, router]);
 
   // Pre-seed countries from cookie (mederti-country)
   useEffect(() => {
@@ -187,10 +200,17 @@ export default function OnboardingPage() {
 
     // Final step → save and complete
     setSubmitting(true);
+    setPhase("saving");
     try {
+      // Time-bound the save so a slow serverless cold-start doesn't trap
+      // the user on "Saving…" forever. 12s is generous; the call should
+      // typically be <1s.
+      const ctrl = new AbortController();
+      const watchdog = setTimeout(() => ctrl.abort(), 12_000);
       const r = await fetch("/api/user/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ctrl.signal,
         body: JSON.stringify({
           role,
           countries,
@@ -200,6 +220,7 @@ export default function OnboardingPage() {
           complete_onboarding: true,
         }),
       });
+      clearTimeout(watchdog);
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j?.error || "Could not save your profile");
@@ -208,9 +229,28 @@ export default function OnboardingPage() {
       if (countries[0]) {
         document.cookie = `mederti-country=${countries[0]}; path=/; max-age=${60 * 60 * 24 * 365}`;
       }
-      router.replace(landingPathFor(role, useCase));
+
+      const target = landingPathFor(role, useCase);
+      // Switch the message — the user is now waiting on the destination
+      // page, not on us.
+      setPhase("redirecting");
+      router.replace(target);
+
+      // Fallback: if the RSC navigation hasn't actually moved the user
+      // off the onboarding page within 5s (cold serverless on Vercel),
+      // do a hard browser navigation instead.
+      window.setTimeout(() => {
+        if (window.location.pathname.startsWith("/onboarding")) {
+          window.location.assign(target);
+        }
+      }, 5_000);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
+      setPhase("idle");
+      const msg = e instanceof Error
+        ? (e.name === "AbortError"
+            ? "Network is slow. Please try again."
+            : e.message)
+        : "Something went wrong";
       setErr(msg);
       setSubmitting(false);
     }
@@ -432,9 +472,11 @@ export default function OnboardingPage() {
                   fontFamily: "var(--font-inter), sans-serif",
                 }}
               >
-                {submitting
-                  ? "Saving…"
-                  : step === TOTAL_STEPS ? "Finish" : "Continue"}
+                {phase === "redirecting"
+                  ? "Setting up your home page…"
+                  : submitting
+                    ? "Saving…"
+                    : step === TOTAL_STEPS ? "Finish" : "Continue"}
                 {!submitting && <ArrowRight size={14} />}
               </button>
             </div>

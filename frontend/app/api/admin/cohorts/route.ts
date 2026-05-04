@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { createServerClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,21 +33,10 @@ interface Profile {
   created_at: string | null;
 }
 
-async function isAdmin(): Promise<boolean> {
-  // Minimal admin gate: signed-in users only. Tighten with a proper allow-list
-  // (e.g. user_profiles.role = 'admin' or env ADMIN_EMAILS) once we have one.
-  try {
-    const sb = await createServerClient();
-    const { data: { user } } = await sb.auth.getUser();
-    return Boolean(user?.id);
-  } catch {
-    return false;
-  }
-}
-
 export async function GET() {
-  if (!(await isAdmin())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const admin_ctx = await requireAdmin();
+  if (!admin_ctx) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const admin = getSupabaseAdmin();
 

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/intelligence?status=draft&page=1
  * List intelligence articles for admin review.
  */
 export async function GET(req: NextRequest) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const sp = req.nextUrl.searchParams;
   const status = sp.get("status");
   const page = Math.max(1, Number(sp.get("page") ?? 1));
@@ -35,6 +39,9 @@ export async function GET(req: NextRequest) {
  * Publish or reject a draft article.
  */
 export async function PATCH(req: NextRequest) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const body = await req.json();
   const { id, action, reviewerEmail } = body as {
     id?: string;

@@ -94,6 +94,7 @@ export default function CohortsPage() {
     fetch("/api/admin/cohorts")
       .then(async (r) => {
         if (r.status === 401) { setErr("Sign in to view this page."); return null; }
+        if (r.status === 403) { setErr("Admin access required."); return null; }
         if (!r.ok) { setErr("Could not load cohort data."); return null; }
         return r.json();
       })

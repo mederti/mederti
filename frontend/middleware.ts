@@ -118,16 +118,23 @@ export async function middleware(req: NextRequest) {
     // Cheap async check: read the onboarding flag from user_profiles.
     // We use the same Supabase SSR client so RLS lets the user see their own row.
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from("user_profiles")
         .select("onboarding_done")
         .eq("user_id", user.id)
         .maybeSingle();
-      if (profile && profile.onboarding_done === false) {
+      // Fail-open: if the column doesn't exist (migration 025 not yet
+      // applied) or the lookup fails, do NOT redirect — that would trap
+      // every user in /onboarding, which itself can't write the column.
+      if (error) {
+        const msg = (error.message ?? "").toLowerCase();
+        if (msg.includes("could not find") || msg.includes("schema cache") || msg.includes("column")) {
+          // Schema not migrated; let them through.
+        }
+      } else if (profile && profile.onboarding_done === false) {
         return NextResponse.redirect(new URL("/onboarding", req.url));
-      }
-      // If no row yet, also send them to onboarding so we can create it
-      if (!profile) {
+      } else if (!profile) {
+        // If no row yet, send them to onboarding so we can create it
         return NextResponse.redirect(new URL("/onboarding", req.url));
       }
     } catch {

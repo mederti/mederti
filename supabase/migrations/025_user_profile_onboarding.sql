@@ -39,7 +39,8 @@ ALTER TABLE user_profiles
   ADD COLUMN IF NOT EXISTS org_size           TEXT,
   ADD COLUMN IF NOT EXISTS therapy_areas      TEXT[]  DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS onboarding_done    BOOLEAN DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS onboarding_done_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS onboarding_done_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS is_admin           BOOLEAN DEFAULT FALSE;
 
 -- Use-case enum (kept as TEXT with a CHECK so it's easy to extend later)
 ALTER TABLE user_profiles
@@ -81,3 +82,5 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_countries
   ON user_profiles USING GIN (countries);
 CREATE INDEX IF NOT EXISTS idx_user_profiles_therapy_areas
   ON user_profiles USING GIN (therapy_areas);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_is_admin
+  ON user_profiles (is_admin) WHERE is_admin = TRUE;

@@ -67,13 +67,29 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = getSupabaseAdmin();
-  const { data, error } = await admin
+
+  // Resilient: try the full select, fall back to the legacy columns if
+  // migration 025 hasn't been applied to this DB yet.
+  let { data, error } = await admin
     .from("user_profiles")
     .select(
       "role, countries, use_case, org_size, therapy_areas, company_name, onboarding_done, onboarding_done_at, created_at"
     )
     .eq("user_id", userId)
     .maybeSingle();
+
+  if (error) {
+    const msg = (error.message ?? "").toLowerCase();
+    if (msg.includes("could not find") || msg.includes("schema cache") || msg.includes("column")) {
+      const retry = await admin
+        .from("user_profiles")
+        .select("role, company_name, created_at")
+        .eq("user_id", userId)
+        .maybeSingle();
+      data = retry.data;
+      error = retry.error;
+    }
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -153,15 +169,61 @@ export async function POST(req: Request) {
   }
 
   const admin = getSupabaseAdmin();
-  const { data, error } = await admin
+
+  // Resilient upsert: if migration 025 hasn't been applied yet (live DB
+  // missing the new columns), strip the new fields and retry with only
+  // the legacy columns so signup keeps working. We log the warning so
+  // it shows up in monitoring.
+  const NEW_COLUMNS = [
+    "countries", "use_case", "org_size", "therapy_areas",
+    "onboarding_done", "onboarding_done_at",
+  ];
+
+  let { data, error } = await admin
     .from("user_profiles")
     .upsert(update, { onConflict: "user_id" })
     .select()
     .maybeSingle();
 
   if (error) {
+    const msg = error.message ?? "";
+    const looksLikeMissingColumn =
+      msg.toLowerCase().includes("could not find") ||
+      msg.toLowerCase().includes("schema cache") ||
+      msg.toLowerCase().includes("column");
+
+    if (looksLikeMissingColumn) {
+      console.warn(
+        "user/profile: live DB missing migration 025 columns — retrying with legacy fields only.",
+        { error: msg },
+      );
+      const legacyUpdate: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(update)) {
+        if (!NEW_COLUMNS.includes(k)) legacyUpdate[k] = v;
+      }
+      // Always keep user_id
+      legacyUpdate.user_id = userId;
+
+      const retry = await admin
+        .from("user_profiles")
+        .upsert(legacyUpdate, { onConflict: "user_id" })
+        .select()
+        .maybeSingle();
+      data = retry.data;
+      error = retry.error;
+    }
+  }
+
+  if (error) {
     console.error("user/profile POST error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ success: true, profile: data });
+
+  // Tell the client whether the new fields landed (so the onboarding
+  // page can decide if it's safe to mark itself "done" client-side).
+  return NextResponse.json({
+    success: true,
+    profile: data,
+    schema_full: !!data && "countries" in data,
+  });
 }

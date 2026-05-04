@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import SiteFooter from "@/app/components/site-footer";
+import ProfileSettings from "./ProfileSettings";
 
 const ROLE_OPTIONS = [
   { value: "default",     label: "Default" },
@@ -523,43 +524,13 @@ export default function AccountPage() {
                     </div>
                   </div>
 
-                  {/* Role selector */}
-                  <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, padding: "24px 24px" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>Role</div>
-                    <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 16 }}>
-                      Your role determines which features and dashboards you can access.
+                  {/* Profile (role, countries, use case, org size, therapy areas) */}
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>Profile</div>
+                    <div style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 14 }}>
+                      The answers you gave at signup. Update them any time — changes take effect immediately.
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {ROLE_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => saveRole(opt.value)}
-                          disabled={roleSaving}
-                          style={{
-                            padding: "8px 16px", borderRadius: 7,
-                            fontSize: 13, fontWeight: role === opt.value ? 600 : 400,
-                            background: role === opt.value ? "var(--teal-bg)" : "#fff",
-                            color: role === opt.value ? "var(--teal)" : "var(--app-text-3)",
-                            border: `1px solid ${role === opt.value ? "var(--teal)" : "var(--app-border)"}`,
-                            cursor: roleSaving ? "wait" : "pointer",
-                            fontFamily: "var(--font-inter), sans-serif",
-                            transition: "all 0.15s",
-                          }}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                    {roleSaved && (
-                      <div style={{ fontSize: 12, color: "var(--teal)", marginTop: 10, fontWeight: 500 }}>
-                        Role updated successfully.
-                      </div>
-                    )}
-                    {role === "supplier" && (
-                      <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 10 }}>
-                        You now have access to the <Link href="/supplier-dashboard" style={{ color: "var(--teal)", fontWeight: 500 }}>Supplier Dashboard</Link>.
-                      </div>
-                    )}
+                    <ProfileSettings />
                   </div>
 
                   {/* Alert preferences */}

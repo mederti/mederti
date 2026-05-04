@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+const SOFT_LAUNCH =
+  (process.env.NEXT_PUBLIC_SOFT_LAUNCH ?? "").toLowerCase() === "true";
+
 export default function SiteFooter() {
   return (
     <footer style={{ background: "#070B14", borderTop: "none" }}>
@@ -36,12 +39,13 @@ export default function SiteFooter() {
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.35)", marginBottom: 16 }}>Product</div>
             <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Link href="/dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Dashboard</Link>
+              {!SOFT_LAUNCH && <Link href="/dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Dashboard</Link>}
               <Link href="/search" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Drug Search</Link>
-              <Link href="/shortages" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Shortages</Link>
-              <Link href="/recalls" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Recalls</Link>
-              <Link href="/alerts" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Alerts</Link>
-              <Link href="/supplier-dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Supplier Dashboard</Link>
+              {!SOFT_LAUNCH && <Link href="/shortages" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Shortages</Link>}
+              {!SOFT_LAUNCH && <Link href="/recalls" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Recalls</Link>}
+              {!SOFT_LAUNCH && <Link href="/alerts" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Alerts</Link>}
+              {!SOFT_LAUNCH && <Link href="/supplier-dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Supplier Dashboard</Link>}
+              <Link href="/intelligence" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Intelligence</Link>
             </nav>
           </div>
 
@@ -49,23 +53,25 @@ export default function SiteFooter() {
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.35)", marginBottom: 16 }}>Company</div>
             <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Link href="/about" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>About</Link>
-              <Link href="/pricing" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Pricing</Link>
-              <Link href="/contact" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Contact</Link>
+              {!SOFT_LAUNCH && <Link href="/about" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>About</Link>}
+              {!SOFT_LAUNCH && <Link href="/pricing" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Pricing</Link>}
+              {!SOFT_LAUNCH && <Link href="/contact" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Contact</Link>}
               <a href="mailto:hello@mederti.com" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>hello@mederti.com</a>
             </nav>
           </div>
 
-          {/* Resources */}
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.35)", marginBottom: 16 }}>Resources</div>
-            <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Link href="/intelligence" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Intelligence</Link>
-              <Link href="/home" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Home Feed</Link>
-              <Link href="/watchlist" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Watchlist</Link>
-              <Link href="/dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Dashboard</Link>
-            </nav>
-          </div>
+          {/* Resources — hidden under soft-launch (everything's already in Product) */}
+          {!SOFT_LAUNCH && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.35)", marginBottom: 16 }}>Resources</div>
+              <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <Link href="/intelligence" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Intelligence</Link>
+                <Link href="/home" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Home Feed</Link>
+                <Link href="/watchlist" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Watchlist</Link>
+                <Link href="/dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Dashboard</Link>
+              </nav>
+            </div>
+          )}
 
           {/* Legal */}
           <div>

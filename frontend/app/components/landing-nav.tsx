@@ -12,15 +12,26 @@ import { useUserProfile } from "@/lib/hooks/use-user-profile";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
 import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
 
+/* ── Soft-launch feature flag ── */
+const SOFT_LAUNCH =
+  (process.env.NEXT_PUBLIC_SOFT_LAUNCH ?? "").toLowerCase() === "true";
+
 /* ── Nav link sets ── */
-const BASE_APP_LINKS = [
+const FULL_BASE_APP_LINKS = [
   { href: "/search",       label: "Search",       icon: Search },
   { href: "/dashboard",    label: "Dashboard",    icon: Home },
   { href: "/intelligence", label: "Intelligence", icon: BarChart3 },
   { href: "/watchlist",    label: "Watchlist",     icon: Bookmark },
 ];
 
-const GUEST_LINKS: { label: string; href: string; style?: "bold" | "regular" | "teal" }[] = [
+const SOFT_BASE_APP_LINKS = [
+  { href: "/search",       label: "Search",       icon: Search },
+  { href: "/intelligence", label: "Intelligence", icon: BarChart3 },
+];
+
+const BASE_APP_LINKS = SOFT_LAUNCH ? SOFT_BASE_APP_LINKS : FULL_BASE_APP_LINKS;
+
+const FULL_GUEST_LINKS: { label: string; href: string; style?: "bold" | "regular" | "teal" }[] = [
   { label: "Pharmacists",   href: "/pharmacists",  style: "bold" },
   { label: "Doctors",       href: "/doctors",      style: "bold" },
   { label: "Hospitals",     href: "/hospitals",     style: "bold" },
@@ -28,6 +39,13 @@ const GUEST_LINKS: { label: string; href: string; style?: "bold" | "regular" | "
   { label: "Suppliers",     href: "/suppliers",     style: "regular" },
   { label: "Intelligence",  href: "/intelligence",  style: "teal" },
 ];
+
+const SOFT_GUEST_LINKS: typeof FULL_GUEST_LINKS = [
+  { label: "Search",        href: "/search",        style: "bold" },
+  { label: "Intelligence",  href: "/intelligence",  style: "teal" },
+];
+
+const GUEST_LINKS = SOFT_LAUNCH ? SOFT_GUEST_LINKS : FULL_GUEST_LINKS;
 
 const COUNTRIES = [
   { code: "AU", flag: "🇦🇺" },
@@ -183,7 +201,7 @@ export default function SiteNav() {
       }}>
 
         {/* ── Left: Logo ── */}
-        <Link href={loggedIn ? "/home" : "/"} style={{
+        <Link href={loggedIn ? (SOFT_LAUNCH ? "/search" : "/home") : "/"} style={{
           display: "flex", alignItems: "center",
           textDecoration: "none", flexShrink: 0,
         }}>
@@ -564,21 +582,25 @@ export default function SiteNav() {
                     </Link>
                   );
                 })}
-                <div style={{ height: 1, background: "var(--app-border)", margin: "8px 12px" }} />
-                <Link href="/shortages" style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
-                  color: "var(--app-text)", textDecoration: "none",
-                }}>
-                  Shortages
-                </Link>
-                <Link href="/recalls" style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
-                  color: "var(--app-text)", textDecoration: "none",
-                }}>
-                  Recalls
-                </Link>
+                {!SOFT_LAUNCH && (
+                  <>
+                    <div style={{ height: 1, background: "var(--app-border)", margin: "8px 12px" }} />
+                    <Link href="/shortages" style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                      color: "var(--app-text)", textDecoration: "none",
+                    }}>
+                      Shortages
+                    </Link>
+                    <Link href="/recalls" style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                      color: "var(--app-text)", textDecoration: "none",
+                    }}>
+                      Recalls
+                    </Link>
+                  </>
+                )}
                 <Link href="/intelligence" style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "12px 12px", borderRadius: 8, fontSize: 15,
@@ -600,21 +622,25 @@ export default function SiteNav() {
                     {label}
                   </Link>
                 ))}
-                <div style={{ height: 1, background: "var(--app-border)", margin: "8px 12px" }} />
-                <Link href="/shortages" style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
-                  color: "var(--app-text-3)", textDecoration: "none",
-                }}>
-                  Browse Shortages
-                </Link>
-                <Link href="/recalls" style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "12px 12px", borderRadius: 8, fontSize: 15,
-                  color: "var(--app-text-3)", textDecoration: "none",
-                }}>
-                  Browse Recalls
-                </Link>
+                {!SOFT_LAUNCH && (
+                  <>
+                    <div style={{ height: 1, background: "var(--app-border)", margin: "8px 12px" }} />
+                    <Link href="/shortages" style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                      color: "var(--app-text-3)", textDecoration: "none",
+                    }}>
+                      Browse Shortages
+                    </Link>
+                    <Link href="/recalls" style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "12px 12px", borderRadius: 8, fontSize: 15,
+                      color: "var(--app-text-3)", textDecoration: "none",
+                    }}>
+                      Browse Recalls
+                    </Link>
+                  </>
+                )}
               </>
             )}
           </div>

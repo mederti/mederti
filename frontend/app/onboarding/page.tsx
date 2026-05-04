@@ -91,8 +91,21 @@ const THERAPY_AREAS: Array<{ value: string; label: string }> = [
   { value: "other",                    label: "Other" },
 ];
 
+// Soft-launch hides /home, /supplier-dashboard, /watchlist, etc. Valid
+// post-onboarding landings under the flag are /search and /intelligence.
+const SOFT_LAUNCH =
+  (process.env.NEXT_PUBLIC_SOFT_LAUNCH ?? "").toLowerCase() === "true";
+
 // Decide where to land users after onboarding based on role + use case.
 function landingPathFor(role: Role | null, useCase: UseCase | null): string {
+  if (SOFT_LAUNCH) {
+    // Researcher / journalist / analyst / planner → Intelligence is the right home.
+    if (role === "government" || role === "researcher" || useCase === "analyse_market") {
+      return "/intelligence";
+    }
+    // Everyone else lands in Search since /home and /supplier-dashboard are hidden.
+    return "/search";
+  }
   if (role === "manufacturer" || role === "wholesaler" || useCase === "sell_or_source") {
     return "/supplier-dashboard";
   }

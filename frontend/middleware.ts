@@ -5,6 +5,56 @@ const MOBILE_UA_REGEX =
   /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
 
 /**
+ * Soft-launch mode.
+ *
+ * When `NEXT_PUBLIC_SOFT_LAUNCH=true`, the site exposes only the five
+ * pages we want for the initial public release:
+ *   /              (homepage)
+ *   /signup        (sign up)
+ *   /login         (sign in)
+ *   /search        (drug search)
+ *   /drugs/[id]    (drug detail)
+ *   /intelligence  (Pharma Brief)
+ * Plus the auth/account/onboarding scaffolding needed for those to work.
+ *
+ * Everything else 308-redirects to /coming-soon. Flip the env var off
+ * (or unset it) and the full site reappears — no code changes needed.
+ *
+ * Set the var on the Vercel "preview" environment to demo soft-launch
+ * on preview URLs while production stays normal.
+ */
+const SOFT_LAUNCH =
+  (process.env.NEXT_PUBLIC_SOFT_LAUNCH ?? "").toLowerCase() === "true";
+
+const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
+  "/",                  // homepage
+  "/signup",
+  "/login",
+  "/auth",              // OAuth/email confirm callbacks
+  "/forgot-password",
+  "/reset-password",
+  "/onboarding",        // post-signup profiling
+  "/account",           // user can manage their account
+  "/search",            // drug search
+  "/drugs",             // /drugs/[id]
+  "/intelligence",      // Pharma Brief and any subroutes
+  "/coming-soon",
+  "/admin",             // separately gated by requireAdmin
+  "/privacy",
+  "/terms",
+];
+
+function softLaunchAllowed(pathname: string): boolean {
+  if (pathname === "/") return true;
+  for (const p of SOFT_LAUNCH_ALLOW) {
+    if (p === "/") continue;
+    if (pathname === p) return true;
+    if (pathname.startsWith(p + "/")) return true;
+  }
+  return false;
+}
+
+/**
  * Routes that DO NOT require authentication.
  * Everything else (the actual product) requires a signed-in user.
  *
@@ -62,6 +112,15 @@ export async function middleware(req: NextRequest) {
     maxAge: 60 * 60 * 24,
     sameSite: "lax",
   });
+
+  // ── Soft-launch gate ──
+  // When NEXT_PUBLIC_SOFT_LAUNCH=true, redirect anything off the
+  // 5-page allowlist to /coming-soon. Auth + onboarding still work.
+  if (SOFT_LAUNCH && !softLaunchAllowed(pathname)) {
+    const url = new URL("/coming-soon", req.url);
+    url.searchParams.set("from", pathname);
+    return NextResponse.redirect(url, 308);
+  }
 
   // ── Skip auth gating for public paths ──
   if (isPublic(pathname)) {

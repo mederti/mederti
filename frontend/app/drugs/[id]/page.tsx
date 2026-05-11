@@ -20,6 +20,7 @@ import AvailableSuppliers from "./AvailableSuppliers";
 import PipelineRegulatory from "./PipelineRegulatory";
 import SupplyChainResilience from "./SupplyChainResilience";
 import SoWhatInsight from "./SoWhatInsight";
+import CrossBorderAvailability from "./CrossBorderAvailability";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -876,6 +877,9 @@ export default async function DrugPage({ params }: Props) {
 
             {/* ═══ 2.5 AVAILABLE SUPPLIERS (marketplace) ═══ */}
             <AvailableSuppliers drugId={id} drugName={drug.generic_name} />
+
+            {/* ═══ 2.55 CROSS-BORDER AVAILABILITY (registries) ═══ */}
+            <CrossBorderAvailability drugId={id} />
 
             {/* ═══ 2.6 PIPELINE & REGULATORY CALENDAR ═══ */}
             <PipelineRegulatory drugId={id} />

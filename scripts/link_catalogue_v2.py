@@ -560,20 +560,35 @@ def main():
         return
 
     log.info("")
-    log.info(f"STEP E: Writing {len(updates)} updates…")
-    BATCH = 200
+    log.info(f"STEP E: Writing {len(updates)} updates via batch upsert…")
+    # Batch upserts: PostgREST accepts an array body on conflict=id.
+    # ~100-1000x faster than per-row UPDATEs over HTTP.
+    BATCH = 500
+    written = 0
+    failed = 0
     for i in range(0, len(updates), BATCH):
         chunk = updates[i:i + BATCH]
-        for u in chunk:
-            row_id = u.pop("id")
-            try:
-                supabase.table("drug_catalogue").update(u).eq("id", row_id).execute()
-            except Exception as e:
-                log.warning(f"  update failed for {row_id}: {str(e)[:80]}")
-        if (i // BATCH) % 10 == 0 or i + BATCH >= len(updates):
-            log.info(f"  {min(i + BATCH, len(updates))}/{len(updates)}")
+        try:
+            supabase.table("drug_catalogue").upsert(chunk, on_conflict="id").execute()
+            written += len(chunk)
+        except Exception as e:
+            # Fall back to row-by-row on chunk failure so one bad row
+            # doesn't lose the rest of the batch.
+            log.warning(f"  batch {i}-{i+len(chunk)} failed ({str(e)[:80]}) — falling back to per-row")
+            for u in chunk:
+                row_id = u.get("id")
+                update_fields = {k: v for k, v in u.items() if k != "id"}
+                try:
+                    supabase.table("drug_catalogue").update(update_fields).eq("id", row_id).execute()
+                    written += 1
+                except Exception as e2:
+                    failed += 1
+                    if failed <= 5:
+                        log.warning(f"    row {row_id} failed: {str(e2)[:80]}")
+        if (i // BATCH) % 4 == 0 or i + BATCH >= len(updates):
+            log.info(f"  {min(i + BATCH, len(updates))}/{len(updates)} (written={written}, failed={failed})")
 
-    log.info("✅ Linker v2 complete.")
+    log.info(f"✅ Linker v2 complete. Wrote {written}, failed {failed}.")
 
 
 if __name__ == "__main__":

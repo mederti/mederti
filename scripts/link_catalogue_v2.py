@@ -471,13 +471,14 @@ def main():
 
     # Step C — fetch catalogue rows to (re-)process
     log.info(f"STEP C: Fetching catalogue rows ({'all (refresh)' if REFRESH else 'unlinked only'})…")
+    # Pull the full row. We re-send the fields the user didn't touch
+    # back through the PostgREST upsert, which keeps every NOT NULL
+    # column satisfied on the INSERT-fallback branch of the upsert.
+    select_cols = "*"
     if REFRESH:
-        catalogue = fetch_all(supabase, "drug_catalogue",
-                              "id, drug_id, generic_name, brand_name, source_name, source_country, strength, dosage_form")
+        catalogue = fetch_all(supabase, "drug_catalogue", select_cols)
     else:
-        catalogue = fetch_all(supabase, "drug_catalogue",
-                              "id, drug_id, generic_name, brand_name, source_name, source_country, strength, dosage_form",
-                              drug_id=None)
+        catalogue = fetch_all(supabase, "drug_catalogue", select_cols, drug_id=None)
     log.info(f"  {len(catalogue)} rows to process")
 
     # Step D — match + normalise
@@ -511,7 +512,16 @@ def main():
         form_norm = normalise_form(entry.get("dosage_form"))
         gen_norm = strip_salts(normalise(name)) if name else None
 
-        update_row: dict = {"id": entry["id"]}
+        # Carry every column from the fetched row through the upsert
+        # payload. PostgREST's upsert (used in STEP E) does
+        # INSERT...ON CONFLICT DO UPDATE, so the INSERT branch needs
+        # all NOT NULL columns. By echoing the whole row back, every
+        # NOT NULL is satisfied. We then overlay the changed fields.
+        # We drop server-managed columns that would create conflicts.
+        DROP_COLS = {"search_vector", "created_at", "updated_at"}
+        update_row: dict = {
+            k: v for k, v in entry.items() if k not in DROP_COLS
+        }
         changed = False
 
         # Linkage: only set if currently unlinked OR refresh mode

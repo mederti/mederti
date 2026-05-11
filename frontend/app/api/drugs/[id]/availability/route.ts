@@ -94,14 +94,44 @@ export async function GET(
     atc_code: string | null;
   };
 
-  // Pull every catalogue row mapped to this drug.
-  const cataRes = await admin
-    .from("drug_catalogue")
-    .select(
-      "source_country, brand_name, sponsor, strength, dosage_form, registration_status, registration_number, source_name"
-    )
-    .eq("drug_id", drugId)
-    .limit(2000);
+  // Pull all known synonyms for this drug — lets us follow
+  // paracetamol↔acetaminophen and similar cross-border equivalences
+  // when the drug_catalogue row was mapped to one canonical name but
+  // the user is on the page for the other.
+  const synRes = await admin
+    .from("drug_synonyms")
+    .select("synonym_normalised")
+    .eq("drug_id", drugId);
+
+  const synonymList = (synRes.data ?? [])
+    .map((s) => (s as { synonym_normalised: string }).synonym_normalised)
+    .filter(Boolean);
+
+  // Build the catalogue query — match by drug_id OR by any known
+  // synonym name in generic_normalised. (generic_normalised is set by
+  // the v2 linker; legacy rows fall back to the FK-only path.)
+  let cataRes;
+  if (synonymList.length > 0) {
+    const orFilter = [
+      `drug_id.eq.${drugId}`,
+      `generic_normalised.in.(${synonymList.map((s) => `"${s}"`).join(",")})`,
+    ].join(",");
+    cataRes = await admin
+      .from("drug_catalogue")
+      .select(
+        "source_country, brand_name, sponsor, strength, dosage_form, registration_status, registration_number, source_name"
+      )
+      .or(orFilter)
+      .limit(2000);
+  } else {
+    cataRes = await admin
+      .from("drug_catalogue")
+      .select(
+        "source_country, brand_name, sponsor, strength, dosage_form, registration_status, registration_number, source_name"
+      )
+      .eq("drug_id", drugId)
+      .limit(2000);
+  }
 
   if (cataRes.error) {
     return NextResponse.json(

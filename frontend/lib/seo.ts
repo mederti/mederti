@@ -174,3 +174,25 @@ function buildDrugDescription(drug: DrugForJsonLd): string {
   if (drug.who_essential_medicine) parts.push("— WHO Essential Medicine");
   return parts.join(" ");
 }
+
+// ─── Breadcrumb structured data ─────────────────────────────────────────────
+
+/**
+ * schema.org BreadcrumbList payload. Pass the trail as ordered tuples
+ * from root to leaf. Google renders this as a clickable breadcrumb above
+ * the page title in search results.
+ */
+export function breadcrumbJsonLd(
+  trail: Array<{ name: string; path: string }>,
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": trail.map((step, i) => ({
+      "@type": "ListItem",
+      "position": i + 1,
+      "name": step.name,
+      "item": canonicalUrl(step.path),
+    })),
+  };
+}

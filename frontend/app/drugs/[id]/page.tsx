@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd } from "@/lib/seo";
+import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
@@ -676,11 +676,20 @@ export default async function DrugPage({ params }: Props) {
     affectedCountries.size,
   );
 
+  // Breadcrumb structured data — Google shows this above the page title
+  // in SERPs. Path: Home › Search › {drug.generic_name}
+  const breadcrumbLd = breadcrumbJsonLd([
+    { name: "Mederti",    path: "/" },
+    { name: "Drug search", path: "/search" },
+    { name: drug.generic_name, path: `/drugs/${id}` },
+  ]);
+
   /* ── Render ── */
   return (
     <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
-      {/* JSON-LD structured data */}
+      {/* JSON-LD structured data — Drug graph + Breadcrumbs */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       {/* AI-readable summary — visually hidden but crawlable */}
       <div style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}>
         <p>

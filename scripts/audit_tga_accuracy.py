@@ -7,7 +7,7 @@ fetches live status from TGA Medicine Shortages Information (MSI),
 diffs the results, and logs discrepancies.
 
 Run:      python scripts/audit_tga_accuracy.py
-Schedule: Weekly via Railway cron (Monday 8am UTC)
+Schedule: Daily via Railway cron (08:00 UTC)
 """
 
 from __future__ import annotations

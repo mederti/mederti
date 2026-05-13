@@ -1,0 +1,2 @@
+[start]
+cmd = "python railway/tga_audit_cron/run.py"

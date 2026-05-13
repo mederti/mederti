@@ -62,13 +62,20 @@ def search_drugs(
     except Exception:
         pass
 
-    # Fallback: ilike if FTS returned nothing
+    # Fallback: ilike across name/brand/synonyms if FTS returned nothing.
+    # Sanitise commas and parens — they're filter syntax in PostgREST `.or_()`.
     if not rows:
         try:
+            q_safe = q_clean.translate(str.maketrans({",": " ", "(": " ", ")": " "}))
+            pattern = f"%{q_safe}%"
             resp = (
                 db.table("drugs")
                 .select("id, generic_name, brand_names, atc_code")
-                .ilike("generic_name", f"%{q_clean}%")
+                .or_(
+                    f"generic_name.ilike.{pattern},"
+                    f"brand_names_text.ilike.{pattern},"
+                    f"synonyms_text.ilike.{pattern}"
+                )
                 .limit(limit)
                 .execute()
             )

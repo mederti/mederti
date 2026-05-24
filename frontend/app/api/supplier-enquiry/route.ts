@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { getPartnerForCountry } from "@/lib/suppliers";
 
@@ -19,12 +20,36 @@ const resend =
  *  5. Email confirmation to buyer
  */
 export async function POST(req: NextRequest) {
-  const { drugName, drugId, quantity, urgency, organisation, message, country, userEmail, userId } =
+  // SECURITY: `userId` is NEVER read from the request body — it would be
+  // spoofable, allowing an attacker to plant enquiries under another user's
+  // account (which the `Users can view own enquiries` RLS policy would then
+  // expose to the spoofed owner). We resolve the caller from the session
+  // cookie below. `userEmail` from the body is treated only as a fallback
+  // contact address for anonymous enquiries.
+  const { drugName, drugId, quantity, urgency, organisation, message, country, userEmail: bodyContactEmail } =
     await req.json();
 
   if (!drugName || !urgency || !country) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+
+  // Resolve the calling user from the auth session. Null for anonymous
+  // enquiries — those are still allowed (no signin required), but their
+  // user_id is left null so they can't appear in anyone else's history.
+  let sessionUserId: string | null = null;
+  let sessionUserEmail: string | null = null;
+  try {
+    const sbSession = await createServerClient();
+    const { data: { user } } = await sbSession.auth.getUser();
+    sessionUserId = user?.id ?? null;
+    sessionUserEmail = user?.email ?? null;
+  } catch {
+    // Anonymous enquiry — leave both null.
+  }
+
+  // Contact email: prefer the verified session email; fall back to the
+  // body-provided one only for anonymous submissions.
+  const contactEmail: string | null = sessionUserEmail ?? bodyContactEmail ?? null;
 
   const partner = getPartnerForCountry(country);
   // Note: partner is now optional — marketplace suppliers may exist instead
@@ -42,8 +67,8 @@ export async function POST(req: NextRequest) {
       message,
       country,
       partner_id: partner?.id ?? "marketplace",
-      user_email: userEmail ?? null,
-      user_id: userId ?? null,
+      user_email: contactEmail,
+      user_id: sessionUserId,
       status: "sent",
     })
     .select()
@@ -103,7 +128,7 @@ export async function POST(req: NextRequest) {
           from: process.env.RESEND_FROM_EMAIL ?? "intelligence@mederti.com",
           to: partnerEmail,
           subject: `[Mederti] ${urgency.toUpperCase()} enquiry — ${drugName}`,
-          html: leadEmailHtml({ drugName, urgency, quantity, organisation, userEmail, message, country, supplierName: partner.name }),
+          html: leadEmailHtml({ drugName, urgency, quantity, organisation, userEmail: contactEmail, message, country, supplierName: partner.name }),
         });
       } catch (e) {
         console.error("[supplier-enquiry] Partner email failed:", e);
@@ -123,7 +148,7 @@ export async function POST(req: NextRequest) {
             urgency,
             quantity,
             organisation,
-            userEmail,
+            userEmail: contactEmail,
             message,
             country,
             supplierName: s.company_name,
@@ -135,12 +160,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 4c. Confirmation to buyer
-    if (userEmail) {
+    if (contactEmail) {
       const supplierCount = targetSuppliers.length + (partner ? 1 : 0);
       try {
         await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL ?? "intelligence@mederti.com",
-          to: userEmail,
+          to: contactEmail,
           subject: `Your enquiry for ${drugName} has been sent to ${supplierCount} supplier${supplierCount === 1 ? "" : "s"}`,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px;">

@@ -38,13 +38,13 @@ const PERSONAS: Array<{
     key: "procurement",
     label: "Procurement",
     sub: "Numbers-first",
-    href: () => "/design/procurement",
+    href: (id) => (id ? `/drugs/${id}?as=procurement` : "/design/procurement"),
   },
   {
     key: "supplier",
     label: "Supplier",
     sub: "Market-scan",
-    href: () => "/design/supplier",
+    href: (id) => (id ? `/drugs/${id}?as=supplier` : "/design/supplier"),
   },
 ];
 

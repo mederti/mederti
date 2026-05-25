@@ -24,9 +24,30 @@ import SoWhatInsight from "./SoWhatInsight";
 import CrossBorderAvailability from "./CrossBorderAvailability";
 import PersonaSwitcher from "./PersonaSwitcher";
 import PharmacistAnswerCard from "./PharmacistAnswerCard";
+import ProcurementView from "./ProcurementView";
+import SupplierView from "./SupplierView";
+
+/** Tiny ISO-3166 → emoji-flag map for the country chips. */
+const FLAG: Record<string, string> = {
+  AU: "🇦🇺", NZ: "🇳🇿", GB: "🇬🇧", UK: "🇬🇧", US: "🇺🇸", CA: "🇨🇦",
+  SG: "🇸🇬", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", IE: "🇮🇪",
+  CH: "🇨🇭", NO: "🇳🇴", SE: "🇸🇪", FI: "🇫🇮", DK: "🇩🇰", NL: "🇳🇱",
+  BE: "🇧🇪", AT: "🇦🇹", PL: "🇵🇱", PT: "🇵🇹", GR: "🇬🇷", JP: "🇯🇵",
+  KR: "🇰🇷", IN: "🇮🇳", CN: "🇨🇳", BR: "🇧🇷", MX: "🇲🇽", ZA: "🇿🇦",
+};
+const flagFor = (cc: string): string => FLAG[cc?.toUpperCase()] ?? "🌐";
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ as?: string }>;
+}
+
+type Persona = "pharmacist" | "procurement" | "supplier";
+
+function resolvePersona(as: string | undefined): Persona {
+  if (as === "procurement") return "procurement";
+  if (as === "supplier") return "supplier";
+  return "pharmacist";
 }
 
 /* ── SEO: dynamic metadata ── */
@@ -221,8 +242,11 @@ const DOT_COLORS: Record<string, string> = {
   update: "#0F172A",
 };
 
-export default async function DrugPage({ params }: Props) {
+export default async function DrugPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const sp = searchParams ? await searchParams : {};
+  const persona: Persona = resolvePersona(sp.as);
+
   const supabase = getSupabaseAdmin();
 
   /* ── Parallel data fetching ── */
@@ -686,6 +710,113 @@ export default async function DrugPage({ params }: Props) {
     { name: drug.generic_name, path: `/drugs/${id}` },
   ]);
 
+  /* ── Persona-aware render: procurement and supplier views ───────────────── */
+  if (persona === "procurement" || persona === "supplier") {
+    const sev: "critical" | "high" | "medium" | "low" =
+      worstSeverity === "critical" || worstSeverity === "high" || worstSeverity === "medium" || worstSeverity === "low"
+        ? worstSeverity
+        : "medium";
+    const statusLabel = sev === "critical" ? "Not available" : sev === "high" ? "Very limited" : sev === "medium" ? "Limited" : "Available";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const altsArr = (alternatives as any[]).slice(0, 4).map((a: any) => ({
+      name: a.drugs?.generic_name ?? "Alternative",
+      form: a.relationship_type ? String(a.relationship_type).replace(/_/g, " ") : "therapeutic alternative",
+      matchPercent: Math.round((a.similarity_score ?? 0.7) * 100),
+      isAvailable: true,
+    }));
+
+    const top = altsArr[0]
+      ? { name: altsArr[0].name, matchPercent: altsArr[0].matchPercent, isAvailable: altsArr[0].isAvailable, form: altsArr[0].form }
+      : null;
+
+    // Oldest start_date among active shortages → "since Feb '25"-style label
+    const firstStart = activeShortages
+      .map((s: { start_date?: string | null }) => s.start_date ? new Date(s.start_date).getTime() : null)
+      .filter((t: number | null): t is number => t !== null)
+      .sort((a, b) => a - b)[0];
+    const sinceLabel = firstStart
+      ? `since ${new Date(firstStart).toLocaleDateString("en-AU", { month: "short", year: "2-digit" }).replace(/(\d{2})$/, "'$1")}`
+      : undefined;
+    const firstReported = firstStart ? new Date(firstStart).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "2-digit" }).replace(/(\d{2})$/, "'$1") : undefined;
+
+    // Prior incidents = resolved/stale shortage_events for this drug (approx)
+    const priorIncidents = (shortages as Array<{ status: string }>).filter(
+      (s) => s.status === "resolved" || s.status === "stale"
+    ).length;
+
+    // Sources array for SupplierView (regulator, country, flag, hoursAgo)
+    const supplierSources = Array.from(seenSources.values())
+      .filter((s) => s.lastVerified)
+      .map((s) => {
+        const hoursAgo = (Date.now() - new Date(s.lastVerified!).getTime()) / 3_600_000;
+        return {
+          regulator: s.abbreviation,
+          country: s.countryCode,
+          flag: flagFor(s.countryCode),
+          hoursAgo: Math.max(0, hoursAgo),
+        };
+      })
+      .sort((a, b) => a.hoursAgo - b.hoursAgo)
+      .slice(0, 5);
+
+    const drugName = `${drug.generic_name}${drugStrength ? ` ${drugStrength}` : ""}`.trim();
+    const status = { label: statusLabel, severity: sev, markets: `${affectedCountries.size} of ${affectedCountries.size + 1} markets` };
+    const expectedReturn = predictedReturnDate
+      ? { label: predictedReturnDate, range: "± 2 months", confidence: confidence || 60 }
+      : null;
+
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
+
+        <SiteNav />
+        <PersonaSwitcher current={persona} drugId={id} />
+
+        <div style={{ background: "var(--navy)", padding: "8px 24px", borderBottom: "1px solid var(--bd)" }}>
+          <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>
+            {"←"} Back to search
+          </Link>
+        </div>
+
+        <div style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 24px 60px", width: "100%" }}>
+          {persona === "procurement" ? (
+            <ProcurementView
+              drugName={drugName}
+              genericName={drug.generic_name}
+              atcCode={drug.atc_code ?? undefined}
+              drugClass={[drug.atc_description, drug.drug_class, drug.therapeutic_category].filter(Boolean).join(" · ") || undefined}
+              status={status}
+              expectedReturn={expectedReturn}
+              topAlternative={top ? { name: top.name, matchPercent: top.matchPercent, isAvailable: top.isAvailable } : null}
+              alternatives={altsArr}
+              tradePrice={null}
+              shortageDetails={{
+                reason: activeShortages[0]?.reason_category || activeShortages[0]?.reason || undefined,
+                firstReported,
+                sourcesCount: seenSources.size || undefined,
+                priorIncidents: priorIncidents || undefined,
+              }}
+            />
+          ) : (
+            <SupplierView
+              drugName={drugName}
+              genericName={drug.generic_name}
+              atcCode={drug.atc_code ?? undefined}
+              status={{ ...status, sinceLabel }}
+              expectedReturn={expectedReturn}
+              topAlternative={top ? { name: top.name, form: top.form, matchPercent: top.matchPercent, isAvailable: top.isAvailable } : null}
+              tradePrice={null}
+              alternatives={altsArr.map((a) => ({ name: a.name, matchPercent: a.matchPercent, isAvailable: a.isAvailable }))}
+              sources={supplierSources}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   /* ── Render ── */
   return (
     <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
@@ -728,7 +859,7 @@ export default async function DrugPage({ params }: Props) {
       <SiteNav />
 
       {/* ═══ PERSONA SWITCHER ═══ */}
-      <PersonaSwitcher current="pharmacist" drugId={id} />
+      <PersonaSwitcher current={persona} drugId={id} />
 
       {/* ═══ NAV BAR ═══ */}
       <div style={{

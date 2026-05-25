@@ -9,7 +9,6 @@ import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 import SiteNav from "@/app/components/landing-nav";
 import V3ChatPanel from "./chat-panel";
 import { buildAiInsightText } from "./build-insight-text";
-import { ShortageForcast } from "./forecast";
 import { V4BellButton } from "./v4/bell-button";
 import { HeaderActions } from "./v4/header-actions";
 import { getDevice } from "@/lib/get-device";
@@ -18,10 +17,7 @@ import { truncateDrugName } from "@/lib/utils";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import { DrugImage } from "./drug-image";
 import AvailableSuppliers from "./AvailableSuppliers";
-import PipelineRegulatory from "./PipelineRegulatory";
-import SupplyChainResilience from "./SupplyChainResilience";
 import SoWhatInsight from "./SoWhatInsight";
-import CrossBorderAvailability from "./CrossBorderAvailability";
 import PersonaSwitcher from "./PersonaSwitcher";
 import PharmacistAnswerCard from "./PharmacistAnswerCard";
 import ProcurementView from "./ProcurementView";
@@ -1123,20 +1119,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
 
           <div className="drug-page" style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 32px 64px" }}>
 
-            {/* ═══ 2. SHORTAGE FORECAST ═══ */}
-            <ShortageForcast shortages={shortages} userCountry={userCountry} drugName={drug.generic_name} />
-
-            {/* ═══ 2.5 AVAILABLE SUPPLIERS (marketplace) ═══ */}
+            {/* ═══ 2.5 AVAILABLE SUPPLIERS (marketplace — actionable for pharmacist) ═══ */}
             <AvailableSuppliers drugId={id} drugName={drug.generic_name} />
-
-            {/* ═══ 2.55 CROSS-BORDER AVAILABILITY (registries) ═══ */}
-            <CrossBorderAvailability drugId={id} />
-
-            {/* ═══ 2.6 PIPELINE & REGULATORY CALENDAR ═══ */}
-            <PipelineRegulatory drugId={id} />
-
-            {/* ═══ 2.7 SUPPLY CHAIN RESILIENCE ═══ */}
-            <SupplyChainResilience drugId={id} />
 
             {/* ═══ 3. SHORTAGE REPORTS BY COUNTRY ═══ */}
             <div id="country-list" style={{ marginBottom: 20 }}>
@@ -1211,8 +1195,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
               })}
             </p>
 
-            {/* ═══ 5. SUPPLY TIMELINE ═══ */}
-            {deduped.length > 0 && (
+            {/* ═══ 5. SUPPLY TIMELINE — hidden in simplified pharmacist view ═══ */}
+            {false && deduped.length > 0 && (
               <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden", marginBottom: 20 }}>
                 <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Supply Timeline</span>

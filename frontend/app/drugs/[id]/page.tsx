@@ -44,10 +44,21 @@ interface Props {
 
 type Persona = "pharmacist" | "procurement" | "supplier";
 
-function resolvePersona(as: string | undefined): Persona {
+/** Maps user_profiles.role → persona view. */
+function personaFromRole(role: string | null | undefined): Persona | null {
+  if (!role) return null;
+  if (role === "pharmacist") return "pharmacist";
+  if (role === "hospital" || role === "government") return "procurement";
+  if (role === "supplier") return "supplier";
+  return null; // 'default' or unknown
+}
+
+/** Explicit ?as= wins, else session role, else pharmacist. */
+function resolvePersona(as: string | undefined, sessionRole: string | null): Persona {
   if (as === "procurement") return "procurement";
   if (as === "supplier") return "supplier";
-  return "pharmacist";
+  if (as === "pharmacist") return "pharmacist";
+  return personaFromRole(sessionRole) ?? "pharmacist";
 }
 
 /* ── SEO: dynamic metadata ── */
@@ -245,7 +256,26 @@ const DOT_COLORS: Record<string, string> = {
 export default async function DrugPage({ params, searchParams }: Props) {
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
-  const persona: Persona = resolvePersona(sp.as);
+
+  // ── Persona resolution ──────────────────────────────────────────────────
+  // Precedence: ?as= query > signed-in user's role > pharmacist default.
+  // Session lookup is best-effort — never block the page on it.
+  let sessionRole: string | null = null;
+  try {
+    const { createServerClient } = await import("@/lib/supabase/server");
+    const sb = await createServerClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (user) {
+      const admin = getSupabaseAdmin();
+      const { data: profile } = await admin
+        .from("user_profiles")
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      sessionRole = (profile as { role?: string } | null)?.role ?? null;
+    }
+  } catch { /* anonymous — default persona */ }
+  const persona: Persona = resolvePersona(sp.as, sessionRole);
 
   const supabase = getSupabaseAdmin();
 

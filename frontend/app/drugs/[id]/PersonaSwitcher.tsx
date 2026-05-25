@@ -1,14 +1,9 @@
 /**
  * PersonaSwitcher — three-way pill bar shown above the drug page.
  *
- * Routing logic:
- *   • pharmacist     → stays on /drugs/[id]                    (the live React page)
- *   • procurement    → /design/procurement (static mockup of D · KPI dashboard)
- *   • supplier       → /design/supplier    (static mockup of F · Modular tiles)
- *
- * Future: read `user_profiles.role` from session and set the active pill
- * automatically; route mockup users to the matching live page once the
- * other two personas have shipped real React components.
+ * Routing: all three personas render the same /drugs/[id] route with
+ * a `?as=pharmacist|procurement|supplier` query param, auto-detected
+ * from user_profiles.role when no param is present.
  */
 import Link from "next/link";
 
@@ -38,13 +33,13 @@ const PERSONAS: Array<{
     key: "procurement",
     label: "Procurement",
     sub: "Numbers-first",
-    href: (id) => (id ? `/drugs/${id}?as=procurement` : "/design/procurement"),
+    href: (id) => (id ? `/drugs/${id}?as=procurement` : "/search"),
   },
   {
     key: "supplier",
     label: "Supplier",
     sub: "Market-scan",
-    href: (id) => (id ? `/drugs/${id}?as=supplier` : "/design/supplier"),
+    href: (id) => (id ? `/drugs/${id}?as=supplier` : "/search"),
   },
 ];
 

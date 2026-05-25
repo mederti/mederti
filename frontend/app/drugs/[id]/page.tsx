@@ -54,7 +54,8 @@ function resolvePersona(as: string | undefined, sessionRole: string | null): Per
   if (as === "procurement") return "procurement";
   if (as === "supplier") return "supplier";
   if (as === "pharmacist") return "pharmacist";
-  return personaFromRole(sessionRole) ?? "pharmacist";
+  // Default: the F bento layout (Supplier view) — modular tiles, market-scan emphasis.
+  return personaFromRole(sessionRole) ?? "supplier";
 }
 
 /* ── SEO: dynamic metadata ── */

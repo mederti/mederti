@@ -23,6 +23,7 @@ import SupplyChainResilience from "./SupplyChainResilience";
 import SoWhatInsight from "./SoWhatInsight";
 import CrossBorderAvailability from "./CrossBorderAvailability";
 import PersonaSwitcher from "./PersonaSwitcher";
+import PharmacistAnswerCard from "./PharmacistAnswerCard";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -755,6 +756,42 @@ export default async function DrugPage({ params }: Props) {
 
         {/* ── RIGHT COLUMN (70%) — Drug Detail ── */}
         <div className="v3-right" style={{ flex: 1, overflowY: "auto", background: "var(--app-bg)", color: "var(--app-text)" }}>
+
+          {/* ═══ 0. PHARMACIST ANSWER HERO — recommended substitute, ETA, trade price ═══ */}
+          {activeShortages.length > 0 && alternatives.length > 0 && (
+            <div style={{ background: "var(--app-bg)", padding: "20px 32px 4px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
+              <PharmacistAnswerCard
+                drugName={`${drug.generic_name}${drugStrength ? ` ${drugStrength}` : ""}`.trim()}
+                genericName={drug.generic_name}
+                atcCode={drug.atc_code ?? undefined}
+                status={{
+                  label: worstSeverity === "critical" ? "Not available" : worstSeverity === "high" ? "Very limited" : "Limited",
+                  severity: (worstSeverity === "critical" || worstSeverity === "high" || worstSeverity === "medium" || worstSeverity === "low" ? worstSeverity : "medium") as "critical" | "high" | "medium" | "low",
+                  markets: `${affectedCountries.size} ${affectedCountries.size === 1 ? "market" : "markets"} affected`,
+                }}
+                topAlternative={(() => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const alt = alternatives[0] as any;
+                  if (!alt) return null;
+                  const altName = alt.drugs?.generic_name ?? "Therapeutic alternative";
+                  return {
+                    name: altName,
+                    form: alt.relationship_type ? alt.relationship_type.replace(/_/g, " ") : "therapeutic alternative",
+                    isAvailable: true,
+                    matchPercent: Math.round((alt.similarity_score ?? 0.7) * 100),
+                    clinicalReasoning: alt.dose_conversion_notes ?? alt.availability_note ?? `Therapeutic alternative for ${drug.generic_name} based on shared mechanism of action. Confirm dosing and clinical fit before substituting.`,
+                  };
+                })()}
+                expectedReturn={predictedReturnDate ? {
+                  label: predictedReturnDate,
+                  range: "± 2 months",
+                  confidence: confidence || 60,
+                } : null}
+                tradePrice={null}
+                paediatricAlternative={null}
+              />
+            </div>
+          )}
 
           {/* ═══ 1. HEADER ROW — Drug Identity left + My Country card right ═══ */}
           <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>

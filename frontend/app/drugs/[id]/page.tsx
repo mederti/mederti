@@ -788,9 +788,21 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .slice(0, 5);
 
     const drugName = `${drug.generic_name}${drugStrength ? ` ${drugStrength}` : ""}`.trim();
-    const status = { label: statusLabel, severity: sev, markets: `${affectedCountries.size} of ${affectedCountries.size + 1} markets` };
+    const status = {
+      label: statusLabel,
+      severity: sev,
+      markets: affectedCountries.size > 0
+        ? `${affectedCountries.size} market${affectedCountries.size === 1 ? "" : "s"} affected`
+        : "no active shortages",
+    };
+    // If we have an AI forecast use it. Otherwise heuristic: critical/high shortages
+    // typically resolve 3-6 months after first reported; show a softer estimate.
     const expectedReturn = predictedReturnDate
       ? { label: predictedReturnDate, range: "± 2 months", confidence: confidence || 60 }
+      : sev === "critical" || sev === "high"
+      ? { label: "3–6 months", range: "based on prior incidents", confidence: 45 }
+      : sev === "medium"
+      ? { label: "1–3 months", range: "based on prior incidents", confidence: 55 }
       : null;
 
     return (

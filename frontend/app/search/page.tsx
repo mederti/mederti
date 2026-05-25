@@ -238,14 +238,29 @@ function SearchResults() {
 
       {/* Results */}
       {loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} style={{
-              height: 82, background: "var(--app-bg)", border: "1px solid var(--app-border)",
-              borderRadius: 12, animation: "pulse 1.5s ease-in-out infinite",
-              opacity: 1 - i * 0.12,
-            }} />
-          ))}
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 16, padding: "80px 20px",
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-black.png"
+            alt="Mederti"
+            style={{ height: 38, animation: "mederti-pulse 1.4s ease-in-out infinite" }}
+          />
+          <div style={{
+            fontSize: 13, color: "var(--app-text-3)",
+            fontFamily: "var(--font-dm-mono), monospace",
+            letterSpacing: "0.05em",
+          }}>
+            Searching the global registry…
+          </div>
+          <style>{`
+            @keyframes mederti-pulse {
+              0%, 100% { opacity: 1;   transform: scale(1); }
+              50%      { opacity: 0.45; transform: scale(0.96); }
+            }
+          `}</style>
         </div>
       )}
 

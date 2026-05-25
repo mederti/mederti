@@ -764,7 +764,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     const firstStart = activeShortages
       .map((s: { start_date?: string | null }) => s.start_date ? new Date(s.start_date).getTime() : null)
       .filter((t: number | null): t is number => t !== null)
-      .sort((a, b) => a - b)[0];
+      .sort((a: number, b: number) => a - b)[0];
     const sinceLabel = firstStart
       ? `since ${new Date(firstStart).toLocaleDateString("en-AU", { month: "short", year: "2-digit" }).replace(/(\d{2})$/, "'$1")}`
       : undefined;

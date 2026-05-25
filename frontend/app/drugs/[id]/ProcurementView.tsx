@@ -815,5 +815,3 @@ function StatRow({
     </div>
   );
 }
-</content>
-</invoke>

@@ -111,15 +111,16 @@ export default function SupplierView({
 }: Props) {
   const sev = SEVERITY[status.severity];
   const isCritical = status.severity === "critical";
+  const isUrgent = status.severity === "critical" || status.severity === "high";
   const genericLine = atcCode
     ? `${genericName} · ATC ${atcCode}`
     : genericName;
 
   // Supplier-focused CTA: when there's a shortage in AU, frame as an opportunity to
   // list stock; otherwise, encourage responding to enquiries from pharmacies.
-  const actionLabel = isCritical ? "List your stock" : "Respond to enquiries";
-  const actionSub = isCritical
-    ? "AU pharmacies are searching now. Be first to surface as a verified supplier."
+  const actionLabel = isUrgent ? "List your stock" : "Respond to enquiries";
+  const actionSub = isUrgent
+    ? "Pharmacies are searching now. Be first to surface as a verified supplier."
     : "Get notified the moment a pharmacy requests this SKU.";
   const actionHref = "/supplier-dashboard/inbox";
 
@@ -224,44 +225,44 @@ export default function SupplierView({
         </div>
 
         {/* ---------- Row 1: Expected return (w2) ---------- */}
-        {expectedReturn && (
-          <div className="sv-tile sv-w2" style={tileBase}>
-            <div style={tileLabelStyle}>Expected return</div>
-            <div style={tileExtraStyle}>
-              {expectedReturn.confidence}% conf
+        <div className="sv-tile sv-w2" style={tileBase}>
+          <div style={tileLabelStyle}>Expected return</div>
+          <div style={tileExtraStyle}>
+            {expectedReturn ? `${expectedReturn.confidence}% conf` : "no forecast"}
+          </div>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              marginTop: 4,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 20,
+                fontWeight: 600,
+                letterSpacing: "-0.015em",
+                color: expectedReturn ? "var(--app-text)" : "var(--app-text-4)",
+                lineHeight: 1.1,
+                fontFamily: "var(--font-dm-mono), monospace",
+              }}
+            >
+              {expectedReturn ? expectedReturn.label : "—"}
             </div>
             <div
               style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-                marginTop: 4,
+                fontSize: 11,
+                color: "var(--app-text-3)",
+                fontFamily: "var(--font-dm-mono), monospace",
+                marginTop: 6,
               }}
             >
-              <div
-                style={{
-                  fontSize: 20,
-                  fontWeight: 600,
-                  letterSpacing: "-0.015em",
-                  color: "var(--app-text)",
-                  lineHeight: 1.1,
-                  fontFamily: "var(--font-dm-mono), monospace",
-                }}
-              >
-                {expectedReturn.label}
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--app-text-3)",
-                  fontFamily: "var(--font-dm-mono), monospace",
-                  marginTop: 6,
-                }}
-              >
-                Range: {expectedReturn.range}
-              </div>
+              {expectedReturn ? `Range: ${expectedReturn.range}` : "Forecast pending"}
             </div>
+          </div>
+          {expectedReturn && (
             <div
               style={{
                 height: 4,
@@ -279,8 +280,8 @@ export default function SupplierView({
                 }}
               />
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* ---------- Row 1: Top substitute (w2) ---------- */}
         {topAlternative && (
@@ -359,7 +360,7 @@ export default function SupplierView({
         )}
 
         {/* ---------- Row 2: Trade price (w4) ---------- */}
-        {tradePrice && (
+        {tradePrice ? (
           <div className="sv-tile sv-w4" style={tileBase}>
             <div style={tileLabelStyle}>
               Trade price — AU + adjacent markets
@@ -467,6 +468,37 @@ export default function SupplierView({
                 })}
               </div>
             )}
+          </div>
+        ) : (
+          <div className="sv-tile sv-w4" style={tileBase}>
+            <div style={tileLabelStyle}>Trade price — AU + adjacent markets</div>
+            <div style={tileExtraStyle}>awaiting wholesaler data</div>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: 6,
+                marginTop: 4,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-dm-mono), monospace",
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: "var(--app-text-4)",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                🇦🇺 Awaiting Sigma · Symbion feed
+              </div>
+              <div style={{ fontSize: 11, color: "var(--app-text-3)", lineHeight: 1.5 }}>
+                AU wholesaler trade pricing arrives once distributor feeds are
+                connected. Mederti pulls public reference pricing today.
+              </div>
+            </div>
           </div>
         )}
 

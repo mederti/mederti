@@ -22,6 +22,7 @@ import PipelineRegulatory from "./PipelineRegulatory";
 import SupplyChainResilience from "./SupplyChainResilience";
 import SoWhatInsight from "./SoWhatInsight";
 import CrossBorderAvailability from "./CrossBorderAvailability";
+import PersonaSwitcher from "./PersonaSwitcher";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -724,6 +725,9 @@ export default async function DrugPage({ params }: Props) {
       `}</style>
 
       <SiteNav />
+
+      {/* ═══ PERSONA SWITCHER ═══ */}
+      <PersonaSwitcher current="pharmacist" drugId={id} />
 
       {/* ═══ NAV BAR ═══ */}
       <div style={{

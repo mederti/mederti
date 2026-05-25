@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mederti — Drug page mockups · desktop</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #ffffff;
+  --bg-2:    #f8fafc;
+  --bg-3:    #f1f5f9;
+  --border:  #e2e8f0;
+  --border-2:#cbd5e1;
+  --text:    #0f172a;
+  --text-2:  #334155;
+  --text-3:  #64748b;
+  --text-4:  #94a3b8;
+  --teal:    #0d9488;
+  --teal-l:  #14b8a6;
+  --teal-bg: #f0fdfa;
+  --teal-b:  #ccfbf1;
+  --indigo:  #4f46e5;
+  --ind-bg:  #eef2ff;
+  --ind-b:   #c7d2fe;
+  --crit:    #dc2626;
+  --crit-bg: #fef2f2;
+  --crit-b:  #fecaca;
+  --high:    #ea580c;
+  --high-bg: #fff7ed;
+  --high-b:  #fed7aa;
+  --med:     #ca8a04;
+  --med-bg:  #fefce8;
+  --med-b:   #fde68a;
+  --low:     #16a34a;
+  --low-bg:  #f0fdf4;
+  --low-b:   #bbf7d0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: #e6e8ec;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  padding: 40px 24px 80px;
+}
+
+/* ===== SHELL ===== */
+.shell-head {
+  max-width: 1240px;
+  margin: 0 auto 28px;
+}
+.shell-title { font-size: 18px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.shell-sub { font-size: 13px; color: var(--text-3); margin-top: 4px; }
+
+.tabs {
+  max-width: 1240px;
+  margin: 0 auto 24px;
+  display: flex; gap: 6px;
+  background: var(--bg);
+  padding: 5px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  width: fit-content;
+}
+.tab {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 500;
+  padding: 8px 14px; border-radius: 7px;
+  background: transparent; border: 0;
+  color: var(--text-3); cursor: pointer;
+  transition: all 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--text); color: #fff; }
+
+.frames { display: flex; flex-direction: column; gap: 36px; }
+
+.mock-frame {
+  max-width: 1240px;
+  margin: 0 auto;
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 18px 60px -15px rgba(15,23,42,0.16);
+  overflow: hidden;
+}
+.frame-tag {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--bg);
+  border-bottom: 1px dashed var(--border);
+}
+.frame-tag-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.frame-tag-meta { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* Tab visibility */
+.frames[data-active="A"] .mock-frame:not(.mock-a),
+.frames[data-active="B"] .mock-frame:not(.mock-b),
+.frames[data-active="C"] .mock-frame:not(.mock-c) { display: none; }
+
+/* ===== SHARED NAV ===== */
+.m-nav {
+  height: 56px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px;
+}
+.m-nav-left { display: flex; align-items: center; gap: 32px; }
+.m-nav-logo { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; color: var(--teal); }
+.m-nav-links { display: flex; gap: 22px; }
+.m-nav-link { font-size: 13px; color: var(--text-3); cursor: pointer; }
+.m-nav-link.active { color: var(--text); }
+.m-nav-link:hover { color: var(--text); }
+.m-nav-right { display: flex; align-items: center; gap: 10px; }
+.m-nav-search {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px;
+  width: 280px;
+  font-size: 12px; color: var(--text-4);
+}
+.m-nav-btn {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text-3); padding: 6px 12px; border-radius: 7px;
+  font-size: 12px; cursor: pointer; font-family: 'Inter', sans-serif;
+}
+.m-nav-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--teal) 0%, var(--indigo) 100%);
+  color: #fff; font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ===== SHARED BREADCRUMB ===== */
+.m-breadcrumb {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 32px 0;
+  font-size: 12px; color: var(--text-3);
+}
+.m-breadcrumb a { color: var(--text-3); text-decoration: none; cursor: pointer; }
+.m-breadcrumb a:hover { color: var(--teal); }
+.m-breadcrumb .sep { color: var(--text-4); }
+
+/* ===== SHARED BUTTONS ===== */
+.m-btn-primary {
+  padding: 13px 20px;
+  background: var(--teal); border: 0; border-radius: 10px;
+  color: #fff; font-size: 14px; font-weight: 600;
+  font-family: 'Inter', sans-serif; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: 0 1px 2px rgba(13,148,136,0.2), 0 4px 16px -2px rgba(13,148,136,0.25);
+  transition: background 0.15s;
+}
+.m-btn-primary:hover { background: var(--teal-l); }
+.m-btn-primary.full { width: 100%; }
+
+/* ============================================================
+   MOCKUP A — ANSWER VIEW (DESKTOP)
+   ============================================================ */
+.a-body { padding: 24px 32px 40px; }
+
+.a-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.a-header-left { flex: 1; min-width: 0; }
+.a-drug-name {
+  font-size: 28px; font-weight: 600; letter-spacing: -0.025em;
+  color: var(--text); line-height: 1.15;
+}
+.a-drug-generic { font-size: 14px; color: var(--text-3); margin-top: 4px; }
+.a-drug-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.a-drug-tag {
+  font-size: 11px; padding: 3px 9px; border-radius: 5px;
+  background: var(--bg-2); color: var(--text-3); border: 1px solid var(--border);
+}
+
+.a-status-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: var(--crit-bg);
+  border: 1px solid var(--crit-b);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.a-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--crit); animation: blink 1.6s ease-in-out infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.a-status-pill-text { font-size: 13px; font-weight: 500; color: var(--crit); }
+.a-status-pill-text strong { font-weight: 600; }
+.a-status-pill-meta { font-size: 11px; color: var(--crit); opacity: 0.7; font-family: 'DM Mono', monospace; margin-left: 4px; }
+
+.a-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+/* Main answer card */
+.a-answer {
+  background: var(--bg);
+  border: 1px solid var(--teal-b);
+  border-radius: 14px;
+  padding: 24px;
+}
+.a-answer-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--teal); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.a-answer-name {
+  font-size: 26px; font-weight: 600; letter-spacing: -0.02em;
+  color: var(--text); line-height: 1.15;
+}
+.a-answer-form { font-size: 13px; color: var(--text-3); margin-top: 4px; }
+.a-answer-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.a-pill {
+  font-size: 11px; padding: 4px 10px; border-radius: 5px;
+  background: var(--low-bg); color: var(--low); border: 1px solid var(--low-b);
+  font-weight: 500;
+}
+.a-pill.neutral {
+  background: var(--bg-2); color: var(--text-3); border-color: var(--border);
+}
+.a-answer-why {
+  font-size: 13px; color: var(--text-2); line-height: 1.65;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border);
+}
+.a-answer-why strong { color: var(--text); font-weight: 500; }
+.a-answer-actions {
+  display: flex; gap: 10px;
+  margin-top: 18px;
+}
+.a-btn-act {
+  padding: 11px 18px;
+  background: var(--text); border: 0; border-radius: 9px;
+  color: #fff; font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.a-btn-act-sec {
+  padding: 11px 16px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 9px;
+  color: var(--text-2); font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif;
+  cursor: pointer;
+}
+
+/* Secondary substitute */
+.a-secondary {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex; align-items: center; gap: 14px;
+  margin-top: 16px;
+}
+.a-sec-icon {
+  width: 36px; height: 36px; border-radius: 9px;
+  background: var(--teal-bg); color: var(--teal);
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+  flex-shrink: 0;
+}
+.a-sec-body { flex: 1; min-width: 0; }
+.a-sec-label { font-size: 10px; font-weight: 500; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+.a-sec-name { font-size: 14px; font-weight: 500; color: var(--text); }
+.a-sec-form { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.a-sec-tick { font-size: 12px; color: var(--low); font-weight: 500; flex-shrink: 0; }
+
+.a-why-toggle {
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 13px; color: var(--text-3);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer;
+}
+.a-why-toggle:hover { color: var(--text); border-color: var(--border-2); }
+
+/* Sidebar */
+.a-sidebar { display: flex; flex-direction: column; gap: 12px; }
+.a-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.a-card-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-4); margin-bottom: 8px;
+}
+
+.a-eta-val { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.a-eta-meta { font-size: 11px; color: var(--text-3); font-family: 'DM Mono', monospace; margin-top: 4px; }
+.a-eta-bar { margin-top: 10px; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+.a-eta-bar-fill { width: 72%; height: 100%; background: linear-gradient(90deg, var(--teal) 0%, var(--teal-l) 100%); }
+.a-eta-conf-row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--text-4); margin-top: 6px;
+  font-family: 'DM Mono', monospace;
+}
+.a-eta-conf-row strong { color: var(--teal); font-weight: 600; }
+
+/* Price card */
+.a-price-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.a-price-au-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 26px; font-weight: 600;
+  color: var(--text); letter-spacing: -0.02em; line-height: 1;
+}
+.a-price-au-unit { font-size: 11px; color: var(--text-3); margin-top: 5px; }
+.a-price-meta { text-align: right; font-size: 10px; color: var(--text-4); font-family: 'DM Mono', monospace; line-height: 1.5; }
+.a-price-meta strong { color: var(--text-3); font-weight: 500; }
+.a-markets-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-4); margin: 14px 0 10px;
+}
+.a-markets { display: flex; flex-direction: column; gap: 9px; }
+.a-market {
+  display: grid;
+  grid-template-columns: 18px 1fr auto 50px;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+.a-market-flag { font-size: 14px; line-height: 1; }
+.a-market-name { color: var(--text-2); font-weight: 500; }
+.a-market-price { color: var(--text); font-family: 'DM Mono', monospace; }
+.a-market-delta { font-size: 10px; font-family: 'DM Mono', monospace; text-align: right; }
+.a-market-delta.up { color: var(--crit); }
+.a-market-delta.down { color: var(--low); }
+.a-market-delta.flat { color: var(--text-4); }
+
+.a-alert-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.a-alert-sub { text-align: center; font-size: 11px; color: var(--text-4); margin-top: 8px; }
+
+/* ============================================================
+   MOCKUP B — CHAT-FIRST (DESKTOP)
+   ============================================================ */
+.b-body {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  min-height: 720px;
+}
+
+.b-main {
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.b-head {
+  padding: 22px 32px 18px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.b-head-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.b-drug-name { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+.b-stat-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--crit); animation: blink 1.6s ease-in-out infinite;
+}
+.b-status-mini { font-size: 12px; color: var(--crit); font-weight: 500; }
+.b-drug-generic { font-size: 13px; color: var(--text-3); margin-top: 4px; }
+
+.b-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.b-stat {
+  padding: 14px 18px;
+  border-right: 1px solid var(--border);
+}
+.b-stat:last-child { border-right: 0; }
+.b-stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-4); margin-bottom: 6px; }
+.b-stat-val { font-size: 15px; font-weight: 500; color: var(--text); }
+.b-stat-val.crit { color: var(--crit); }
+.b-stat-val.mono { font-family: 'DM Mono', monospace; }
+.b-stat-sub { font-size: 11px; color: var(--text-4); margin-top: 2px; font-family: 'DM Mono', monospace; }
+
+/* Chat surface */
+.b-chat {
+  flex: 1;
+  padding: 28px 32px;
+  display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto;
+  background: var(--bg-2);
+}
+.b-msg {
+  max-width: 78%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.b-msg.ai {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+.b-msg.ai strong { color: var(--text); font-weight: 500; }
+.b-msg-label {
+  font-size: 9px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--indigo); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 5px;
+}
+
+/* Chip grid */
+.b-chips-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  max-width: 78%;
+}
+.b-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: left;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  display: flex; align-items: center; gap: 8px;
+  transition: all 0.15s;
+}
+.b-chip:hover { border-color: var(--teal); color: var(--text); background: var(--teal-bg); }
+.b-chip-icon { color: var(--text-4); font-size: 13px; flex-shrink: 0; }
+
+/* Input bar */
+.b-input-wrap {
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  padding: 14px 32px 18px;
+}
+.b-input {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+}
+.b-input input {
+  flex: 1; border: 0; background: transparent;
+  font-family: 'Inter', sans-serif; font-size: 14px;
+  color: var(--text); outline: none;
+}
+.b-input input::placeholder { color: var(--text-4); }
+.b-send {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--teal); border: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; cursor: pointer; flex-shrink: 0; font-size: 15px;
+}
+
+/* Sidebar */
+.b-side {
+  background: var(--bg);
+  display: flex; flex-direction: column;
+}
+.b-side-section {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.b-side-section:last-child { border-bottom: 0; }
+.b-side-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-4); margin-bottom: 10px;
+}
+.b-side-price-au {
+  font-family: 'DM Mono', monospace;
+  font-size: 22px; font-weight: 600;
+  color: var(--text); letter-spacing: -0.02em;
+}
+.b-side-price-unit { font-size: 11px; color: var(--text-3); margin-top: 3px; }
+.b-side-markets { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; }
+.b-side-market {
+  display: grid;
+  grid-template-columns: 16px 1fr auto 42px;
+  gap: 8px;
+  align-items: center;
+  font-size: 11.5px;
+}
+.b-side-market .flag { font-size: 13px; }
+.b-side-market .name { color: var(--text-2); font-weight: 500; }
+.b-side-market .price { color: var(--text); font-family: 'DM Mono', monospace; }
+.b-side-market .delta { font-size: 10px; font-family: 'DM Mono', monospace; text-align: right; }
+.b-side-market .delta.up { color: var(--crit); }
+.b-side-market .delta.down { color: var(--low); }
+
+/* ============================================================
+   MOCKUP C — GLANCE VIEW (DESKTOP)
+   ============================================================ */
+.c-body {
+  padding: 32px;
+  display: flex; flex-direction: column;
+  align-items: center;
+}
+.c-inner {
+  width: 100%;
+  max-width: 820px;
+}
+
+.c-name-block {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.c-drug-name {
+  font-size: 30px; font-weight: 600; letter-spacing: -0.025em;
+  color: var(--text); line-height: 1.15;
+}
+.c-drug-generic { font-size: 14px; color: var(--text-3); margin-top: 6px; }
+
+/* The four-card horizontal answer */
+.c-facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.c-fact {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 18px 16px;
+  display: flex; flex-direction: column;
+  position: relative;
+  transition: border-color 0.15s;
+}
+.c-fact:hover { border-color: var(--border-2); }
+.c-fact.crit { border-color: var(--crit-b); background: var(--crit-bg); }
+.c-fact-label {
+  font-size: 10px; font-weight: 600; color: var(--text-4);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.c-fact.crit .c-fact-label { color: var(--crit); opacity: 0.8; }
+.c-fact-main {
+  font-size: 18px; font-weight: 600; color: var(--text);
+  letter-spacing: -0.01em; line-height: 1.2;
+  display: flex; align-items: center; gap: 8px;
+}
+.c-fact-main.mono { font-family: 'DM Mono', monospace; font-size: 17px; }
+.c-fact.crit .c-fact-main { color: var(--crit); }
+.c-fact-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--crit); animation: blink 1.6s ease-in-out infinite; flex-shrink: 0; }
+.c-fact-sub {
+  font-size: 11px; color: var(--text-3); font-family: 'DM Mono', monospace;
+  margin-top: 8px;
+}
+.c-fact.crit .c-fact-sub { color: var(--crit); opacity: 0.7; }
+.c-fact-link {
+  font-size: 11px; color: var(--teal); font-weight: 500;
+  margin-top: 8px; cursor: pointer;
+}
+.c-fact-link:hover { text-decoration: underline; }
+
+/* Trade price expanded row — sits between facts and alert */
+.c-prices {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+.c-prices-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.c-prices-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-4); }
+.c-prices-meta { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text-4); }
+.c-prices-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+.c-price-cell {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.c-price-cell.home { background: var(--teal-bg); border-color: var(--teal-b); }
+.c-price-flag-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-3); }
+.c-price-cell.home .c-price-flag-row { color: var(--teal); font-weight: 600; }
+.c-price-flag { font-size: 13px; }
+.c-price-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 14px; font-weight: 600;
+  color: var(--text);
+}
+.c-price-cell.home .c-price-val { color: var(--teal); }
+.c-price-delta { font-size: 10px; font-family: 'DM Mono', monospace; }
+.c-price-delta.up { color: var(--crit); }
+.c-price-delta.down { color: var(--low); }
+.c-price-delta.flat { color: var(--text-4); }
+
+/* Big alert */
+.c-alert-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.c-alert-wrap .m-btn-primary { padding: 16px 32px; font-size: 14px; min-width: 360px; }
+.c-alert-sub { font-size: 11px; color: var(--text-4); }
+
+/* Quick actions */
+.c-quick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+.c-quick-btn {
+  padding: 13px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  text-align: left;
+  transition: all 0.15s;
+}
+.c-quick-btn:hover { border-color: var(--text); color: var(--text); }
+.c-quick-btn span { font-size: 11px; color: var(--text-4); font-weight: 400; }
+
+.c-details {
+  margin-top: 18px;
+  padding: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px; color: var(--text-3);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer;
+}
+.c-details:hover { color: var(--text); border-color: var(--border-2); }
+
+/* Fade-in */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.mock-frame > * { animation: fadeUp 0.3s ease both; }
+</style>
+</head>
+<body>
+
+<div class="shell-head">
+  <div class="shell-title">Drug page — three simplification experiments · desktop</div>
+  <div class="shell-sub">Amoxicillin 500mg · status: critical shortage · trade price added across AU + 5 adjacent markets</div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="A">A · Answer</button>
+  <button class="tab" data-tab="B">B · Chat-first</button>
+  <button class="tab" data-tab="C">C · Glance</button>
+</div>
+
+<div class="frames" data-active="A">
+
+  <!-- ============ MOCKUP A — ANSWER VIEW ============ -->
+  <div class="mock-frame mock-a">
+    <div class="frame-tag">
+      <div class="frame-tag-name">A · Answer view</div>
+      <div class="frame-tag-meta">recommend-first</div>
+    </div>
+
+    <nav class="m-nav">
+      <div class="m-nav-left">
+        <span class="m-nav-logo">Mederti</span>
+        <div class="m-nav-links">
+          <span class="m-nav-link">Shortages</span>
+          <span class="m-nav-link active">Drugs</span>
+          <span class="m-nav-link">Recalls</span>
+          <span class="m-nav-link">Insights</span>
+        </div>
+      </div>
+      <div class="m-nav-right">
+        <div class="m-nav-search">🔍 Search 161,000+ drug products…</div>
+        <div class="m-nav-avatar">RM</div>
+      </div>
+    </nav>
+
+    <div class="m-breadcrumb">
+      <a>Drugs</a><span class="sep">/</span>
+      <a>Antibiotics</a><span class="sep">/</span>
+      <a>Penicillins</a><span class="sep">/</span>
+      <span>Amoxicillin 500mg</span>
+    </div>
+
+    <div class="a-body">
+
+      <div class="a-header">
+        <div class="a-header-left">
+          <div class="a-drug-name">Amoxicillin 500mg</div>
+          <div class="a-drug-generic">amoxicillin trihydrate · oral capsule · ATC J01CA04</div>
+          <div class="a-drug-tags">
+            <span class="a-drug-tag">Antibiotic</span>
+            <span class="a-drug-tag">WHO Essential Medicine</span>
+            <span class="a-drug-tag">PBS listed</span>
+            <span class="a-drug-tag">Schedule 4</span>
+          </div>
+        </div>
+        <div class="a-status-pill">
+          <div class="a-status-dot"></div>
+          <div class="a-status-pill-text"><strong>Not available</strong> · critical</div>
+          <div class="a-status-pill-meta">5/5 mkts</div>
+        </div>
+      </div>
+
+      <div class="a-grid">
+
+        <div class="a-left">
+          <div class="a-answer">
+            <div class="a-answer-label">✦ Recommended substitute</div>
+            <div class="a-answer-name">Phenoxymethylpenicillin 500mg</div>
+            <div class="a-answer-form">Pen V · oral capsule · same antibiotic class</div>
+            <div class="a-answer-pills">
+              <span class="a-pill">Available in AU</span>
+              <span class="a-pill neutral">71% clinical match</span>
+              <span class="a-pill neutral">PBS listed</span>
+              <span class="a-pill neutral">$8.20 AUD</span>
+            </div>
+            <div class="a-answer-why">
+              Suitable for <strong>mild–moderate infections in adults</strong> where amoxicillin would be first-line — strep throat, dental abscess, cellulitis, secondary prophylaxis. Not a fit for otitis media, sinusitis, or paediatric dosing under 12. For under-12s, see paediatric option below.
+            </div>
+            <div class="a-answer-actions">
+              <button class="a-btn-act">📝 Draft prescriber note</button>
+              <button class="a-btn-act-sec">Compare 4 alternatives</button>
+              <button class="a-btn-act-sec">⋯</button>
+            </div>
+          </div>
+
+          <div class="a-secondary">
+            <div class="a-sec-icon">👶</div>
+            <div class="a-sec-body">
+              <div class="a-sec-label">For under 12s</div>
+              <div class="a-sec-name">Amoxicillin 250mg/5ml suspension</div>
+              <div class="a-sec-form">same active ingredient · oral liquid · $9.80 AUD</div>
+            </div>
+            <div class="a-sec-tick">✓ Available</div>
+          </div>
+
+          <div class="a-why-toggle">▼ Why this recommendation? See clinical reasoning & source data</div>
+        </div>
+
+        <div class="a-sidebar">
+
+          <div class="a-card">
+            <div class="a-card-label">Expected return</div>
+            <div class="a-eta-val">Aug – Oct 2026</div>
+            <div class="a-eta-meta">Range: Jun 2026 → Jan 2027 · ± 2mo</div>
+            <div class="a-eta-bar"><div class="a-eta-bar-fill"></div></div>
+            <div class="a-eta-conf-row">
+              <span>AI confidence</span>
+              <strong>72 / 100</strong>
+            </div>
+          </div>
+
+          <div class="a-card">
+            <div class="a-price-head">
+              <div>
+                <div class="a-card-label" style="margin-bottom: 4px;">🇦🇺 Trade price · AU</div>
+                <div class="a-price-au-val">$13.50</div>
+                <div class="a-price-au-unit">AUD · pack of 20 caps</div>
+              </div>
+              <div class="a-price-meta">
+                <strong>30d median</strong><br>
+                updated 4d ago<br>
+                Sigma · Symbion · API
+              </div>
+            </div>
+            <div class="a-markets-label">Adjacent markets · same SKU</div>
+            <div class="a-markets">
+              <div class="a-market">
+                <span class="a-market-flag">🇳🇿</span>
+                <span class="a-market-name">New Zealand</span>
+                <span class="a-market-price">$14.20 NZD</span>
+                <span class="a-market-delta down">−3%</span>
+              </div>
+              <div class="a-market">
+                <span class="a-market-flag">🇬🇧</span>
+                <span class="a-market-name">United Kingdom</span>
+                <span class="a-market-price">£3.80 GBP</span>
+                <span class="a-market-delta down">−47%</span>
+              </div>
+              <div class="a-market">
+                <span class="a-market-flag">🇨🇦</span>
+                <span class="a-market-name">Canada</span>
+                <span class="a-market-price">$9.40 CAD</span>
+                <span class="a-market-delta down">−24%</span>
+              </div>
+              <div class="a-market">
+                <span class="a-market-flag">🇺🇸</span>
+                <span class="a-market-name">United States</span>
+                <span class="a-market-price">$11.80 USD</span>
+                <span class="a-market-delta up">+35%</span>
+              </div>
+              <div class="a-market">
+                <span class="a-market-flag">🇸🇬</span>
+                <span class="a-market-name">Singapore</span>
+                <span class="a-market-price">$15.60 SGD</span>
+                <span class="a-market-delta up">+32%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="a-alert-card">
+            <button class="m-btn-primary full">🔔 Alert me when stock returns</button>
+            <div class="a-alert-sub">Email + SMS · the moment any AU supplier lists stock</div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ MOCKUP B — CHAT-FIRST ============ -->
+  <div class="mock-frame mock-b">
+    <div class="frame-tag">
+      <div class="frame-tag-name">B · Chat-first</div>
+      <div class="frame-tag-meta">agent-first</div>
+    </div>
+
+    <nav class="m-nav">
+      <div class="m-nav-left">
+        <span class="m-nav-logo">Mederti</span>
+        <div class="m-nav-links">
+          <span class="m-nav-link">Shortages</span>
+          <span class="m-nav-link active">Drugs</span>
+          <span class="m-nav-link">Recalls</span>
+          <span class="m-nav-link">Insights</span>
+        </div>
+      </div>
+      <div class="m-nav-right">
+        <div class="m-nav-search">🔍 Search 161,000+ drug products…</div>
+        <div class="m-nav-avatar">RM</div>
+      </div>
+    </nav>
+
+    <div class="b-body">
+
+      <div class="b-main">
+        <div class="b-head">
+          <div class="b-head-row">
+            <div class="b-drug-name">Amoxicillin 500mg</div>
+            <div class="b-stat-dot"></div>
+            <div class="b-status-mini">Not available — critical</div>
+          </div>
+          <div class="b-drug-generic">amoxicillin trihydrate · oral capsule · ATC J01CA04 · WHO Essential</div>
+        </div>
+
+        <div class="b-stats">
+          <div class="b-stat">
+            <div class="b-stat-label">Status</div>
+            <div class="b-stat-val crit">Not available</div>
+            <div class="b-stat-sub">5 of 5 markets</div>
+          </div>
+          <div class="b-stat">
+            <div class="b-stat-label">Expected return</div>
+            <div class="b-stat-val mono">Aug – Oct '26</div>
+            <div class="b-stat-sub">72% confidence</div>
+          </div>
+          <div class="b-stat">
+            <div class="b-stat-label">Top substitute</div>
+            <div class="b-stat-val">Pen V 500mg</div>
+            <div class="b-stat-sub">71% match · avail.</div>
+          </div>
+          <div class="b-stat">
+            <div class="b-stat-label">AU trade price</div>
+            <div class="b-stat-val mono">$13.50 AUD</div>
+            <div class="b-stat-sub">+5 mkts in sidebar</div>
+          </div>
+        </div>
+
+        <div class="b-chat">
+          <div class="b-msg ai">
+            <div class="b-msg-label">✦ Mederti agent</div>
+            I've loaded the full shortage history, country availability, alternatives, and trade-price data for <strong>Amoxicillin 500mg</strong>. What do you need to know?
+          </div>
+
+          <div class="b-chips-grid">
+            <button class="b-chip"><span class="b-chip-icon">→</span>Substitute for adult sinusitis</button>
+            <button class="b-chip"><span class="b-chip-icon">→</span>Paediatric alternative under 12</button>
+            <button class="b-chip"><span class="b-chip-icon">→</span>Compare trade price · 6 markets</button>
+            <button class="b-chip"><span class="b-chip-icon">→</span>When will stock return to AU?</button>
+            <button class="b-chip"><span class="b-chip-icon">→</span>Which AU suppliers have stock?</button>
+            <button class="b-chip"><span class="b-chip-icon">→</span>Draft a prescriber note</button>
+            <button class="b-chip"><span class="b-chip-icon">→</span>Show me 4 alternatives ranked</button>
+            <button class="b-chip"><span class="b-chip-icon">🔔</span>Alert me when stock returns</button>
+          </div>
+        </div>
+
+        <div class="b-input-wrap">
+          <div class="b-input">
+            <input type="text" placeholder="Ask anything about Amoxicillin 500mg — substitutes, supply, pricing, history…">
+            <button class="b-send">↑</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="b-side">
+        <div class="b-side-section">
+          <div class="b-side-label">🇦🇺 Trade price · AU</div>
+          <div class="b-side-price-au">$13.50</div>
+          <div class="b-side-price-unit">AUD · 20 caps · 30d median</div>
+        </div>
+        <div class="b-side-section">
+          <div class="b-side-label">Adjacent markets</div>
+          <div class="b-side-markets">
+            <div class="b-side-market">
+              <span class="flag">🇳🇿</span>
+              <span class="name">NZ</span>
+              <span class="price">$14.20 NZD</span>
+              <span class="delta down">−3%</span>
+            </div>
+            <div class="b-side-market">
+              <span class="flag">🇬🇧</span>
+              <span class="name">UK</span>
+              <span class="price">£3.80 GBP</span>
+              <span class="delta down">−47%</span>
+            </div>
+            <div class="b-side-market">
+              <span class="flag">🇨🇦</span>
+              <span class="name">CA</span>
+              <span class="price">$9.40 CAD</span>
+              <span class="delta down">−24%</span>
+            </div>
+            <div class="b-side-market">
+              <span class="flag">🇺🇸</span>
+              <span class="name">US</span>
+              <span class="price">$11.80 USD</span>
+              <span class="delta up">+35%</span>
+            </div>
+            <div class="b-side-market">
+              <span class="flag">🇸🇬</span>
+              <span class="name">SG</span>
+              <span class="price">$15.60 SGD</span>
+              <span class="delta up">+32%</span>
+            </div>
+          </div>
+        </div>
+        <div class="b-side-section">
+          <div class="b-side-label">Quick context</div>
+          <div style="font-size: 12px; color: var(--text-3); line-height: 1.6;">
+            <strong style="color: var(--text); font-weight: 500;">3rd shortage</strong> of this drug since 2018. API supply failure (Aurobindo).
+            Partial restocking expected May–June 2026.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ MOCKUP C — GLANCE VIEW ============ -->
+  <div class="mock-frame mock-c">
+    <div class="frame-tag">
+      <div class="frame-tag-name">C · Glance view</div>
+      <div class="frame-tag-meta">three-second-answer</div>
+    </div>
+
+    <nav class="m-nav">
+      <div class="m-nav-left">
+        <span class="m-nav-logo">Mederti</span>
+        <div class="m-nav-links">
+          <span class="m-nav-link">Shortages</span>
+          <span class="m-nav-link active">Drugs</span>
+          <span class="m-nav-link">Recalls</span>
+          <span class="m-nav-link">Insights</span>
+        </div>
+      </div>
+      <div class="m-nav-right">
+        <div class="m-nav-search">🔍 Search 161,000+ drug products…</div>
+        <div class="m-nav-avatar">RM</div>
+      </div>
+    </nav>
+
+    <div class="c-body">
+      <div class="c-inner">
+
+        <div class="c-name-block">
+          <div class="c-drug-name">Amoxicillin 500mg</div>
+          <div class="c-drug-generic">amoxicillin trihydrate · oral capsule · ATC J01CA04</div>
+        </div>
+
+        <div class="c-facts">
+          <div class="c-fact crit">
+            <div class="c-fact-label">Status</div>
+            <div class="c-fact-main">
+              <div class="c-fact-dot"></div>
+              Not available
+            </div>
+            <div class="c-fact-sub">5 of 5 markets</div>
+          </div>
+          <div class="c-fact">
+            <div class="c-fact-label">Back by</div>
+            <div class="c-fact-main mono">Aug – Oct '26</div>
+            <div class="c-fact-sub">72% confidence</div>
+          </div>
+          <div class="c-fact">
+            <div class="c-fact-label">Use instead</div>
+            <div class="c-fact-main">Pen V 500mg</div>
+            <div class="c-fact-link">View match → 71%</div>
+          </div>
+          <div class="c-fact">
+            <div class="c-fact-label">AU trade</div>
+            <div class="c-fact-main mono">$13.50</div>
+            <div class="c-fact-sub">AUD · 20 caps · 30d</div>
+          </div>
+        </div>
+
+        <div class="c-prices">
+          <div class="c-prices-head">
+            <div class="c-prices-label">Trade price · AU + 5 adjacent markets</div>
+            <div class="c-prices-meta">30d median · updated 4d ago</div>
+          </div>
+          <div class="c-prices-grid">
+            <div class="c-price-cell home">
+              <div class="c-price-flag-row"><span class="c-price-flag">🇦🇺</span>AU</div>
+              <div class="c-price-val">$13.50</div>
+              <div class="c-price-delta flat">home</div>
+            </div>
+            <div class="c-price-cell">
+              <div class="c-price-flag-row"><span class="c-price-flag">🇳🇿</span>NZ</div>
+              <div class="c-price-val">$14.20</div>
+              <div class="c-price-delta down">−3%</div>
+            </div>
+            <div class="c-price-cell">
+              <div class="c-price-flag-row"><span class="c-price-flag">🇬🇧</span>UK</div>
+              <div class="c-price-val">£3.80</div>
+              <div class="c-price-delta down">−47%</div>
+            </div>
+            <div class="c-price-cell">
+              <div class="c-price-flag-row"><span class="c-price-flag">🇨🇦</span>CA</div>
+              <div class="c-price-val">$9.40</div>
+              <div class="c-price-delta down">−24%</div>
+            </div>
+            <div class="c-price-cell">
+              <div class="c-price-flag-row"><span class="c-price-flag">🇺🇸</span>US</div>
+              <div class="c-price-val">$11.80</div>
+              <div class="c-price-delta up">+35%</div>
+            </div>
+            <div class="c-price-cell">
+              <div class="c-price-flag-row"><span class="c-price-flag">🇸🇬</span>SG</div>
+              <div class="c-price-val">$15.60</div>
+              <div class="c-price-delta up">+32%</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="c-alert-wrap">
+          <button class="m-btn-primary">🔔 Alert me when stock returns</button>
+          <div class="c-alert-sub">Email + SMS · the moment any AU supplier lists stock</div>
+        </div>
+
+        <div class="c-quick">
+          <button class="c-quick-btn">Ask the agent →<span>full conversational answer</span></button>
+          <button class="c-quick-btn">Substitutes →<span>4 alternatives ranked</span></button>
+          <button class="c-quick-btn">Source data →<span>5 verified regulators</span></button>
+        </div>
+
+        <div class="c-details">▼ Show full shortage details · timeline · suppliers</div>
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const tabs = document.querySelectorAll('.tab');
+const frames = document.querySelector('.frames');
+function setActive(name){tabs.forEach(x=>x.classList.toggle('active',x.dataset.tab===name));frames.dataset.active=name;}
+tabs.forEach(t => { t.addEventListener('click', () => { setActive(t.dataset.tab); history.replaceState(null,'','#'+t.dataset.tab); }); });
+const initial = window.location.hash.replace('#','');
+if(initial && document.querySelector('.tab[data-tab="'+initial+'"]')) setActive(initial);
+</script>
+
+</body>
+</html>

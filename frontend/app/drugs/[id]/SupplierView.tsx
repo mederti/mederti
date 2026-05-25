@@ -284,7 +284,7 @@ export default function SupplierView({
         </div>
 
         {/* ---------- Row 1: Top substitute (w2) ---------- */}
-        {topAlternative && (
+        {topAlternative ? (
           <div className="sv-tile sv-w2" style={tileBase}>
             <div style={tileLabelStyle}>Top substitute</div>
             <div style={tileExtraStyle}>
@@ -355,6 +355,43 @@ export default function SupplierView({
                   {formatAud(topAlternative.priceAud)}
                 </span>
               )}
+            </div>
+          </div>
+        ) : (
+          <div className="sv-tile sv-w2" style={tileBase}>
+            <div style={tileLabelStyle}>Top substitute</div>
+            <div style={tileExtraStyle}>none mapped</div>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                marginTop: 4,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "var(--app-text-4)",
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.2,
+                }}
+              >
+                No alternatives in catalogue
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--app-text-3)",
+                  marginTop: 6,
+                  lineHeight: 1.5,
+                }}
+              >
+                Therapeutic class match not yet indexed for this drug.
+                Ask the chat panel for clinical-equivalence guidance.
+              </div>
             </div>
           </div>
         )}
@@ -577,7 +614,7 @@ export default function SupplierView({
         </Link>
 
         {/* ---------- Row 3: Alternatives (w3 h2) ---------- */}
-        {alternatives.length > 0 && (
+        {alternatives.length > 0 ? (
           <div className="sv-tile sv-w3 sv-h2" style={tileBase}>
             <div style={tileLabelStyle}>Alternatives</div>
             <div style={tileExtraStyle}>
@@ -655,10 +692,60 @@ export default function SupplierView({
               ))}
             </div>
           </div>
+        ) : (
+          <div className="sv-tile sv-w3 sv-h2" style={tileBase}>
+            <div style={tileLabelStyle}>Alternatives</div>
+            <div style={tileExtraStyle}>indexing</div>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                marginTop: 14,
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "var(--app-text-4)",
+                  letterSpacing: "-0.005em",
+                }}
+              >
+                No therapeutic alternatives indexed yet
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--app-text-3)",
+                  lineHeight: 1.6,
+                }}
+              >
+                Our clinical-equivalence graph is being expanded. For
+                this drug, clinical alternatives need to be cross-referenced
+                against the ATC class and prescriber-substitution guidelines
+                before they appear here.
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "var(--app-text-4)",
+                  fontFamily: "var(--font-dm-mono), monospace",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  marginTop: 4,
+                }}
+              >
+                Path B · clinical-equivalence pipeline
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ---------- Row 3: Sources (w3) ---------- */}
-        {sources.length > 0 && (
+        {sources.length > 0 ? (
           <div className="sv-tile sv-w3" style={tileBase}>
             <div style={tileLabelStyle}>Verified sources</div>
             <div style={tileExtraStyle}>
@@ -715,6 +802,29 @@ export default function SupplierView({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        ) : (
+          <div className="sv-tile sv-w3" style={tileBase}>
+            <div style={tileLabelStyle}>Verified sources</div>
+            <div style={tileExtraStyle}>none active</div>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                marginTop: 4,
+                gap: 6,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text-4)" }}>
+                No active regulator notices
+              </div>
+              <div style={{ fontSize: 11, color: "var(--app-text-3)", lineHeight: 1.5 }}>
+                40 regulators continuously monitored. None currently report
+                an active shortage event for this drug.
+              </div>
             </div>
           </div>
         )}

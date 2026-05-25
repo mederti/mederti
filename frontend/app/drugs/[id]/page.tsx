@@ -806,51 +806,74 @@ export default async function DrugPage({ params, searchParams }: Props) {
       : null;
 
     return (
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
+      <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
+
+        <style>{`
+          @media (max-width: 900px) {
+            .v3-cols { flex-direction: column !important; }
+            .v3-left { width: 100% !important; max-height: 320px; border-right: 0 !important; border-bottom: 1px solid var(--app-border) !important; }
+          }
+        `}</style>
 
         <SiteNav />
         <PersonaSwitcher current={persona} drugId={id} />
 
-        <div style={{ background: "var(--navy)", padding: "8px 24px", borderBottom: "1px solid var(--bd)" }}>
-          <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>
-            {"←"} Back to search
-          </Link>
-        </div>
+        <div className="v3-cols" style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
 
-        <div style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 24px 60px", width: "100%" }}>
-          {persona === "procurement" ? (
-            <ProcurementView
-              drugName={drugName}
-              genericName={drug.generic_name}
-              atcCode={drug.atc_code ?? undefined}
-              drugClass={[drug.atc_description, drug.drug_class, drug.therapeutic_category].filter(Boolean).join(" · ") || undefined}
-              status={status}
-              expectedReturn={expectedReturn}
-              topAlternative={top ? { name: top.name, matchPercent: top.matchPercent, isAvailable: top.isAvailable } : null}
-              alternatives={altsArr}
-              tradePrice={null}
-              shortageDetails={{
-                reason: activeShortages[0]?.reason_category || activeShortages[0]?.reason || undefined,
-                firstReported,
-                sourcesCount: seenSources.size || undefined,
-                priorIncidents: priorIncidents || undefined,
-              }}
-            />
-          ) : (
-            <SupplierView
-              drugName={drugName}
-              genericName={drug.generic_name}
-              atcCode={drug.atc_code ?? undefined}
-              status={{ ...status, sinceLabel }}
-              expectedReturn={expectedReturn}
-              topAlternative={top ? { name: top.name, form: top.form, matchPercent: top.matchPercent, isAvailable: top.isAvailable } : null}
-              tradePrice={null}
-              alternatives={altsArr.map((a) => ({ name: a.name, matchPercent: a.matchPercent, isAvailable: a.isAvailable }))}
-              sources={supplierSources}
-            />
-          )}
+          {/* ── LEFT COLUMN — So What insight + Chat ── */}
+          <div className="v3-left" style={{ width: "25%", minWidth: 280, borderRight: "1px solid var(--app-border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "14px 14px 0", flexShrink: 0 }}>
+              <SoWhatInsight drugId={id} />
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <V3ChatPanel drugId={id} drugContext={drugContext} openingMessage={openingMessage} />
+            </div>
+          </div>
+
+          {/* ── RIGHT COLUMN — Persona view ── */}
+          <div className="v3-right" style={{ flex: 1, overflowY: "auto", background: "var(--app-bg)", color: "var(--app-text)" }}>
+            <div style={{ background: "var(--navy)", padding: "8px 24px", borderBottom: "1px solid var(--bd)" }}>
+              <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>
+                {"←"} Back to search
+              </Link>
+            </div>
+
+            <div style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 24px 60px", width: "100%" }}>
+              {persona === "procurement" ? (
+                <ProcurementView
+                  drugName={drugName}
+                  genericName={drug.generic_name}
+                  atcCode={drug.atc_code ?? undefined}
+                  drugClass={[drug.atc_description, drug.drug_class, drug.therapeutic_category].filter(Boolean).join(" · ") || undefined}
+                  status={status}
+                  expectedReturn={expectedReturn}
+                  topAlternative={top ? { name: top.name, matchPercent: top.matchPercent, isAvailable: top.isAvailable } : null}
+                  alternatives={altsArr}
+                  tradePrice={null}
+                  shortageDetails={{
+                    reason: activeShortages[0]?.reason_category || activeShortages[0]?.reason || undefined,
+                    firstReported,
+                    sourcesCount: seenSources.size || undefined,
+                    priorIncidents: priorIncidents || undefined,
+                  }}
+                />
+              ) : (
+                <SupplierView
+                  drugName={drugName}
+                  genericName={drug.generic_name}
+                  atcCode={drug.atc_code ?? undefined}
+                  status={{ ...status, sinceLabel }}
+                  expectedReturn={expectedReturn}
+                  topAlternative={top ? { name: top.name, form: top.form, matchPercent: top.matchPercent, isAvailable: top.isAvailable } : null}
+                  tradePrice={null}
+                  alternatives={altsArr.map((a) => ({ name: a.name, matchPercent: a.matchPercent, isAvailable: a.isAvailable }))}
+                  sources={supplierSources}
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );

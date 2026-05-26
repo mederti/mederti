@@ -58,13 +58,9 @@ export function TopicalChip({ onSelect }: { onSelect: (q: string) => void }) {
         fontFamily: "var(--font-inter), sans-serif",
         transition: "background 0.15s, border-color 0.15s, color 0.15s",
         lineHeight: 1.4,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
       }}
     >
-      <span style={{ fontSize: 14, flexShrink: 0 }}>📰</span>
-      <span>{question}</span>
+      {question}
     </button>
   );
 }

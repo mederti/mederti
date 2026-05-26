@@ -1,22 +1,23 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic();
+const FALLBACK_QUESTION =
+  "How are current geopolitical tensions affecting global pharmaceutical supply chains?";
 
-// In-memory cache — resets on redeploy, good enough for daily cadence
-let cache: { question: string; generated: number } | null = null;
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const ONE_DAY_SECONDS = 24 * 60 * 60;
 
-export async function GET() {
-  // Serve from cache if fresh
-  if (cache && Date.now() - cache.generated < CACHE_TTL) {
-    return NextResponse.json({ question: cache.question, cached: true });
+async function generateQuestion(): Promise<{ question: string; fallback: boolean; reason?: string }> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { question: FALLBACK_QUESTION, fallback: true, reason: "missing_api_key" };
   }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 200,
+      max_tokens: 80,
       tools: [
         {
           type: "web_search_20250305",
@@ -46,26 +47,34 @@ Search for current pharmaceutical supply chain news, then generate ONE question.
       ],
     });
 
-    // Extract the text response
     const question = response.content
       .filter((b) => b.type === "text")
       .map((b) => (b as any).text)
       .join("")
       .trim()
-      .replace(/^["']|["']$/g, ""); // strip quotes if any
+      .replace(/^["']|["']$/g, "");
 
-    // Cache it
-    cache = { question, generated: Date.now() };
+    if (!question) {
+      return { question: FALLBACK_QUESTION, fallback: true, reason: "empty_response" };
+    }
 
-    return NextResponse.json({ question, cached: false });
+    return { question, fallback: false };
   } catch (error) {
     console.error("Daily question generation failed:", error);
-    // Fallback question if generation fails
-    return NextResponse.json({
-      question:
-        "How are current geopolitical tensions affecting global pharmaceutical supply chains?",
-      cached: false,
-      fallback: true,
-    });
+    return { question: FALLBACK_QUESTION, fallback: true, reason: "generation_error" };
   }
+}
+
+const getCachedQuestion = unstable_cache(generateQuestion, ["mederti-daily-question"], {
+  revalidate: ONE_DAY_SECONDS,
+  tags: ["daily-question"],
+});
+
+export async function GET() {
+  const result = await getCachedQuestion();
+  return NextResponse.json(result, {
+    headers: {
+      "Cache-Control": `public, s-maxage=${ONE_DAY_SECONDS}, stale-while-revalidate=${ONE_DAY_SECONDS}`,
+    },
+  });
 }

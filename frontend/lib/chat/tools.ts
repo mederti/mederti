@@ -281,6 +281,21 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
       required: ["country"],
     },
   },
+  {
+    name: "get_eligibility_status",
+    description:
+      "Lookup eligibility for shortage-specific regulatory pathways — TGA Section 19A (AU), MHRA Serious Shortage Protocol (UK), DHSC Medicine Supply Notification (UK), FDA Drug Shortage list (US), FDA 503B outsourcing (US), EU Article 5(2) per-country exemption (EU). Returns the active eligibility entries with regulator-published reference IDs, descriptions, lifecycle dates and canonical source URLs. When no entries exist on file (e.g. before scrapers backfill the regulatory_eligibility table) returns the audit §11 eligibility refusal envelope so the model lands on the canonical refusal template — directing the user at the live regulator URL — instead of improvising. Use for SUP-15/16/17/18, RET-08/27, HPR-18 — the ⚠ HALLUCINATION RISK eligibility cluster.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID (preferred when known)." },
+        generic_name: { type: "string", description: "Generic name (use when drug_id not resolved)." },
+        country: { type: "string", description: "ISO-2 country code. Required." },
+        scheme: { type: "string", description: "Optional filter to one scheme: tga_s19a | mhra_ssp | dhsc_msn | fda_503b | fda_shortage | eu_art_5_2." },
+      },
+      required: ["country"],
+    },
+  },
 ];
 
 export type ToolContext = {
@@ -2485,6 +2500,80 @@ async function getPredictiveSignals(args: { country: string; min_peers?: number;
   };
 }
 
+// ─── Sprint 2 PR 3 — get_eligibility_status (audit §9 item 12, cluster E) ────
+//
+// Backed by regulatory_eligibility (migration 040). When the table is empty
+// (e.g. before scrapers backfill), returns the §11 eligibility refusal
+// envelope so the model lands on the canonical refusal template instead of
+// improvising. When populated, returns the structured eligibility entry +
+// confidence + source URL.
+async function getEligibilityStatus(args: { drug_id?: string; generic_name?: string; country: string; scheme?: string }) {
+  const country = (args.country || "").toUpperCase();
+  if (!country) return { status: "unanswerable", reason: "missing_country", hint: "Pass a 2-letter ISO country code." };
+  if (!args.drug_id && !args.generic_name) {
+    return { status: "unanswerable", reason: "missing_drug", hint: "Pass drug_id (preferred) or generic_name." };
+  }
+  const sb = getSupabase();
+  let q = sb.from("regulatory_eligibility")
+    .select("id,drug_id,generic_name,brand_name,scheme,status,scheme_reference,description,listed_at,expires_at,withdrawn_at,source_url,source_name,last_verified_at")
+    .eq("country_code", country)
+    .order("listed_at", { ascending: false, nullsFirst: false })
+    .limit(20);
+  if (args.drug_id) q = q.eq("drug_id", args.drug_id);
+  else if (args.generic_name) q = q.ilike("generic_name", `%${args.generic_name.replace(/[%_]/g, "")}%`);
+  if (args.scheme) q = q.eq("scheme", args.scheme);
+
+  let rows: any[] = [];
+  try {
+    const { data, error } = await q;
+    if (error) throw error;
+    rows = (data ?? []) as any[];
+  } catch (e: any) {
+    // Table may not exist yet (migration 040 unapplied). Treat as no-data path.
+    rows = [];
+  }
+
+  if (rows.length === 0) {
+    return {
+      status: "unanswerable",
+      reason: "no_eligibility_on_file",
+      hint: `Eligibility for ${args.scheme ?? "this scheme"} is determined per-application by the regulator. Mederti doesn't currently index the live eligibility list for ${country}. Canonical sources: TGA s19A (tga.gov.au/resources/section-19a-approvals), MHRA SSP (cpe.org.uk/dispensing-and-supply/supply-chain/ssps/), FDA Drug Shortage (accessdata.fda.gov/scripts/drugshortages/). I can tell you whether the drug is in a declared shortage — that gates eligibility for most pathways.`,
+      country, drug_id: args.drug_id ?? null, generic_name: args.generic_name ?? null, scheme: args.scheme ?? null,
+      confidence: { level: "low", score: 0, basis: "No eligibility entries on file. Pilot coverage AU/UK/US/EU when scrapers populate regulatory_eligibility." } satisfies Confidence,
+    };
+  }
+
+  const active = rows.filter((r) => r.status === "active");
+  let freshestDays = Infinity;
+  for (const r of rows) {
+    if (r.last_verified_at) {
+      const d = (Date.now() - new Date(r.last_verified_at).getTime()) / 86400_000;
+      if (d < freshestDays) freshestDays = d;
+    }
+  }
+  const confidence = computeConfidence({
+    sourceReliability: 0.95,
+    signalCount: rows.length,
+    freshnessDays: Number.isFinite(freshestDays) ? freshestDays : 30,
+  });
+  return {
+    country, drug_id: args.drug_id ?? null, generic_name: args.generic_name ?? null, scheme: args.scheme ?? null,
+    total_entries: rows.length,
+    active_entries: active.length,
+    items: rows.map((r) => ({
+      scheme: r.scheme, status: r.status, scheme_reference: r.scheme_reference,
+      description: r.description, listed_at: r.listed_at, expires_at: r.expires_at,
+      withdrawn_at: r.withdrawn_at, source_url: r.source_url, source_name: r.source_name,
+      last_verified_at: r.last_verified_at,
+    })),
+    confidence: { ...confidence, basis: `${active.length} active eligibility entr${active.length === 1 ? "y" : "ies"} for ${country}${args.scheme ? ` under ${args.scheme}` : ""}. Backed by regulator-published listings; verify against canonical URL before relying on the entry for a clinical or commercial decision.` },
+    notes: [
+      "Eligibility schemes are issued per-application by the regulator. This view shows what Mederti has scraped, not what's necessarily applicable to a specific applicant or product variant.",
+      "Coverage pilot: AU (TGA s19A), UK (MHRA SSP + DHSC MSN), US (FDA Drug Shortage + 503B), EU (Article 5(2) per country).",
+    ],
+  };
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, any>,
@@ -2535,6 +2624,8 @@ export async function executeTool(
       return await getResolutionTimeStats(input as any);
     case "get_predictive_signals":
       return await getPredictiveSignals(input as any);
+    case "get_eligibility_status":
+      return await getEligibilityStatus(input as any);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

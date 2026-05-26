@@ -64,3 +64,7 @@ SHELL=/bin/bash
 15  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py ema_recalls   >> logs/cron.log 2>&1
 30  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py mhra_recalls  >> logs/cron.log 2>&1
 45  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_medwatch  >> logs/cron.log 2>&1
+
+# ─── Daily data-health digest (07:00 UTC = 18:00 AEST). Emails OPS_ALERT_EMAIL ───
+# only when something is actionable (use --force-email to override).
+0   7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.health.daily_check >> logs/health.log 2>&1

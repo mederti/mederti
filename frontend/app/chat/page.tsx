@@ -73,12 +73,15 @@ function ChatPageInner() {
     });
   }, []);
 
-  // URL-seed support — when this page is opened with ?q=<text>, prefill the
-  // composer; when ?send=1 is also present, auto-fire the question. Used by
-  // deep links from elsewhere in the app (e.g. the per-drug "Ask Mederti"
-  // CTA on /drugs/[id]). Fires once per mount.
+  // URL-seed support — when this page is opened (or re-navigated) with
+  // ?q=<text>, prefill the composer; when ?send=1 is also present, auto-fire
+  // the question. Used by deep links from elsewhere in the app (e.g. the
+  // per-drug "Ask Mederti" CTA on /drugs/[id]) AND by the global SiteNav
+  // search bar while on /chat (router.push to /chat?q=...&send=1 reroutes
+  // drug autocomplete into the chat instead of /drugs/[id]). Fires once per
+  // unique q+send combo, so re-navigating with new params triggers again.
   const searchParams = useSearchParams();
-  const seedFiredRef = useRef(false);
+  const lastSeedKeyRef = useRef<string | null>(null);
 
   // Scroll the latest user question to the top of the viewport so the reader
   // starts at the beginning of the assistant's response, not the end.
@@ -160,13 +163,18 @@ function ChatPageInner() {
     }
   }
 
-  // Consume ?q= / ?send= once the user is past the auth gate.
+  // Consume ?q= / ?send= once the user is past the auth gate. Re-fires when
+  // the params change (e.g. the user picks a new drug from the SiteNav search
+  // while staying on /chat), but only once per unique q+send combo.
   useEffect(() => {
-    if (!authChecked || !isAuthed || seedFiredRef.current) return;
+    if (!authChecked || !isAuthed) return;
     const q = searchParams.get("q");
     if (!q) return;
-    seedFiredRef.current = true;
-    if (searchParams.get("send") === "1") {
+    const sendFlag = searchParams.get("send");
+    const key = `${q}|${sendFlag ?? ""}`;
+    if (lastSeedKeyRef.current === key) return;
+    lastSeedKeyRef.current = key;
+    if (sendFlag === "1") {
       void send(q);
     } else {
       setDraft(q);

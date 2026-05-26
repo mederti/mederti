@@ -19,10 +19,67 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from abc import ABC, abstractmethod
 from datetime import date, datetime, timezone
 from typing import Any
+
+# ── Drug-name plausibility guard ────────────────────────────────────────────
+# Recall feed titles often look like sentences ("Updated labelling for X",
+# "Important safety information about Y", "Health Canada recalls Z"). Before
+# auto-creating a row in the canonical `drugs` table, screen these out so the
+# catalogue does not get polluted with recall headlines.
+
+_DRUG_NAME_MAX_WORDS  = 5
+_DRUG_NAME_MAX_CHARS  = 80
+_DRUG_NAME_MIN_CHARS  = 3
+
+_DRUG_NAME_STOPWORDS: frozenset[str] = frozenset([
+    "updated", "update", "advisory", "warning", "warnings", "information",
+    "alert", "alerts", "notice", "important", "recall", "recalls", "recalled",
+    "letter", "letters", "communication", "errors", "error", "risk", "risks",
+    "label", "labelling", "labeling", "mislabel", "mislabelling", "rejection",
+    "death", "deaths", "serious", "adverse", "reaction", "reactions", "safety",
+    "withdraw", "withdrawal", "withdrawn", "issued", "issue", "issues",
+    "voluntary", "voluntarily", "may", "could", "due", "regarding", "and",
+    "about", "for", "of", "the", "with", "from", "concerns", "concerning",
+    "potential", "possible", "investigation", "hazard", "health",
+])
+
+# Phrases that should never appear in a real generic name
+_DRUG_NAME_BANNED_SUBSTRINGS: tuple[str, ...] = (
+    "and the ", "due to ", "labelling for ", "labeling for ", "recall of ",
+    "notice of ", "warning about ", "warning of ", "information about ",
+    "risk of ", "risks of ", "advisory on ", "may cause ", "could cause ",
+    "letter to ", "communication to ", "press release",
+)
+
+
+def _looks_like_drug_name(name: str) -> bool:
+    """
+    Return True iff `name` plausibly names a single drug (vs a recall headline).
+    Used to gate auto-creation of `drugs` rows from recall feeds.
+    """
+    if not name:
+        return False
+    clean = name.strip()
+    if not (_DRUG_NAME_MIN_CHARS <= len(clean) <= _DRUG_NAME_MAX_CHARS):
+        return False
+
+    lower = clean.lower()
+    if any(banned in lower for banned in _DRUG_NAME_BANNED_SUBSTRINGS):
+        return False
+
+    # Tokenise on whitespace; ignore parenthetical strength suffixes
+    tokens = re.findall(r"[A-Za-z][A-Za-z\-]+", lower)
+    if not tokens:
+        return False
+    if len(tokens) > _DRUG_NAME_MAX_WORDS:
+        return False
+    if any(tok in _DRUG_NAME_STOPWORDS for tok in tokens):
+        return False
+    return True
 
 import httpx
 from supabase import Client
@@ -204,7 +261,17 @@ class BaseRecallScraper(ABC):
                 )
                 return matched["id"]
 
-        # 3. Auto-create minimal record
+        # 3. Auto-create minimal record — but only for plausibly drug-like names.
+        # Recall feed titles often look like sentences; auto-creating those
+        # pollutes the canonical `drugs` catalogue. Skip them entirely and let
+        # the recall be saved without a drug_id (which is permitted).
+        if not _looks_like_drug_name(generic_name):
+            self.log.info(
+                "Skipping drug auto-create — name does not look like a drug",
+                extra={"generic_name": generic_name, "source": self.SOURCE_NAME},
+            )
+            return None
+
         self.log.warning(
             "Drug not in registry — auto-creating minimal record",
             extra={"generic_name": generic_name, "source": self.SOURCE_NAME},

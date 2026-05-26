@@ -257,8 +257,13 @@ def main(keys: list[str] | None = None) -> int:
     # ── Summary table ─────────────────────────────────────────────────────────
     run_end     = datetime.now(timezone.utc)
     total_s     = (run_end - run_start).total_seconds()
-    errors      = [r for r in results if r["status"] == "error"]
-    successes   = [r for r in results if r["status"] not in ("error",)]
+    # A "broken" run is either a hard exception (status=='error') or a scraper
+    # that returned a non-success status. Previously only hard exceptions were
+    # surfaced, so silent scraper-level failures like cofepris/hsa/sahpra were
+    # masked.
+    BAD_STATUSES = {"error", "failed"}
+    broken      = [r for r in results if r["status"] in BAD_STATUSES]
+    successes   = [r for r in results if r["status"] not in BAD_STATUSES]
 
     log.info("")
     log.info("=" * 60)
@@ -273,10 +278,47 @@ def main(keys: list[str] | None = None) -> int:
             f"{r['duration_s']:>9.1f}s"
         )
     log.info("-" * 62)
-    log.info(f"Succeeded: {len(successes)}   Errors: {len(errors)}")
-    if errors:
-        for r in errors:
-            log.error(f"  {r['scraper']}: {r['error']}")
+    log.info(f"Succeeded: {len(successes)}   Failed: {len(broken)}")
+    if broken:
+        for r in broken:
+            log.error(f"  {r['scraper']}: status={r['status']} error={r['error']}")
+
+    # ── Ops alert on broken scrapers ──────────────────────────────────────────
+    if not dry_run and broken:
+        try:
+            from backend.alerts.resend_client import send_ops_alert
+            ops_to = os.environ.get("OPS_ALERT_EMAIL", "").strip()
+            if ops_to:
+                keys_summary = ", ".join(r["scraper"] for r in broken)
+                send_ops_alert(
+                    to=ops_to,
+                    subject=f"Mederti scraper failures: {keys_summary[:80]}",
+                    summary=(
+                        f"{len(broken)} of {len(results)} scrapers reported a "
+                        f"non-success status during the run that finished at "
+                        f"{run_end.isoformat()}.\n\n"
+                        "These were previously silent — the parent runner used "
+                        "to log 'Errors: 0' as long as no Python exception "
+                        "escaped. The per-scraper status is now surfaced."
+                    ),
+                    rows=[
+                        {
+                            "scraper":   r["scraper"],
+                            "status":    r["status"],
+                            "records":   r["records"],
+                            "duration":  f"{r['duration_s']}s",
+                            "error":     (r["error"] or "")[:200],
+                        }
+                        for r in broken
+                    ],
+                )
+            else:
+                log.warning(
+                    "OPS_ALERT_EMAIL not set — scraper failures not emailed",
+                    extra={"broken_count": len(broken)},
+                )
+        except Exception as exc:
+            log.error(f"Ops alert send failed: {exc}")
 
     # ── Dispatch pending shortage alerts ──────────────────────────────────────
     if not dry_run:
@@ -316,7 +358,7 @@ def main(keys: list[str] | None = None) -> int:
         except Exception as exc:
             log.error(f"Recall alert dispatcher failed: {exc}")
 
-    return 1 if errors else 0
+    return 1 if broken else 0
 
 
 if __name__ == "__main__":

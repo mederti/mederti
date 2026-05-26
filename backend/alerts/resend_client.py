@@ -174,6 +174,79 @@ def send_recall_alert(
         return False
 
 
+def send_ops_alert(
+    to: str,
+    subject: str,
+    summary: str,
+    rows: list[dict] | None = None,
+) -> bool:
+    """
+    Send an internal ops alert email (scraper failures, health-check findings).
+    `rows` renders as a simple monospace table if provided.
+    Returns True if sent successfully, False if stubbed or failed.
+    """
+    if _STUBBED:
+        log.info(
+            "RESEND_API_KEY not configured — stubbing ops alert",
+            extra={"to": to, "subject": subject},
+        )
+        return False
+
+    table_html = ""
+    if rows:
+        keys = list(rows[0].keys())
+        head = "".join(
+            f'<th style="text-align:left;padding:6px 12px;font-size:12px;'
+            f'color:#64748b;border-bottom:1px solid #e2e8f0">{k}</th>'
+            for k in keys
+        )
+        body = ""
+        for r in rows[:50]:
+            body += "<tr>" + "".join(
+                f'<td style="padding:6px 12px;font-size:13px;color:#0f172a;'
+                f'font-family:ui-monospace,monospace;border-bottom:1px solid #f1f5f9">'
+                f'{str(r.get(k, ""))[:120]}</td>'
+                for k in keys
+            ) + "</tr>"
+        table_html = (
+            f'<table style="width:100%;border-collapse:collapse;margin-top:16px">'
+            f'<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
+        )
+
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;padding:32px 16px;margin:0">
+  <div style="max-width:680px;margin:0 auto;background:#fff;border-radius:12px;padding:28px 32px;border:1px solid #e2e8f0">
+    <div style="font-size:18px;font-weight:700;color:#0d9488;margin-bottom:8px">Mederti — Ops</div>
+    <h1 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 16px">{subject}</h1>
+    <div style="font-size:14px;color:#334155;line-height:1.7;white-space:pre-wrap">{summary}</div>
+    {table_html}
+    <div style="margin-top:24px;padding-top:12px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8">
+      Automated Mederti ops alert · do not reply
+    </div>
+  </div>
+</body>
+</html>"""
+
+    try:
+        resp = httpx.post(
+            _API_URL,
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                     "Content-Type": "application/json"},
+            json={"from": RESEND_FROM, "to": [to], "subject": subject, "html": html},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        log.info("Ops alert sent", extra={"to": to, "subject": subject})
+        return True
+    except Exception as exc:
+        log.error("Failed to send ops alert",
+                  extra={"error": str(exc), "to": to, "subject": subject})
+        return False
+
+
 def send_welcome_email(to: str) -> bool:
     """
     Send a welcome email to a new subscriber.

@@ -182,15 +182,41 @@ class HealthCanadaRecallsScraper(BaseRecallScraper):
             "raw_record":       rec,
         }
 
+    # Preamble phrases that show up at the start of HC recall titles —
+    # strip them so the residue (if anything) can be tested as a drug name.
+    _PREAMBLE_PATTERNS: tuple[str, ...] = (
+        r"^updated\s+labell?ing\s+for\s+",
+        r"^updated\s+(safety|product)\s+information\s+(for|about|on)\s+",
+        r"^updated\s+(?:safety\s+)?information\s+",
+        r"^updated\s+",
+        r"^important\s+safety\s+information\s+(?:for|about|on|regarding)\s+",
+        r"^important\s+information\s+(?:for|about|on|regarding)\s+",
+        r"^health\s+canada\s+(?:recalls?|advises|warns|reminds|reports?)\s+",
+        r"^recall\s+of\s+",
+        r"^advisory\s+(?:on|regarding|about|for)\s+",
+        r"^notice\s+(?:on|regarding|about|of)\s+",
+        r"^safety\s+(?:alert|notice|warning)\s+(?:for|about|on)\s+",
+        r"^warning\s+(?:about|on|regarding)\s+",
+    )
+
     @staticmethod
     def _clean_name(raw: str) -> str:
         """Extract a usable drug name from HC title field."""
         if not raw:
             return ""
+        candidate = raw.strip()
+        # Strip known preambles ("Updated labelling for X" → "X")
+        for pat in HealthCanadaRecallsScraper._PREAMBLE_PATTERNS:
+            new = re.sub(pat, "", candidate, flags=re.IGNORECASE)
+            if new != candidate:
+                candidate = new.strip()
+                break
         # Remove dosage info after first comma or em-dash
-        name = re.split(r"[,\-–—]", raw)[0].strip()
+        name = re.split(r"[,\-–—:;]", candidate)[0].strip()
         # Remove batch/lot info
         name = re.sub(r"\b(lot|batch|recall|class)\b.*", "", name, flags=re.IGNORECASE).strip()
+        # Strip surrounding quotes/parens
+        name = name.strip("\"'()[]").strip()
         return name[:100] if len(name) >= 3 else ""
 
     @staticmethod

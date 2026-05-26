@@ -89,7 +89,18 @@ export default function SiteNav() {
   const searchRef  = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  /* ── Global search autocomplete ── */
+  /* ── Global search autocomplete ──
+   * On /chat, the search bar routes into the chat itself (seed + auto-send)
+   * instead of jumping to the per-drug product page — keeps everything inside
+   * the chat flow / preview pane per the chat-page contract.
+   */
+  const goFromSearch = (text: string, fallbackHref: string) => {
+    if (pathname === "/chat") {
+      router.push(`/chat?q=${encodeURIComponent(text)}&send=1`);
+    } else {
+      router.push(fallbackHref);
+    }
+  };
   const ac = useAutocomplete({
     minChars: 2,
     debounceMs: 200,
@@ -98,12 +109,12 @@ export default function SiteNav() {
     onSelect: (item) => {
       ac.clear();
       setSearchOpen(false);
-      router.push(item.href);
+      goFromSearch(`Tell me about ${item.name}`, item.href);
     },
     onSubmit: (q) => {
       ac.setIsOpen(false);
       setSearchOpen(false);
-      router.push(`/search?q=${encodeURIComponent(q)}`);
+      goFromSearch(q, `/search?q=${encodeURIComponent(q)}`);
     },
   });
 
@@ -326,7 +337,7 @@ export default function SiteNav() {
                   onSelect={(item) => {
                     ac.clear();
                     setSearchOpen(false);
-                    router.push(item.href);
+                    goFromSearch(`Tell me about ${item.name}`, item.href);
                   }}
                   onHover={() => {}}
                 />

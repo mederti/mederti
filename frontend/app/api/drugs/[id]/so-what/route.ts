@@ -4,7 +4,6 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
 
-const client = new Anthropic();
 const MODEL = "claude-sonnet-4-20250514";
 const TTL_MS = 12 * 60 * 60 * 1000; // 12h cache
 
@@ -39,21 +38,34 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     }
   }
 
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json(
+      { error: "AI insights unavailable: ANTHROPIC_API_KEY not configured.", reason: "missing_api_key" },
+      { status: 503 },
+    );
+  }
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
   const sb = getSupabaseAdmin();
 
-  // Fetch the full drug context in parallel
-  const altPromise = sb.from("drug_alternatives").select("alternative_drug_name").eq("drug_id", drugId).limit(8) as unknown as Promise<{ data: Array<{ alternative_drug_name: string }> | null }>;
-  const altResult = await altPromise.catch(() => ({ data: [] as Array<{ alternative_drug_name: string }> }));
+  // Fetch the full drug context in parallel. We wrap each Supabase builder in
+  // Promise.resolve(...).catch(...) so a single table failure doesn't 500 the
+  // route — failed sub-queries degrade to empty data instead.
+  const safe = <T,>(p: PromiseLike<{ data: T | null }>, empty: T) =>
+    Promise.resolve(p).catch(() => ({ data: empty }));
 
-  const [drugRes, shortagesRes, regEventsRes, trialsRes, facilitiesRes, approvalsRes] = await Promise.all([
+  const [drugRes, shortagesRes, regEventsRes, trialsRes, facilitiesRes, approvalsRes, alternativesRes] = await Promise.all([
     sb.from("drugs").select("id, generic_name, brand_names, atc_code_full, drug_class, who_essential_medicine, critical_medicine_eu").eq("id", drugId).maybeSingle(),
     sb.from("shortage_events").select("country_code, status, severity, reason_category, start_date, end_date").eq("drug_id", drugId),
     sb.from("regulatory_events").select("event_type, event_date, source_country, sponsor, description, outcome").eq("drug_id", drugId).gte("event_date", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)).limit(10),
     sb.from("clinical_trials").select("phase, overall_status, primary_completion_date, sponsor").eq("drug_id", drugId).in("phase", ["Phase 3", "Phase 4"]).limit(15),
     sb.from("manufacturing_facilities").select("facility_name, country, last_inspection_classification, oai_count_5y, warning_letter_count_5y").or("last_inspection_classification.eq.OAI,warning_letter_count_5y.gt.0").limit(8),
     sb.from("drug_approvals").select("authority, te_code").eq("drug_id", drugId).limit(20),
+    safe(
+      sb.from("drug_alternatives").select("alternative_drug_name").eq("drug_id", drugId).limit(8) as unknown as PromiseLike<{ data: Array<{ alternative_drug_name: string }> | null }>,
+      [] as Array<{ alternative_drug_name: string }>,
+    ),
   ]);
-  const alternativesRes = altResult;
 
   const drug = drugRes.data as { generic_name: string; brand_names: string[] | null; atc_code_full: string | null; drug_class: string | null; who_essential_medicine: boolean; critical_medicine_eu: boolean } | null;
   if (!drug) return NextResponse.json({ error: "Drug not found" }, { status: 404 });

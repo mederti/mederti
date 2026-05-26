@@ -71,10 +71,6 @@ export function isDrugAvailable(drug: DrugDetail, country = "AU"): boolean {
   return !drug.shortages.some((s) => s.status === "active" && s.country_code === country);
 }
 
-export function drugMainSiteUrl(drugId: string): string {
-  return `https://mederti.vercel.app/drugs/${drugId}`;
-}
-
 export function formatPrice(unit: number | null | undefined, currency: string | null | undefined): string {
   if (unit == null) return "—";
   const sym = currency === "AUD" ? "$" : currency === "USD" ? "$" : currency === "GBP" ? "£" : currency === "EUR" ? "€" : "";

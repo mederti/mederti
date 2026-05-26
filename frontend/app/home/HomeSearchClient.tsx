@@ -2,17 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
 import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
 
 const SUGGESTED = [
-  "Amoxicillin",
-  "Metformin",
-  "Paracetamol IV",
-  "Ozempic",
-  "Lithium Carbonate",
-  "Cisplatin",
+  "Atorvastatin availability in Spain and Italy",
+  "Alternatives to amoxicillin during shortage",
+  "Critical drug shortages in Europe this month",
+  "Compare metformin supply across AU, UK, US",
+  "Recent recalls for blood pressure drugs",
 ];
 
 export default function HomeSearchClient() {
@@ -63,12 +62,12 @@ export default function HomeSearchClient() {
             transition: "border-color 0.15s, box-shadow 0.15s",
             overflow: "hidden",
           }}>
-            <Search
-              style={{ width: 18, height: 18, strokeWidth: 1.5, marginLeft: 16, flexShrink: 0, color: "var(--app-text-4)" }}
+            <Sparkles
+              style={{ width: 18, height: 18, strokeWidth: 1.5, marginLeft: 16, flexShrink: 0, color: "var(--teal)" }}
             />
             <input
               {...ac.inputProps}
-              placeholder="Search drugs, generics, conditions…"
+              placeholder="Ask anything — e.g. find atorvastatin availability in Spain and Italy"
               autoComplete="off"
               spellCheck={false}
               style={{
@@ -103,7 +102,7 @@ export default function HomeSearchClient() {
                 fontFamily: "var(--font-inter), sans-serif",
               }}
             >
-              Search
+              Ask
             </button>
           </div>
         </form>

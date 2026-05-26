@@ -124,6 +124,18 @@ function DrugCard({ drug, altCounts }: { drug: DrugResult; altCounts: Record<str
   );
 }
 
+function isConversational(q: string): boolean {
+  const t = q.trim().toLowerCase();
+  if (!t) return false;
+  // Starts with question/action word
+  if (/^(find|show|list|get|search|compare|tell|look|what|where|when|how|why|which|who|do|does|is|are|can|should)\b/.test(t)) return true;
+  // Contains availability/intent phrases
+  if (/\b(availability|available in|shortage in|alternatives? to|across|between|compared to|versus|vs\.?)\b/.test(t)) return true;
+  // 4+ words
+  if (t.split(/\s+/).length >= 4) return true;
+  return false;
+}
+
 function SearchResults() {
   const params = useSearchParams();
   const router = useRouter();
@@ -136,6 +148,14 @@ function SearchResults() {
   const [altCounts, setAltCounts] = useState<Record<string, number>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const conversational = isConversational(query);
+
+  function askMederti(q: string) {
+    const t = q.trim();
+    if (!t) return;
+    router.push(`/chat?q=${encodeURIComponent(t)}`);
+  }
+
   const ac = useAutocomplete({
     minChars: 2,
     debounceMs: 200,
@@ -144,13 +164,16 @@ function SearchResults() {
       ac.setIsOpen(false);
       router.push(item.href);
     },
-    onSubmit: () => {
+    onSubmit: (q) => {
       ac.setIsOpen(false);
+      if (isConversational(q)) askMederti(q);
     },
   });
 
   const search = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setTotal(0); return; }
+    // Skip keyword search for conversational queries — the UI surfaces an "Ask Mederti AI" CTA instead.
+    if (isConversational(q)) { setResults([]); setTotal(0); setLoading(false); return; }
     setLoading(true);
     try {
       const data = await api.search(q, 20);
@@ -194,41 +217,71 @@ function SearchResults() {
     <>
       {/* Search bar */}
       <div style={{ marginBottom: 40 }}>
-        <div ref={ac.containerRef} style={{ position: "relative", maxWidth: 600 }}>
-          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--app-text-4)", fontSize: 16, pointerEvents: "none", zIndex: 1 }}>
-            ⌕
-          </span>
-          <input
-            autoFocus
-            {...ac.inputProps}
-            value={query}
-            onChange={e => handleChange(e.target.value)}
-            placeholder="Search drug name, brand name, or ATC code…"
-            style={{
-              width: "100%", padding: "14px 16px 14px 40px", fontSize: 16,
-              border: "1px solid var(--app-border-2)", borderRadius: 10,
-              fontFamily: "var(--font-inter), sans-serif",
-              outline: "none", background: "#fff", color: "var(--app-text)",
-              boxSizing: "border-box",
-            }}
-            onFocus={e => { ac.inputProps.onFocus(); (e.target.style.borderColor = "var(--teal)"); }}
-            onBlur={e => (e.target.style.borderColor = "var(--app-border-2)")}
-          />
-
-          {/* Autocomplete dropdown */}
-          {ac.isOpen && (
-            <AutocompleteDropdown
-              items={ac.items}
-              cursor={ac.cursor}
-              loading={ac.loading}
-              query={query}
-              listId={ac.inputProps["aria-controls"]}
-              onSelect={(item) => { ac.setIsOpen(false); router.push(item.href); }}
-              onHover={() => {}}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (isConversational(query)) askMederti(query);
+          }}
+        >
+          <div ref={ac.containerRef} style={{ position: "relative", maxWidth: 600 }}>
+            <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: conversational ? "var(--teal)" : "var(--app-text-4)", fontSize: 16, pointerEvents: "none", zIndex: 1 }}>
+              {conversational ? "✦" : "⌕"}
+            </span>
+            <input
+              autoFocus
+              {...ac.inputProps}
+              value={query}
+              onChange={e => handleChange(e.target.value)}
+              placeholder="Ask anything — e.g. find atorvastatin availability in Spain and Italy"
+              style={{
+                width: "100%", padding: "14px 16px 14px 40px", fontSize: 16,
+                border: `1px solid ${conversational ? "var(--teal)" : "var(--app-border-2)"}`, borderRadius: 10,
+                fontFamily: "var(--font-inter), sans-serif",
+                outline: "none", background: "#fff", color: "var(--app-text)",
+                boxSizing: "border-box",
+              }}
+              onFocus={e => { ac.inputProps.onFocus(); (e.target.style.borderColor = "var(--teal)"); }}
+              onBlur={e => (e.target.style.borderColor = conversational ? "var(--teal)" : "var(--app-border-2)")}
             />
-          )}
-        </div>
-        {query.trim() && !loading && (
+
+            {/* Autocomplete dropdown */}
+            {ac.isOpen && !conversational && (
+              <AutocompleteDropdown
+                items={ac.items}
+                cursor={ac.cursor}
+                loading={ac.loading}
+                query={query}
+                listId={ac.inputProps["aria-controls"]}
+                onSelect={(item) => { ac.setIsOpen(false); router.push(item.href); }}
+                onHover={() => {}}
+              />
+            )}
+          </div>
+        </form>
+
+        {conversational && (
+          <div style={{ marginTop: 12, maxWidth: 600 }}>
+            <button
+              type="button"
+              onClick={() => askMederti(query)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "10px 16px",
+                background: "var(--teal)", color: "#fff",
+                border: "none", borderRadius: 8,
+                fontSize: 14, fontWeight: 600, cursor: "pointer",
+                fontFamily: "var(--font-inter), sans-serif",
+              }}
+            >
+              <span style={{ fontSize: 14 }}>✦</span> Ask Mederti AI — &ldquo;{query.trim().length > 60 ? query.trim().slice(0, 60) + "…" : query.trim()}&rdquo;
+            </button>
+            <div style={{ marginTop: 6, fontSize: 12, color: "var(--app-text-4)" }}>
+              Press Enter to get an AI-powered answer with live shortage, recall, and availability data.
+            </div>
+          </div>
+        )}
+
+        {!conversational && query.trim() && !loading && (
           <div style={{ marginTop: 10, fontSize: 13, color: "var(--app-text-4)" }}>
             {total === 0 ? "No drugs found" : `${total} drug${total !== 1 ? "s" : ""} matched`}
             {total > 20 && " · showing top 20"}
@@ -272,24 +325,50 @@ function SearchResults() {
         </div>
       )}
 
-      {!loading && query.trim() && results.length === 0 && (
+      {!loading && query.trim() && results.length === 0 && !conversational && (
         <div style={{ textAlign: "center", padding: "60px 20px" }}>
           <div style={{ fontSize: 32, marginBottom: 16 }}>🔍</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>No results for &ldquo;{query}&rdquo;</div>
           <div style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.65, maxWidth: 400, margin: "0 auto" }}>
-            Try a different spelling, the generic name, or a brand name. Covers 95,000+ registered drugs across the US, Canada, and 20+ countries.
+            Try a different spelling, the generic name, or a brand name. Or rephrase as a question to get an AI-powered answer.
           </div>
         </div>
       )}
 
       {!loading && !query.trim() && (
         <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <div style={{ fontSize: 32, marginBottom: 16 }}>💊</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>Search the shortage database</div>
-          <div style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.65 }}>
-            Try searching for <button onClick={() => handleChange("amoxicillin")} style={{ background: "none", border: "none", color: "var(--teal)", cursor: "pointer", fontSize: 14, fontFamily: "var(--font-inter), sans-serif" }}>amoxicillin</button>,{" "}
-            <button onClick={() => handleChange("insulin")} style={{ background: "none", border: "none", color: "var(--teal)", cursor: "pointer", fontSize: 14, fontFamily: "var(--font-inter), sans-serif" }}>insulin</button>, or{" "}
-            <button onClick={() => handleChange("salbutamol")} style={{ background: "none", border: "none", color: "var(--teal)", cursor: "pointer", fontSize: 14, fontFamily: "var(--font-inter), sans-serif" }}>salbutamol</button>
+          <div style={{ fontSize: 32, marginBottom: 16 }}>✦</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)", marginBottom: 8 }}>Search by drug name — or ask anything</div>
+          <div style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.65, marginBottom: 18 }}>
+            Type a generic, brand, or ATC code for instant lookup, or ask a full question to get an AI answer.
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", maxWidth: 540, margin: "0 auto" }}>
+            {[
+              { label: "find atorvastatin availability in Spain and Italy", conv: true },
+              { label: "alternatives to amoxicillin during shortage", conv: true },
+              { label: "compare metformin supply across AU, UK, US", conv: true },
+              { label: "amoxicillin", conv: false },
+              { label: "insulin", conv: false },
+              { label: "salbutamol", conv: false },
+            ].map(({ label, conv }) => (
+              <button
+                key={label}
+                onClick={() => {
+                  if (conv) askMederti(label);
+                  else handleChange(label);
+                }}
+                style={{
+                  padding: "6px 14px", borderRadius: 20,
+                  background: conv ? "var(--teal-bg)" : "#fff",
+                  border: `1px solid ${conv ? "var(--teal-b)" : "var(--app-border)"}`,
+                  color: conv ? "var(--teal)" : "var(--app-text-3)",
+                  fontSize: 13, cursor: "pointer",
+                  fontFamily: "var(--font-inter), sans-serif",
+                }}
+              >
+                {conv ? "✦ " : ""}{label}
+              </button>
+            ))}
           </div>
         </div>
       )}

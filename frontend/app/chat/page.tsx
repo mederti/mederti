@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowUp } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
+import SiteFooter from "@/app/components/site-footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { TopicalChip } from "./TopicalChip";
 
@@ -411,7 +412,7 @@ function ChatPageInner() {
     return (
       <div style={{
         display: "flex", flexDirection: "column",
-        height: "100vh", background: "var(--app-bg)",
+        minHeight: "100vh", background: "var(--app-bg)",
         color: "var(--app-text)",
       }}>
         <SiteNav />
@@ -440,6 +441,7 @@ function ChatPageInner() {
             Create free account
           </Link>
         </div>
+        <SiteFooter />
       </div>
     );
   }

@@ -1,0 +1,456 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Bookmark,
+  ChatBubble,
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  Hex,
+  Kebab,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Trash,
+} from "./icons";
+import {
+  RECENT_BUCKET_LABELS,
+  SEED_FOLDERS,
+  SEED_RECENT_CHATS,
+  SEED_WATCHLISTS,
+  type RecentChat,
+  type Status,
+  type WatchlistItem,
+} from "../seedData";
+
+const LS_FOLDERS = "chat2:sidebar:expandedFolders";
+const LS_WATCHLISTS = "chat2:sidebar:expandedWatchlists";
+
+function useExpandedSet(key: string, defaultOpen: string[]) {
+  const [open, setOpen] = useState<Set<string>>(() => new Set(defaultOpen));
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const arr = JSON.parse(raw) as string[];
+        setOpen(new Set(arr));
+      }
+    } catch {}
+    setHydrated(true);
+  }, [key]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(Array.from(open)));
+    } catch {}
+  }, [key, open, hydrated]);
+
+  const toggle = (id: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  return { open, toggle };
+}
+
+function StatusDot({ status }: { status: Status }) {
+  const cls =
+    status === "red" ? "bg-red-600" : status === "amber" ? "bg-yellow-600" : "bg-green-600";
+  return <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${cls}`} />;
+}
+
+function ItemKebab({
+  onClick,
+  visible,
+}: {
+  onClick?: (e: React.MouseEvent) => void;
+  visible?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onClick?.(e);
+      }}
+      className={`w-[18px] h-[18px] inline-flex items-center justify-center rounded text-slate-400 transition-opacity hover:bg-slate-900/[0.08] hover:text-slate-600 shrink-0 ${
+        visible ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      }`}
+      title="More"
+    >
+      <Kebab />
+    </button>
+  );
+}
+
+function SectionHeader({ label, onAdd }: { label: string; onAdd?: () => void }) {
+  return (
+    <div className="flex items-center justify-between px-2.5 pt-1 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400 select-none">
+      <span>{label}</span>
+      {onAdd ? (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="w-[18px] h-[18px] inline-flex items-center justify-center rounded text-slate-400 hover:bg-slate-900/[0.06] hover:text-slate-600"
+          title={`New ${label.toLowerCase()}`}
+        >
+          <Plus size={11} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function GroupRow({
+  isOpen,
+  icon,
+  label,
+  count,
+  onClick,
+}: {
+  isOpen: boolean;
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[13px] text-slate-700 hover:bg-slate-900/[0.04] hover:text-slate-900 transition-colors text-left"
+    >
+      <span className={`inline-flex items-center justify-center w-3 h-3 text-slate-400 transition-transform shrink-0 ${isOpen ? "rotate-90" : ""}`}>
+        <ChevronRight size={10} />
+      </span>
+      <span className="inline-flex items-center justify-center text-slate-400 shrink-0">{icon}</span>
+      <span className="flex-1 truncate">{label}</span>
+      <span className="text-[10px] font-mono text-slate-400" style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}>
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function ChatKebabMenu({
+  onClose,
+  onAction,
+}: {
+  onClose: () => void;
+  onAction: (label: string) => void;
+}) {
+  const folders = SEED_FOLDERS;
+  return (
+    <>
+      <div className="fixed inset-0 z-20" onClick={onClose} />
+      <div
+        className="absolute top-full right-0 mt-1 z-30 bg-white border border-slate-200 rounded-lg min-w-[200px] p-1"
+        style={{ boxShadow: "0 8px 24px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.04)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-[10px] uppercase tracking-wider text-slate-400 px-2 pt-1.5 pb-1">
+          Move to folder
+        </div>
+        {folders.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => onAction(`Moved to ${f.name}`)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left"
+          >
+            <Folder size={12} />
+            {f.name}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => onAction("New folder")}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-teal-600 hover:bg-teal-50 rounded text-left"
+        >
+          <Plus size={12} />
+          New folder…
+        </button>
+        <div className="h-px bg-slate-200 my-1" />
+        <button
+          type="button"
+          onClick={() => onAction("Rename (coming soon)")}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left"
+        >
+          <Pencil size={12} />
+          Rename
+        </button>
+        <button
+          type="button"
+          onClick={() => onAction("Starred")}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left"
+        >
+          <Star size={12} />
+          Star
+        </button>
+        <button
+          type="button"
+          onClick={() => onAction("Delete (coming soon)")}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-red-600 hover:bg-red-50 rounded text-left"
+        >
+          <Trash size={12} />
+          Delete chat
+        </button>
+      </div>
+    </>
+  );
+}
+
+function ChatHistoryItem({
+  chatId,
+  title,
+  active,
+  onSelectDrugPreview,
+  onToast,
+}: {
+  chatId: string;
+  title: string;
+  active?: boolean;
+  onSelectDrugPreview?: (slug: string | null) => void;
+  onToast: (msg: string) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+  return (
+    <div className="relative group">
+      <button
+        type="button"
+        onClick={() => {
+          // Navigate to chat — stub uses /chat2/[id]
+          router.push(`/chat2/${chatId}`);
+        }}
+        className={`w-full flex items-center gap-1.5 pl-2.5 pr-1 py-1.5 rounded-md transition-colors text-left ${
+          active
+            ? "bg-white text-slate-900 font-medium"
+            : "text-slate-700 hover:bg-slate-900/[0.04] hover:text-slate-900"
+        }`}
+        style={active ? { boxShadow: "inset 0 0 0 1px rgb(226 232 240)" } : undefined}
+      >
+        <span className="flex-1 truncate text-[13px] leading-snug">{title}</span>
+        <span className="w-[18px] h-[18px] shrink-0" />
+      </button>
+      <div className="absolute right-1 top-1/2 -translate-y-1/2">
+        <ItemKebab onClick={() => setMenuOpen(true)} visible={menuOpen} />
+      </div>
+      {menuOpen ? (
+        <ChatKebabMenu
+          onClose={() => setMenuOpen(false)}
+          onAction={(label) => {
+            setMenuOpen(false);
+            onToast(label);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function WatchlistDrugRow({
+  item,
+  active,
+  onOpen,
+}: {
+  item: WatchlistItem;
+  active: boolean;
+  onOpen: (slug: string) => void;
+}) {
+  return (
+    <div className="relative group">
+      <button
+        type="button"
+        onClick={() => onOpen(item.drug_slug)}
+        className={`w-full flex items-center gap-2.5 pl-2.5 pr-7 py-1.5 rounded-md text-[13px] text-left transition-colors ${
+          active
+            ? "bg-teal-50 text-teal-900"
+            : "text-slate-700 hover:bg-slate-900/[0.04] hover:text-slate-900"
+        }`}
+      >
+        <StatusDot status={item.status} />
+        <span className="flex-1 truncate">{item.drug_name}</span>
+      </button>
+      <div className="absolute right-1 top-1/2 -translate-y-1/2">
+        <ItemKebab />
+      </div>
+    </div>
+  );
+}
+
+export function Sidebar({
+  activeChatId,
+  activeDrugSlug,
+  onOpenDrugPreview,
+  onToast,
+}: {
+  activeChatId: string | null;
+  activeDrugSlug: string | null;
+  onOpenDrugPreview: (slug: string) => void;
+  onToast: (msg: string) => void;
+}) {
+  const wl = useExpandedSet(LS_WATCHLISTS, ["wl-1"]);
+  const fl = useExpandedSet(LS_FOLDERS, ["f-1"]);
+
+  const recentsByBucket = useMemo(() => {
+    const groups = new Map<RecentChat["bucket"], RecentChat[]>();
+    for (const r of SEED_RECENT_CHATS) {
+      if (!groups.has(r.bucket)) groups.set(r.bucket, []);
+      groups.get(r.bucket)!.push(r);
+    }
+    return Array.from(groups.entries());
+  }, []);
+
+  return (
+    <aside className="w-[268px] shrink-0 bg-slate-50/60 border-r border-slate-200 flex flex-col h-screen">
+      {/* Brand */}
+      <div className="flex items-center gap-2.5 px-4 pt-4 pb-3.5">
+        <span className="inline-flex items-center justify-center text-slate-900">
+          <Hex size={24} />
+        </span>
+        <span className="text-[17px] font-medium tracking-tight text-slate-900">mederti</span>
+      </div>
+
+      {/* Primary actions */}
+      <div className="px-2.5 pb-2.5 flex flex-col gap-0.5">
+        <Link
+          href="/chat2"
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+        >
+          <Plus size={14} />
+          <span>New chat</span>
+        </Link>
+        <button
+          type="button"
+          onClick={() => onToast("Search chats — coming soon")}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-slate-700 hover:bg-slate-900/[0.04] hover:text-slate-900 transition-colors text-left"
+        >
+          <Search size={14} />
+          <span>Search chats</span>
+        </button>
+      </div>
+
+      {/* Scrolling sections */}
+      <div className="flex-1 overflow-y-auto px-2.5 pb-4">
+        {/* Watchlists */}
+        <div className="mt-1">
+          <SectionHeader label="Watchlists" onAdd={() => onToast("New watchlist — coming soon")} />
+          {SEED_WATCHLISTS.map((w) => {
+            const isOpen = wl.open.has(w.id);
+            const count = w.items.length || w.itemCount || 0;
+            return (
+              <div key={w.id}>
+                <GroupRow
+                  isOpen={isOpen}
+                  icon={<Bookmark size={13} />}
+                  label={w.name}
+                  count={count}
+                  onClick={() => wl.toggle(w.id)}
+                />
+                {isOpen && w.items.length > 0 ? (
+                  <div className="pl-[18px] mt-px">
+                    {w.items.map((it) => (
+                      <WatchlistDrugRow
+                        key={it.drug_slug}
+                        item={it}
+                        active={it.drug_slug === activeDrugSlug}
+                        onOpen={onOpenDrugPreview}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Folders */}
+        <div className="mt-3.5">
+          <SectionHeader label="Folders" onAdd={() => onToast("New folder — coming soon")} />
+          {SEED_FOLDERS.map((f) => {
+            const isOpen = fl.open.has(f.id);
+            const count = f.chats.length || f.chatCount || 0;
+            return (
+              <div key={f.id}>
+                <GroupRow
+                  isOpen={isOpen}
+                  icon={<Folder size={13} />}
+                  label={f.name}
+                  count={count}
+                  onClick={() => fl.toggle(f.id)}
+                />
+                {isOpen && f.chats.length > 0 ? (
+                  <div className="pl-[18px] mt-px">
+                    {f.chats.map((c) => (
+                      <ChatHistoryItem
+                        key={c.id}
+                        chatId={c.id}
+                        title={c.title}
+                        active={c.id === activeChatId}
+                        onToast={onToast}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Recent chats */}
+        <div className="mt-3.5">
+          {recentsByBucket.map(([bucket, items]) => (
+            <div key={bucket}>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2.5 pt-2.5 pb-1">
+                {RECENT_BUCKET_LABELS[bucket]}
+              </div>
+              {items.map((c) => (
+                <ChatHistoryItem
+                  key={c.id}
+                  chatId={c.id}
+                  title={c.title}
+                  active={c.id === activeChatId}
+                  onToast={onToast}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* User footer */}
+      <div className="border-t border-slate-200 px-3 py-2.5 flex items-center gap-2.5 bg-slate-50/60">
+        <span
+          className="w-7 h-7 rounded-full inline-flex items-center justify-center text-white text-[11px] font-semibold shrink-0"
+          style={{ background: "linear-gradient(135deg, #0d9488, #14b8a6)" }}
+        >
+          R
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-slate-900 leading-tight">Rob</div>
+          <div className="text-[11px] text-slate-400 leading-tight">Mederti · Founder</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onToast("User menu — coming soon")}
+          className="text-slate-400 hover:text-slate-700 text-base px-1"
+          title="More"
+        >
+          ⋯
+        </button>
+      </div>
+    </aside>
+  );
+}

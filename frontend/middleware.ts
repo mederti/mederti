@@ -80,6 +80,9 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/government",
   "/governments",
   "/suppliers",           // and /suppliers/directory, /suppliers/[slug] (public discovery)
+  // Public layout-iteration preview of the new chat experience. Flip back to
+  // gated when /chat2 is promoted to replace /chat.
+  "/chat2",
   // Static demo / preview HTML in public/
   "/table-preview.html",
   // Public APIs that are safe to expose

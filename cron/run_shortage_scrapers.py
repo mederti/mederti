@@ -25,6 +25,20 @@ CORE_SHORTAGE_SCRAPERS = [
     "sukl", "ogyei", "swissmedic", "noma", "ages",
     # Phase 9+
     "anvisa", "pmda", "mfds", "cofepris", "sahpra", "nafdac", "sfda",
+    # Phase 10 — additional country coverage (verified working 2026-05-26, +~1,400 events)
+    "argentina_anmat",      # AR — 320 active
+    "belgium_famhp",        # BE — 632 active
+    "greece_eof",           # GR — 270 (230 active + 40 resolved)
+    "hk_drugoffice",        # HK — recall notices feed (low volume)
+    "malaysia_npra",        # MY — 148 (142 active + 6 anticipated)
+    "portugal_infarmed",    # PT — 34 active (sharp supply_chain signal)
+    "turkey_titck",         # TR — 10 active
+    "uae_mohap",            # AE — 9 active
+    # Quarantined — see notes 2026-05-26:
+    #   "china_nmpa"    — 0 relevant items out of 42 fetched (filter or schema drift)
+    #   "india_cdsco"   — PDF links no longer found on NSQ page (selector update needed)
+    #   "israel_moh"    — SPA with #! routes (needs API discovery or headless browser)
+    #   "poland_mz"     — source URL returns 404 (page moved)
 ]
 
 log = _setup_logging()

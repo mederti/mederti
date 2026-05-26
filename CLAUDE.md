@@ -1,29 +1,28 @@
 # Mederti — Project Briefing for Claude Code
 
-## What is Mederti?
-A global pharmaceutical shortage intelligence platform. It scrapes drug shortage and recall data from 40 regulatory sources across 20+ countries, stores it in a PostgreSQL database, and serves it through a REST API and Next.js frontend.
+> **Vision:** the world's leading source of short-supply drug data and insights — a fusion of the Mederti database with Claude-level synthesis, serving pharmacists, hospital procurement, regulators, suppliers, doctors, and government.
 
-**Live site:** https://mederti.vercel.app (currently shows empty data — see "Critical Blockers" below)
+**Live:** https://mederti.vercel.app — serving real data. Spot-check:
+`/api/search?q=amoxicillin` returns 8 results; canonical Amoxicillin has 17 active shortages, Insulin aspart 27, Insulin glargine 20.
+
+> **Note for the next agent:** the prior version of this file (Mar 2025) was badly out of date and described a FastAPI-backed architecture that no longer matches reality. If you find a claim here that doesn't match the code, **trust the code and update this file**. Stale source-of-truth is a credibility killer.
 
 ---
 
-## Architecture
+## Architecture (May 2026)
 
 ```
-Scrapers (Python, local cron)
-    ↓ upsert via Supabase REST API
-Supabase (PostgreSQL, cloud)
-    ↑ service-role key
-FastAPI backend (api/)
-    ↑ NEXT_PUBLIC_API_URL
-Next.js frontend (frontend/)
+Scrapers (Python, 28 active jobs on Mac cron — Railway migration documented)
+    ↓ upsert via Supabase REST API (service-role key)
+Supabase (PostgreSQL, RLS on, FTS + trigram, 32 migrations)
+    ↑
+Next.js Route Handlers (frontend/app/api/*) — 30+ endpoints, talk to Supabase directly
+    ↑
+Next.js 16 frontend (App Router, React 19, Tailwind 4)
     → Deployed on Vercel
 ```
 
-- **Database:** Supabase PostgreSQL at `https://mleblwjozjvpbuztggxp.supabase.co`
-- **Backend API:** FastAPI, configured for Railway deployment (not yet deployed)
-- **Frontend:** Next.js 16 + React 19 + Tailwind 4, deployed on Vercel
-- **Scrapers:** Python, run locally via cron every 30 min
+**Key change from old docs:** the FastAPI app in `api/` is no longer on the critical path. The frontend uses Next.js Route Handlers (`frontend/app/api/*`) that go straight to Supabase via the service-role key. FastAPI may still be deployed as "mederti API" on Railway per `cron/RAILWAY_SERVICES.md`, but the live site does not depend on it. Treat `api/` as legacy until proven otherwise — verify before relying on it.
 
 ---
 
@@ -31,211 +30,173 @@ Next.js frontend (frontend/)
 
 ```
 mederti/
-├── api/                    # FastAPI backend
-│   ├── main.py             # App entry point (uvicorn api.main:app)
-│   └── routers/            # 8 routers: search, drugs, shortages, summary, sources, recalls, data_quality, intelligence_sources
+├── api/                          # FastAPI (legacy — not on frontend critical path)
+│   ├── main.py
+│   └── routers/                  # search, drugs, shortages, summary, sources, recalls, data_quality, intelligence_sources
 ├── backend/
-│   ├── scrapers/           # 47+ country-specific scrapers
-│   ├── alerts/             # Email alert system (Resend)
-│   ├── importers/          # Data importers (alternatives, intelligence sources)
-│   └── utils/
-│       ├── db.py           # Supabase client singleton (get_supabase_client())
-│       ├── logger.py
-│       └── retry.py
+│   ├── scrapers/                 # 66 scraper files (.py)
+│   ├── alerts/                   # Resend email alerts
+│   ├── importers/                # WHO ATC/DDD, RxNorm, PharmaCompass, etc.
+│   └── utils/                    # db.py (Supabase client), logger.py, retry.py
 ├── frontend/
-│   ├── app/                # Next.js App Router pages
+│   ├── app/
+│   │   ├── api/                  # 30+ Next.js Route Handlers (production data path)
+│   │   ├── drugs/[id]/           # Persona-aware drug detail (PharmacistAnswerCard, ProcurementView, SupplierView)
+│   │   └── [persona]/            # pharmacists/, doctors/, hospitals/, government/, suppliers/, supplier-dashboard/
 │   ├── lib/
-│   │   ├── api.ts          # TypeScript API client (all endpoints typed)
-│   │   ├── rss.ts          # RSS feed parser
-│   │   └── supabase/       # client.ts (browser) + server.ts (SSR)
-│   ├── .env.local          # Frontend env vars (GITIGNORED)
-│   └── vercel.json         # Vercel deployment config
+│   │   ├── api.ts                # Typed client (uses /api relative URLs — no external backend dep)
+│   │   ├── supabase/             # admin.ts (service role, server-only), client.ts (browser), server.ts (SSR)
+│   │   ├── ai/                   # Supplier insights, etc.
+│   │   └── rss.ts
+│   ├── .env.local                # GITIGNORED
+│   └── vercel.json
 ├── supabase/
-│   ├── migrations/         # 8 migration files (001-008)
-│   └── seed.sql            # Seed data
-├── cron/                   # Cron job configs
-├── logs/                   # Scraper logs (daily files)
-├── .env                    # Backend env vars (GITIGNORED)
-├── .env.example            # Template
-├── railway.toml            # Railway deployment config
-├── nixpacks.toml           # Explicit Python 3.11 build for Railway
-└── run_all_scrapers.py     # Master scraper orchestrator
+│   └── migrations/               # 32 migrations (001 → 032)
+├── cron/
+│   ├── crontab_fixed.txt         # Current Mac cron (28 jobs, staggered 19:00–06:45 UTC)
+│   ├── run_shortage_scrapers.py
+│   ├── run_recall_scrapers.py
+│   ├── setup_cron.sh
+│   └── RAILWAY_SERVICES.md       # In-flight migration plan (3 cron services + always-on API)
+├── logs/                         # Daily scraper logs + cron.log (currently ~500MB, unrotated)
+├── railway/                      # Railway service configs (e.g. tga_audit_cron/)
+├── nixpacks.toml                 # Python 3.11 for Railway
+├── railway.toml
+├── .env                          # GITIGNORED (backend creds)
+└── run_all_scrapers.py           # Master scraper orchestrator
 ```
 
 ---
 
-## Database Schema (key tables)
+## Database — 32 migrations, key surfaces
 
-| Table | Records (Mar 3) | Purpose |
-|-------|-----------------|---------|
-| drugs | 7,161 | Master drug registry with full-text search (tsvector + trigram) |
-| shortage_events | 14,108 | Deduplicated shortage signals (MD5 hash dedup via shortage_id) |
-| recalls | 12,864 | Drug recall tracking (Class I/II/III) |
-| data_sources | 40 | Regulatory bodies (25 active, 15 inactive) |
-| raw_scrapes | 195 | Raw scraper output log |
-| drug_alternatives | — | Therapeutic alternatives with evidence grading |
-| drug_pricing | — | Historical pricing by country |
-| user_watchlists | — | User drug watches (links to Supabase Auth) |
-| alert_notifications | — | Alert dispatch ledger |
-| audit_logs | — | Immutable mutation log |
-| email_subscribers | 1 | Landing page signups |
-| manufacturers | 5 | Pharma companies |
-| intelligence_sources | 124+ | Macro data source catalog |
+Beyond the original shortage/recall core, the schema has grown into:
 
-### Shortage statuses: active (9,113) | resolved (4,068) | anticipated (917) | stale (10)
-### Recall statuses: active (1,959) | completed (10,905)
+- **Drug intelligence layer** — `drugs`, `drug_catalogue`, `drug_universe` (multi-country), `drug_synonyms`, `drug_rxnorm`, `atc_codes`, `drug_alternatives`, `drug_pricing`
+- **Shortage core** — `shortage_events` (with structured reason fields, MD5 dedup), `shortage_status_log`, `live_status_layer`
+- **Recall core** — `recalls`, `recall_shortage_links`
+- **Supplier & supply intelligence** — `manufacturers`, `supplier_inventory`, `supplier_enquiries`, `supplier_marketplace`, `supply_intelligence_layer`, `pipeline_and_regulatory`
+- **Intelligence & content** — `intelligence_sources` (catalog), `intelligence_articles`, `ai_insights_cache`
+- **Users & personas** — `user_profiles` (with `role`: pharmacist | procurement | supplier | doctor | government | hospital; `is_admin` locked against self-elevation), `user_watchlists`, `alert_notifications`, `email_subscribers`
+- **Ops & audit** — `data_sources`, `raw_scrapes`, `audit_logs` (immutable mutation + TGA audit log)
+
+RLS is enabled on the previously-unguarded tables (migration 029). `user_profiles.is_admin` is locked (028). `supplier_inventory` has a `WITH CHECK` policy (030).
 
 ---
 
-## API Endpoints
+## Scraper Coverage — 28 active cron jobs + 38 additional scraper files
 
-Base: `http://localhost:8000` (local) or Railway URL (production — TBD)
+**Active in cron (`cron/crontab_fixed.txt`), all daily UTC:**
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| /health | GET | Health check |
-| /search?q=&limit= | GET | Fuzzy drug search with shortage counts |
-| /drugs/{id} | GET | Drug detail |
-| /drugs/{id}/shortages | GET | Shortages for a drug |
-| /drugs/{id}/alternatives | GET | Therapeutic alternatives |
-| /drugs/{id}/recalls | GET | Recall history + resilience score |
-| /shortages | GET | Browse shortages (paginated, filterable by country/status/severity) |
-| /shortages/summary | GET | Dashboard KPIs |
-| /sources | GET | List regulatory data sources |
-| /recalls | GET | Browse recalls (paginated, filterable) |
-| /recalls/summary | GET | Recall aggregate counts |
-| /intelligence-sources | GET | Browse 124+ intelligence sources |
-| /intelligence-sources/summary | GET | Counts by category |
-| /intelligence-sources/{id} | GET | Single source detail |
-| /health/data-quality | GET | Data quality health checks |
+| Phase | Scrapers (cron-scheduled) |
+|---|---|
+| 1–7 Shortage (core) | tga, fda, health_canada, mhra, ema, bfarm, ansm, aifa, aemps, fda_enforcement, hsa, pharmac |
+| 8 Shortage (additional) | medsafe, cbg_meb, dkma, fimea, hpra, lakemedelsverket, sukl, ogyei, swissmedic, noma, ages |
+| 9+ New country | anvisa, pmda, mfds, cofepris, sahpra, nafdac, sfda |
+| Recalls | tga_recalls, fda_recalls, health_canada_recalls, ema_recalls, mhra_recalls, fda_medwatch |
+
+**Scraper files present but not yet in cron** (38): argentina_anmat, ashp, belgium_famhp, china_nmpa, clinicaltrials, edqm_cep, ema_chmp, eudragmdp, fda_adcomm, fda_inspections, greece_eof, hk_drugoffice, india_cdsco, israel_moh, malaysia_npra, nhs_drug_tariff, poland_mz, portugal_infarmed, turkey_titck, uae_mohap, plus the unscheduled recall counterparts (aemps_recalls, aifa_recalls, ansm_recalls, bfarm_recalls, hsa_recalls, medsafe_recalls, drugs_at_fda) and `recall_linker.py` (recall→shortage causal-link populator).
+
+**Cadence:** 30-min stagger on the core phase, 15-min stagger on phases 8–9+. All scrapers dedupe via MD5 `shortage_id` so repeated runs are idempotent.
+
+**TGA audit:** a daily Railway cron samples 50 active AU shortage records and diffs against the live TGA MSI, writing results to `audit_logs`. Was weekly; promoted to daily after the baseline hit 100%.
 
 ---
 
-## Frontend Pages
+## Frontend — 24 pages, 30+ API routes, persona-aware
 
-### Data pages (require backend API):
-- `/dashboard` — KPIs, world heatmap, shortage timeline, news, video
-- `/shortages` — filterable shortage table
-- `/recalls` — filterable recall table
-- `/search` — drug search with shortage breakdowns
-- `/home` — home feed (AU-focused shortages, recalls, watchlist)
-- `/drugs/[id]` — drug detail (shortages, alternatives, recalls, resilience score)
+**Pages (public):** `/`, `/about`, `/pricing`, `/contact`, `/privacy`, `/terms`, `/login`, `/signup`, `/onboarding`, `/account`, `/dashboard`, `/home`, `/search`, `/shortages`, `/recalls`, `/intelligence`, `/drugs/[id]`, `/chat`, `/alerts`, `/watchlist`, `/pharmacists`, `/doctors`, `/hospitals`, `/government`, `/suppliers`, `/supplier-dashboard`, `/coming-soon`.
 
-### Auth pages (Supabase Auth):
-- `/login`, `/signup` — authentication
-- `/alerts` — drug watchlist management
-- `/watchlist` — saved drugs
-- `/account` — settings & notifications
+**Persona routing:** `/drugs/[id]` auto-routes to the persona view based on `user_profiles.role`:
+- Pharmacist → `PharmacistAnswerCard` (radical simplification — answer + actions)
+- Procurement → `ProcurementView`
+- Supplier → `SupplierView` (F bento layout, default fallback)
 
-### Static pages:
-- `/` — landing page
-- `/about`, `/pricing`, `/contact`, `/privacy`, `/terms`, `/chat`
+**API routes (selected — see `frontend/app/api/*` for the full list of 30+):**
+- Data: `/api/search`, `/api/drugs/[id]`, `/api/drugs/[id]/shortages|alternatives|recalls`, `/api/drug-resilience/[drug_id]`, `/api/drug-autocomplete`, `/api/bulk-lookup`, `/api/market-data`
+- Intelligence: `/api/predictive-signals` (peer-set lead-time analysis across 16 EU peers), `/api/regulatory-calendar`, `/api/intelligence/briefing`, `/api/pipeline/[drug_id]`
+- Chat/AI: `/api/chat` (Claude Sonnet, tool-using, with rule-based fallback when `ANTHROPIC_API_KEY` is unset — fallback is a degraded experience), `/api/daily-question`, `/api/chip-answer`
+- Supplier marketplace: `/api/suppliers/directory`, `/api/supplier/{analytics,demand-signals,inbox,market-gaps,opportunities,pathways,quotes,regulatory}`, `/api/supplier-enquiry`
+- Admin: `/api/admin/intelligence`, `/api/admin/cohorts`
+- User: `/api/user/role`, `/api/user/profile`
+- Email/comms: `/api/subscribe`, `/api/contact`
 
 ---
 
 ## Environment Variables
 
-### Backend (.env at project root — GITIGNORED):
+**Backend (`.env` at repo root, gitignored):**
 ```
 SUPABASE_URL=https://mleblwjozjvpbuztggxp.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service role JWT>
 MEDERTI_DRY_RUN=0
 ```
 
-### Frontend (frontend/.env.local — GITIGNORED):
+**Frontend (`frontend/.env.local`, gitignored — also set in Vercel):**
 ```
-NEXT_PUBLIC_API_URL=http://localhost:8000          # ← MUST be Railway URL in production
 NEXT_PUBLIC_SUPABASE_URL=https://mleblwjozjvpbuztggxp.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon JWT>
 SUPABASE_URL=https://mleblwjozjvpbuztggxp.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service role JWT>
+ANTHROPIC_API_KEY=<for /api/chat — without it, chat falls back to rule-based handler>
 RESEND_API_KEY=<resend key>
 RESEND_FROM_EMAIL=intelligence@mederti.com
 ```
 
----
-
-## CRITICAL BLOCKERS — Live site shows empty data
-
-The live site at mederti.vercel.app shows zero data because the frontend can't reach the backend API. The fix requires these steps in order:
-
-### 1. Push unpushed commit to GitHub
-Commit `bd3ebbe` is on local `main` but never pushed. It contains:
-- `nixpacks.toml` — explicit Python 3.11 build config for Railway
-- All recall scrapers (15+ countries)
-- Intelligence sources router + importer
-- Frontend pages: shortages, recalls, home, alerts, watchlist, chat
-- World map, news feed, video embed components
-- DB migrations 007 (recalls) and 008 (intelligence sources)
-
-Previous push was blocked by git-defender (corporate tool on old machine). New machine should be able to push.
-
-### 2. Deploy backend on Railway
-- Go to railway.app → project → connect GitHub repo `mederti/mederti`
-- Add env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, MEDERTI_DRY_RUN=0
-- Deploy (nixpacks.toml will handle Python 3.11 setup)
-- Settings → Networking → Generate public domain
-- Result: `https://something.up.railway.app`
-
-### 3. Configure Vercel environment variables
-In Vercel dashboard → frontend project → Settings → Environment Variables:
-- `NEXT_PUBLIC_API_URL` = Railway public domain URL
-- `NEXT_PUBLIC_SUPABASE_URL` = Supabase URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` = anon key
-- `RESEND_API_KEY` = Resend key
-- `RESEND_FROM_EMAIL` = intelligence@mederti.com
-
-Then redeploy.
-
----
-
-## Known Issues
-
-| Issue | Severity | Notes |
-|-------|----------|-------|
-| `last_scraped_at` never updates on data_sources | Low | Scrapers don't write back to this field |
-| 3 raw_scrapes stuck in `processing` status | Low | May need manual cleanup |
-| Scrapers run from local Mac cron | Medium | Stops when laptop sleeps — move to Railway/VPS |
-| EMA scraper stale since Feb 24 | Medium | Returns duplicate/failed repeatedly |
-| BfArM scraper failed on Mar 1 | Medium | Worked fine Feb 28 |
-| Recall scrapers not in cron | Medium | No new recalls since Feb 25 |
-| Only 5 manufacturers seeded | Low | Sparse data |
-| CORS allows only GET | Fine for now | Update if POST endpoints added |
+`NEXT_PUBLIC_API_URL` is **not used** by the live frontend — `lib/api.ts` uses relative `/api/*` URLs.
 
 ---
 
 ## Local Development
 
 ```bash
-# Backend (from project root)
-source .env && python3 -m uvicorn api.main:app --port 8000
+# Frontend (the real app)
+cd frontend && npm run dev                       # http://localhost:3000
 
-# Frontend (from frontend/)
-cd frontend && npm run dev
+# FastAPI (legacy — only if you need it)
+source .env && python3 -m uvicorn api.main:app --port 8000
 
 # Run all scrapers
 python3 run_all_scrapers.py
+python3 run_all_scrapers.py tga fda              # specific
+MEDERTI_DRY_RUN=1 python3 -m backend.scrapers.tga_scraper   # dry run
 
-# Run single scraper (dry run)
-MEDERTI_DRY_RUN=1 python3 -m backend.scrapers.tga_scraper
+# Migrations
+ls supabase/migrations/                          # 001 → 032
 ```
+
+---
+
+## Honest Known Issues
+
+| Issue | Severity | Notes |
+|---|---|---|
+| Scrapers still on Mac cron (laptop sleep = downtime) | **High** | `cron/RAILWAY_SERVICES.md` documents the migration plan; uncertain whether deployed. Verify with Railway dashboard before assuming. |
+| `cron.log` unrotated (~500MB and growing) | Medium | Set up logrotate or move to structured logging in Railway. |
+| `last_scraped_at` on `data_sources` not updated by scrapers | Medium | No per-source freshness signal visible to users. Wire this up + expose as a public freshness dashboard. |
+| Some recall scraper files exist but aren't in cron (aemps_recalls, aifa_recalls, ansm_recalls, bfarm_recalls, hsa_recalls, medsafe_recalls) | Medium | Add to `crontab_fixed.txt` once tested. |
+| Major scraper files exist but never wired to cron (china_nmpa, india_cdsco, israel_moh, malaysia_npra, poland_mz, portugal_infarmed, turkey_titck, uae_mohap, greece_eof, belgium_famhp, hk_drugoffice, argentina_anmat) | High | Each is a meaningful coverage gain — pharma market size, geopolitical relevance. |
+| `recall_linker.py` exists; unclear if it's wired into the pipeline | Medium | Causal recall→shortage links are a strong differentiator if populated. |
+| Chat fallback (when `ANTHROPIC_API_KEY` is unset) is rule-based pattern matching | Medium | Degraded experience; verify Vercel env var is set. See `frontend/app/api/chat/route.ts`. |
+| No public methodology page or freshness dashboard | Medium | Credibility lever for "world's leading source" positioning. |
+| No public API tier / data exports for institutional users | Medium | Citations from regulators/researchers = moat. |
+| Forward-signal modelling (which drugs are *about* to shortage) — early | Medium | `predictive-signals` is peer-set based; could go deeper with API supplier concentration, demand spikes, recall precursors. |
 
 ---
 
 ## Tech Stack
 
-**Backend:** Python 3.11, FastAPI, Supabase Python SDK, httpx, BeautifulSoup4, lxml
-**Frontend:** Next.js 16.1.6, React 19.2.3, TypeScript, Tailwind CSS 4, @supabase/ssr, Lucide icons, React Simple Maps, Resend
-**Database:** PostgreSQL via Supabase (RLS enabled, full-text search, trigram indexes)
-**Deployment:** Vercel (frontend), Railway (backend — not yet deployed), Supabase (database)
-**Scrapers:** 47+ Python scrapers covering FDA, TGA, EMA, MHRA, Health Canada, BfArM, ANSM, AIFA, AEMPS, HPRA, Fimea, NoMA, Swissmedic, Pharmac, and more
+- **Backend (data):** Python 3.11, Supabase Python SDK, httpx, BeautifulSoup4, lxml, Resend
+- **Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, `@supabase/ssr`, Anthropic SDK, Lucide, React Simple Maps
+- **Database:** PostgreSQL via Supabase (RLS, FTS via `tsvector` + trigram, JSONB structured fields)
+- **Deployment:** Vercel (frontend + Route Handlers), Supabase (DB), Mac cron + Railway (scrapers — hybrid during migration)
+- **AI:** `claude-sonnet-4-20250514` in `/api/chat` (worth upgrading to a newer Sonnet/Opus — see `frontend/app/api/chat/route.ts:978`)
 
 ---
 
-## Git Info
+## Git
 
-- **Repo:** github.com/mederti/mederti (private)
-- **Branch:** main
-- **Latest pushed commit:** `aebb975` (Feb 23) — deployment configs
-- **Unpushed commit:** `bd3ebbe` — recalls, intelligence sources, nixpacks fix (NEEDS PUSH)
-- **Vercel project ID:** prj_YEn45c67WshFBA6D6jP6NwkYBwk5
+- **Repo:** `github.com/mederti/mederti` (private)
+- **Branch:** `main`
+- **HEAD:** `335edd0` (recent: bento empty states, RxNorm + PharmaCompass ingests, WHO ATC, persona-aware drug pages, security hardening on RLS)
+- **Recent direction:** persona-driven UX, supplier/procurement workflows, Path A data ingests (RxNorm, ATC, PharmaCompass), security/RLS cleanup, bento empty-state polish.

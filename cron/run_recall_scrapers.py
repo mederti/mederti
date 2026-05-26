@@ -16,10 +16,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from run_all_scrapers import SCRAPERS, _setup_logging
 
 RECALL_SCRAPERS = [
+    # Verified working in production / daily cron
     "tga_recalls", "fda_recalls", "fda_medwatch",
     "health_canada_recalls", "ema_recalls", "mhra_recalls",
-    "bfarm_recalls", "ansm_recalls", "aifa_recalls",
-    "aemps_recalls", "medsafe_recalls", "hsa_recalls",
+    # Verified working 2026-05-26 (dry-run dormant test)
+    "ansm_recalls",       # FR — recent recall e.g. 2026-05-22
+    "aifa_recalls",       # IT — recent recall e.g. 2026-01-13
+    "medsafe_recalls",    # NZ — slow (per-recall detail fetch, ~2s each); completes in Railway
+    # Quarantined 2026-05-26 — see notes; re-enable once fixed
+    # "aemps_recalls",    # ES — 403 Forbidden (anti-bot)
+    # "bfarm_recalls",    # DE — 404 on pharmnet-bund.de/dynamic/de/ru/rueckrufliste.html
+    # "hsa_recalls",      # SG — 404 on hsa.gov.sg/announcements/safety-alerts-and-product-recalls
 ]
 
 log = _setup_logging()

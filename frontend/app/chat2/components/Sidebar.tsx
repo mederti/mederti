@@ -293,25 +293,37 @@ function WatchlistDrugRow({
 export function Sidebar({
   activeChatId,
   activeDrugSlug,
+  isDemo,
   onOpenDrugPreview,
   onToast,
 }: {
   activeChatId: string | null;
   activeDrugSlug: string | null;
+  isDemo: boolean;
   onOpenDrugPreview: (slug: string) => void;
   onToast: (msg: string) => void;
 }) {
   const wl = useExpandedSet(LS_WATCHLISTS, ["wl-1"]);
   const fl = useExpandedSet(LS_FOLDERS, ["f-1"]);
 
+  // Seed data is opt-in. Default is the new-user state — empty sidebar
+  // until the user actually creates something. Flip `?demo=1` to see the
+  // full populated mockup for design review.
+  const watchlists = isDemo ? SEED_WATCHLISTS : [];
+  const folders = isDemo ? SEED_FOLDERS : [];
+  const recents = isDemo ? SEED_RECENT_CHATS : [];
+
   const recentsByBucket = useMemo(() => {
     const groups = new Map<RecentChat["bucket"], RecentChat[]>();
-    for (const r of SEED_RECENT_CHATS) {
+    for (const r of recents) {
       if (!groups.has(r.bucket)) groups.set(r.bucket, []);
       groups.get(r.bucket)!.push(r);
     }
     return Array.from(groups.entries());
-  }, []);
+  }, [recents]);
+
+  const hasAnyChat = recents.length > 0 || folders.some((f) => f.chats.length > 0);
+  const hasAnyContent = watchlists.length > 0 || folders.length > 0 || hasAnyChat;
 
   return (
     <aside className="w-[268px] shrink-0 bg-slate-50/60 border-r border-slate-200 flex flex-col h-screen">
@@ -323,7 +335,7 @@ export function Sidebar({
         <span className="text-[17px] font-medium tracking-tight text-slate-900">mederti</span>
       </div>
 
-      {/* Primary actions */}
+      {/* Primary actions — Search hides until there's history to search */}
       <div className="px-2.5 pb-2.5 flex flex-col gap-0.5">
         <Link
           href="/chat2"
@@ -332,102 +344,118 @@ export function Sidebar({
           <Plus size={14} />
           <span>New chat</span>
         </Link>
-        <button
-          type="button"
-          onClick={() => onToast("Search chats — coming soon")}
-          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-slate-700 hover:bg-slate-900/[0.04] hover:text-slate-900 transition-colors text-left"
-        >
-          <Search size={14} />
-          <span>Search chats</span>
-        </button>
+        {hasAnyChat ? (
+          <button
+            type="button"
+            onClick={() => onToast("Search chats — coming soon")}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-slate-700 hover:bg-slate-900/[0.04] hover:text-slate-900 transition-colors text-left"
+          >
+            <Search size={14} />
+            <span>Search chats</span>
+          </button>
+        ) : null}
       </div>
 
-      {/* Scrolling sections */}
+      {/* Scrolling sections — each hides when empty so a fresh sidebar
+          shows just New chat + footer, like Claude / ChatGPT on day one. */}
       <div className="flex-1 overflow-y-auto px-2.5 pb-4">
-        {/* Watchlists */}
-        <div className="mt-1">
-          <SectionHeader label="Watchlists" onAdd={() => onToast("New watchlist — coming soon")} />
-          {SEED_WATCHLISTS.map((w) => {
-            const isOpen = wl.open.has(w.id);
-            const count = w.items.length || w.itemCount || 0;
-            return (
-              <div key={w.id}>
-                <GroupRow
-                  isOpen={isOpen}
-                  icon={<Bookmark size={13} />}
-                  label={w.name}
-                  count={count}
-                  onClick={() => wl.toggle(w.id)}
-                />
-                {isOpen && w.items.length > 0 ? (
-                  <div className="pl-[18px] mt-px">
-                    {w.items.map((it) => (
-                      <WatchlistDrugRow
-                        key={it.drug_slug}
-                        item={it}
-                        active={it.drug_slug === activeDrugSlug}
-                        onOpen={onOpenDrugPreview}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+        {watchlists.length > 0 ? (
+          <div className="mt-1">
+            <SectionHeader label="Watchlists" onAdd={() => onToast("New watchlist — coming soon")} />
+            {watchlists.map((w) => {
+              const isOpen = wl.open.has(w.id);
+              const count = w.items.length || w.itemCount || 0;
+              return (
+                <div key={w.id}>
+                  <GroupRow
+                    isOpen={isOpen}
+                    icon={<Bookmark size={13} />}
+                    label={w.name}
+                    count={count}
+                    onClick={() => wl.toggle(w.id)}
+                  />
+                  {isOpen && w.items.length > 0 ? (
+                    <div className="pl-[18px] mt-px">
+                      {w.items.map((it) => (
+                        <WatchlistDrugRow
+                          key={it.drug_slug}
+                          item={it}
+                          active={it.drug_slug === activeDrugSlug}
+                          onOpen={onOpenDrugPreview}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
 
-        {/* Folders */}
-        <div className="mt-3.5">
-          <SectionHeader label="Folders" onAdd={() => onToast("New folder — coming soon")} />
-          {SEED_FOLDERS.map((f) => {
-            const isOpen = fl.open.has(f.id);
-            const count = f.chats.length || f.chatCount || 0;
-            return (
-              <div key={f.id}>
-                <GroupRow
-                  isOpen={isOpen}
-                  icon={<Folder size={13} />}
-                  label={f.name}
-                  count={count}
-                  onClick={() => fl.toggle(f.id)}
-                />
-                {isOpen && f.chats.length > 0 ? (
-                  <div className="pl-[18px] mt-px">
-                    {f.chats.map((c) => (
-                      <ChatHistoryItem
-                        key={c.id}
-                        chatId={c.id}
-                        title={c.title}
-                        active={c.id === activeChatId}
-                        onToast={onToast}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+        {folders.length > 0 ? (
+          <div className="mt-3.5">
+            <SectionHeader label="Folders" onAdd={() => onToast("New folder — coming soon")} />
+            {folders.map((f) => {
+              const isOpen = fl.open.has(f.id);
+              const count = f.chats.length || f.chatCount || 0;
+              return (
+                <div key={f.id}>
+                  <GroupRow
+                    isOpen={isOpen}
+                    icon={<Folder size={13} />}
+                    label={f.name}
+                    count={count}
+                    onClick={() => fl.toggle(f.id)}
+                  />
+                  {isOpen && f.chats.length > 0 ? (
+                    <div className="pl-[18px] mt-px">
+                      {f.chats.map((c) => (
+                        <ChatHistoryItem
+                          key={c.id}
+                          chatId={c.id}
+                          title={c.title}
+                          active={c.id === activeChatId}
+                          onToast={onToast}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
 
-        {/* Recent chats */}
-        <div className="mt-3.5">
-          {recentsByBucket.map(([bucket, items]) => (
-            <div key={bucket}>
-              <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2.5 pt-2.5 pb-1">
-                {RECENT_BUCKET_LABELS[bucket]}
+        {recents.length > 0 ? (
+          <div className="mt-3.5">
+            {recentsByBucket.map(([bucket, items]) => (
+              <div key={bucket}>
+                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2.5 pt-2.5 pb-1">
+                  {RECENT_BUCKET_LABELS[bucket]}
+                </div>
+                {items.map((c) => (
+                  <ChatHistoryItem
+                    key={c.id}
+                    chatId={c.id}
+                    title={c.title}
+                    active={c.id === activeChatId}
+                    onToast={onToast}
+                  />
+                ))}
               </div>
-              {items.map((c) => (
-                <ChatHistoryItem
-                  key={c.id}
-                  chatId={c.id}
-                  title={c.title}
-                  active={c.id === activeChatId}
-                  onToast={onToast}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Empty-state hint — only shown when sidebar is completely empty.
+            Deliberately quiet: no big illustration, no row of CTAs. The
+            sidebar's job in this state is to stay out of the way while the
+            user types their first question. */}
+        {!hasAnyContent ? (
+          <div className="px-2.5 pt-4 text-[12px] text-slate-400 leading-relaxed">
+            Your chats and saved drugs will appear here as you use Mederti.
+          </div>
+        ) : null}
       </div>
 
       {/* User footer */}

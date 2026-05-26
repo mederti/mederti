@@ -15,6 +15,9 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const drugIdParam = searchParams.get("drug");
+  // ?demo=1 populates the sidebar with the seed watchlists/folders/recents
+  // for design review. Default is the empty new-user state.
+  const isDemo = searchParams.get("demo") === "1";
 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [drugsMap, setDrugsMap] = useState<Record<string, DrugDetail>>({});
@@ -117,7 +120,8 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
       <Sidebar
         activeChatId={chatId}
         activeDrugSlug={drugIdParam}
-        onOpenDrugPreview={(slug) => setToast(`Watchlist drug rows are seeded — wire to real drug IDs in v2`)}
+        isDemo={isDemo}
+        onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
         onToast={setToast}
       />
 

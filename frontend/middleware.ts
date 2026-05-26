@@ -80,6 +80,8 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/government",
   "/governments",
   "/suppliers",           // and /suppliers/directory, /suppliers/[slug] (public discovery)
+  // Static demo / preview HTML in public/
+  "/table-preview.html",
   // Public APIs that are safe to expose
   // (handled separately below — we let middleware skip /api/* via matcher)
 ];

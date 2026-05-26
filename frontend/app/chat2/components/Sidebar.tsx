@@ -26,6 +26,16 @@ import {
   type Status,
   type WatchlistItem,
 } from "../seedData";
+import {
+  BUCKET_LABELS,
+  BUCKET_ORDER,
+  bucketFor,
+  deleteChat,
+  renameChat,
+  toggleStarChat,
+  type Bucket,
+  type SavedChat,
+} from "../chatStore";
 
 const LS_FOLDERS = "chat2:sidebar:expandedFolders";
 const LS_WATCHLISTS = "chat2:sidebar:expandedWatchlists";
@@ -144,11 +154,21 @@ function GroupRow({
 }
 
 function ChatKebabMenu({
+  isSaved,
+  isStarred,
   onClose,
-  onAction,
+  onRename,
+  onToggleStar,
+  onDelete,
+  onStub,
 }: {
+  isSaved: boolean;
+  isStarred: boolean;
   onClose: () => void;
-  onAction: (label: string) => void;
+  onRename: () => void;
+  onToggleStar: () => void;
+  onDelete: () => void;
+  onStub: (label: string) => void;
 }) {
   const folders = SEED_FOLDERS;
   return (
@@ -166,7 +186,7 @@ function ChatKebabMenu({
           <button
             key={f.id}
             type="button"
-            onClick={() => onAction(`Moved to ${f.name}`)}
+            onClick={() => onStub(`Moved to ${f.name} — folders persist in Pass 4`)}
             className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left"
           >
             <Folder size={12} />
@@ -175,7 +195,7 @@ function ChatKebabMenu({
         ))}
         <button
           type="button"
-          onClick={() => onAction("New folder")}
+          onClick={() => onStub("New folder — coming in Pass 4")}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-teal-600 hover:bg-teal-50 rounded text-left"
         >
           <Plus size={12} />
@@ -184,24 +204,29 @@ function ChatKebabMenu({
         <div className="h-px bg-slate-200 my-1" />
         <button
           type="button"
-          onClick={() => onAction("Rename (coming soon)")}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left"
+          onClick={isSaved ? onRename : () => onStub("Save the chat first")}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left disabled:opacity-40"
+          disabled={!isSaved}
         >
           <Pencil size={12} />
           Rename
         </button>
         <button
           type="button"
-          onClick={() => onAction("Starred")}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left"
+          onClick={isSaved ? onToggleStar : () => onStub("Save the chat first")}
+          className={`w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] hover:bg-slate-100 rounded text-left disabled:opacity-40 ${
+            isStarred ? "text-amber-600" : "text-slate-700"
+          }`}
+          disabled={!isSaved}
         >
-          <Star size={12} />
-          Star
+          <Star size={12} filled={isStarred} />
+          {isStarred ? "Unstar" : "Star"}
         </button>
         <button
           type="button"
-          onClick={() => onAction("Delete (coming soon)")}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-red-600 hover:bg-red-50 rounded text-left"
+          onClick={isSaved ? onDelete : () => onStub("Save the chat first")}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-red-600 hover:bg-red-50 rounded text-left disabled:opacity-40"
+          disabled={!isSaved}
         >
           <Trash size={12} />
           Delete chat
@@ -215,23 +240,48 @@ function ChatHistoryItem({
   chatId,
   title,
   active,
-  onSelectDrugPreview,
+  isStarred,
+  isPersisted,
   onToast,
 }: {
   chatId: string;
   title: string;
   active?: boolean;
-  onSelectDrugPreview?: (slug: string | null) => void;
+  isStarred?: boolean;
+  // True when this row represents a chat in the real localStorage store.
+  // Seeded-demo rows pass false; their kebab actions stay stubbed.
+  isPersisted: boolean;
   onToast: (msg: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
+
+  const handleRename = () => {
+    setMenuOpen(false);
+    // window.prompt is ugly — replace with inline edit in a later pass once
+    // we have the headroom. Functional and unmistakable for v1.
+    const next = window.prompt("Rename chat", title);
+    if (next == null) return;
+    renameChat(chatId, next);
+  };
+
+  const handleDelete = () => {
+    setMenuOpen(false);
+    if (!window.confirm(`Delete "${title}"? This can't be undone.`)) return;
+    deleteChat(chatId);
+    if (active) router.replace("/chat2");
+  };
+
+  const handleToggleStar = () => {
+    setMenuOpen(false);
+    toggleStarChat(chatId);
+  };
+
   return (
     <div className="relative group">
       <button
         type="button"
         onClick={() => {
-          // Navigate to chat — stub uses /chat2/[id]
           router.push(`/chat2/${chatId}`);
         }}
         className={`w-full flex items-center gap-1.5 pl-2.5 pr-1 py-1.5 rounded-md transition-colors text-left ${
@@ -241,6 +291,11 @@ function ChatHistoryItem({
         }`}
         style={active ? { boxShadow: "inset 0 0 0 1px rgb(226 232 240)" } : undefined}
       >
+        {isStarred ? (
+          <span className="text-amber-500 shrink-0">
+            <Star size={11} filled />
+          </span>
+        ) : null}
         <span className="flex-1 truncate text-[13px] leading-snug">{title}</span>
         <span className="w-[18px] h-[18px] shrink-0" />
       </button>
@@ -249,8 +304,13 @@ function ChatHistoryItem({
       </div>
       {menuOpen ? (
         <ChatKebabMenu
+          isSaved={isPersisted}
+          isStarred={!!isStarred}
           onClose={() => setMenuOpen(false)}
-          onAction={(label) => {
+          onRename={handleRename}
+          onToggleStar={handleToggleStar}
+          onDelete={handleDelete}
+          onStub={(label) => {
             setMenuOpen(false);
             onToast(label);
           }}
@@ -294,35 +354,59 @@ export function Sidebar({
   activeChatId,
   activeDrugSlug,
   isDemo,
+  chats,
   onOpenDrugPreview,
   onToast,
 }: {
   activeChatId: string | null;
   activeDrugSlug: string | null;
   isDemo: boolean;
+  // Real chats from the localStorage store (already sorted updatedAt desc).
+  chats: SavedChat[];
   onOpenDrugPreview: (slug: string) => void;
   onToast: (msg: string) => void;
 }) {
   const wl = useExpandedSet(LS_WATCHLISTS, ["wl-1"]);
   const fl = useExpandedSet(LS_FOLDERS, ["f-1"]);
 
-  // Seed data is opt-in. Default is the new-user state — empty sidebar
-  // until the user actually creates something. Flip `?demo=1` to see the
-  // full populated mockup for design review.
+  // Watchlists + folders stay seeded for now (Pass 3 & 4). Recents is the
+  // real localStorage list once we have any saved chats — falls back to
+  // seed only in demo mode for design review.
   const watchlists = isDemo ? SEED_WATCHLISTS : [];
   const folders = isDemo ? SEED_FOLDERS : [];
-  const recents = isDemo ? SEED_RECENT_CHATS : [];
 
-  const recentsByBucket = useMemo(() => {
+  // Bucket real chats by recency. Starred chats float to the top of their
+  // bucket so they stay discoverable as the list grows.
+  const realRecentsByBucket = useMemo(() => {
+    const groups = new Map<Bucket, SavedChat[]>();
+    const sorted = [...chats].sort((a, b) => {
+      if (a.isStarred !== b.isStarred) return a.isStarred ? -1 : 1;
+      return b.updatedAt - a.updatedAt;
+    });
+    for (const c of sorted) {
+      const bucket = bucketFor(c.updatedAt);
+      if (!groups.has(bucket)) groups.set(bucket, []);
+      groups.get(bucket)!.push(c);
+    }
+    return BUCKET_ORDER.filter((b) => groups.has(b)).map((b) => [b, groups.get(b)!] as const);
+  }, [chats]);
+
+  // Fall back to seeded recents in demo mode if there are no real chats.
+  const showSeedRecents = isDemo && chats.length === 0;
+  const seedRecentsByBucket = useMemo(() => {
+    if (!showSeedRecents) return [] as Array<[RecentChat["bucket"], RecentChat[]]>;
     const groups = new Map<RecentChat["bucket"], RecentChat[]>();
-    for (const r of recents) {
+    for (const r of SEED_RECENT_CHATS) {
       if (!groups.has(r.bucket)) groups.set(r.bucket, []);
       groups.get(r.bucket)!.push(r);
     }
     return Array.from(groups.entries());
-  }, [recents]);
+  }, [showSeedRecents]);
 
-  const hasAnyChat = recents.length > 0 || folders.some((f) => f.chats.length > 0);
+  const hasAnyChat =
+    chats.length > 0 ||
+    showSeedRecents ||
+    folders.some((f) => f.chats.length > 0);
   const hasAnyContent = watchlists.length > 0 || folders.length > 0 || hasAnyChat;
 
   return (
@@ -415,6 +499,7 @@ export function Sidebar({
                           chatId={c.id}
                           title={c.title}
                           active={c.id === activeChatId}
+                          isPersisted={false}
                           onToast={onToast}
                         />
                       ))}
@@ -426,9 +511,30 @@ export function Sidebar({
           </div>
         ) : null}
 
-        {recents.length > 0 ? (
+        {realRecentsByBucket.length > 0 ? (
           <div className="mt-3.5">
-            {recentsByBucket.map(([bucket, items]) => (
+            {realRecentsByBucket.map(([bucket, items]) => (
+              <div key={bucket}>
+                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2.5 pt-2.5 pb-1">
+                  {BUCKET_LABELS[bucket]}
+                </div>
+                {items.map((c) => (
+                  <ChatHistoryItem
+                    key={c.id}
+                    chatId={c.id}
+                    title={c.title}
+                    active={c.id === activeChatId}
+                    isStarred={c.isStarred}
+                    isPersisted
+                    onToast={onToast}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : showSeedRecents ? (
+          <div className="mt-3.5">
+            {seedRecentsByBucket.map(([bucket, items]) => (
               <div key={bucket}>
                 <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2.5 pt-2.5 pb-1">
                   {RECENT_BUCKET_LABELS[bucket]}
@@ -439,6 +545,7 @@ export function Sidebar({
                     chatId={c.id}
                     title={c.title}
                     active={c.id === activeChatId}
+                    isPersisted={false}
                     onToast={onToast}
                   />
                 ))}

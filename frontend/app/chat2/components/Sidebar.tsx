@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronRight,
   Folder,
-  Hex,
   Kebab,
   Pencil,
   Plus,
@@ -411,12 +410,16 @@ export function Sidebar({
 
   return (
     <aside className="w-[268px] shrink-0 bg-slate-50/60 border-r border-slate-200 flex flex-col h-screen">
-      {/* Brand */}
-      <div className="flex items-center gap-2.5 px-4 pt-4 pb-3.5">
-        <span className="inline-flex items-center justify-center text-slate-900">
-          <Hex size={24} />
-        </span>
-        <span className="text-[17px] font-medium tracking-tight text-slate-900">mederti</span>
+      {/* Brand — use the real lockup. PNG keeps the type proportions
+          exact; the wordmark is part of the asset so we drop the inline
+          "mederti" text. */}
+      <div className="flex items-center px-4 pt-4 pb-3.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo-black.png"
+          alt="Mederti"
+          style={{ height: 22, width: "auto", display: "block" }}
+        />
       </div>
 
       {/* Primary actions — Search hides until there's history to search */}

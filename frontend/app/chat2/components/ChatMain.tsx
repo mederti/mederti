@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
-import { BarChart, Bell, ChatBubble, Grid, Hex, Send } from "./icons";
+import { BarChart, Bell, ChatBubble, Grid, Send } from "./icons";
 import { parseAgentResponse, RenderedResponse } from "./parser2";
 
 export type Turn =
@@ -140,10 +140,17 @@ export function ChatMain({
                   </div>
                 ) : (
                   <div key={t.id} className="mb-2">
-                    <div className="mb-3.5 text-slate-900">
-                      <span className="inline-flex items-center justify-center">
-                        <Hex size={20} />
-                      </span>
+                    <div className="mb-3.5">
+                      {/* Logomark indicator next to each AI reply.
+                          Uses the real brand mark (app/icon.png — the
+                          favicon/PWA icon source), not the placeholder
+                          hex we shipped first. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/icon.png"
+                        alt="Mederti"
+                        style={{ width: 20, height: 20, display: "block" }}
+                      />
                     </div>
                     {t.error ? (
                       <div className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">

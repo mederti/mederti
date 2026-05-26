@@ -129,8 +129,3 @@ export const Send = (p: { size?: number; className?: string }) => (
   </svg>
 );
 
-export const Hex = (p: { size?: number; className?: string }) => (
-  <svg width={p.size ?? 24} height={p.size ?? 24} viewBox="0 0 28 28" fill="none" className={p.className}>
-    <path d="M14 2.5 L24.4 8.5 L24.4 20.5 L14 26.5 L3.6 20.5 L3.6 8.5 Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" fill="none" />
-  </svg>
-);

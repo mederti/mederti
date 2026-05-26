@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { DrugDetailBundle, ShortageRow, SubstituteWithSuppliers } from "@/lib/chat/types";
 import {
   Bell,
@@ -75,6 +76,148 @@ function worstAvailability(shortages: ShortageRow[]): Availability {
     if (a === "amber") worst = "amber";
   }
   return worst;
+}
+
+// Product label / package image. Fetches lazily from /api/drug-image
+// (DailyMed/NIH source, cached 24h). Silently returns null on miss so we
+// don't leave a broken card behind — many drugs simply don't have a US
+// label image available.
+function Chat2DrugImage({ name }: { name: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
+
+  useEffect(() => {
+    if (!name) return;
+    let cancelled = false;
+    setImageUrl(null);
+    setLoaded(false);
+    fetch(`/api/drug-image?name=${encodeURIComponent(name)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.imageUrl) setImageUrl(data.imageUrl);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [name]);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [lightbox]);
+
+  if (!imageUrl) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setLightbox(true)}
+        className="block w-full mb-3.5 rounded-xl overflow-hidden border border-slate-200 bg-white cursor-zoom-in hover:border-slate-300 transition-colors"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={`${name} product label`}
+          onLoad={() => setLoaded(true)}
+          style={{
+            width: "100%",
+            maxHeight: 180,
+            objectFit: "contain",
+            display: "block",
+            opacity: loaded ? 1 : 0,
+            transition: "opacity 0.25s",
+            padding: 8,
+            background: "#fff",
+          }}
+        />
+        <div className="text-[9px] text-slate-400 text-center py-1.5 border-t border-slate-100 font-mono" style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}>
+          DAILYMED · NIH · CLICK TO ENLARGE
+        </div>
+      </button>
+      {lightbox
+        ? createPortal(
+            <div
+              onClick={() => setLightbox(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 99999,
+                background: "rgba(0,0,0,0.85)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "zoom-out",
+                padding: 24,
+              }}
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightbox(false);
+                }}
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background: "rgba(255,255,255,0.15)",
+                  border: "none",
+                  color: "#fff",
+                  fontSize: 20,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                ×
+              </button>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imageUrl}
+                alt={`${name} product label`}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  maxWidth: "90vw",
+                  maxHeight: "90vh",
+                  objectFit: "contain",
+                  borderRadius: 8,
+                  cursor: "default",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+                  background: "#fff",
+                  padding: 12,
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 20,
+                  fontSize: 11,
+                  color: "rgba(255,255,255,0.5)",
+                }}
+              >
+                Source: DailyMed / NIH
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  );
 }
 
 function StatusCard({ bundle }: { bundle: DrugDetailBundle }) {
@@ -384,6 +527,9 @@ export function PreviewPane({
                 <Tag>{bundle.drug.atc_code}</Tag>
               ) : null}
             </div>
+
+            {/* Product label image — lazy-fetched, hidden if DailyMed has nothing */}
+            <Chat2DrugImage name={bundle.drug.generic_name || bundle.drug.name} />
 
             {/* Status */}
             <StatusCard bundle={bundle} />

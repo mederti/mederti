@@ -196,10 +196,15 @@ export async function POST(req: NextRequest) {
 
 function extractText(msg: Anthropic.Message | null): string {
   if (!msg) return "";
+  // Web search splits a single response into multiple text blocks where
+  // citations attach. Joining with "\n\n" would turn each split into its own
+  // paragraph and orphan fragments like ", and" onto their own lines. Use a
+  // blank separator so the prose flows; Claude already emits its own \n\n
+  // between real paragraphs inside each block.
   return msg.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
-    .join("\n\n")
+    .join("")
     .trim();
 }
 

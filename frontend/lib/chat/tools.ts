@@ -4,13 +4,16 @@ import { coverageGate } from "./coverage";
 import type {
   ClassSummary,
   ClassTopDrug,
+  Confidence,
   DrugDetail,
   DrugSummary,
   RecallRow,
   ShortageRow,
+  SourceConsulted,
   SubstituteRow,
   SupplierPriceRow,
 } from "./types";
+import { computeConfidence, confidenceFromSources } from "./confidence";
 
 export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   // Anthropic server-side web search — used freely as a primary research tool
@@ -385,6 +388,11 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     external_identifiers: Object.keys(externalIdentifiers).length > 0
       ? externalIdentifiers
       : undefined,
+    // Confidence for the shortage claim attached to this drug. Absent when
+    // there are no active rows (no shortage claim to be confident about).
+    confidence: sourcesConsulted
+      ? confidenceFromSources(sourcesConsulted, { signalCount: activeRows.length })
+      : undefined,
   };
 
   ctx.drugs[detail.drug_id] = detail;
@@ -740,7 +748,18 @@ async function findSubstitutes(args: {
     .limit(limit);
 
   const altRows = alts.data ?? [];
-  if (altRows.length === 0) return [];
+  if (altRows.length === 0) {
+    // No alternatives recorded — return a zero-row low-confidence envelope
+    // so the model surfaces the §11 dose-conversion / substitute refusal
+    // template instead of inventing alternatives from priors.
+    return Object.assign([] as SubstituteRow[], {
+      confidence: {
+        level: "low",
+        score: 0,
+        basis: "No ATC-matched alternatives on file for this drug.",
+      } satisfies Confidence,
+    }) as any;
+  }
 
   const ids = altRows.map((a: any) => a.alternative_drug_id);
 
@@ -779,7 +798,39 @@ async function findSubstitutes(args: {
   });
 
   for (const s of out) ctx.subs[s.drug_id] = s;
-  return out;
+  // Confidence for the substitute set — backed by curated drug_alternatives
+  // rows, so reliability is high (Mederti pharmacists / WHO EML / FDA Orange
+  // Book sources). Use clinical_evidence_level as the per-row reliability:
+  // A → 0.95, B → 0.85, C → 0.7, D → 0.5, E → 0.4. Best-of-set drives the
+  // aggregate. signalCount = number of alternatives surfaced.
+  const evidenceScore = (lvl: string | null | undefined): number => {
+    if (!lvl) return 0.6;
+    const k = lvl.toUpperCase();
+    if (k === "A") return 0.95;
+    if (k === "B") return 0.85;
+    if (k === "C") return 0.7;
+    if (k === "D") return 0.5;
+    return 0.4;
+  };
+  const bestEvidence = out.reduce(
+    (best, s) => Math.max(best, evidenceScore(s.clinical_evidence_level)),
+    0
+  );
+  const confidence = computeConfidence({
+    sourceReliability: bestEvidence,
+    signalCount: out.length,
+    freshnessDays: 0, // drug_alternatives is curated reference data, not scraped
+  });
+  return Object.assign(out, {
+    confidence: {
+      ...confidence,
+      basis: `${out.length} substitute${out.length === 1 ? "" : "s"} (best evidence ${
+        out
+          .map((s) => s.clinical_evidence_level)
+          .filter(Boolean)[0] ?? "unspecified"
+      }) from Mederti's curated alternates table.`,
+    },
+  }) as any;
 }
 
 async function listActiveShortages(args: {
@@ -898,6 +949,15 @@ async function listActiveShortages(args: {
       source_url: r.source_url,
     };
   });
+
+  // Provenance + confidence — backed by the SAME rows the items are summarised
+  // from so the chip strip and the confidence basis stay in sync with the
+  // count surfaced to the model.
+  const sourcesConsulted = await computeSourcesConsulted(rows.slice(0, limit) as any);
+  const confidence = confidenceFromSources(sourcesConsulted, {
+    signalCount: items.length,
+  });
+
   // When a severity filter was wiped, return the unfiltered rows + a flag so
   // the model can be honest ("no rows tagged X, here's what's active").
   if (severityFallbackApplied) {
@@ -905,9 +965,18 @@ async function listActiveShortages(args: {
       items,
       severity_fallback_applied: true,
       note: `No active shortages tagged severity=${args.severity}. Returning all severities so you can answer honestly — severity tagging coverage is sparse across regulators.`,
+      sources_consulted: sourcesConsulted,
+      confidence,
     } as any;
   }
-  return items;
+  // Return the legacy shape (raw array) when no caveat applies — wrap in an
+  // object instead when callers want the confidence block. The model picks up
+  // either shape via tool-result inspection.
+  return {
+    items,
+    sources_consulted: sourcesConsulted,
+    confidence,
+  } as any;
 }
 
 async function getTradePrices(args: { drug_id: string; countries?: string[] }): Promise<SupplierPriceRow[]> {
@@ -935,7 +1004,23 @@ async function getTradePrices(args: { drug_id: string; countries?: string[] }): 
       });
     }
   }
-  return rows;
+  // Supplier-listed prices are sparse — confidence reflects volume of evidence.
+  // Zero rows → low (audit §11 HPR-13/16 template territory). 1–2 → low-medium.
+  // 3+ rows → medium (still not procurement-grade — these are listed prices,
+  // not transacted ones).
+  const confidence = computeConfidence({
+    sourceReliability: 0.6,
+    signalCount: rows.length,
+    freshnessDays: 0, // supplier_inventory has its own status field; trust the rows we get
+  });
+  return Object.assign(rows, {
+    confidence: {
+      ...confidence,
+      basis: rows.length === 0
+        ? "No supplier-listed prices on file for this drug."
+        : `${rows.length} supplier-listed price point${rows.length === 1 ? "" : "s"} from supplier_inventory.`,
+    },
+  }) as any;
 }
 
 async function searchRecalls(args: {
@@ -960,7 +1045,22 @@ async function searchRecalls(args: {
 
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []) as RecallRow[];
+  const rows = (data ?? []) as RecallRow[];
+
+  // Provenance for recalls — same regulator mapping as shortages, using
+  // country_code as the join key. announced_date carries the timing signal
+  // when last_scraped_at is missing.
+  const provenanceRows = rows.map((r) => ({
+    country_code: r.country_code ?? null,
+    start_date: r.announced_date ?? null,
+  }));
+  const sourcesConsulted = await computeSourcesConsulted(provenanceRows);
+  const confidence = confidenceFromSources(sourcesConsulted, { signalCount: rows.length });
+
+  return Object.assign(rows, {
+    sources_consulted: sourcesConsulted,
+    confidence,
+  }) as any;
 }
 
 export async function hydrateReferencedIds(text: string, ctx: ToolContext): Promise<void> {
@@ -1106,14 +1206,20 @@ async function computeSourcesConsulted(
   const countries = [...byCountry.keys()];
   const scrapeMeta = new Map<
     string,
-    { last_scraped_at: string | null; source_url: string | null }
+    {
+      last_scraped_at: string | null;
+      source_url: string | null;
+      /** Max reliability_weight observed across this country's data_sources rows.
+       *  Drives the confidence helper's per-source aggregation downstream. */
+      reliability_weight: number;
+    }
   >();
   if (countries.length > 0) {
     try {
       const sb = getSupabase();
       const { data } = await sb
         .from("data_sources")
-        .select("country_code,last_scraped_at,source_url,is_active")
+        .select("country_code,last_scraped_at,source_url,is_active,reliability_weight")
         .in("country_code", countries)
         .eq("is_active", true);
       for (const r of data ?? []) {
@@ -1122,11 +1228,24 @@ async function computeSourcesConsulted(
         const next = {
           last_scraped_at: (r as any).last_scraped_at as string | null,
           source_url: (r as any).source_url as string | null,
+          reliability_weight: typeof (r as any).reliability_weight === "number"
+            ? Number((r as any).reliability_weight)
+            : 0.7,
         };
         const ex = scrapeMeta.get(cc);
         if (!ex) scrapeMeta.set(cc, next);
-        else if (next.last_scraped_at && (!ex.last_scraped_at || next.last_scraped_at > ex.last_scraped_at)) {
-          scrapeMeta.set(cc, next);
+        else {
+          // Keep the freshest scrape AND the highest reliability observed.
+          if (
+            next.last_scraped_at &&
+            (!ex.last_scraped_at || next.last_scraped_at > ex.last_scraped_at)
+          ) {
+            ex.last_scraped_at = next.last_scraped_at;
+            ex.source_url = next.source_url;
+          }
+          if (next.reliability_weight > ex.reliability_weight) {
+            ex.reliability_weight = next.reliability_weight;
+          }
         }
       }
     } catch (e) {
@@ -1183,6 +1302,7 @@ async function computeSourcesConsulted(
         source_url: meta?.source_url ?? null,
         freshness_label: label,
         is_stale,
+        reliability_weight: meta?.reliability_weight ?? 0.7,
       };
     })
     .sort((a, b) => b.rows_contributed - a.rows_contributed);
@@ -1347,6 +1467,9 @@ async function summarizeShortageLandscape(
       shortage_event_count: d.shortage_count,
     })),
     sources_consulted: sourcesConsulted,
+    confidence: confidenceFromSources(sourcesConsulted, {
+      signalCount: working.length,
+    }),
     notes,
   };
 }
@@ -1590,6 +1713,7 @@ async function getClassSummary(
     eu_critical_count: euCriticalDrugs.size,
     top_drugs: topDrugs,
     sources_consulted: sourcesConsulted,
+    confidence: confidenceFromSources(sourcesConsulted, { signalCount: rows.length }),
   };
 
   ctx.classes[atc] = summary;

@@ -54,6 +54,20 @@ interface ShortageDetails {
   priorIncidents?: number;
 }
 
+interface ManufacturerConcentration {
+  count: number;
+  band: "unknown" | "high_risk" | "moderate_risk" | "low_risk";
+  usdmf?: number;
+  cep?: number;
+  euWc?: number;
+}
+
+interface MarketSpend {
+  country: string;
+  year: number;
+  usdPpp: number;
+}
+
 interface Props {
   drugName: string;
   genericName: string;
@@ -65,6 +79,8 @@ interface Props {
   alternatives: Alternative[];
   tradePrice?: TradePrice | null;
   shortageDetails?: ShortageDetails;
+  manufacturer?: ManufacturerConcentration | null;
+  marketSpend?: MarketSpend | null;
 }
 
 /* ---------- shared style fragments ---------- */
@@ -149,6 +165,8 @@ export default function ProcurementView({
   alternatives,
   tradePrice,
   shortageDetails,
+  manufacturer,
+  marketSpend,
 }: Props) {
   const metaParts = [
     genericName,
@@ -387,6 +405,106 @@ export default function ProcurementView({
           </div>
         </div>
       </div>
+
+      {/* ============== Supply concentration + market context strip ============== */}
+      {(manufacturer || marketSpend) && (
+        <div
+          className="d-strip"
+          style={{
+            display: "grid",
+            gridTemplateColumns: manufacturer && marketSpend ? "1fr 1fr" : "1fr",
+            gap: 12,
+            marginBottom: 20,
+          }}
+        >
+          {manufacturer && (
+            <div style={{ ...moduleBase, padding: "16px 18px" }}>
+              <div style={{ ...moduleHead, marginBottom: 10 }}>
+                <div style={moduleTitle}>Manufacturer concentration</div>
+                <div style={moduleMeta}>
+                  PharmaCompass · {manufacturer.count} suppliers
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 14,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: MONO,
+                    fontSize: 24,
+                    fontWeight: 600,
+                    color: "var(--app-text)",
+                    letterSpacing: "-0.015em",
+                  }}
+                >
+                  {manufacturer.count.toLocaleString()}
+                </div>
+                <RiskBadge band={manufacturer.band} />
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 14,
+                  fontSize: 11,
+                  color: "var(--app-text-3)",
+                  fontFamily: MONO,
+                  marginTop: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                {manufacturer.usdmf !== undefined && (
+                  <span><strong style={{ color: "var(--app-text)" }}>{manufacturer.usdmf}</strong> USDMF</span>
+                )}
+                {manufacturer.cep !== undefined && (
+                  <span><strong style={{ color: "var(--app-text)" }}>{manufacturer.cep}</strong> EU CEP</span>
+                )}
+                {manufacturer.euWc !== undefined && (
+                  <span><strong style={{ color: "var(--app-text)" }}>{manufacturer.euWc}</strong> EU WC</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {marketSpend && (
+            <div style={{ ...moduleBase, padding: "16px 18px" }}>
+              <div style={{ ...moduleHead, marginBottom: 10 }}>
+                <div style={moduleTitle}>Market spending baseline</div>
+                <div style={moduleMeta}>OECD · {marketSpend.year}</div>
+              </div>
+              <div
+                style={{
+                  fontFamily: MONO,
+                  fontSize: 24,
+                  fontWeight: 600,
+                  color: "var(--app-text)",
+                  letterSpacing: "-0.015em",
+                }}
+              >
+                ${marketSpend.usdPpp.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                <span style={{ fontSize: 13, color: "var(--app-text-4)", fontWeight: 500 }}>
+                  {" "}USD PPP / capita
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--app-text-3)",
+                  marginTop: 6,
+                  lineHeight: 1.5,
+                }}
+              >
+                {marketSpend.country} pharmaceutical spending per capita ({marketSpend.year}).
+                Reference baseline for procurement budgeting.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ============== Modules grid ============== */}
       <div
@@ -699,6 +817,7 @@ export default function ProcurementView({
         @media (max-width: 768px) {
           .d-kpis  { grid-template-columns: repeat(2, 1fr) !important; }
           .d-modules { grid-template-columns: 1fr !important; }
+          .d-strip   { grid-template-columns: 1fr !important; }
           .d-price-grid { grid-template-columns: repeat(3, 1fr) !important; }
         }
       `}</style>
@@ -779,6 +898,35 @@ function PriceCell({
           : `${delta > 0 ? "+" : ""}${delta}%`}
       </div>
     </div>
+  );
+}
+
+function RiskBadge({ band }: { band: "unknown" | "high_risk" | "moderate_risk" | "low_risk" }) {
+  const palette: Record<typeof band, { label: string; c: string; bg: string; b: string }> = {
+    high_risk:     { label: "High concentration risk",     c: "var(--crit)", bg: "var(--crit-bg)", b: "var(--crit-b)" },
+    moderate_risk: { label: "Moderate concentration risk", c: "var(--med)",  bg: "var(--med-bg)",  b: "var(--med-b)"  },
+    low_risk:      { label: "Diverse supplier base",       c: "var(--low)",  bg: "var(--low-bg)",  b: "var(--low-b)"  },
+    unknown:       { label: "Concentration unknown",       c: "var(--app-text-4)", bg: "var(--app-bg-2)", b: "var(--app-border)" },
+  };
+  const s = palette[band];
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        padding: "4px 9px",
+        borderRadius: 5,
+        fontWeight: 600,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        fontFamily: "var(--font-dm-mono), monospace",
+        background: s.bg,
+        color: s.c,
+        border: `1px solid ${s.b}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {s.label}
+    </span>
   );
 }
 

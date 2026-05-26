@@ -137,6 +137,36 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
     },
   },
   {
+    name: "summarize_shortage_landscape",
+    description:
+      "ONE-CALL landscape summary for class/region/severity-level questions ('show critical antibiotic shortages globally', 'what's in shortage in oncology in the EU', 'how bad is the cardiovascular shortage picture'). Returns: aggregate counts, severity distribution, country distribution, top affected drugs (with drug_ids you can drug_card), WHO essential / EU critical overlap, and a notes block flagging data caveats (sparse severity tagging, country coverage gaps). PREFER this over multiple list_active_shortages calls when the user is asking for a landscape — a single tool call beats N row-level fetches and lets you spend tokens on synthesis.",
+    input_schema: {
+      type: "object",
+      properties: {
+        atc_prefix: {
+          type: "string",
+          description:
+            "ATC code prefix to scope the landscape (e.g. 'J01' = antibacterials, 'L01' = antineoplastics, 'C' = cardiovascular). Omit for an unscoped global view.",
+        },
+        country: {
+          type: "string",
+          description: "Optional ISO-2 country code to scope. Omit for global.",
+        },
+        severity: {
+          type: "string",
+          enum: ["critical", "high", "medium", "low"],
+          description:
+            "Optional severity filter. If the user asks for 'critical' and nothing comes back, the response includes broaden=true with the unfiltered counts so you can say 'no rows tagged critical, but here's what's active'.",
+        },
+        top_n: {
+          type: "number",
+          description: "How many top drugs to return (default 8, cap 15).",
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: "search_recalls",
     description:
       "Search recent drug recalls by name. Returns recall_class (I=most severe, III=least), reason, manufacturer, announced_date, and the regulator's press release URL.",
@@ -725,20 +755,35 @@ async function listActiveShortages(args: {
     }
   }
 
-  let q = sb
-    .from("shortage_events")
-    .select("drug_id,country,country_code,status,severity,reason,start_date,estimated_resolution_date,source_url")
-    .eq("status", "active")
-    .order("start_date", { ascending: false })
-    .limit(allowedDrugIds ? 200 : limit); // larger fetch when post-filtering by manufacturer
+  // Build the base query without severity, so we can fall back gracefully if
+  // a severity filter wipes the result (severity tagging is sparse across
+  // regulators — many rows are NULL).
+  const baseQuery = () => {
+    let qb = sb
+      .from("shortage_events")
+      .select("drug_id,country,country_code,status,severity,reason,start_date,estimated_resolution_date,source_url")
+      .eq("status", "active")
+      .order("start_date", { ascending: false })
+      .limit(allowedDrugIds ? 200 : limit);
+    if (args.country) qb = qb.eq("country_code", args.country);
+    if (allowedDrugIds) qb = qb.in("drug_id", [...allowedDrugIds]);
+    return qb;
+  };
 
-  if (args.country) q = q.eq("country_code", args.country);
+  let severityFallbackApplied = false;
+  let q = baseQuery();
   if (args.severity) q = q.eq("severity", args.severity);
-  if (allowedDrugIds) q = q.in("drug_id", [...allowedDrugIds]);
 
-  const { data, error } = await q;
-  if (error) throw error;
-
+  let res = await q;
+  if (res.error) throw res.error;
+  if (args.severity && (res.data ?? []).length === 0) {
+    // Filter wiped the result — retry without severity so the caller gets
+    // *something* useful (with a flag so they can be honest about the gap).
+    severityFallbackApplied = true;
+    res = await baseQuery();
+    if (res.error) throw res.error;
+  }
+  const { data } = res;
   let rows = (data ?? []) as Array<ShortageRow & { drug_id: string }>;
   const drugIds = Array.from(new Set(rows.map((r) => r.drug_id).filter(Boolean)));
   if (drugIds.length === 0) return [];
@@ -757,7 +802,7 @@ async function listActiveShortages(args: {
   }
 
   // After post-filters, slice to the requested limit.
-  return rows.slice(0, limit).map((r) => {
+  const items = rows.slice(0, limit).map((r) => {
     const d = drugMap.get(r.drug_id) ?? {};
     return {
       drug_id: r.drug_id,
@@ -773,6 +818,16 @@ async function listActiveShortages(args: {
       source_url: r.source_url,
     };
   });
+  // When a severity filter was wiped, return the unfiltered rows + a flag so
+  // the model can be honest ("no rows tagged X, here's what's active").
+  if (severityFallbackApplied) {
+    return {
+      items,
+      severity_fallback_applied: true,
+      note: `No active shortages tagged severity=${args.severity}. Returning all severities so you can answer honestly — severity tagging coverage is sparse across regulators.`,
+    } as any;
+  }
+  return items;
 }
 
 async function getTradePrices(args: { drug_id: string; countries?: string[] }): Promise<SupplierPriceRow[]> {
@@ -885,6 +940,162 @@ export async function hydrateReferencedIds(text: string, ctx: ToolContext): Prom
   }
 }
 
+// Landscape summary — single call returns enough data for the model to write a
+// class/region answer (KPIs + top drugs + geo distribution) without making N
+// per-row tool calls. Drug ids in `top_drugs` are populated into ctx.drugs so the
+// model can emit <drug_card id="..." /> tags directly.
+async function summarizeShortageLandscape(
+  args: { atc_prefix?: string; country?: string; severity?: string; top_n?: number },
+  ctx: ToolContext
+) {
+  const sb = getSupabase();
+  const topN = Math.min(Math.max(args.top_n ?? 8, 1), 15);
+
+  // 1. Fetch active shortage events with embedded drug rows. We pull a wide page
+  //    because severity/ATC tagging is sparse and we want accurate aggregates.
+  //    Cap at 5000 rows — the full active set is ~22k but the long tail is
+  //    dominated by Switzerland's per-product fragmentation.
+  let q = sb
+    .from("shortage_events")
+    .select(
+      "drug_id,country_code,severity,start_date,drugs(id,generic_name,brand_names,atc_code,drug_class,who_essential_medicine,critical_medicine_eu)"
+    )
+    .eq("status", "active")
+    .order("start_date", { ascending: false })
+    .limit(5000);
+  if (args.country) q = q.eq("country_code", args.country);
+
+  const { data, error } = await q;
+  if (error) throw error;
+  const allRows = (data ?? []) as Array<any>;
+
+  // Filter by ATC client-side (PostgREST embedded filters are awkward across joins).
+  const atc = (args.atc_prefix || "").toUpperCase();
+  const scoped = atc
+    ? allRows.filter((r) => (r.drugs?.atc_code || "").toUpperCase().startsWith(atc))
+    : allRows;
+
+  // 2. Optional severity narrowing — track both broadened and narrowed sets so
+  //    we can tell the model honestly when the filter wiped the result.
+  const narrowed = args.severity
+    ? scoped.filter((r) => r.severity === args.severity)
+    : scoped;
+
+  const usingFallback = !!args.severity && narrowed.length === 0 && scoped.length > 0;
+  const working = usingFallback ? scoped : narrowed;
+
+  // 3. Aggregates.
+  const bySeverity: Record<string, number> = {};
+  const byCountry: Record<string, number> = {};
+  const byDrug = new Map<
+    string,
+    {
+      drug_id: string;
+      name: string;
+      atc_code: string | null;
+      drug_class: string | null;
+      who_essential: boolean;
+      critical_medicine_eu: boolean;
+      countries: Set<string>;
+      severities: Set<string>;
+      shortage_count: number;
+    }
+  >();
+
+  for (const r of working) {
+    const sev = r.severity || "untagged";
+    bySeverity[sev] = (bySeverity[sev] || 0) + 1;
+    const c = r.country_code;
+    if (c) byCountry[c] = (byCountry[c] || 0) + 1;
+    const d = r.drugs;
+    if (!d?.id) continue;
+    let bucket = byDrug.get(d.id);
+    if (!bucket) {
+      bucket = {
+        drug_id: d.id,
+        name: d.generic_name || "Unknown",
+        atc_code: d.atc_code,
+        drug_class: d.drug_class,
+        who_essential: !!d.who_essential_medicine,
+        critical_medicine_eu: !!d.critical_medicine_eu,
+        countries: new Set<string>(),
+        severities: new Set<string>(),
+        shortage_count: 0,
+      };
+      byDrug.set(d.id, bucket);
+    }
+    bucket.shortage_count += 1;
+    if (c) bucket.countries.add(c);
+    if (r.severity) bucket.severities.add(r.severity);
+  }
+
+  // Sort drugs by (country count desc, shortage count desc) — country diversity
+  // is the better signal of structural problems than raw row count, which is
+  // dominated by Swiss product fragmentation.
+  const rankedDrugs = [...byDrug.values()]
+    .sort((a, b) => {
+      const dc = b.countries.size - a.countries.size;
+      if (dc !== 0) return dc;
+      return b.shortage_count - a.shortage_count;
+    })
+    .slice(0, topN);
+
+  // Hydrate full drug details for the top drugs so the model can drug_card them.
+  // Fire in parallel; tolerate individual failures.
+  await Promise.all(
+    rankedDrugs.map((d) => getDrugDetails({ drug_id: d.drug_id }, ctx).catch(() => null))
+  );
+
+  // 4. Pre-format country distribution as a sorted list (cap at 15).
+  const countriesSorted = Object.entries(byCountry)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([country_code, count]) => ({ country_code, count }));
+
+  const notes: string[] = [];
+  if (usingFallback) {
+    notes.push(
+      `No shortages tagged severity=${args.severity} in this scope. Returning all severities so you can answer honestly.`
+    );
+  }
+  // Surface the data-quality caveat the prompt now warns about, so the model
+  // can mention it inline when relevant.
+  const untaggedCount = bySeverity["untagged"] || 0;
+  if (untaggedCount > working.length * 0.1) {
+    notes.push(
+      `${untaggedCount}/${working.length} rows have no regulator-published severity (data caveat — not "no shortage").`
+    );
+  }
+
+  return {
+    filter: {
+      atc_prefix: args.atc_prefix || null,
+      country: args.country || null,
+      severity: args.severity || null,
+      severity_fallback_applied: usingFallback,
+    },
+    total_active_events: working.length,
+    unique_drugs_affected: byDrug.size,
+    by_severity: bySeverity,
+    by_country: countriesSorted,
+    who_essential_overlap: rankedDrugs.filter((d) => d.who_essential).length,
+    eu_critical_overlap: rankedDrugs.filter((d) => d.critical_medicine_eu).length,
+    top_drugs: rankedDrugs.map((d) => ({
+      drug_id: d.drug_id,
+      name: d.name,
+      atc_code: d.atc_code,
+      drug_class: d.drug_class,
+      who_essential: d.who_essential,
+      critical_medicine_eu: d.critical_medicine_eu,
+      countries: [...d.countries].sort(),
+      country_count: d.countries.size,
+      severities: [...d.severities],
+      shortage_event_count: d.shortage_count,
+    })),
+    notes,
+  };
+}
+
 async function queryIntelligenceSources(input: {
   query?: string;
   category?: string;
@@ -943,6 +1154,8 @@ export async function executeTool(
       return await findSubstitutes(input as any, ctx);
     case "list_active_shortages":
       return await listActiveShortages(input as any, ctx);
+    case "summarize_shortage_landscape":
+      return await summarizeShortageLandscape(input as any, ctx);
     case "get_trade_prices":
       return await getTradePrices(input as any);
     case "search_recalls":

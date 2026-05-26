@@ -10,6 +10,10 @@ export const dynamic = "force-dynamic";
 
 const MAX_ITERATIONS = 8;
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929";
+// Generous output budget so Mode C (landscape) responses have room for KPIs +
+// 3–6 drug cards + 2–4 paragraphs of synthesis. Mode A responses naturally stay
+// short and don't consume this; only Mode C and Mode B push higher.
+const MAX_OUTPUT_TOKENS = 4096;
 
 type IncomingBody = {
   messages: ChatMessage[];
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
       const response = await anthropic.messages.create({
         model: MODEL,
-        max_tokens: 2048,
+        max_tokens: MAX_OUTPUT_TOKENS,
         system: [
           {
             type: "text",
@@ -124,7 +128,7 @@ export async function POST(req: NextRequest) {
       });
       lastResponse = await anthropic.messages.create({
         model: MODEL,
-        max_tokens: 2048,
+        max_tokens: MAX_OUTPUT_TOKENS,
         system: [
           {
             type: "text",

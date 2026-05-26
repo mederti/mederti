@@ -26,7 +26,10 @@ export type ParsedPart =
 const DRUG_TAG_RE = /<drug_card\s+([^>]+?)\/>/g;
 const SUB_TAG_RE = /<sub_card\s+id="([^"]+)"(?:\s+match="([^"]+)")?\s*\/>/g;
 const FOLLOWUP_RE = /<followups>([\s\S]*?)<\/followups>/g;
+// Tolerant fallback for unclosed trailing tags (model truncation or sloppy output).
+const FOLLOWUP_UNCLOSED_RE = /<followups>([\s\S]*?)$/g;
 const ALTERNATES_RE = /<alternates>([\s\S]*?)<\/alternates>/g;
+const ALTERNATES_UNCLOSED_RE = /<alternates>([\s\S]*?)$/g;
 
 function extractAttr(attrs: string, name: string): string | undefined {
   const m = new RegExp(`${name}="([^"]+)"`).exec(attrs);
@@ -49,11 +52,23 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     hits.push({ kind: "sub", index: m.index, length: m[0].length, data: { id: m[1], match: m[2] || "" } });
   }
   FOLLOWUP_RE.lastIndex = 0;
+  const closedFollowupRanges: Array<[number, number]> = [];
   for (let m: RegExpExecArray | null; (m = FOLLOWUP_RE.exec(raw)) !== null; ) {
     const items = m[1].split("|").map((s) => s.trim()).filter(Boolean);
     hits.push({ kind: "followup", index: m.index, length: m[0].length, data: { items } });
+    closedFollowupRanges.push([m.index, m.index + m[0].length]);
+  }
+  FOLLOWUP_UNCLOSED_RE.lastIndex = 0;
+  for (let m: RegExpExecArray | null; (m = FOLLOWUP_UNCLOSED_RE.exec(raw)) !== null; ) {
+    const overlaps = closedFollowupRanges.some(([s, e]) => m!.index >= s && m!.index < e);
+    if (overlaps) continue;
+    const inner = m[1].replace(/<\/?followups>?$/, "");
+    const items = inner.split("|").map((s) => s.trim()).filter(Boolean);
+    if (items.length === 0) continue;
+    hits.push({ kind: "followup", index: m.index, length: m[0].length, data: { items } });
   }
   ALTERNATES_RE.lastIndex = 0;
+  const closedAlternatesRanges: Array<[number, number]> = [];
   for (let m: RegExpExecArray | null; (m = ALTERNATES_RE.exec(raw)) !== null; ) {
     const items = m[1]
       .split("|")
@@ -68,6 +83,28 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
         return { id, name };
       })
       .filter((x): x is { id: string; name: string } => x !== null);
+    hits.push({ kind: "alternates", index: m.index, length: m[0].length, data: { items } });
+    closedAlternatesRanges.push([m.index, m.index + m[0].length]);
+  }
+  ALTERNATES_UNCLOSED_RE.lastIndex = 0;
+  for (let m: RegExpExecArray | null; (m = ALTERNATES_UNCLOSED_RE.exec(raw)) !== null; ) {
+    const overlaps = closedAlternatesRanges.some(([s, e]) => m!.index >= s && m!.index < e);
+    if (overlaps) continue;
+    const inner = m[1].replace(/<\/?alternates>?$/, "");
+    const items = inner
+      .split("|")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => {
+        const idx = s.indexOf(":");
+        if (idx === -1) return null;
+        const id = s.slice(0, idx).trim();
+        const name = s.slice(idx + 1).trim();
+        if (!/^[0-9a-f-]{36}$/i.test(id) || !name) return null;
+        return { id, name };
+      })
+      .filter((x): x is { id: string; name: string } => x !== null);
+    if (items.length === 0) continue;
     hits.push({ kind: "alternates", index: m.index, length: m[0].length, data: { items } });
   }
   hits.sort((a, b) => a.index - b.index);

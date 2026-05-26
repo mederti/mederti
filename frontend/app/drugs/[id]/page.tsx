@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 import SiteNav from "@/app/components/landing-nav";
-import V3ChatPanel from "./chat-panel";
+import { AskMedertiCta } from "./ask-mederti-cta";
 import { buildAiInsightText } from "./build-insight-text";
 import { V4BellButton } from "./v4/bell-button";
 import { HeaderActions } from "./v4/header-actions";
@@ -638,48 +638,6 @@ export default async function DrugPage({ params, searchParams }: Props) {
     });
   }
 
-  /* ── Opening AI message ── */
-  const localStatus = countryGroups[userCountry];
-  const localName = COUNTRY_NAMES[userCountry] ?? userCountry;
-  let openingMessage: string;
-  if (activeShortages.length > 0) {
-    const sevLabel = worstSeverity === "critical" ? "critical" : worstSeverity === "high" ? "significant" : "moderate";
-    openingMessage = `${drug.generic_name} is currently under ${sevLabel} shortage in ${affectedCountries.size} countr${affectedCountries.size !== 1 ? "ies" : "y"}.`;
-    if (localStatus) {
-      const localLabel = localStatus.severity === "critical" ? "not available" : localStatus.severity === "high" ? "very limited" : localStatus.severity === "medium" ? "limited" : "reduced";
-      openingMessage += ` In ${localName}, supply is ${localLabel} according to ${localStatus.source}.`;
-    } else {
-      openingMessage += ` No shortage is currently reported in ${localName}.`;
-    }
-    if (alternatives.length > 0) openingMessage += ` There are ${alternatives.length} known therapeutic alternative${alternatives.length !== 1 ? "s" : ""}.`;
-    openingMessage += " What would you like to know?";
-  } else {
-    openingMessage = `No active shortages are currently reported for ${drug.generic_name}. Supply appears stable across all monitored countries. Ask me anything about this drug's history, alternatives, or market status.`;
-  }
-
-  /* ── Drug context for chat ── */
-  const drugContext = {
-    id: drug.id,
-    generic_name: drug.generic_name,
-    brand_names: drug.brand_names ?? [],
-    atc_code: drug.atc_code ?? null,
-    strength: drugStrength,
-    form: drugForm,
-    userCountry,
-    userCountryName: cName,
-    userCountryStatus: myShortage?.status ?? "no data",
-    userCountrySeverity: myShortage?.severity ?? "unknown",
-    activeShortageCount: activeShortages.length,
-    affectedCountries: Array.from(affectedCountries) as string[],
-    worstSeverity,
-    riskScore: drugRisk.riskScore,
-    riskLevel: drugRisk.riskLevel,
-    alternativeCount: alternatives.length,
-    recallCount: recalls.length,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    shortagesByCountry: countries.map((c: any) => ({ country: c.country, code: c.countryCode, severity: c.severity })),
-  };
-
   /* ── Mobile layout ── */
   const device = await getDevice();
   if (device === "mobile") {
@@ -883,7 +841,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
               <SoWhatInsight drugId={id} />
             </div>
             <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-              <V3ChatPanel drugId={id} drugContext={drugContext} openingMessage={openingMessage} />
+              <AskMedertiCta drugName={drug.generic_name} />
             </div>
           </div>
 
@@ -1001,7 +959,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
             <SoWhatInsight drugId={id} />
           </div>
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <V3ChatPanel drugId={id} drugContext={drugContext} openingMessage={openingMessage} />
+            <AskMedertiCta drugName={drug.generic_name} />
           </div>
         </div>
 

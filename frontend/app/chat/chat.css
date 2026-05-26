@@ -1,0 +1,1811 @@
+/*
+ * Mederti Chat — scoped styles, ported from the standalone prototype.
+ *
+ * All variables live on .mederti-chat-root (the chat page's outer wrapper)
+ * so they don't collide with the rest of the site. Tailwind directives and
+ * global html/body/* selectors from the prototype are intentionally omitted —
+ * those come from the main site's globals.css. The .m-nav styles are dropped
+ * because the main site's SiteNav is used instead.
+ */
+
+.mederti-chat-root {
+  --bg:        #ffffff;
+  --bg-2:      #f8fafc;
+  --bg-3:      #f1f5f9;
+  --border:    #e2e8f0;
+  --border-2:  #cbd5e1;
+  --text:      #0f172a;
+  --text-2:    #334155;
+  --text-3:    #64748b;
+  --text-4:    #94a3b8;
+  --teal:      #0d9488;
+  --teal-l:    #14b8a6;
+  --teal-bg:   #f0fdfa;
+  --teal-b:    #ccfbf1;
+  --indigo:    #4f46e5;
+  --ind-bg:    #eef2ff;
+  --ind-b:     #c7d2fe;
+  --crit:      #dc2626;
+  --crit-bg:   #fef2f2;
+  --crit-b:    #fecaca;
+  --high:      #ea580c;
+  --high-bg:   #fff7ed;
+  --high-b:    #fed7aa;
+  --med:       #ca8a04;
+  --med-bg:    #fefce8;
+  --med-b:     #fde68a;
+  --low:       #16a34a;
+  --low-bg:    #f0fdf4;
+  --low-b:     #bbf7d0;
+
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mederti-chat-root *,
+.mederti-chat-root *::before,
+.mederti-chat-root *::after {
+  box-sizing: border-box;
+}
+
+.mederti-chat-root .font-mono { font-family: "DM Mono", ui-monospace, monospace; }.mederti-chat-root /* ===== Chat shell ===== */
+.chat-shell{
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 36px 24px 160px;
+  min-height: calc(100vh - 64px);
+}.mederti-chat-root .chat-welcome{
+  text-align: center;
+  padding: 56px 16px 24px;
+}.mederti-chat-root .chat-welcome h1{
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 10px;
+}.mederti-chat-root .chat-welcome p{
+  font-size: 14px;
+  color: var(--text-3);
+  max-width: 480px;
+  margin: 0 auto;
+}.mederti-chat-root .chat-suggestions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 28px;
+}.mederti-chat-root .chat-suggestion{
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}.mederti-chat-root .chat-suggestion:hover{
+  background: var(--teal-bg);
+  border-color: var(--teal-b);
+  color: var(--teal);
+}.mederti-chat-root /* ===== Messages ===== */
+.msg-list{
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}.mederti-chat-root .msg{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+}.mederti-chat-root .msg-user{
+  scroll-margin-top: 80px;
+}.mederti-chat-root .msg-list-tail{
+  min-height: calc(100vh - 220px);
+}.mederti-chat-root .msg-role{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}.mederti-chat-root .msg-bubble-user{
+  align-self: flex-end;
+  background: var(--text);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 14px 14px 4px 14px;
+  font-size: 14px;
+  max-width: 80%;
+  line-height: 1.5;
+  word-wrap: break-word;
+}.mederti-chat-root .msg-bubble-assistant{
+  align-self: stretch;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+}.mederti-chat-root .msg-bubble-assistant p{ margin: 0 0 10px; }.mederti-chat-root .msg-bubble-assistant p:last-child{ margin-bottom: 0; }.mederti-chat-root .msg-bubble-assistant strong{ font-weight: 600; }.mederti-chat-root /* ===== Drug card ===== */
+.drug-card{
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}.mederti-chat-root .drug-card-head{
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}.mederti-chat-root .drug-card-name{
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}.mederti-chat-root .drug-card-sub{
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}.mederti-chat-root .drug-card-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}.mederti-chat-root .drug-card-field-label{
+  font-size: 10px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 3px;
+}.mederti-chat-root .drug-card-field-value{
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}.mederti-chat-root .drug-card-foot{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+  color: var(--text-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}.mederti-chat-root .drug-card-foot a{
+  color: var(--teal);
+  text-decoration: none;
+}.mederti-chat-root .drug-card-foot a:hover{ text-decoration: underline; }.mederti-chat-root /* Severity badges */
+.sev{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: "DM Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}.mederti-chat-root .sev-critical{ background: var(--crit-bg); color: var(--crit); border: 1px solid var(--crit-b); }.mederti-chat-root .sev-high{ background: var(--high-bg); color: var(--high); border: 1px solid var(--high-b); }.mederti-chat-root .sev-medium{ background: var(--med-bg); color: var(--med); border: 1px solid var(--med-b); }.mederti-chat-root .sev-low{ background: var(--low-bg); color: var(--low); border: 1px solid var(--low-b); }.mederti-chat-root .sev-ok{ background: var(--teal-bg); color: var(--teal); border: 1px solid var(--teal-b); }.mederti-chat-root .sev-resolved{ background: var(--bg-3); color: var(--text-3); border: 1px solid var(--border); }.mederti-chat-root /* ===== Sub card (substitutes) ===== */
+.sub-card{
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 8px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}.mederti-chat-root .sub-card-name{
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}.mederti-chat-root .sub-card-meta{
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}.mederti-chat-root .sub-card-match{
+  font-size: 12px;
+  font-family: "DM Mono", monospace;
+  color: var(--indigo);
+  background: var(--ind-bg);
+  border: 1px solid var(--ind-b);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}.mederti-chat-root /* ===== Follow-up chips ===== */
+.followups{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}.mederti-chat-root .followup-chip{
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}.mederti-chat-root .followup-chip:hover{
+  background: var(--teal-bg);
+  border-color: var(--teal-b);
+  color: var(--teal);
+}.mederti-chat-root /* ===== Composer ===== */
+.composer-wrap{
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 30%, rgba(255,255,255,1) 100%);
+  padding: 24px 16px 24px;
+  z-index: 10;
+}.mederti-chat-root .composer{
+  max-width: 760px;
+  margin: 0 auto;
+  background: var(--bg);
+  border: 1px solid var(--border-2);
+  border-radius: 14px;
+  padding: 6px 8px 6px 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  box-shadow: 0 8px 32px -8px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15,23,42,0.02);
+  transition: border-color 0.15s;
+}.mederti-chat-root .composer:focus-within{ border-color: var(--teal); }.mederti-chat-root .composer textarea{
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  resize: none;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  padding: 10px 0;
+  line-height: 1.5;
+  max-height: 200px;
+  min-height: 24px;
+}.mederti-chat-root .composer textarea::placeholder{ color: var(--text-4); }.mederti-chat-root .composer-send{
+  background: var(--text);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}.mederti-chat-root .composer-send:hover:not(:disabled){ background: var(--teal); }.mederti-chat-root .composer-send:disabled{ background: var(--border-2); cursor: not-allowed; }.mederti-chat-root .composer-foot{
+  max-width: 760px;
+  margin: 8px auto 0;
+  font-size: 11px;
+  color: var(--text-4);
+  text-align: center;
+  font-family: "DM Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}.mederti-chat-root /* ===== Typing indicator ===== */
+.typing{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}.mederti-chat-root .typing-dot{
+  width: 6px;
+  height: 6px;
+  background: var(--text-4);
+  border-radius: 50%;
+  animation: typing 1.4s infinite;
+}.mederti-chat-root .typing-dot:nth-child(2){ animation-delay: 0.2s; }.mederti-chat-root .typing-dot:nth-child(3){ animation-delay: 0.4s; }
+@keyframes typing {0%, 60%, 100%{ opacity: 0.3; transform: translateY(0); }30%{ opacity: 1; transform: translateY(-3px); }
+}.mederti-chat-root /* ===== Error banner ===== */
+.err{
+  background: var(--crit-bg);
+  border: 1px solid var(--crit-b);
+  color: var(--crit);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin: 12px 0;
+}.mederti-chat-root /* ===== Layout (chat + optional pane) ===== */
+.layout{
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  transition: padding-right 0.32s cubic-bezier(.2,.7,.2,1);
+}.mederti-chat-root .layout-pane-open .chat-shell{ max-width: 640px; }
+@media (min-width: 1100px) {.mederti-chat-root .layout-pane-open{ padding-right: 520px; }
+}.mederti-chat-root /* ===== Card name + badges ===== */
+.drug-card-name-row{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}.mederti-chat-root .badge{
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: "DM Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}.mederti-chat-root .badge-who{ background: var(--ind-bg);  color: var(--indigo); border: 1px solid var(--ind-b); }.mederti-chat-root .badge-crit-eu{ background: var(--crit-bg); color: var(--crit);   border: 1px solid var(--crit-b); }.mederti-chat-root /* ===== Per-country severity strip ===== */
+.drug-card-countries{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}.mederti-chat-root .drug-card-country-chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}.mederti-chat-root .country-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  letter-spacing: 0.04em;
+}.mederti-chat-root .country-chip-code{ color: var(--text-2); font-weight: 500; }.mederti-chat-root .country-chip-dot{
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-4);
+}.mederti-chat-root .country-chip-critical .country-chip-dot{ background: var(--crit); }.mederti-chat-root .country-chip-high     .country-chip-dot{ background: var(--high); }.mederti-chat-root .country-chip-medium   .country-chip-dot{ background: var(--med); }.mederti-chat-root .country-chip-low      .country-chip-dot{ background: var(--low); }.mederti-chat-root .country-chip-critical, .mederti-chat-root .country-chip-high{ border-color: var(--high-b); }.mederti-chat-root .country-chip-more{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-3);
+  padding: 3px 6px;
+}.mederti-chat-root /* ===== Card footer ===== */
+.drug-card-foot{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}.mederti-chat-root .drug-card-action{
+  background: var(--text);
+  color: #fff;
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}.mederti-chat-root .drug-card-action:hover{ background: var(--teal); }.mederti-chat-root .drug-card-source{
+  font-size: 12px;
+  color: var(--teal);
+  text-decoration: none;
+}.mederti-chat-root .drug-card-source:hover{ text-decoration: underline; }.mederti-chat-root /* ===== Sub card as button ===== */
+.sub-card-button{
+  width: 100%;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}.mederti-chat-root .sub-card-button:hover{
+  border-color: var(--teal-b);
+  background: var(--teal-bg);
+}.mederti-chat-root /* ===== Pane ===== */
+.pane-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.32);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 30;
+}.mederti-chat-root .pane-backdrop-open{ opacity: 1; pointer-events: auto; }
+@media (min-width: 1100px) {.mederti-chat-root /* On wide screens, .mederti-chat-root no backdrop — chat stays usable beside the pane. */
+  .pane-backdrop{ background: transparent; }.mederti-chat-root .pane-backdrop-open{ pointer-events: none; }
+}.mederti-chat-root .pane{
+  position: fixed;
+  top: 56px;
+  bottom: 0;
+  right: 0;
+  width: min(520px, 100vw);
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -16px 0 36px -16px rgba(15, 23, 42, 0.16);
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(.2,.7,.2,1);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+}.mederti-chat-root .pane-open{ transform: translateX(0); }.mederti-chat-root .pane-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}.mederti-chat-root .pane-head-meta{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}.mederti-chat-root .pane-close{
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-3);
+  transition: all 0.15s;
+}.mederti-chat-root .pane-close:hover{ background: var(--bg-3); color: var(--text); }.mederti-chat-root .pane-back{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: 0;
+  padding: 5px 9px;
+  margin-left: -7px;
+  border-radius: 6px;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  max-width: calc(100% - 50px);
+  transition: all 0.15s;
+}.mederti-chat-root .pane-back:hover{
+  background: var(--bg-3);
+  color: var(--text);
+}.mederti-chat-root .pane-back svg{ color: var(--text-3); flex-shrink: 0; }.mederti-chat-root .pane-back:hover svg{ color: var(--text); }.mederti-chat-root .pane-back-label{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}.mederti-chat-root .pane-body{
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px 40px;
+}.mederti-chat-root .pane-loading{
+  display: flex;
+  justify-content: center;
+  padding: 60px 0;
+}.mederti-chat-root .pane-hero{
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}.mederti-chat-root .pane-hero-name{
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}.mederti-chat-root .pane-hero-sub{
+  font-size: 12.5px;
+  color: var(--text-3);
+  line-height: 1.5;
+}.mederti-chat-root .pane-hero-status{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}.mederti-chat-root .pane-status-pill{
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 14px;
+  font-family: "DM Mono", monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}.mederti-chat-root .pane-status-ok{
+  background: var(--low-bg);
+  color: var(--low);
+  border: 1px solid var(--low-b);
+}.mederti-chat-root .pane-hero-brands{
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}.mederti-chat-root .pane-section{
+  margin-top: 20px;
+}.mederti-chat-root .pane-section-title{
+  font-size: 10.5px;
+  font-family: "DM Mono", monospace;
+  font-weight: 500;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}.mederti-chat-root .pane-history-compact{
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}.mederti-chat-root /* ===== Product summary (top of pane) ===== */
+.pane-product-summary{ margin-top: 16px; }.mederti-chat-root .pane-product-list{
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 18px;
+  row-gap: 8px;
+  align-items: baseline;
+}.mederti-chat-root .pane-product-row{
+  display: contents;
+}.mederti-chat-root .pane-product-row dt{
+  font-size: 10.5px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}.mederti-chat-root .pane-product-row dd{
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.45;
+}.mederti-chat-root .pane-product-counts{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+  color: var(--text-3);
+}.mederti-chat-root .pane-product-counts strong{
+  color: var(--text);
+  font-weight: 600;
+  font-family: "DM Mono", monospace;
+}.mederti-chat-root /* ===== Compact shortage row (collapsed by default) ===== */
+.pane-shortage-list{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}.mederti-chat-root .pane-shortage-row{
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}.mederti-chat-root .pane-shortage-row:hover{ border-color: var(--border-2); }.mederti-chat-root .pane-shortage-row.open{ background: var(--bg); border-color: var(--teal-b); }.mederti-chat-root .pane-shortage-row-head{
+  display: grid;
+  grid-template-columns: 36px max-content 1fr 22px 14px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}.mederti-chat-root .pane-shortage-cc{
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0.04em;
+}.mederti-chat-root .pane-shortage-sev{
+  font-size: 10px !important;
+  padding: 2px 7px !important;
+  text-transform: lowercase;
+}.mederti-chat-root .pane-shortage-dates{
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}.mederti-chat-root .pane-shortage-arrow{ color: var(--text-4); margin: 0 2px; }.mederti-chat-root .pane-shortage-source{
+  font-size: 14px;
+  color: var(--teal);
+  text-decoration: none;
+  text-align: center;
+  line-height: 1;
+}.mederti-chat-root .pane-shortage-source:hover{ color: var(--teal-l); }.mederti-chat-root .pane-shortage-source-spacer{ width: 14px; }.mederti-chat-root .pane-shortage-chevron{
+  color: var(--text-4);
+  transition: transform 0.18s;
+}.mederti-chat-root .pane-shortage-row.open .pane-shortage-chevron{ transform: rotate(180deg); }.mederti-chat-root .pane-shortage-reason{
+  padding: 0 14px 11px 60px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+  border-top: 1px dashed var(--border);
+  padding-top: 9px;
+  margin-top: 2px;
+}.mederti-chat-root .pane-empty{
+  font-size: 13px;
+  color: var(--text-3);
+  padding: 8px 0;
+}.mederti-chat-root .pane-snapshot{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (min-width: 480px) {.mederti-chat-root .pane-snapshot{ grid-template-columns: repeat(4, 1fr); }
+}.mederti-chat-root .pane-stat{
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 12px;
+}.mederti-chat-root .pane-stat-value{
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}.mederti-chat-root .pane-stat-label{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}.mederti-chat-root .pane-rows{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}.mederti-chat-root .pane-row{
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}.mederti-chat-root .pane-row-button{
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}.mederti-chat-root .pane-row-button:hover{
+  border-color: var(--teal-b);
+  background: var(--teal-bg);
+}.mederti-chat-root .pane-row-head{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}.mederti-chat-root .pane-row-title{
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}.mederti-chat-root .pane-row-meta{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}.mederti-chat-root .pane-row-cc{
+  font-size: 11px;
+  color: var(--text-4);
+  letter-spacing: 0.04em;
+}.mederti-chat-root .pane-row-status{
+  font-size: 10px;
+  font-family: "DM Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}.mederti-chat-root .pane-row-status-active{ background: var(--high-bg); color: var(--high); }.mederti-chat-root .pane-row-status-resolved{ background: var(--bg-3); color: var(--text-3); }.mederti-chat-root .pane-row-status-anticipated{ background: var(--med-bg); color: var(--med); }.mederti-chat-root .pane-row-status-stale{ background: var(--bg-3); color: var(--text-4); }.mederti-chat-root .pane-row-dates{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}.mederti-chat-root .pane-row-reason{
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin-bottom: 6px;
+}.mederti-chat-root .pane-row-source{
+  font-size: 12px;
+  color: var(--teal);
+  text-decoration: none;
+}.mederti-chat-root .pane-row-source:hover{ text-decoration: underline; }.mederti-chat-root .pane-row-more{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-align: center;
+  padding: 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}.mederti-chat-root .pane-formgrid{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}.mederti-chat-root .recall-class{
+  font-size: 10px;
+  font-family: "DM Mono", monospace;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-3);
+  color: var(--text-3);
+  border: 1px solid var(--border);
+}.mederti-chat-root .recall-class-1{ background: var(--crit-bg); color: var(--crit); border-color: var(--crit-b); }.mederti-chat-root .recall-class-2{ background: var(--high-bg); color: var(--high); border-color: var(--high-b); }.mederti-chat-root .recall-class-3{ background: var(--med-bg);  color: var(--med);  border-color: var(--med-b); }.mederti-chat-root /* ========================================================
+   PERSONA CARD SYSTEM
+   Lifted from mederti-card-persona-variations.html
+   ======================================================== */
+
+.card{
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin: 12px 0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}.mederti-chat-root .card-skeleton .card-skeleton-bars{
+  padding: 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}.mederti-chat-root .skeleton-bar{
+  height: 10px;
+  background: var(--bg-3);
+  border-radius: 4px;
+  animation: skeleton 1.2s ease-in-out infinite;
+}.mederti-chat-root .skeleton-pill{
+  width: 64px;
+  height: 22px;
+  background: var(--bg-3);
+  border-radius: 12px;
+  animation: skeleton 1.2s ease-in-out infinite;
+}
+@keyframes skeleton {0%, 100%{ opacity: 0.55; }50%{ opacity: 1; }
+}.mederti-chat-root .card-head{ padding: 18px 20px 14px; }.mederti-chat-root .card-title-row{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}.mederti-chat-root .card-name{
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}.mederti-chat-root .card-head-right{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}.mederti-chat-root .tag-who{
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--ind-bg);
+  color: var(--indigo);
+  border: 1px solid var(--ind-b);
+  font-family: "DM Mono", monospace;
+  letter-spacing: 0.04em;
+}.mederti-chat-root .tag-status{
+  font-size: 10px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 14px;
+  font-family: "DM Mono", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}.mederti-chat-root .tag-status.medium{ background: var(--med-bg);   color: var(--med);    border: 1px solid var(--med-b); }.mederti-chat-root .tag-status.critical{ background: var(--crit-bg);  color: var(--crit);   border: 1px solid var(--crit-b); }.mederti-chat-root .tag-status.high{ background: var(--high-bg);  color: var(--high);   border: 1px solid var(--high-b); }.mederti-chat-root .tag-status.available{ background: var(--low-bg);   color: var(--low);    border: 1px solid var(--low-b); }.mederti-chat-root .card-meta{ font-size: 12px; color: var(--text-3); margin-top: 4px; }.mederti-chat-root .card-meta strong{ color: var(--text-2); font-weight: 500; }.mederti-chat-root .card-brands{ font-size: 12px; color: var(--text-3); margin-top: 6px; }.mederti-chat-root .card-brands em{ font-style: normal; color: var(--text-4); margin-right: 4px; }.mederti-chat-root .divider-dashed{
+  border: 0;
+  border-top: 1px dashed var(--border);
+  margin: 0 20px;
+}.mederti-chat-root .section-label{
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-4);
+  margin-bottom: 6px;
+}.mederti-chat-root /* Persona toggle inside card header */
+.persona-toggle{
+  display: inline-flex;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 2px;
+}.mederti-chat-root .persona-toggle-btn{
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: all 0.15s;
+}.mederti-chat-root .persona-toggle-btn:hover:not(:disabled):not(.persona-toggle-btn-on){
+  color: var(--text-2);
+}.mederti-chat-root .persona-toggle-btn-on{
+  background: var(--text);
+  color: #fff;
+}.mederti-chat-root .persona-toggle-btn:disabled{
+  color: var(--text-4);
+  cursor: not-allowed;
+  opacity: 0.5;
+}.mederti-chat-root /* Status panel */
+.card-a-status{
+  margin: 0 20px 12px;
+  padding: 11px 14px;
+  background: var(--med-bg);
+  border: 1px solid var(--med-b);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}.mederti-chat-root .card-a-status-headline{
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--med);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  letter-spacing: -0.01em;
+}.mederti-chat-root .card-a-status-dot{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--med);
+  flex-shrink: 0;
+}.mederti-chat-root .card-a-status-dates{
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}.mederti-chat-root .card-a-status-pre{ font-size: 11px; color: var(--text-3); font-weight: 400; }.mederti-chat-root .card-a-status-val{
+  font-family: "DM Mono", monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  line-height: 1;
+}.mederti-chat-root .card-a-status-sep{ color: var(--text-4); font-size: 11px; margin: 0 2px; }.mederti-chat-root .card-a-status.available{
+  background: var(--low-bg);
+  border-color: var(--low-b);
+}.mederti-chat-root .card-a-status.available .card-a-status-headline{ color: var(--low); }.mederti-chat-root .card-a-status.available .card-a-status-dot{ background: var(--low); }.mederti-chat-root .card-a-status-supply{
+  font-family: "DM Mono", monospace;
+  font-size: 11.5px;
+  color: var(--text-3);
+}.mederti-chat-root /* Clickable drug name — opens the detail pane to the right */
+.card-name-link{
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s;
+  color: inherit;
+  text-decoration: none;
+  font: inherit;
+  letter-spacing: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+}.mederti-chat-root .card-name-link::after{
+  content: "→";
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-4);
+  opacity: 0.45;
+  transition: all 0.15s;
+}.mederti-chat-root .card-name-link:hover{ color: var(--teal); }.mederti-chat-root .card-name-link:hover::after{
+  color: var(--teal);
+  opacity: 1;
+  transform: translateX(2px);
+}.mederti-chat-root .card-name-link:focus-visible{
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: 3px;
+}.mederti-chat-root /* Country pills */
+.country-row{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }.mederti-chat-root .country-pill{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-2);
+}.mederti-chat-root .country-pill-dot{ width: 6px; height: 6px; border-radius: 50%; }.mederti-chat-root .country-pill-dot.crit{ background: var(--crit); }.mederti-chat-root .country-pill-dot.high{ background: var(--high); }.mederti-chat-root .country-pill-dot.med{ background: var(--med); }.mederti-chat-root .country-pill-dot.low{ background: var(--low); }.mederti-chat-root /* Actions strip */
+.card-actions{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: var(--bg);
+  border-top: 1px dashed var(--border);
+  flex-wrap: wrap;
+}.mederti-chat-root .btn-primary{
+  padding: 8px 14px;
+  background: var(--text);
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}.mederti-chat-root .btn-primary:hover{ background: #1e293b; }.mederti-chat-root .btn-primary.teal{ background: var(--teal); }.mederti-chat-root .btn-primary.teal:hover{ background: var(--teal-l); }.mederti-chat-root .link-src{
+  font-size: 12px;
+  color: var(--teal);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  text-decoration: none;
+}.mederti-chat-root .link-src:hover{ color: var(--teal-l); text-decoration: underline; }.mederti-chat-root .actions-spacer{ flex: 1; }.mederti-chat-root /* Pre-order band */
+.card-a-preorder{
+  margin: 0 20px 14px;
+  padding: 11px 14px;
+  background: linear-gradient(135deg, var(--ind-bg) 0%, var(--teal-bg) 100%);
+  border: 1px solid var(--ind-b);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}.mederti-chat-root .card-a-preorder-text{
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+  flex: 1;
+}.mederti-chat-root .card-a-preorder-text strong{ color: var(--text); font-weight: 500; }.mederti-chat-root .card-a-preorder-btn{
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  padding: 7px 12px;
+  background: var(--indigo);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}.mederti-chat-root .card-a-preorder-btn:hover{ background: #4338ca; }.mederti-chat-root /* Pharmacist substitute block */
+.card-a-sub{
+  margin: 14px 20px;
+  padding: 16px;
+  background: var(--low-bg);
+  border: 1px solid var(--low-b);
+  border-radius: 10px;
+}.mederti-chat-root .card-a-sub-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}.mederti-chat-root .card-a-sub-label{
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--low);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}.mederti-chat-root .card-a-sub-match{
+  font-family: "DM Mono", monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--low);
+}.mederti-chat-root .card-a-sub-name{
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-bottom: 3px;
+}.mederti-chat-root .card-a-sub-form{
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: "DM Mono", monospace;
+  margin-bottom: 10px;
+}.mederti-chat-root .card-a-sub-facts{
+  display: flex;
+  gap: 0;
+  border-top: 1px dashed var(--low-b);
+  padding-top: 10px;
+}.mederti-chat-root .card-a-sub-fact{ flex: 1; }.mederti-chat-root .card-a-sub-fact + .card-a-sub-fact{
+  padding-left: 12px;
+  border-left: 1px solid var(--low-b);
+  margin-left: 12px;
+}.mederti-chat-root .card-a-sub-fact-label{
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-4);
+  margin-bottom: 3px;
+}.mederti-chat-root .card-a-sub-fact-val{
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  font-family: "DM Mono", monospace;
+}.mederti-chat-root /* Supplier rows */
+.card-a-supplier{
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--low-b);
+}.mederti-chat-root .card-a-supplier-label{
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}.mederti-chat-root .card-a-supplier-label-count{
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}.mederti-chat-root .card-a-supplier-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--bg);
+  border: 1px solid var(--low-b);
+  border-radius: 7px;
+}.mederti-chat-root .card-a-supplier-name{
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}.mederti-chat-root .card-a-supplier-pill{
+  font-size: 9px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--low-bg);
+  color: var(--low);
+  border: 1px solid var(--low-b);
+  font-family: "DM Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}.mederti-chat-root .card-a-supplier-meta{
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: "DM Mono", monospace;
+  flex: 1;
+  text-align: right;
+}.mederti-chat-root .card-a-supplier-action{
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--teal);
+  padding: 5px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--teal-b);
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+}.mederti-chat-root .card-a-supplier-action:hover{ background: var(--teal-bg); border-color: var(--teal); }.mederti-chat-root .card-a-supplier-action-block{
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: center;
+  background: var(--bg-2);
+  color: var(--teal);
+  border: 1px dashed var(--teal-b);
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}.mederti-chat-root .card-a-supplier-action-block:hover{
+  background: var(--teal-bg);
+  border-color: var(--teal);
+  border-style: solid;
+}.mederti-chat-root /* Make the substitute name look like a follow-up affordance */
+.card-a-sub-name-button{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}.mederti-chat-root .card-a-sub-name-button:hover{ color: var(--teal); }.mederti-chat-root .card-a-sub-name-arrow{
+  font-size: 14px;
+  color: var(--text-4);
+  font-weight: 400;
+  opacity: 0.55;
+  transition: all 0.15s;
+}.mederti-chat-root .card-a-sub-name-button:hover .card-a-sub-name-arrow{
+  color: var(--teal);
+  opacity: 1;
+  transform: translateX(2px);
+}.mederti-chat-root .card-a-sub-name-button:focus-visible{
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+  border-radius: 3px;
+}.mederti-chat-root .card-a-supplier-more{
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 7px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}.mederti-chat-root .card-a-supplier-more:hover{ color: var(--teal); }.mederti-chat-root .card-a-context{
+  padding: 0 20px 14px;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}.mederti-chat-root .card-a-context strong{ color: var(--text-2); font-weight: 500; }.mederti-chat-root /* State B suppliers panel */
+.card-a-state-b-suppliers{
+  margin: 0 20px 14px;
+  padding: 14px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}.mederti-chat-root .card-a-state-b-suppliers .card-a-supplier-label{ margin-bottom: 9px; }.mederti-chat-root .card-a-state-b-suppliers .card-a-supplier-row + .card-a-supplier-row{ margin-top: 6px; }.mederti-chat-root /* Procurement fact grid + alternatives */
+.card-b-row{ padding: 14px 20px; }.mederti-chat-root .card-b-grid{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 0;
+  margin-top: 6px;
+}
+@media (min-width: 600px) {.mederti-chat-root .card-b-grid{ grid-template-columns: repeat(4, 1fr); }
+}.mederti-chat-root .card-b-fact{ padding-right: 14px; }.mederti-chat-root .card-b-fact + .card-b-fact{ border-left: 1px solid var(--border); padding-left: 14px; }.mederti-chat-root .card-b-fact-label{
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-4);
+  margin-bottom: 4px;
+}.mederti-chat-root .card-b-fact-val{ font-size: 13px; color: var(--text); line-height: 1.4; }.mederti-chat-root .card-b-fact-val.mono{ font-family: "DM Mono", monospace; font-size: 12.5px; }.mederti-chat-root .card-b-fact-sub{
+  font-size: 10px;
+  color: var(--text-4);
+  margin-top: 3px;
+  font-family: "DM Mono", monospace;
+}.mederti-chat-root .card-b-reason{
+  padding: 0 20px 16px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+}.mederti-chat-root .card-b-reason-label{
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-4);
+  display: inline;
+  margin-right: 8px;
+}.mederti-chat-root .card-b-alts{
+  margin: 0 20px 14px;
+  padding: 12px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}.mederti-chat-root .card-b-alts-label{
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}.mederti-chat-root .card-b-alt-row{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 12px;
+  gap: 12px;
+  transition: background 0.15s;
+}.mederti-chat-root .card-b-alt-row:hover{ background: var(--bg-3); margin: 0 -10px; padding-left: 10px; padding-right: 10px; }.mederti-chat-root .card-b-alt-row:last-child{ border-bottom: 0; }.mederti-chat-root .card-b-alt-info{ flex: 1; min-width: 0; }.mederti-chat-root .card-b-alt-name{ color: var(--text); font-weight: 500; }.mederti-chat-root .card-b-alt-meta{ color: var(--text-3); font-family: "DM Mono", monospace; font-size: 11px; }.mederti-chat-root .card-b-alt-suppliers{
+  font-family: "DM Mono", monospace;
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-top: 5px;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+}.mederti-chat-root .card-b-alt-suppliers strong{ color: var(--text-2); font-weight: 500; }.mederti-chat-root .card-b-alt-status{
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: "DM Mono", monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}.mederti-chat-root .card-b-alt-status.green{ background: var(--low-bg); color: var(--low); border: 1px solid var(--low-b); }.mederti-chat-root .card-b-alt-status.amber{ background: var(--med-bg); color: var(--med); border: 1px solid var(--med-b); }.mederti-chat-root /* Supplier card hero */
+.card-c-hero{
+  margin: 0 20px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--ind-bg) 0%, var(--teal-bg) 100%);
+  border: 1px solid var(--ind-b);
+  border-radius: 10px;
+  margin-bottom: 14px;
+}.mederti-chat-root .card-c-hero-label{
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--indigo);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}.mederti-chat-root .card-c-hero-row{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }.mederti-chat-root .card-c-stat-val{
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  font-family: "DM Mono", monospace;
+  line-height: 1;
+}.mederti-chat-root .card-c-stat-label{
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}.mederti-chat-root .card-c-stat-sub{
+  font-size: 10px;
+  color: var(--text-4);
+  margin-top: 2px;
+  font-family: "DM Mono", monospace;
+}.mederti-chat-root .card-c-supplier-bar{
+  margin: 0 20px 14px;
+  padding: 12px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}.mederti-chat-root .card-c-supplier-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}.mederti-chat-root .card-c-supplier-label{
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+}.mederti-chat-root .card-c-supplier-gauge{
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  color: var(--text-2);
+}.mederti-chat-root .card-c-supplier-bar-bg{
+  height: 6px;
+  background: var(--bg-3);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}.mederti-chat-root .card-c-supplier-bar-fill{
+  height: 100%;
+  background: linear-gradient(to right, var(--crit), var(--high));
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}.mederti-chat-root .card-c-supplier-note{
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 8px;
+  line-height: 1.5;
+}.mederti-chat-root .card-c-supplier-note strong{ color: var(--text-2); font-weight: 500; }.mederti-chat-root /* ===== Lead capture modal ===== */
+.modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  z-index: 60;
+  animation: fadeIn 0.2s ease;
+}.mederti-chat-root .modal{
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  background: var(--bg);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.32);
+  padding: 28px 28px 22px;
+  z-index: 61;
+  animation: modalIn 0.22s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes fadeIn {from{ opacity: 0; }to{ opacity: 1; } }
+@keyframes modalIn {from{ opacity: 0; transform: translate(-50%, -46%); }to{ opacity: 1; transform: translate(-50%, -50%); }
+}.mederti-chat-root .modal-close{
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-3);
+}.mederti-chat-root .modal-close:hover{ background: var(--bg-3); color: var(--text); }.mederti-chat-root .modal-head{ margin-bottom: 14px; padding-right: 32px; }.mederti-chat-root .modal-title{
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}.mederti-chat-root .modal-sub{
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 6px;
+  line-height: 1.5;
+}.mederti-chat-root .modal-ctx{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--text-2);
+  margin-bottom: 16px;
+}.mederti-chat-root .modal-ctx-label{
+  font-size: 10px;
+  font-family: "DM Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-4);
+  margin-right: 4px;
+}.mederti-chat-root .modal-fields{ display: flex; flex-direction: column; gap: 12px; }.mederti-chat-root .modal-field{ display: flex; flex-direction: column; gap: 4px; flex: 1; }.mederti-chat-root .modal-field-label{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}.mederti-chat-root .modal-req{ color: var(--crit); }.mederti-chat-root .modal-input{
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}.mederti-chat-root .modal-input:focus{ border-color: var(--teal); }.mederti-chat-root .modal-textarea{ resize: vertical; min-height: 60px; line-height: 1.5; }.mederti-chat-root .modal-row{ display: flex; gap: 10px; }
+@media (max-width: 480px) {.mederti-chat-root .modal-row{ flex-direction: column; gap: 12px; } }.mederti-chat-root .modal-actions{
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  justify-content: flex-end;
+}.mederti-chat-root .modal-cancel, .mederti-chat-root .modal-submit{
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}.mederti-chat-root .modal-cancel{
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}.mederti-chat-root .modal-cancel:hover{ background: var(--bg-3); }.mederti-chat-root .modal-submit{
+  background: var(--text);
+  border: 0;
+  color: #fff;
+}.mederti-chat-root .modal-submit:hover:not(:disabled){ background: var(--teal); }.mederti-chat-root .modal-submit:disabled{ background: var(--border-2); cursor: not-allowed; }.mederti-chat-root .modal-foot{
+  font-size: 11px;
+  color: var(--text-4);
+  margin-top: 12px;
+  line-height: 1.5;
+}.mederti-chat-root .modal-success{
+  text-align: center;
+  padding: 18px 0 6px;
+}.mederti-chat-root .modal-success-icon{
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--low-bg);
+  color: var(--low);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin: 0 auto 14px;
+  border: 2px solid var(--low-b);
+}.mederti-chat-root .modal-warn{
+  font-size: 11px;
+  color: var(--text-4);
+  margin-top: 14px;
+  padding: 8px 12px;
+  background: var(--bg-3);
+  border-radius: 6px;
+  text-align: left;
+  line-height: 1.5;
+}.mederti-chat-root .modal-warn code{
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+}.mederti-chat-root .modal-done-btn{
+  margin: 18px auto 0;
+  background: var(--text);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 24px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  width: auto;
+}.mederti-chat-root /* ===== Inline recall callout on cards ===== */
+.recall-callout{
+  margin: 0 20px 12px;
+  padding: 10px 12px 9px;
+  background: var(--crit-bg);
+  border: 1px solid var(--crit-b);
+  border-left: 3px solid var(--crit);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}.mederti-chat-root .recall-callout[data-class="II"], .mederti-chat-root .recall-callout[data-class="2"]{
+  background: var(--high-bg);
+  border-color: var(--high-b);
+  border-left-color: var(--high);
+}.mederti-chat-root .recall-callout[data-class="III"], .mederti-chat-root .recall-callout[data-class="3"]{
+  background: var(--med-bg);
+  border-color: var(--med-b);
+  border-left-color: var(--med);
+}.mederti-chat-root .recall-callout-head{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}.mederti-chat-root .recall-callout-icon{ font-size: 13px; color: var(--crit); }.mederti-chat-root .recall-callout[data-class="II"] .recall-callout-icon, .mederti-chat-root .recall-callout[data-class="2"] .recall-callout-icon{ color: var(--high); }.mederti-chat-root .recall-callout[data-class="III"] .recall-callout-icon, .mederti-chat-root .recall-callout[data-class="3"] .recall-callout-icon{ color: var(--med); }.mederti-chat-root .recall-callout-class{
+  font-size: 10px;
+  font-family: "DM Mono", monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--crit);
+}.mederti-chat-root .recall-callout[data-class="II"] .recall-callout-class, .mederti-chat-root .recall-callout[data-class="2"] .recall-callout-class{ color: var(--high); }.mederti-chat-root .recall-callout[data-class="III"] .recall-callout-class, .mederti-chat-root .recall-callout[data-class="3"] .recall-callout-class{ color: var(--med); }.mederti-chat-root .recall-callout-date{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-3);
+  margin-left: auto;
+}.mederti-chat-root .recall-callout-body{
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+}.mederti-chat-root .recall-callout-prod{ color: var(--text); font-weight: 500; }.mederti-chat-root .recall-callout-foot{
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+}.mederti-chat-root .recall-callout-link{
+  font-size: 11.5px;
+  font-weight: 500;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text-2);
+  text-decoration: none;
+}.mederti-chat-root .recall-callout-link:hover{ color: var(--text); text-decoration: underline; }.mederti-chat-root /* ===== Manufacturer chips ===== */
+.card-mfg-row{ padding-top: 4px; padding-bottom: 12px; }.mederti-chat-root .card-mfg-header{ padding: 6px 20px 0; }.mederti-chat-root .mfg-chips{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }.mederti-chat-root .mfg-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+  font-weight: 500;
+  cursor: default;
+}.mederti-chat-root .mfg-chip-count{
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+  color: var(--text-4);
+  background: var(--bg-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+}.mederti-chat-root .mfg-chip-more{
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--teal);
+  cursor: pointer;
+  padding: 4px 6px;
+}.mederti-chat-root .mfg-chip-more:hover{ text-decoration: underline; }.mederti-chat-root /* ===== Shortage history line ===== */
+.card-history-line{
+  margin: 0 20px 14px;
+  padding: 9px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}.mederti-chat-root .card-history-icon{
+  font-size: 13px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}.mederti-chat-root .card-history-text{ letter-spacing: 0.01em; }.mederti-chat-root /* ===== Pane: manufacturers + history sections ===== */
+.pane-mfg-grid{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}.mederti-chat-root .pane-mfg-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}.mederti-chat-root .pane-mfg-name{ font-size: 13px; color: var(--text); font-weight: 500; }.mederti-chat-root .pane-mfg-meta{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-3);
+}.mederti-chat-root .pane-mfg-products{
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg-3);
+  padding: 2px 8px;
+  border-radius: 4px;
+}.mederti-chat-root /* History timeline visual */
+.pane-history-stats{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+@media (min-width: 480px) {.mederti-chat-root .pane-history-stats{ grid-template-columns: repeat(4, 1fr); }
+}.mederti-chat-root .pane-history-stat{
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+}.mederti-chat-root .pane-history-stat-val{
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: "DM Mono", monospace;
+}.mederti-chat-root .pane-history-stat-label{
+  font-size: 10px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}.mederti-chat-root .pane-history-spark{
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  height: 24px;
+  margin: 8px 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-3);
+}.mederti-chat-root .pane-history-spark-bar{
+  flex: 1;
+  border-right: 1px solid rgba(255, 255, 255, 0.6);
+  min-width: 2px;
+  transition: background 0.2s;
+}.mederti-chat-root .pane-history-spark-bar:last-child{ border-right: 0; }.mederti-chat-root .pane-history-spark-bar.active{ background: var(--high); }.mederti-chat-root .pane-history-spark-bar.resolved{ background: var(--low); }.mederti-chat-root .pane-history-spark-bar.empty{ background: transparent; }.mederti-chat-root .pane-history-axis{
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  margin-top: 2px;
+}.mederti-chat-root .pane-history-recur{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}.mederti-chat-root .pane-history-recur-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-2);
+}.mederti-chat-root .pane-history-recur-chip strong{
+  color: var(--text);
+  font-weight: 600;
+  font-family: "DM Mono", monospace;
+}.mederti-chat-root /* ===== Disambiguation chips above a drug card ===== */
+.alternates{
+  margin: 8px 0 -4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}.mederti-chat-root .alternates-label{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 2px;
+}.mederti-chat-root .alternates-chip{
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 11px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+}.mederti-chat-root .alternates-chip:hover{
+  background: var(--teal-bg);
+  border-color: var(--teal-b);
+  color: var(--teal);
+}.mederti-chat-root /* ===== Products on registry (in pane) ===== */
+.products-filters{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}.mederti-chat-root .products-search{
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+}.mederti-chat-root .products-search:focus{ border-color: var(--teal); }.mederti-chat-root .products-chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}.mederti-chat-root .products-chip{
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+}.mederti-chat-root .products-chip:hover{ color: var(--text); border-color: var(--border-2); }.mederti-chat-root .products-chip.on{
+  background: var(--text);
+  color: #fff;
+  border-color: var(--text);
+}.mederti-chat-root .products-count{
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 4px 0 10px;
+}.mederti-chat-root .products-list{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}.mederti-chat-root .products-group{
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+}.mederti-chat-root .products-group-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-bottom: 1px dashed var(--border);
+}.mederti-chat-root .products-group-strength{
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: "DM Mono", monospace;
+  letter-spacing: -0.01em;
+}.mederti-chat-root .products-group-count{
+  font-size: 10px;
+  font-family: "DM Mono", monospace;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}.mederti-chat-root .products-group-rows{
+  padding: 6px 12px 8px;
+}.mederti-chat-root .products-line{
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--border);
+}.mederti-chat-root .products-line:last-child{ border-bottom: 0; }.mederti-chat-root .products-line-head{
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}.mederti-chat-root .products-line-name{
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}.mederti-chat-root .products-line-pill{
+  font-size: 9px;
+  font-family: "DM Mono", monospace;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  background: var(--low-bg);
+  color: var(--low);
+  border: 1px solid var(--low-b);
+  border-radius: 3px;
+}.mederti-chat-root .products-line-pill-neutral{
+  background: var(--bg-3);
+  color: var(--text-3);
+  border-color: var(--border);
+}.mederti-chat-root .products-line-sub{
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+  line-height: 1.4;
+}

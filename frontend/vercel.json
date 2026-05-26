@@ -2,5 +2,10 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install --legacy-peer-deps"
+  "installCommand": "npm install --legacy-peer-deps",
+  "functions": {
+    "app/api/chat/route.ts": {
+      "maxDuration": 300
+    }
+  }
 }

@@ -173,18 +173,32 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         router.replace(`/chat2/${id}`, { scroll: false });
       }
 
+      // 270-second client timeout — matches the Vercel maxDuration of 300s
+      // minus a small buffer so we show a friendly error instead of a bare
+      // network failure if the function is still running when Vercel cuts it.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 270_000);
+
       try {
         const payload: ChatMessage[] = nextTurns.map((t) => ({ role: t.role, text: t.text }));
         const resp = await fetch("/api/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ messages: payload }),
+          signal: controller.signal,
         });
-        const data = (await resp.json()) as ChatApiResponse;
 
         // If the user switched chats mid-flight, drop the response on the
         // floor — it would corrupt whichever chat they're now viewing.
         if (activeIdRef.current !== id) return;
+
+        // Vercel can return an HTML error page (504, etc.) — guard the parse.
+        let data: ChatApiResponse;
+        try {
+          data = (await resp.json()) as ChatApiResponse;
+        } catch {
+          throw new Error(`Server error (${resp.status}) — please try again`);
+        }
 
         if (!resp.ok || data.error) {
           const errTurn: Turn = {
@@ -223,13 +237,23 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
           }
         }
       } catch (e) {
-        if (activeIdRef.current !== id) return;
-        const msg = e instanceof Error ? e.message : String(e);
+        // Always show an error — even if the user has switched chats we want
+        // the error stored so they see it when they come back (rather than
+        // silently losing it). We only skip if the active chat has genuinely
+        // changed to a *different* chat (not just navigating back to the same one).
+        if (activeIdRef.current !== id && activeIdRef.current !== null) return;
+        const isAbort = e instanceof DOMException && e.name === "AbortError";
+        const msg = isAbort
+          ? "The request timed out — this query takes a while. Try a more specific question."
+          : e instanceof Error
+          ? e.message
+          : String(e);
         const errTurn: Turn = { id: ++idRef.current, role: "assistant", text: "", error: msg };
         const finalTurns = [...nextTurns, errTurn];
         setTurns(finalTurns);
         persist(id!, finalTurns, drugsMap, subsMap);
       } finally {
+        clearTimeout(timeoutId);
         setPending(false);
       }
     },

@@ -42,6 +42,20 @@ export type SourceConsulted = {
   /** True when last_scraped_at is null OR older than 7 days. The renderer
    *  uses this to visually flag the chip so users aren't misled. */
   is_stale: boolean;
+  /** data_sources.reliability_weight (0..1). Drives the confidence helper's
+   *  per-source aggregation. Optional for back-compat — older callers may
+   *  not have populated it; confidenceFromSources defaults to 0.7 when missing. */
+  reliability_weight?: number;
+};
+
+/** Rules-based confidence v1 — see frontend/lib/chat/confidence.ts.
+ *  Every tool returning numeric or row-based results MUST attach one. */
+export type Confidence = {
+  level: "low" | "medium" | "high";
+  /** 0..1 raw score. Don't render directly; use `level` for prose, `basis` for explanation. */
+  score: number;
+  /** Human-readable explanation, e.g. "TGA + AIFA, 5 events, scraped today". */
+  basis: string;
 };
 
 export type ClassTopDrug = {
@@ -69,6 +83,8 @@ export type ClassSummary = {
   eu_critical_count: number;
   top_drugs: ClassTopDrug[];
   sources_consulted: SourceConsulted[];
+  /** Rules-based confidence v1 — see frontend/lib/chat/confidence.ts. */
+  confidence?: Confidence;
 };
 
 /** External / cross-reference identifiers for a drug. All optional —
@@ -110,6 +126,9 @@ export type DrugDetail = DrugSummary & {
    *  the lighter fetchDrugDetail returns the same shape so the pane can use it
    *  too. Coverage is partial — never assume every key is non-null. */
   external_identifiers?: DrugExternalIdentifiers;
+  /** Rules-based confidence v1 — see frontend/lib/chat/confidence.ts.
+   *  Attached for every active-shortage drug; absent when no shortages on file. */
+  confidence?: Confidence;
 };
 
 export type SubstituteRow = {

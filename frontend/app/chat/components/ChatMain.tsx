@@ -15,7 +15,7 @@ export type ActiveView = "chat" | "dashboard" | "intelligence";
 
 export type Turn =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "assistant"; text: string; error?: string };
+  | { id: number; role: "assistant"; text: string; error?: string; drugIdByName?: Record<string, string> };
 
 export interface AttachedFile {
   id: string;
@@ -235,6 +235,7 @@ export function ChatMain({
                         parts={parseAgentResponse(t.text)}
                         drugs={drugsMap}
                         subs={subsMap}
+                        drugIdByName={t.role === "assistant" ? t.drugIdByName : undefined}
                         onFollowup={onSend}
                       />
                     )}

@@ -173,7 +173,8 @@ How to render:
 
 - Lead with one sentence framing the table (e.g. "Mederti has 4 ATC-matched alternatives recorded — penicillin-class first, then a broader-spectrum fallback:").
 - 4–6 columns. First column is the subject (drug, country, supplier) and **bold** each subject value so the eye lands on it.
-- Standard GFM table syntax (pipes + a "| --- | --- |" separator row). Keep cells short — one line where possible.
+- Standard GFM table syntax (pipes + a "| --- | --- |" separator row). Keep cells short — one line, no embedded newlines, no multi-sentence cells. If a column would need explanation longer than a phrase, drop it or move that detail to the framing sentence before the table.
+- **Tables are ONE contiguous block.** Header row, separator row, and ALL data rows must be on consecutive lines with NO blank lines between them and NO prose interleaved between rows. If you need commentary about a row, finish the whole table first, then write the commentary as a paragraph below. Splitting a table across paragraphs is a rendering bug — only the first chunk survives as a table.
 - Tables are complementary to <drug_card /> tags, not a replacement. For a single-drug answer, the drug_card goes for the queried drug and a table (or <sub_card />s) goes for the alternatives — both belong.
 - For ≤2 alternatives or items, <sub_card />s are better than a table (more visual). For ≥3, a table scans faster.
 

@@ -398,6 +398,7 @@ export function Sidebar({
   chats,
   collapsed,
   onCollapse,
+  onNewChat,
   onOpenDrugPreview,
   onToast,
 }: {
@@ -410,6 +411,10 @@ export function Sidebar({
   collapsed: boolean;
   // Toggle collapse/expand.
   onCollapse: () => void;
+  // Imperative new-chat handler — clears in-memory state AND navigates.
+  // Necessary because a plain <Link href="/chat"> is a no-op when the user is
+  // already on /chat (welcome screen), so the button felt broken.
+  onNewChat: () => void;
   onOpenDrugPreview: (slug: string) => void;
   onToast: (msg: string) => void;
 }) {
@@ -502,15 +507,17 @@ export function Sidebar({
           <PanelLeft size={16} />
         </button>
 
-        {/* New chat */}
-        <Link
-          href="/chat"
+        {/* New chat — imperative reset + navigate so it works from any state,
+            including when the user is already on /chat (welcome screen). */}
+        <button
+          type="button"
+          onClick={onNewChat}
           className={railBtn}
           title="New chat"
           aria-label="New chat"
         >
           <Plus size={16} />
-        </Link>
+        </button>
 
         {/* Search — only when there's history */}
         {hasAnyChat ? (
@@ -607,13 +614,14 @@ export function Sidebar({
 
       {/* Primary actions — Search hides until there's history to search */}
       <div className="px-2.5 pb-2.5 flex flex-col gap-0.5">
-        <Link
-          href="/chat"
-          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+        <button
+          type="button"
+          onClick={onNewChat}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors text-left"
         >
           <Plus size={14} />
           <span>New chat</span>
-        </Link>
+        </button>
         {hasAnyChat ? (
           <button
             type="button"

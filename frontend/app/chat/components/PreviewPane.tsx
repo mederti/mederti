@@ -432,6 +432,77 @@ function AltCard({
   );
 }
 
+// External identifiers — universal cross-reference codes a pharmacist /
+// procurement lead / supplier looks up in upstream systems (CAS in chemistry
+// catalogues, UNII at the FDA GSRS, EMA product number in the EU EPAR,
+// RxCUI in RxNav, SNOMED in clinical terminologies, ChEMBL in research).
+// Click-to-copy because the destination is almost always another tool's
+// search bar. Coverage is partial — only keys with non-null values surface.
+const ID_LABELS: Record<string, string> = {
+  atc_code: "ATC",
+  atc_code_full: "ATC (full)",
+  rxcui: "RxCUI",
+  unii: "UNII",
+  cas_number: "CAS",
+  ema_product_number: "EMA",
+  snomed_ct_code: "SNOMED CT",
+  chembl_id: "ChEMBL",
+};
+function IdentifiersSection({
+  drug,
+  onToast,
+}: {
+  drug: import("@/lib/chat/types").DrugDetail;
+  onToast: (msg: string) => void;
+}) {
+  const ids = drug.external_identifiers;
+  if (!ids) return null;
+  const items: Array<{ key: string; label: string; value: string }> = [];
+  for (const [k, label] of Object.entries(ID_LABELS)) {
+    const v = ids[k as keyof typeof ids];
+    if (typeof v === "string" && v.trim()) {
+      items.push({ key: k, label, value: v });
+    }
+  }
+  if (items.length === 0) return null;
+  const onCopy = async (label: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      onToast(`${label} copied`);
+    } catch {
+      onToast(`Couldn't copy ${label}`);
+    }
+  };
+  return (
+    <div className="mb-4.5" style={{ marginBottom: 18 }}>
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
+        Identifiers
+      </div>
+      <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
+        {items.map((it) => (
+          <button
+            key={it.key}
+            type="button"
+            onClick={() => onCopy(it.label, it.value)}
+            className="w-full flex items-center justify-between px-3.5 py-2 hover:bg-slate-50 text-left first:rounded-t-xl last:rounded-b-xl transition-colors group"
+            title="Click to copy"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              {it.label}
+            </span>
+            <span
+              className="text-[12px] text-slate-700 group-hover:text-slate-900 tabular-nums"
+              style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
+            >
+              {it.value}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function PreviewPane({
   drugId,
   onClose,
@@ -652,6 +723,12 @@ export function PreviewPane({
                 </div>
               );
             })()}
+
+            {/* Identifiers — every populated external_identifier (ATC, CAS,
+                UNII, RxCUI, EMA product number, SNOMED, ChEMBL) with a click-
+                to-copy affordance. Coverage is partial; the section silently
+                hides when the drug has no identifiers on file. */}
+            <IdentifiersSection drug={bundle.drug} onToast={onToast} />
 
             {/* Country availability */}
             {bundle.drug.shortages.length > 0 ? (

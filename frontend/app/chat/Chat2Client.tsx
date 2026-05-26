@@ -32,8 +32,77 @@ import { LeadContext } from "@/app/chat/components/LeadContext";
 // wrapping <div className="mederti-chat-root"> below scopes them.
 import "@/app/chat/chat.css";
 
-// /chat2 is intentionally public during layout iteration — no auth gate. The
-// chat backend handles its own rate limiting; flip back on when promoting.
+// /chat is intentionally public — no auth gate. The chat backend handles its
+// own rate limiting; flip back on at the middleware level if needed.
+
+/**
+ * Resolve every **bold** subject in an assistant response to its canonical
+ * drug_id, so the parser can wrap matching names in clickable links that open
+ * the preview pane. Seeds with drug_ids the chat API already hydrated (their
+ * generic_name → id is known for free), then batch-looks-up the remainder
+ * against /api/search (FTS-ranked, prefers canonical).
+ *
+ * Recovered from the pre-consolidation /chat/page.tsx so deep links from
+ * tables and prose keep working in the new shell.
+ */
+async function resolveDrugNames(
+  content: string,
+  hydrated: Record<string, DrugDetail>
+): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  for (const id of Object.keys(hydrated)) {
+    const d = hydrated[id];
+    if (d?.generic_name) map[d.generic_name] = id;
+  }
+  // Strip tag bodies so we don't try to "resolve" raw UUIDs or chip labels.
+  const stripped = content
+    .replace(/<drug_card[^/]*\/>/g, "")
+    .replace(/<sub_card[^/]*\/>/g, "")
+    .replace(/<class_card[^/]*\/>/g, "")
+    .replace(/<followups>[\s\S]*?<\/followups>/g, "")
+    .replace(/<alternates>[\s\S]*?<\/alternates>/g, "")
+    .replace(/<sources>[\s\S]*?<\/sources>/g, "")
+    .replace(/<kpis>[\s\S]*?<\/kpis>/g, "");
+  const names = [
+    ...new Set(
+      [...stripped.matchAll(/\*\*([^*\n]{2,80})\*\*/g)]
+        .map((m) => m[1].trim())
+        .filter((n) => n.length >= 2 && !map[n])
+    ),
+  ];
+  if (names.length === 0) return map;
+
+  await Promise.all(
+    names.map(async (name) => {
+      try {
+        const r = await fetch(`/api/search?q=${encodeURIComponent(name)}&limit=20`);
+        if (!r.ok) return;
+        const j = await r.json();
+        const hits = (j.results ?? []) as Array<{
+          drug_id: string;
+          generic_name: string;
+          source: string;
+        }>;
+        const drugHits = hits.filter((h) => h.source === "drugs");
+        if (drugHits.length === 0) return;
+        const lower = name.toLowerCase();
+        const exact = drugHits.find((h) => h.generic_name.toLowerCase() === lower);
+        const prefix = drugHits.find(
+          (h) =>
+            h.generic_name.toLowerCase().startsWith(lower + " ") ||
+            h.generic_name.toLowerCase().startsWith(lower + "/")
+        );
+        const best = exact ?? prefix;
+        // Only accept exact/prefix matches — otherwise a name like "Class II"
+        // would resolve to the first drug containing "class" by FTS rank.
+        if (best) map[name] = best.drug_id;
+      } catch {
+        // Network errors silently skip — the bold just stays unclickable.
+      }
+    })
+  );
+  return map;
+}
 
 export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const router = useRouter();
@@ -239,8 +308,9 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         const newSubs = data.subs ? { ...subsMap, ...data.subs } : subsMap;
         if (data.drugs) setDrugsMap(newDrugs);
         if (data.subs) setSubsMap(newSubs);
+        const assistantTurnId = ++idRef.current;
         const okTurn: Turn = {
-          id: ++idRef.current,
+          id: assistantTurnId,
           role: "assistant",
           text: data.content,
         };
@@ -259,6 +329,24 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
             setDrugInUrl(newDrugIds[0]);
           }
         }
+
+        // Resolve bolded drug names → drug_ids so table cells + inline prose
+        // become clickable. Seeds with names the API already hydrated, then
+        // batch-looks-up the rest via /api/search. Updates the turn in place
+        // when the map is ready (chat doesn't block on this).
+        void resolveDrugNames(data.content, data.drugs || {}).then((map) => {
+          if (Object.keys(map).length === 0) return;
+          if (activeIdRef.current !== id) return;
+          setTurns((current) => {
+            const next = current.map((tt) =>
+              tt.id === assistantTurnId && tt.role === "assistant"
+                ? { ...tt, drugIdByName: map }
+                : tt
+            );
+            persist(id!, next as Turn[], newDrugs, newSubs);
+            return next as Turn[];
+          });
+        });
       } catch (e) {
         // Always show an error — even if the user has switched chats we want
         // the error stored so they see it when they come back (rather than
@@ -291,6 +379,26 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
   );
 
   const closeDrug = useCallback(() => setDrugInUrl(null), [setDrugInUrl]);
+
+  // Imperative "New chat" — clears every in-memory chat surface AND navigates.
+  // We can't rely on the URL change alone because clicking "New chat" while
+  // already on /chat is a route no-op (Next.js doesn't remount the segment).
+  // So we wipe state here and use history.replaceState to align the URL
+  // without triggering a router fetch.
+  const handleNewChat = useCallback(() => {
+    activeIdRef.current = null;
+    setTurns([]);
+    setDrugsMap({});
+    setSubsMap({});
+    setDraft("");
+    setPending(false);
+    idRef.current = 0;
+    setDrugInUrl(null);
+    setActiveView("chat");
+    if (window.location.pathname !== "/chat" || window.location.search) {
+      window.history.replaceState(null, "", "/chat");
+    }
+  }, [setDrugInUrl]);
 
   const askAboutDrug = useCallback(
     (name: string) => {
@@ -419,6 +527,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               chats={chatList}
               collapsed={sidebarCollapsed}
               onCollapse={toggleSidebar}
+              onNewChat={handleNewChat}
               onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
               onToast={setToast}
             />

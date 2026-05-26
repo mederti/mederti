@@ -56,6 +56,53 @@ export function CardHeader({
       {showBrands && drug.brand_names.length > 0 ? (
         <div className="card-brands"><em>brands</em>{drug.brand_names.slice(0, 6).join(", ")}</div>
       ) : null}
+      <IdentifiersLine drug={drug} />
+    </div>
+  );
+}
+
+// Compact identifiers row — thin grey line listing every populated
+// external_identifier (CAS, UNII, RxCUI, EMA product number, SNOMED, ChEMBL).
+// Coverage is partial — only keys with non-null values are shown, so the
+// line silently hides when the drug has nothing on file. The full ATC code
+// already lives on the line above; we surface only the *other* identifiers
+// here to avoid duplication.
+function IdentifiersLine({ drug }: { drug: DrugDetail }) {
+  const ids = drug.external_identifiers;
+  if (!ids) return null;
+  const items: Array<[string, string]> = [];
+  if (ids.cas_number) items.push(["CAS", ids.cas_number]);
+  if (ids.unii) items.push(["UNII", ids.unii]);
+  if (ids.rxcui) items.push(["RxCUI", ids.rxcui]);
+  if (ids.ema_product_number) items.push(["EMA", ids.ema_product_number]);
+  if (ids.snomed_ct_code) items.push(["SNOMED", ids.snomed_ct_code]);
+  if (ids.chembl_id) items.push(["ChEMBL", ids.chembl_id]);
+  if (items.length === 0) return null;
+  return (
+    <div
+      style={{
+        fontSize: 11,
+        color: "var(--app-text-4, #94a3b8)",
+        marginTop: 4,
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 10,
+        alignItems: "center",
+      }}
+    >
+      {items.map(([k, v]) => (
+        <span key={k} style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
+          <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 600 }}>{k}</span>
+          <span
+            style={{
+              fontFamily: "var(--font-dm-mono), ui-monospace, monospace",
+              color: "var(--app-text-2, #475569)",
+            }}
+          >
+            {v}
+          </span>
+        </span>
+      ))}
     </div>
   );
 }

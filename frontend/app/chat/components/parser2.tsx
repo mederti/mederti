@@ -12,9 +12,10 @@
  * if chat2 stays parallel long-term, this is the file to clone first.
  */
 
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { DrugCard } from "@/app/chat/components/DrugCard";
+import { PaneContext } from "@/app/chat/components/PaneContext";
 
 export type KpiTile = { value: string; label: string };
 export type SourceChip = {
@@ -248,19 +249,62 @@ export function Chat2SubRow({
   );
 }
 
-function renderInline(text: string): ReactNode[] {
+// Inline button wrapping a bold drug name that opens the preview pane on
+// click. Falls back to a plain <strong> when the name doesn't resolve to a
+// known drug_id (most bold spans aren't drugs — class names, severities, etc.).
+function DrugLink({ id, label }: { id: string; label: string }) {
+  const pane = useContext(PaneContext);
+  if (!pane) {
+    return <strong className="font-semibold text-slate-900">{label}</strong>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => pane.open(id)}
+      className="font-semibold text-slate-900 underline decoration-slate-300 decoration-dotted underline-offset-2 hover:text-teal-700 hover:decoration-teal-500 transition-colors"
+    >
+      {label}
+    </button>
+  );
+}
+
+function renderInline(
+  text: string,
+  drugIdByName?: Record<string, string>
+): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /\*\*([^*]+)\*\*/g;
   let cursor = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index > cursor) out.push(text.slice(cursor, m.index));
-    out.push(<strong key={`b${m.index}`} className="font-semibold text-slate-900">{m[1]}</strong>);
+    const label = m[1];
+    const trimmed = label.trim();
+    const id = drugIdByName?.[trimmed];
+    if (id) {
+      out.push(<DrugLink key={`b${m.index}`} id={id} label={label} />);
+    } else {
+      out.push(
+        <strong key={`b${m.index}`} className="font-semibold text-slate-900">
+          {label}
+        </strong>
+      );
+    }
     cursor = m.index + m[0].length;
   }
   if (cursor < text.length) out.push(text.slice(cursor));
   return out;
 }
+
+const splitRow = (row: string): string[] => {
+  let r = row.trim();
+  if (r.startsWith("|")) r = r.slice(1);
+  if (r.endsWith("|")) r = r.slice(0, -1);
+  return r.split("|").map((c) => c.trim());
+};
+
+const SEPARATOR_RE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/;
+const ROW_RE = /^\s*\|?[^|]*(\|[^|]*){2,}\|?\s*$/;
 
 function parseTableBlock(
   lines: string[]
@@ -268,43 +312,65 @@ function parseTableBlock(
   const nonEmpty = lines.filter((l) => l.trim() !== "");
   if (nonEmpty.length < 2) return null;
   if (!nonEmpty.every((l) => l.includes("|"))) return null;
-  if (!/^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(nonEmpty[1])) return null;
 
-  const splitRow = (row: string): string[] => {
-    let r = row.trim();
-    if (r.startsWith("|")) r = r.slice(1);
-    if (r.endsWith("|")) r = r.slice(0, -1);
-    return r.split("|").map((c) => c.trim());
-  };
+  // Mode A — proper GFM table (header + separator + rows).
+  if (SEPARATOR_RE.test(nonEmpty[1])) {
+    const header = splitRow(nonEmpty[0]);
+    const rows = nonEmpty.slice(2).map(splitRow);
+    if (rows.length === 0) return null;
+    return { header, rows };
+  }
 
-  const header = splitRow(nonEmpty[0]);
-  const rows = nonEmpty.slice(2).map(splitRow);
-  if (rows.length === 0) return null;
-  return { header, rows };
+  // Mode B — headerless data block. Happens when the model splits a long
+  // table across paragraphs and the continuation block has no separator. We
+  // render it as a table with the column count inferred from the first row.
+  // Guard: every line must look like a row (≥3 cells once split), otherwise
+  // we'd swallow legit prose that happens to contain a pipe.
+  if (nonEmpty.length >= 1 && nonEmpty.every((l) => ROW_RE.test(l))) {
+    const rows = nonEmpty.map(splitRow);
+    const cols = rows[0].length;
+    if (cols < 2 || rows.some((r) => r.length !== cols)) return null;
+    return { header: [], rows };
+  }
+  return null;
 }
 
-function TableBlock({ header, rows }: { header: string[]; rows: string[][] }) {
+function TableBlock({
+  header,
+  rows,
+  drugIdByName,
+}: {
+  header: string[];
+  rows: string[][];
+  drugIdByName?: Record<string, string>;
+}) {
+  // Headerless tables come from the "Mode B" continuation case in
+  // parseTableBlock — model split a long table across paragraphs. We skip
+  // the <thead> entirely; the body stands on its own.
+  const showHeader = header.length > 0;
   return (
     <div className="my-3 overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full text-[13px] text-left">
-        <thead className="bg-slate-50">
-          <tr>
-            {header.map((h, ci) => (
-              <th
-                key={ci}
-                className="px-3 py-2 font-semibold text-slate-900 border-b border-slate-200 align-bottom"
-              >
-                {renderInline(h)}
-              </th>
-            ))}
-          </tr>
-        </thead>
+        {showHeader ? (
+          <thead className="bg-slate-50">
+            <tr>
+              {header.map((h, ci) => (
+                <th
+                  key={ci}
+                  className="px-3 py-2 font-semibold text-slate-900 border-b border-slate-200 align-bottom"
+                >
+                  {renderInline(h, drugIdByName)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        ) : null}
         <tbody>
           {rows.map((row, ri) => (
             <tr key={ri} className="border-b border-slate-100 last:border-b-0">
               {row.map((cell, ci) => (
                 <td key={ci} className="px-3 py-2 text-slate-700 align-top">
-                  {renderInline(cell)}
+                  {renderInline(cell, drugIdByName)}
                 </td>
               ))}
             </tr>
@@ -315,7 +381,13 @@ function TableBlock({ header, rows }: { header: string[]; rows: string[][] }) {
   );
 }
 
-function TextBlock({ text }: { text: string }) {
+function TextBlock({
+  text,
+  drugIdByName,
+}: {
+  text: string;
+  drugIdByName?: Record<string, string>;
+}) {
   // Split paragraphs, support h1/h2/hr/tables — same vocab as /chat.
   const blocks = text.split(/\n{2,}/);
   return (
@@ -326,19 +398,26 @@ function TextBlock({ text }: { text: string }) {
         const lines = p.split("\n");
         const table = parseTableBlock(lines);
         if (table) {
-          return <TableBlock key={i} header={table.header} rows={table.rows} />;
+          return (
+            <TableBlock
+              key={i}
+              header={table.header}
+              rows={table.rows}
+              drugIdByName={drugIdByName}
+            />
+          );
         }
         if (t.startsWith("# ")) {
           return (
             <h1 key={i} className="text-[18px] font-semibold text-slate-900 mt-5 mb-3 tracking-tight">
-              {renderInline(t.slice(2))}
+              {renderInline(t.slice(2), drugIdByName)}
             </h1>
           );
         }
         if (t.startsWith("## ")) {
           return (
             <h2 key={i} className="text-[15px] font-semibold text-slate-900 mt-4 mb-2">
-              {renderInline(t.slice(3))}
+              {renderInline(t.slice(3), drugIdByName)}
             </h2>
           );
         }
@@ -347,7 +426,7 @@ function TextBlock({ text }: { text: string }) {
         }
         return (
           <p key={i} className="mb-3.5">
-            {renderInline(t)}
+            {renderInline(t, drugIdByName)}
           </p>
         );
       })}
@@ -359,10 +438,20 @@ type Props = {
   parts: ParsedPart[];
   drugs: Record<string, DrugDetail>;
   subs: Record<string, SubstituteRow>;
+  /** Map of **bold subject** → drug_id, resolved async after the response
+   *  arrives. Bold names matching an entry render as clickable buttons that
+   *  open the preview pane. Names not in the map render as plain <strong>. */
+  drugIdByName?: Record<string, string>;
   onFollowup: (q: string) => void;
 };
 
-export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): ReactNode {
+export function RenderedResponse({
+  parts,
+  drugs,
+  subs,
+  drugIdByName,
+  onFollowup,
+}: Props): ReactNode {
   const out: ReactNode[] = [];
 
   parts.forEach((p, i) => {
@@ -383,7 +472,7 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): Rea
       return;
     }
     if (p.kind === "text") {
-      if (p.text.trim()) out.push(<TextBlock key={i} text={p.text} />);
+      if (p.text.trim()) out.push(<TextBlock key={i} text={p.text} drugIdByName={drugIdByName} />);
     } else if (p.kind === "sub") {
       const s = subs[p.id];
       if (s) out.push(<Chat2SubRow key={i} sub={s} onAsk={onFollowup} />);

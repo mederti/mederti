@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
-import { BarChart, Bell, ChatBubble, Grid, PanelLeft, Send } from "./icons";
+import { BarChart, Bell, ChatBubble, Grid, Send } from "./icons";
 import { parseAgentResponse, RenderedResponse } from "./parser2";
 
 export type Turn =
@@ -16,29 +16,9 @@ const WELCOME_SUGGESTIONS = [
   "What's substitutable for hydrochlorothiazide?",
 ];
 
-export function Chat2TopBar({
-  showSidebarToggle,
-  onToggleSidebar,
-}: {
-  showSidebarToggle: boolean;
-  onToggleSidebar: () => void;
-}) {
+export function Chat2TopBar() {
   return (
     <div className="h-14 flex items-center px-6 gap-3.5 shrink-0">
-      {/* Show the toggle here only when the sidebar is collapsed — when
-          expanded the toggle lives next to the brand inside the sidebar
-          itself. Keeps a single discoverable affordance in each state. */}
-      {showSidebarToggle ? (
-        <button
-          type="button"
-          onClick={onToggleSidebar}
-          className="w-8 h-8 inline-flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 -ml-2"
-          title="Open sidebar"
-          aria-label="Open sidebar"
-        >
-          <PanelLeft size={16} />
-        </button>
-      ) : null}
       <div className="mr-auto flex items-center gap-1">
         <a className="text-[13px] text-slate-500 hover:text-slate-900 px-3 py-1.5 rounded-md hover:bg-slate-100 inline-flex items-center gap-1.5">
           <Grid size={14} />
@@ -81,8 +61,6 @@ export function ChatMain({
   onDraftChange,
   onSend,
   textareaRef,
-  sidebarCollapsed,
-  onToggleSidebar,
 }: {
   turns: Turn[];
   pending: boolean;
@@ -92,8 +70,6 @@ export function ChatMain({
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
 }) {
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const lastUserId = (() => {
@@ -120,7 +96,7 @@ export function ChatMain({
 
   return (
     <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
-      <Chat2TopBar showSidebarToggle={sidebarCollapsed} onToggleSidebar={onToggleSidebar} />
+      <Chat2TopBar />
 
       <div className="flex-1 overflow-y-auto pt-6 pb-8">
         <div className="max-w-[760px] mx-auto px-8">

@@ -291,17 +291,16 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
             className="mederti-chat-root flex h-screen overflow-hidden bg-white text-slate-900"
             style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}
           >
-            {sidebarCollapsed ? null : (
-              <Sidebar
-                activeChatId={chatId}
-                activeDrugSlug={drugIdParam}
-                isDemo={isDemo}
-                chats={chatList}
-                onCollapse={toggleSidebar}
-                onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
-                onToast={setToast}
-              />
-            )}
+            <Sidebar
+              activeChatId={chatId}
+              activeDrugSlug={drugIdParam}
+              isDemo={isDemo}
+              chats={chatList}
+              collapsed={sidebarCollapsed}
+              onCollapse={toggleSidebar}
+              onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
+              onToast={setToast}
+            />
 
             <ChatMain
               turns={turns}
@@ -312,8 +311,6 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               onDraftChange={setDraft}
               onSend={send}
               textareaRef={textareaRef}
-              sidebarCollapsed={sidebarCollapsed}
-              onToggleSidebar={toggleSidebar}
             />
 
             {drugIdParam ? (

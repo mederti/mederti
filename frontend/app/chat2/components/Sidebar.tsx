@@ -355,6 +355,7 @@ export function Sidebar({
   activeDrugSlug,
   isDemo,
   chats,
+  collapsed,
   onCollapse,
   onOpenDrugPreview,
   onToast,
@@ -364,7 +365,9 @@ export function Sidebar({
   isDemo: boolean;
   // Real chats from the localStorage store (already sorted updatedAt desc).
   chats: SavedChat[];
-  // Triggers full collapse — sidebar unmounts, topbar shows re-expand button.
+  // When true, renders the narrow icon rail instead of the full panel.
+  collapsed: boolean;
+  // Toggle collapse/expand.
   onCollapse: () => void;
   onOpenDrugPreview: (slug: string) => void;
   onToast: (msg: string) => void;
@@ -412,6 +415,116 @@ export function Sidebar({
     folders.some((f) => f.chats.length > 0);
   const hasAnyContent = watchlists.length > 0 || folders.length > 0 || hasAnyChat;
 
+  // ── Icon rail (collapsed state) ───────────────────────────────────────────
+  if (collapsed) {
+    const railBtn =
+      "w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-900/[0.06] hover:text-slate-700 transition-colors";
+    return (
+      <aside className="w-[52px] shrink-0 bg-slate-50/60 border-r border-slate-200 flex flex-col items-center h-screen py-3 gap-0.5">
+        {/* Brand icon — clicking expands the sidebar */}
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="mb-1 rounded-lg hover:bg-slate-900/[0.06] p-1 transition-colors"
+          title="Expand sidebar"
+          aria-label="Expand sidebar"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.png" alt="Mederti" style={{ width: 26, height: 26, display: "block" }} />
+        </button>
+
+        {/* Expand toggle */}
+        <button
+          type="button"
+          onClick={onCollapse}
+          className={railBtn}
+          title="Expand sidebar"
+          aria-label="Expand sidebar"
+        >
+          <PanelLeft size={16} />
+        </button>
+
+        {/* New chat */}
+        <Link
+          href="/chat2"
+          className={railBtn}
+          title="New chat"
+          aria-label="New chat"
+        >
+          <Plus size={16} />
+        </Link>
+
+        {/* Search — only when there's history */}
+        {hasAnyChat ? (
+          <button
+            type="button"
+            onClick={() => {
+              onCollapse(); // expand first, then toast
+              onToast("Search chats — coming soon");
+            }}
+            className={railBtn}
+            title="Search chats"
+            aria-label="Search chats"
+          >
+            <Search size={15} />
+          </button>
+        ) : null}
+
+        {/* Watchlists — only in demo */}
+        {watchlists.length > 0 ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className={railBtn}
+            title="Watchlists"
+            aria-label="Watchlists"
+          >
+            <Bookmark size={15} />
+          </button>
+        ) : null}
+
+        {/* Folders — only in demo */}
+        {folders.length > 0 ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className={railBtn}
+            title="Folders"
+            aria-label="Folders"
+          >
+            <Folder size={15} />
+          </button>
+        ) : null}
+
+        {/* Chat history */}
+        {hasAnyChat ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className={railBtn}
+            title="Chat history"
+            aria-label="Chat history"
+          >
+            <ChatBubble size={15} />
+          </button>
+        ) : null}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* User avatar */}
+        <span
+          className="w-7 h-7 rounded-full inline-flex items-center justify-center text-white text-[11px] font-semibold shrink-0"
+          style={{ background: "linear-gradient(135deg, #0d9488, #14b8a6)" }}
+          title="Account"
+        >
+          R
+        </span>
+      </aside>
+    );
+  }
+
+  // ── Full sidebar ──────────────────────────────────────────────────────────
   return (
     <aside className="w-[268px] shrink-0 bg-slate-50/60 border-r border-slate-200 flex flex-col h-screen">
       {/* Brand row — collapse toggle on the right so the brand stays in

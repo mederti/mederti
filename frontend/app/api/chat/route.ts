@@ -8,7 +8,7 @@ import type { ChatMessage } from "@/lib/chat/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_ITERATIONS = 5;
+const MAX_ITERATIONS = 8;
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929";
 
 type IncomingBody = {
@@ -110,10 +110,32 @@ export async function POST(req: NextRequest) {
       );
 
       messages.push({ role: "user", content: toolResults });
+    }
 
-      if (iter === MAX_ITERATIONS - 1) {
-        truncated = true;
-      }
+    // If we exited the loop while Claude was still calling tools, force one
+    // final no-tools synthesis so the user gets an answer (not an interim
+    // "let me search for more…" thought).
+    if (lastResponse && lastResponse.stop_reason === "tool_use") {
+      truncated = true;
+      messages.push({
+        role: "user",
+        content:
+          "You've hit the tool-call budget for this turn. Do not call any more tools. Synthesize a final answer for the user from the data already collected. If the data is incomplete, say so honestly and surface the best partial answer you can.",
+      });
+      lastResponse = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        system: [
+          {
+            type: "text",
+            text: SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        // Intentionally omit `tools` — forces Claude to produce a text answer.
+        messages,
+      });
+      messages.push({ role: "assistant", content: lastResponse.content });
     }
 
     const finalText = extractText(lastResponse);

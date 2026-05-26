@@ -8,6 +8,8 @@ import {
   fetchSubstitutesFor,
   fetchSuppliersForDrugs,
 } from "@/lib/chat/tools";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { computeTradePrice } from "@/lib/trade-price";
 import type { DrugDetailBundle } from "@/lib/chat/types";
 
 export const runtime = "nodejs";
@@ -31,13 +33,23 @@ export async function GET(
   const country = url.searchParams.get("country") || undefined;
 
   try {
-    const [drug, substitutes, recalls, manufacturers, history, products] = await Promise.all([
+    // Compute trade price in parallel with everything else. Returns null when
+    // there's no supplier_inventory row for the home country — the chat
+    // surfaces hide the price tile gracefully in that case.
+    const supabase = getSupabaseAdmin();
+    const homeCountry = (country || "AU").toUpperCase();
+
+    const [drug, substitutes, recalls, manufacturers, history, products, tradePrice] = await Promise.all([
       fetchDrugDetail(id),
       fetchSubstitutesFor(id, country, 8),
       fetchRecallsForDrug(id, 8),
       fetchManufacturersForDrug(id, { country, limit: 12 }),
       fetchShortageHistory(id),
       fetchProductsForDrug(id, { country, limit: 200 }),
+      computeTradePrice(supabase, id, homeCountry).catch((err) => {
+        console.error("[drug/[id]] computeTradePrice failed:", err);
+        return null;
+      }),
     ]);
 
     if (!drug) {
@@ -65,6 +77,7 @@ export async function GET(
         manufacturers,
         history,
         products,
+        tradePrice,
       } satisfies DrugDetailBundle,
       { headers: { "Cache-Control": "private, max-age=15" } }
     );

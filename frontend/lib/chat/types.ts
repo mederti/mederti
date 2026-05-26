@@ -223,6 +223,12 @@ export type DrugDetailBundle = {
   manufacturers: ManufacturerRow[];
   history: ShortageHistoryStats;
   products: ProductRow[];
+  /** Aggregated supplier_inventory price — home market median + adjacent
+   *  markets. Null when no inventory rows reference the user's country.
+   *  Consumed by PreviewPane (chat product panel) and the persona drug cards
+   *  so a pharmacist / procurement user sees the headline trade price
+   *  without scrolling through every supplier listing. */
+  tradePrice?: import("@/lib/trade-price").TradePriceData | null;
   error?: string;
 };
 

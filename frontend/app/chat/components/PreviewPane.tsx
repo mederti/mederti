@@ -653,6 +653,72 @@ export function PreviewPane({
               );
             })()}
 
+            {/* Trade price — home market median + adjacent markets. Source:
+                supplier_inventory aggregated by computeTradePrice. Hidden when
+                no inventory rows reference the user's home country. */}
+            {bundle.tradePrice ? (
+              <div className="mb-4.5" style={{ marginBottom: 18 }}>
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
+                  Trade price
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl px-4 py-3.5">
+                  <div className="flex items-baseline justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div>
+                      <div
+                        className="text-[22px] font-semibold text-slate-900 tracking-tight"
+                        style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
+                      >
+                        {bundle.tradePrice.home.value}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {bundle.tradePrice.home.unit}
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {bundle.tradePrice.home.updatedLabel}
+                    </div>
+                  </div>
+                  {bundle.tradePrice.adjacent.length > 0 ? (
+                    <>
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mt-3 mb-2">
+                        Adjacent markets · same SKU
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {bundle.tradePrice.adjacent.map((m) => (
+                          <div
+                            key={`${m.country}-${m.price}`}
+                            className="grid items-center gap-2 text-[12px]"
+                            style={{ gridTemplateColumns: "18px 1fr auto 48px" }}
+                          >
+                            <span className="text-[13px] leading-none">{m.flag}</span>
+                            <span className="text-slate-700">{m.country}</span>
+                            <span
+                              className="text-slate-900 tabular-nums"
+                              style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
+                            >
+                              {m.price}
+                            </span>
+                            <span
+                              className={
+                                m.delta === 0
+                                  ? "text-[10px] text-slate-400 text-right"
+                                  : m.delta > 0
+                                  ? "text-[10px] text-red-500 text-right tabular-nums"
+                                  : "text-[10px] text-emerald-600 text-right tabular-nums"
+                              }
+                              style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
+                            >
+                              {m.delta === 0 ? "—" : `${m.delta > 0 ? "+" : ""}${m.delta}%`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             {/* Country availability */}
             {bundle.drug.shortages.length > 0 ? (
               <div className="mb-4.5" style={{ marginBottom: 18 }}>

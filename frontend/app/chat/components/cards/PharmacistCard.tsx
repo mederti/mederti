@@ -24,9 +24,79 @@ export function PharmacistCard({
   return (
     <div className="card">
       <CardHeader drug={drug} persona={persona} onPersonaChange={onPersonaChange} showATCLine={false} showBrands={false} />
+      <TradePriceStrip tradePrice={bundle.tradePrice} />
       {available
         ? <StateB drug={drug} bundle={bundle} />
         : <StateA drug={drug} bundle={bundle} />}
+    </div>
+  );
+}
+
+// Compact trade-price strip — single line showing AU median + up to 3
+// adjacent markets. Source: supplier_inventory aggregated by computeTradePrice.
+// Hidden when no inventory rows reference AU. Exported so ProcurementCard
+// (and any future persona card) can reuse the same visual treatment.
+export function TradePriceStrip({ tradePrice }: { tradePrice: DrugDetailBundle["tradePrice"] }) {
+  if (!tradePrice) return null;
+  const adj = tradePrice.adjacent.slice(0, 3);
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "10px 14px",
+        background: "var(--app-bg-2, #f8fafc)",
+        borderRadius: 8,
+        border: "1px solid var(--app-border, #e2e8f0)",
+        margin: "8px 0",
+        fontSize: 12,
+      }}
+    >
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--app-text-4, #94a3b8)" }}>
+        Trade · AU
+      </span>
+      <span
+        style={{
+          fontFamily: "var(--font-dm-mono), ui-monospace, monospace",
+          fontSize: 14,
+          fontWeight: 600,
+          color: "var(--app-text, #0f172a)",
+        }}
+      >
+        {tradePrice.home.value}
+      </span>
+      <span style={{ fontSize: 10, color: "var(--app-text-4, #94a3b8)" }}>
+        {tradePrice.home.pack} · {tradePrice.home.updatedLabel}
+      </span>
+      {adj.length > 0 ? (
+        <span style={{ marginLeft: "auto", display: "flex", gap: 10, fontSize: 11 }}>
+          {adj.map((m) => (
+            <span key={m.country} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 12, lineHeight: 1 }}>{m.flag}</span>
+              <span
+                style={{
+                  fontFamily: "var(--font-dm-mono), ui-monospace, monospace",
+                  color: "var(--app-text-2, #475569)",
+                }}
+              >
+                {m.price}
+              </span>
+              {m.delta !== 0 ? (
+                <span
+                  style={{
+                    fontFamily: "var(--font-dm-mono), ui-monospace, monospace",
+                    fontSize: 10,
+                    color: m.delta > 0 ? "#ef4444" : "#10b981",
+                  }}
+                >
+                  {m.delta > 0 ? "+" : ""}{m.delta}%
+                </span>
+              ) : null}
+            </span>
+          ))}
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -21,6 +21,14 @@ interface Source {
   hoursAgo: number;
 }
 
+interface ManufacturerConcentration {
+  count: number;
+  band: "unknown" | "high_risk" | "moderate_risk" | "low_risk";
+  usdmf?: number;
+  cep?: number;
+  euWc?: number;
+}
+
 interface Props {
   drugName: string;
   genericName: string;
@@ -45,6 +53,7 @@ interface Props {
   } | null;
   alternatives: Alternative[];
   sources: Source[];
+  manufacturer?: ManufacturerConcentration | null;
 }
 
 const SEVERITY: Record<
@@ -108,6 +117,7 @@ export default function SupplierView({
   tradePrice,
   alternatives,
   sources,
+  manufacturer,
 }: Props) {
   const sev = SEVERITY[status.severity];
   const isCritical = status.severity === "critical";
@@ -613,6 +623,39 @@ export default function SupplierView({
           </div>
         </Link>
 
+        {/* ---------- Row 2.5: Manufacturer concentration (w6) ---------- */}
+        {manufacturer && (
+          <div className="sv-tile sv-w6" style={{ ...tileBase, flexDirection: "row", alignItems: "center", gap: 20 }}>
+            <div style={{ flexShrink: 0 }}>
+              <div style={tileLabelStyle}>Manufacturer concentration</div>
+              <div style={{
+                fontFamily: "var(--font-dm-mono), monospace",
+                fontSize: 22,
+                fontWeight: 600,
+                color: "var(--app-text)",
+                marginTop: 6,
+                letterSpacing: "-0.015em",
+              }}>
+                {manufacturer.count.toLocaleString()}
+                <span style={{ fontSize: 12, color: "var(--app-text-4)", fontWeight: 500 }}> qualified suppliers</span>
+              </div>
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+              <SvRiskPill band={manufacturer.band} />
+              <div style={{
+                fontSize: 11, color: "var(--app-text-3)",
+                fontFamily: "var(--font-dm-mono), monospace",
+                display: "flex", gap: 14, flexWrap: "wrap",
+              }}>
+                {manufacturer.usdmf !== undefined && (<span><strong style={{ color: "var(--app-text-2)" }}>{manufacturer.usdmf}</strong> USDMF</span>)}
+                {manufacturer.cep !== undefined && (<span><strong style={{ color: "var(--app-text-2)" }}>{manufacturer.cep}</strong> CEP</span>)}
+                {manufacturer.euWc !== undefined && (<span><strong style={{ color: "var(--app-text-2)" }}>{manufacturer.euWc}</strong> EU WC</span>)}
+                <span style={{ color: "var(--app-text-4)" }}>· PharmaCompass</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ---------- Row 3: Alternatives (w3 h2) ---------- */}
         {alternatives.length > 0 ? (
           <div className="sv-tile sv-w3 sv-h2" style={tileBase}>
@@ -858,5 +901,26 @@ export default function SupplierView({
         }
       `}</style>
     </section>
+  );
+}
+
+function SvRiskPill({ band }: { band: "unknown" | "high_risk" | "moderate_risk" | "low_risk" }) {
+  const palette: Record<typeof band, { label: string; c: string; bg: string; b: string }> = {
+    high_risk:     { label: "High concentration risk",     c: "var(--crit)", bg: "var(--crit-bg)", b: "var(--crit-b)" },
+    moderate_risk: { label: "Moderate concentration risk", c: "var(--med)",  bg: "var(--med-bg)",  b: "var(--med-b)"  },
+    low_risk:      { label: "Diverse supplier base",       c: "var(--low)",  bg: "var(--low-bg)",  b: "var(--low-b)"  },
+    unknown:       { label: "Concentration unknown",       c: "var(--app-text-4)", bg: "var(--app-bg-2)", b: "var(--app-border)" },
+  };
+  const s = palette[band];
+  return (
+    <span style={{
+      fontSize: 10, padding: "4px 9px", borderRadius: 5,
+      fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase",
+      fontFamily: "var(--font-dm-mono), monospace",
+      background: s.bg, color: s.c, border: `1px solid ${s.b}`,
+      width: "fit-content",
+    }}>
+      {s.label}
+    </span>
   );
 }

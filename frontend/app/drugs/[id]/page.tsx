@@ -795,6 +795,61 @@ export default async function DrugPage({ params, searchParams }: Props) {
         ? `${affectedCountries.size} market${affectedCountries.size === 1 ? "" : "s"} affected`
         : "no active shortages",
     };
+
+    // ── Reference data (Paths A + B) — gracefully degrades if migrations not applied ──
+    let manufacturerConcentration: {
+      count: number;
+      band: "unknown" | "high_risk" | "moderate_risk" | "low_risk";
+      usdmf?: number;
+      cep?: number;
+      euWc?: number;
+    } | null = null;
+    try {
+      const mc = await supabase
+        .from("v_drug_manufacturer_concentration")
+        .select("manufacturer_count, concentration_risk, usdmf_count, aggregate_cep_count, eu_wc_count")
+        .eq("drug_id", id)
+        .maybeSingle();
+      const row = mc.data as {
+        manufacturer_count?: number;
+        concentration_risk?: string;
+        usdmf_count?: number;
+        aggregate_cep_count?: number;
+        eu_wc_count?: number;
+      } | null;
+      if (row && row.manufacturer_count && row.manufacturer_count > 0) {
+        manufacturerConcentration = {
+          count: row.manufacturer_count,
+          band: (row.concentration_risk as "unknown" | "high_risk" | "moderate_risk" | "low_risk") || "unknown",
+          usdmf: row.usdmf_count ?? undefined,
+          cep:   row.aggregate_cep_count ?? undefined,
+          euWc:  row.eu_wc_count ?? undefined,
+        };
+      }
+    } catch { /* migration 032 not yet applied — silently skip */ }
+
+    let countryPharmaSpend: { country: string; year: number; usdPpp: number } | null = null;
+    if (userCountry) {
+      try {
+        const cs = await supabase
+          .from("v_country_pharma_spend_latest")
+          .select("country_code2, country_name, year, spending_usd_ppp_per_capita")
+          .eq("country_code2", userCountry)
+          .maybeSingle();
+        const row = cs.data as {
+          country_name?: string;
+          year?: number;
+          spending_usd_ppp_per_capita?: number;
+        } | null;
+        if (row && row.spending_usd_ppp_per_capita !== undefined && row.year) {
+          countryPharmaSpend = {
+            country: row.country_name ?? userCountry,
+            year: row.year,
+            usdPpp: row.spending_usd_ppp_per_capita,
+          };
+        }
+      } catch { /* migration 033 not yet applied — silently skip */ }
+    }
     // If we have an AI forecast use it. Otherwise heuristic: critical/high shortages
     // typically resolve 3-6 months after first reported; show a softer estimate.
     const expectedReturn = predictedReturnDate
@@ -858,6 +913,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
                     sourcesCount: seenSources.size || undefined,
                     priorIncidents: priorIncidents || undefined,
                   }}
+                  manufacturer={manufacturerConcentration}
+                  marketSpend={countryPharmaSpend}
                 />
               ) : (
                 <SupplierView
@@ -870,6 +927,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
                   tradePrice={null}
                   alternatives={altsArr.map((a) => ({ name: a.name, matchPercent: a.matchPercent, isAvailable: a.isAvailable }))}
                   sources={supplierSources}
+                  manufacturer={manufacturerConcentration}
                 />
               )}
             </div>

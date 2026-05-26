@@ -281,6 +281,152 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
       required: ["country"],
     },
   },
+  // ── Sprint 2 PR 1 (audit §4 remaining 11 tools) ──────────────────────────
+  {
+    name: "get_recurring_shortages",
+    description:
+      "Recurring-shortage view — drugs with ≥2 events for a scope (single drug or ATC class) over a time window. Use for SUP-22, RET-23, HCL-19, GOV-08, RET-16 — structural-undersupply / recurrence-pattern questions.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID (single-drug history)." },
+        atc_prefix: { type: "string", description: "ATC prefix (class-level recurrence)." },
+        country: { type: "string", description: "Optional ISO-2 country to narrow scope." },
+        since: { type: "string", description: "ISO date — count events on or after this date (default: all-time)." },
+      },
+    },
+  },
+  {
+    name: "get_shortage_history",
+    description:
+      "Full shortage history for one drug — timeline (up to 50 events), per-country recurrence + duration stats, median resolved duration. Use whenever the user asks 'has this been short before', 'how often does this happen', or wants the recurrence detail behind a drug card's quarterly chip.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID. Required." },
+        country: { type: "string", description: "Optional ISO-2 country to scope." },
+      },
+      required: ["drug_id"],
+    },
+  },
+  {
+    name: "get_available_brands",
+    description:
+      "Active brand/sponsor view for a drug in a country — grouped by sponsor with strength, dosage form, route, PBS-listed flag, generic flag. Use for RET-03 (different brand right now), RET-04 (what pack sizes available), RET-19 (alt brands for standing order), SUP-11 (who supplies this in [country] at what doses).",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID. Required." },
+        country: { type: "string", description: "ISO-2 country code. Required." },
+      },
+      required: ["drug_id", "country"],
+    },
+  },
+  {
+    name: "get_recent_deregistrations",
+    description:
+      "Recently deregistered / cancelled / withdrawn / suspended drug-product registrations. Use for SUP-13 (major supplier just discontinued), RET-18 (slow-moving lines at risk of permanent discontinue), and any 'who pulled out of the market recently' question. Default window: last 12 months.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Optional drug UUID to scope." },
+        country: { type: "string", description: "Optional ISO-2 country code." },
+        since: { type: "string", description: "Optional ISO date floor (default: 12 months ago)." },
+      },
+    },
+  },
+  {
+    name: "get_dose_conversion",
+    description:
+      "Verified dose-conversion + monitoring notes between two specific drugs. HIGH STAKES — returns a refusal envelope when no verified entry exists rather than improvising from priors. Use for HCL-15 / RET-12 dose-conversion questions. Pair with refusal-template language when status=unanswerable.",
+    input_schema: {
+      type: "object",
+      properties: {
+        from_drug_id: { type: "string", description: "Drug being switched FROM. Required." },
+        to_drug_id: { type: "string", description: "Drug being switched TO. Required." },
+      },
+      required: ["from_drug_id", "to_drug_id"],
+    },
+  },
+  {
+    name: "get_therapeutic_equivalents",
+    description:
+      "FDA Orange Book / WHO EML therapeutic-equivalence + bioequivalence ratings. Different from find_substitutes (which is ATC-class-matched) — these are formal regulator-grade equivalence statements. Use for RET-06 (need prescriber approval?), HPR-17 (registered alt suppliers fulfilling today).",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID. Required." },
+        country: { type: "string", description: "Optional ISO-2 country." },
+      },
+      required: ["drug_id"],
+    },
+  },
+  {
+    name: "get_supplier_shortage_record",
+    description:
+      "Shortage attribution by manufacturer / sponsor over time — events count, quarterly breakdown, mean resolved duration. Use for HPR-01 (contracted suppliers with worst record), HPR-04 (suppliers improved/deteriorated QoQ), GOV-07 (suppliers with late/missing notifications).",
+    input_schema: {
+      type: "object",
+      properties: {
+        manufacturer_or_sponsor: { type: "string", description: "Supplier name (fuzzy ILIKE match). Required." },
+        since: { type: "string", description: "Optional ISO date floor (default: 12 months ago)." },
+        country: { type: "string", description: "Optional ISO-2 country." },
+      },
+      required: ["manufacturer_or_sponsor"],
+    },
+  },
+  {
+    name: "get_facility_distress_signals",
+    description:
+      "FDA inspection / EU EudraGMDP distress signals — sites with OAI classification, recent warning letters, or active import alerts. Use for SUP-12 (competitor sites with recent recalls / warning letters / GMP issues), SUP-23 (India/Chinese API distress — caveat: US/EU coverage only; India CDSCO + China NMPA NOT covered).",
+    input_schema: {
+      type: "object",
+      properties: {
+        country: { type: "string", description: "Optional ISO-2 country of the facility." },
+        drug_id: { type: "string", description: "Optional drug UUID to scope to facilities supplying this drug." },
+        limit: { type: "number", description: "Max results (default 25)." },
+      },
+    },
+  },
+  {
+    name: "get_price_around_shortage",
+    description:
+      "Price-vs-shortage time-series correlation for one drug — median price in window before vs after each shortage start, pct change. Use for SUP-07 (price during shortage vs baseline), HCL-11 (pricing during recent shortages), HPR-15 (most expensive substitutions). Coverage best for UK + AU.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID. Required." },
+        country: { type: "string", description: "ISO-2 country code. Required." },
+        window_days: { type: "number", description: "Days before/after shortage start to compute medians (default 180, max 720)." },
+      },
+      required: ["drug_id", "country"],
+    },
+  },
+  {
+    name: "get_management_guidance",
+    description:
+      "Regulator-published shortage management_action text (TGA-rich, others sparse). Use for RET-26 (regulator shortage guidance issued), RET-30 (alert when guidance changes), and any 'what's the regulator telling pharmacists to do about this' question.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID. Required." },
+        country: { type: "string", description: "Optional ISO-2 country." },
+      },
+      required: ["drug_id"],
+    },
+  },
+  {
+    name: "get_recall_links",
+    description:
+      "Recall ↔ shortage causal links from recall_shortage_links — surfaces when a recall caused / preceded / coincided with a shortage. Use for SUP-12 follow-ups, HPR/HCL provenance questions, and recall-driven supply analysis. Recall coverage: US/CA/AU/EU/GB only.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID. Required." },
+      },
+      required: ["drug_id"],
+    },
+  },
 ];
 
 export type ToolContext = {
@@ -2485,6 +2631,453 @@ async function getPredictiveSignals(args: { country: string; min_peers?: number;
   };
 }
 
+// ─── Sprint 2 PR 1 — Remaining 11 typed tools (audit §4) ─────────────────────
+// Same contract as Step 5: every tool returns {confidence, sources_consulted?,
+// status:"unanswerable"+reason+hint} envelopes.
+
+async function getRecurringShortages(args: { drug_id?: string; atc_prefix?: string; country?: string; since?: string }) {
+  if (!args.drug_id && !args.atc_prefix) {
+    return { status: "unanswerable", reason: "missing_scope", hint: "Pass drug_id or atc_prefix." };
+  }
+  const sb = getSupabase();
+  let scopeLabel = ""; let drugIds: string[] = [];
+  if (args.drug_id) { drugIds = [args.drug_id]; scopeLabel = `drug ${args.drug_id}`; }
+  else if (args.atc_prefix) {
+    const atc = args.atc_prefix.toUpperCase().trim();
+    const { data } = await sb.from("drugs").select("id").like("atc_code", `${atc}%`).limit(500);
+    drugIds = (data ?? []).map((d: any) => d.id);
+    scopeLabel = `ATC ${atc}`;
+  }
+  if (drugIds.length === 0) return { status: "unanswerable", reason: "no_drugs_in_scope", hint: "Verify drug_id or ATC prefix." };
+
+  let q = sb.from("shortage_events").select("drug_id,country_code,status,start_date,end_date").in("drug_id", drugIds);
+  if (args.country) q = q.eq("country_code", args.country.toUpperCase());
+  if (args.since) q = q.gte("start_date", args.since);
+  const { data, error } = await q.limit(5000);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+
+  type Agg = { drug_id: string; events: number; countries: Set<string>; first_seen: string | null; last_seen: string | null; resolved: number };
+  const byDrug = new Map<string, Agg>();
+  for (const r of rows as any[]) {
+    if (!r.drug_id) continue;
+    let b = byDrug.get(r.drug_id);
+    if (!b) { b = { drug_id: r.drug_id, events: 0, countries: new Set(), first_seen: null, last_seen: null, resolved: 0 }; byDrug.set(r.drug_id, b); }
+    b.events += 1;
+    if (r.country_code) b.countries.add(r.country_code);
+    if (r.start_date && (!b.first_seen || r.start_date < b.first_seen)) b.first_seen = r.start_date;
+    if (r.start_date && (!b.last_seen || r.start_date > b.last_seen)) b.last_seen = r.start_date;
+    if (r.status === "resolved") b.resolved += 1;
+  }
+  const recurring = [...byDrug.values()].filter((b) => b.events >= 2).sort((a, b) => b.events - a.events);
+
+  const ids = recurring.slice(0, 30).map((r) => r.drug_id);
+  const { data: drugRows } = ids.length ? await sb.from("drugs").select("id,generic_name,atc_code").in("id", ids) : { data: [] };
+  const drugMap = new Map<string, any>();
+  for (const d of (drugRows ?? [])) drugMap.set((d as any).id, d);
+
+  const confidence = computeConfidence({ sourceReliability: 0.9, signalCount: rows.length, freshnessDays: 30 });
+  return {
+    scope: scopeLabel,
+    country: args.country?.toUpperCase() ?? null,
+    total_drugs_with_events: byDrug.size,
+    recurring_drug_count: recurring.length,
+    items: recurring.slice(0, 30).map((r) => ({
+      drug_id: r.drug_id,
+      name: drugMap.get(r.drug_id)?.generic_name ?? "Unknown",
+      atc_code: drugMap.get(r.drug_id)?.atc_code ?? null,
+      total_events: r.events,
+      resolved_events: r.resolved,
+      country_count: r.countries.size,
+      countries_touched: [...r.countries].sort(),
+      first_seen: r.first_seen,
+      last_seen: r.last_seen,
+    })),
+    confidence: { ...confidence, basis: `${recurring.length} recurring drugs (≥2 events) out of ${byDrug.size} in scope; ${rows.length} events total.` },
+  };
+}
+
+async function getShortageHistory(args: { drug_id: string; country?: string }) {
+  if (!args.drug_id) return { status: "unanswerable", reason: "missing_drug_id", hint: "Pass a drug UUID." };
+  const sb = getSupabase();
+  let q = sb.from("shortage_events")
+    .select("country_code,status,severity,start_date,end_date,reason")
+    .eq("drug_id", args.drug_id)
+    .order("start_date", { ascending: false });
+  if (args.country) q = q.eq("country_code", args.country.toUpperCase());
+  const { data, error } = await q.limit(500);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    return {
+      drug_id: args.drug_id,
+      country: args.country?.toUpperCase() ?? null,
+      timeline: [],
+      confidence: { level: "low", score: 0, basis: "No shortage events on file" + (args.country ? ` for ${args.country}.` : ".") } satisfies Confidence,
+    };
+  }
+  const sourcesConsulted = await computeSourcesConsulted(rows as any);
+  const byCountry = new Map<string, { events: number; active: number; resolved: number; longestDays: number | null }>();
+  const durations: number[] = [];
+  for (const r of rows as any[]) {
+    const cc = r.country_code || "—";
+    let b = byCountry.get(cc);
+    if (!b) { b = { events: 0, active: 0, resolved: 0, longestDays: null }; byCountry.set(cc, b); }
+    b.events += 1;
+    if (["active", "anticipated"].includes(r.status)) b.active += 1;
+    if (r.status === "resolved") b.resolved += 1;
+    if (r.start_date && r.end_date) {
+      const d = Math.floor((new Date(r.end_date).getTime() - new Date(r.start_date).getTime()) / 86400000);
+      if (d >= 0) { durations.push(d); if (b.longestDays == null || d > b.longestDays) b.longestDays = d; }
+    }
+  }
+  durations.sort((a, b) => a - b);
+  const med = durations.length ? durations[Math.floor(durations.length / 2)] : null;
+  return {
+    drug_id: args.drug_id,
+    country: args.country?.toUpperCase() ?? null,
+    total_events: rows.length,
+    active_or_anticipated: rows.filter((r: any) => ["active", "anticipated"].includes(r.status)).length,
+    resolved: rows.filter((r: any) => r.status === "resolved").length,
+    median_resolved_duration_days: med,
+    by_country: [...byCountry.entries()].map(([c, b]) => ({ country: c, ...b })).sort((a, b) => b.events - a.events),
+    timeline: rows.slice(0, 50).map((r: any) => ({ country: r.country_code, status: r.status, severity: r.severity, start_date: r.start_date, end_date: r.end_date, reason: r.reason })),
+    sources_consulted: sourcesConsulted,
+    confidence: confidenceFromSources(sourcesConsulted, { signalCount: rows.length }),
+  };
+}
+
+async function getAvailableBrands(args: { drug_id: string; country: string }) {
+  if (!args.drug_id || !args.country) return { status: "unanswerable", reason: "missing_args", hint: "Both drug_id and country required." };
+  const country = args.country.toUpperCase();
+  const sb = getSupabase();
+  const drug = await sb.from("drugs").select("id,generic_name,brand_names").eq("id", args.drug_id).single();
+  if (drug.error || !drug.data) return { status: "unanswerable", reason: "drug_not_found", hint: "Verify drug_id." };
+  const d: any = drug.data;
+  const generic = (d.generic_name || "").trim();
+  const brands: string[] = d.brand_names || [];
+  const esc = (s: string) => s.replace(/[%_,)(]/g, "").trim();
+  const candidates: string[] = [];
+  if (generic) candidates.push(generic);
+  for (const b of brands.slice(0, 10)) if (b) candidates.push(b);
+  if (candidates.length === 0) return { items: [], confidence: { level: "low", score: 0, basis: "No name candidates for matching" } satisfies Confidence };
+  const orParts = candidates.flatMap((n) => { const e = esc(n); return [`product_name.ilike.%${e}%`, `trade_name.ilike.%${e}%`]; }).join(",");
+  const ACTIVE = ["Active", "active", "Authorised", "authorised", "Approved", "approved", "Marketed"];
+  const { data: products } = await sb.from("drug_products")
+    .select("product_name,trade_name,strength,dosage_form,route,sponsor_id,registry_status,pbs_listed,is_generic")
+    .eq("country", country)
+    .in("registry_status", ACTIVE)
+    .or(orParts)
+    .limit(200);
+  const rows = products ?? [];
+  if (rows.length === 0) {
+    return { drug_id: args.drug_id, country, items: [], confidence: { level: "low", score: 0, basis: `No active registrations matching '${generic}' in ${country} on file.` } satisfies Confidence };
+  }
+  const sponsorIds = [...new Set(rows.map((r: any) => r.sponsor_id).filter(Boolean))];
+  const sponsorMap = new Map<string, string>();
+  if (sponsorIds.length > 0) {
+    const { data: sps } = await sb.from("sponsors").select("id,name").in("id", sponsorIds);
+    for (const s of sps ?? []) sponsorMap.set((s as any).id, (s as any).name);
+  }
+  const bySponsor = new Map<string, { sponsor: string; products: any[] }>();
+  for (const p of rows as any[]) {
+    const sn = sponsorMap.get(p.sponsor_id) ?? "Unknown";
+    let g = bySponsor.get(sn);
+    if (!g) { g = { sponsor: sn, products: [] }; bySponsor.set(sn, g); }
+    g.products.push({ product_name: p.product_name, trade_name: p.trade_name, strength: p.strength, dosage_form: p.dosage_form, route: p.route, is_generic: !!p.is_generic, pbs_listed: !!p.pbs_listed });
+  }
+  const confidence = computeConfidence({ sourceReliability: 0.95, signalCount: bySponsor.size, freshnessDays: 1 });
+  return {
+    drug_id: args.drug_id,
+    country,
+    total_active_products: rows.length,
+    unique_sponsors: bySponsor.size,
+    by_sponsor: [...bySponsor.values()].sort((a, b) => b.products.length - a.products.length),
+    confidence: { ...confidence, basis: `${bySponsor.size} sponsor${bySponsor.size === 1 ? "" : "s"} across ${rows.length} active registry entries in ${country}.` },
+  };
+}
+
+async function getRecentDeregistrations(args: { drug_id?: string; country?: string; since?: string }) {
+  const sb = getSupabase();
+  const since = args.since || new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+  const CANCELLED = ["Cancelled", "cancelled", "Withdrawn", "withdrawn", "Suspended", "suspended", "Discontinued", "discontinued"];
+  let q = sb.from("drug_products")
+    .select("product_name,trade_name,sponsor_id,country,registry_status,cancellation_date")
+    .in("registry_status", CANCELLED)
+    .gte("cancellation_date", since)
+    .limit(500);
+  if (args.country) q = q.eq("country", args.country.toUpperCase());
+  if (args.drug_id) {
+    const dr = await sb.from("drugs").select("generic_name").eq("id", args.drug_id).single();
+    if (dr.error || !dr.data) return { status: "unanswerable", reason: "drug_not_found", hint: "Verify drug_id." };
+    const generic = ((dr.data as any).generic_name || "").trim();
+    if (!generic) return { items: [], confidence: { level: "low", score: 0, basis: "Drug has no generic name on file." } satisfies Confidence };
+    q = q.or(`product_name.ilike.%${generic}%,trade_name.ilike.%${generic}%`);
+  }
+  const { data, error } = await q.order("cancellation_date", { ascending: false });
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  const sponsorIds = [...new Set(rows.map((r: any) => r.sponsor_id).filter(Boolean))];
+  const sponsorMap = new Map<string, string>();
+  if (sponsorIds.length > 0) {
+    const { data: sps } = await sb.from("sponsors").select("id,name").in("id", sponsorIds);
+    for (const s of sps ?? []) sponsorMap.set((s as any).id, (s as any).name);
+  }
+  const items = rows.slice(0, 50).map((r: any) => ({
+    product_name: r.product_name, trade_name: r.trade_name,
+    sponsor: sponsorMap.get(r.sponsor_id) ?? "Unknown",
+    country: r.country, registry_status: r.registry_status,
+    cancellation_date: r.cancellation_date,
+  }));
+  const confidence = computeConfidence({ sourceReliability: 0.95, signalCount: rows.length, freshnessDays: 1 });
+  return {
+    since, country: args.country?.toUpperCase() ?? null, drug_id: args.drug_id ?? null,
+    total_deregistrations: rows.length,
+    items,
+    confidence: { ...confidence, basis: `${rows.length} deregistrations since ${since}${args.country ? ` in ${args.country}` : ""}.` },
+  };
+}
+
+async function getDoseConversion(args: { from_drug_id: string; to_drug_id: string }) {
+  if (!args.from_drug_id || !args.to_drug_id) return { status: "unanswerable", reason: "missing_args", hint: "Both from_drug_id and to_drug_id required." };
+  const sb = getSupabase();
+  const { data: rows } = await sb.from("drug_alternatives")
+    .select("drug_id,alternative_drug_id,dose_conversion_notes,clinical_evidence_level,relationship_type,requires_monitoring,monitoring_notes,similarity_score")
+    .or(`and(drug_id.eq.${args.from_drug_id},alternative_drug_id.eq.${args.to_drug_id}),and(drug_id.eq.${args.to_drug_id},alternative_drug_id.eq.${args.from_drug_id})`)
+    .limit(2);
+  const r = (rows ?? [])[0] as any;
+  if (!r || (!r.dose_conversion_notes && !r.monitoring_notes)) {
+    return {
+      status: "unanswerable",
+      reason: "no_verified_conversion",
+      hint: "Mederti doesn't have a verified dose-conversion entry for this pair. Dose conversion depends on patient factors not visible to this system. Canonical references: Australian Medicines Handbook / BNF / Micromedex / hospital antimicrobial stewardship guideline.",
+      from_drug_id: args.from_drug_id, to_drug_id: args.to_drug_id,
+      confidence: { level: "low", score: 0, basis: "No verified dose-conversion entry on file." } satisfies Confidence,
+    };
+  }
+  const e = (r.clinical_evidence_level ?? "").toUpperCase();
+  const scoreByEvidence = e === "A" ? 0.9 : e === "B" ? 0.75 : 0.5;
+  return {
+    from_drug_id: args.from_drug_id, to_drug_id: args.to_drug_id,
+    dose_conversion_notes: r.dose_conversion_notes,
+    monitoring_notes: r.monitoring_notes,
+    requires_monitoring: !!r.requires_monitoring,
+    clinical_evidence_level: r.clinical_evidence_level,
+    relationship_type: r.relationship_type,
+    similarity_score: r.similarity_score,
+    confidence: { level: levelFromScore(scoreByEvidence), score: scoreByEvidence, basis: `Mederti curated dose-conversion (evidence ${r.clinical_evidence_level ?? "unspecified"}). Final dose decision is yours — patient factors not visible to this system.` } satisfies Confidence,
+  };
+}
+
+async function getTherapeuticEquivalents(args: { drug_id: string; country?: string }) {
+  if (!args.drug_id) return { status: "unanswerable", reason: "missing_drug_id", hint: "Pass a drug UUID." };
+  const sb = getSupabase();
+  const { data: te } = await sb.from("therapeutic_equivalents")
+    .select("alternative_drug_id,equivalence_type,evidence_level,notes,source,source_url")
+    .eq("drug_id", args.drug_id).limit(30);
+  const rows = te ?? [];
+  if (rows.length === 0) {
+    return { drug_id: args.drug_id, country: args.country?.toUpperCase() ?? null, items: [], confidence: { level: "low", score: 0, basis: "No therapeutic-equivalent entries on file (FDA Orange Book / WHO EML)." } satisfies Confidence };
+  }
+  const altIds = rows.map((r: any) => r.alternative_drug_id);
+  const { data: drugs } = await sb.from("drugs").select("id,generic_name,atc_code").in("id", altIds);
+  const drugMap = new Map<string, any>();
+  for (const d of (drugs ?? [])) drugMap.set((d as any).id, d);
+  const items = rows.map((r: any) => ({
+    drug_id: r.alternative_drug_id,
+    name: drugMap.get(r.alternative_drug_id)?.generic_name ?? "Unknown",
+    atc_code: drugMap.get(r.alternative_drug_id)?.atc_code ?? null,
+    equivalence_type: r.equivalence_type, evidence_level: r.evidence_level,
+    notes: r.notes, source: r.source, source_url: r.source_url,
+  }));
+  const bestEvidence = items.reduce((best, i) => {
+    const e = (i.evidence_level || "C").toUpperCase();
+    const s = e === "A" ? 0.95 : e === "B" ? 0.85 : e === "C" ? 0.7 : 0.6;
+    return Math.max(best, s);
+  }, 0);
+  const confidence = computeConfidence({ sourceReliability: bestEvidence, signalCount: items.length, freshnessDays: 30 });
+  return {
+    drug_id: args.drug_id, country: args.country?.toUpperCase() ?? null,
+    items,
+    confidence: { ...confidence, basis: `${items.length} entries; best evidence ${items[0]?.evidence_level ?? "unspecified"} from ${items[0]?.source ?? "—"}.` },
+  };
+}
+
+async function getSupplierShortageRecord(args: { manufacturer_or_sponsor: string; since?: string; country?: string }) {
+  const name = (args.manufacturer_or_sponsor || "").trim();
+  if (!name) return { status: "unanswerable", reason: "missing_name", hint: "Pass a manufacturer or sponsor name." };
+  const sb = getSupabase();
+  const { data: sponsors } = await sb.from("sponsors").select("id,name").ilike("name", `%${name.replace(/[%_]/g, "")}%`).limit(20);
+  const { data: mfgs } = await sb.from("manufacturers").select("id,name").ilike("name", `%${name.replace(/[%_]/g, "")}%`).limit(20);
+  const mfgIds = (mfgs ?? []).map((m: any) => m.id);
+  if ((sponsors ?? []).length === 0 && mfgIds.length === 0) {
+    return { status: "unanswerable", reason: "supplier_not_found", hint: `No sponsors or manufacturers matching '${name}'.` };
+  }
+  const since = args.since || new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+  let q = sb.from("shortage_events").select("country_code,status,severity,start_date,end_date,reason,drug_id,manufacturer_id").gte("start_date", since);
+  if (mfgIds.length > 0) q = q.in("manufacturer_id", mfgIds);
+  if (args.country) q = q.eq("country_code", args.country.toUpperCase());
+  const { data: shorts, error } = await q.limit(1000);
+  if (error) throw new Error(error.message);
+  const rows = shorts ?? [];
+  type Quarter = { period: string; events: number; resolved: number };
+  const byQ = new Map<string, Quarter>(); let totalDuration = 0; let resolvedCount = 0;
+  for (const r of rows as any[]) {
+    if (!r.start_date) continue;
+    const d = new Date(r.start_date);
+    const period = `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+    let qx = byQ.get(period);
+    if (!qx) { qx = { period, events: 0, resolved: 0 }; byQ.set(period, qx); }
+    qx.events += 1;
+    if (r.status === "resolved") {
+      qx.resolved += 1;
+      if (r.end_date) {
+        const dur = Math.floor((new Date(r.end_date).getTime() - new Date(r.start_date).getTime()) / 86400000);
+        if (dur >= 0) { totalDuration += dur; resolvedCount += 1; }
+      }
+    }
+  }
+  const sourcesConsulted = await computeSourcesConsulted(rows as any);
+  return {
+    supplier_query: name,
+    matched_sponsors: (sponsors ?? []).slice(0, 5).map((s: any) => s.name),
+    matched_manufacturers: (mfgs ?? []).slice(0, 5).map((m: any) => m.name),
+    since, country: args.country?.toUpperCase() ?? null,
+    total_events: rows.length,
+    active_events: rows.filter((r: any) => r.status === "active").length,
+    by_quarter: [...byQ.values()].sort((a, b) => a.period.localeCompare(b.period)),
+    mean_resolved_duration_days: resolvedCount > 0 ? Math.round(totalDuration / resolvedCount) : null,
+    sources_consulted: sourcesConsulted,
+    confidence: confidenceFromSources(sourcesConsulted, { signalCount: rows.length }),
+    notes: [
+      "Manufacturer attribution depends on shortage_events.manufacturer_id being populated — coverage varies by regulator.",
+      "Sponsor and manufacturer name matching is fuzzy (ILIKE); verify matched names match your intended supplier.",
+    ],
+  };
+}
+
+async function getFacilityDistressSignals(args: { country?: string; drug_id?: string; limit?: number }) {
+  const sb = getSupabase();
+  const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
+  let q = sb.from("manufacturing_facilities")
+    .select("facility_name,company_name,country,facility_type,last_inspection_date,last_inspection_classification,oai_count_5y,warning_letter_count_5y,import_alert_active,import_alert_number,gmp_authority,source_url")
+    .or("last_inspection_classification.eq.OAI,warning_letter_count_5y.gt.0,import_alert_active.eq.true")
+    .order("last_inspection_date", { ascending: false, nullsFirst: false })
+    .limit(limit * 2);
+  if (args.country) q = q.eq("country", args.country.toUpperCase());
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as any[];
+  if (rows.length === 0) {
+    return { country: args.country?.toUpperCase() ?? null, drug_id: args.drug_id ?? null, items: [], confidence: { level: "low", score: 0, basis: "No distress signals in manufacturing_facilities (US/EU coverage)." } satisfies Confidence };
+  }
+  const confidence = computeConfidence({ sourceReliability: 0.9, signalCount: rows.length, freshnessDays: 30 });
+  return {
+    country: args.country?.toUpperCase() ?? null, drug_id: args.drug_id ?? null,
+    items: rows.slice(0, limit).map((r) => ({
+      facility_name: r.facility_name, company_name: r.company_name, country: r.country,
+      facility_type: r.facility_type, last_inspection_date: r.last_inspection_date,
+      last_inspection_classification: r.last_inspection_classification,
+      oai_count_5y: r.oai_count_5y ?? 0, warning_letter_count_5y: r.warning_letter_count_5y ?? 0,
+      import_alert_active: !!r.import_alert_active, import_alert_number: r.import_alert_number,
+      gmp_authority: r.gmp_authority, source_url: r.source_url,
+    })),
+    confidence: { ...confidence, basis: `${rows.length} sites with OAI / warning letter / import alert in last 5y. Coverage: US (FDA) + EU (EudraGMDP); India CDSCO / China NMPA NOT covered.` },
+  };
+}
+
+async function getPriceAroundShortage(args: { drug_id: string; country: string; window_days?: number }) {
+  if (!args.drug_id || !args.country) return { status: "unanswerable", reason: "missing_args", hint: "Both drug_id and country required." };
+  const sb = getSupabase();
+  const window = Math.min(Math.max(args.window_days ?? 180, 30), 720);
+  const { data: shorts } = await sb.from("shortage_events").select("start_date,end_date,status").eq("drug_id", args.drug_id).eq("country_code", args.country.toUpperCase()).order("start_date", { ascending: false }).limit(20);
+  const { data: prices } = await sb.from("drug_pricing_history").select("effective_date,unit_price,currency,price_type,authority,pack_price,pack_description,source").eq("drug_id", args.drug_id).eq("country", args.country.toUpperCase()).order("effective_date", { ascending: false }).limit(200);
+  const shortageRows = (shorts ?? []) as any[];
+  const priceRows = (prices ?? []) as any[];
+  if (priceRows.length === 0) {
+    return { drug_id: args.drug_id, country: args.country.toUpperCase(), items: [], confidence: { level: "low", score: 0, basis: "No pricing history on file for this drug × country." } satisfies Confidence };
+  }
+  const correlations = shortageRows.map((s: any) => {
+    if (!s.start_date) return null;
+    const start = new Date(s.start_date).getTime();
+    const before: number[] = []; const after: number[] = [];
+    for (const p of priceRows) {
+      if (!p.effective_date || p.unit_price == null) continue;
+      const t = new Date(p.effective_date).getTime();
+      const days = (t - start) / 86400000;
+      if (days < 0 && days > -window) before.push(Number(p.unit_price));
+      else if (days >= 0 && days < window) after.push(Number(p.unit_price));
+    }
+    const med = (xs: number[]) => xs.length ? xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)] : null;
+    const medBefore = med(before); const medAfter = med(after);
+    const pctChange = (medBefore != null && medAfter != null && medBefore > 0) ? Math.round(((medAfter - medBefore) / medBefore) * 10000) / 100 : null;
+    return { shortage_start: s.start_date, shortage_end: s.end_date, shortage_status: s.status, median_price_before: medBefore, median_price_after: medAfter, pct_change: pctChange, n_before: before.length, n_after: after.length };
+  }).filter(Boolean);
+  const confidence = computeConfidence({ sourceReliability: 0.85, signalCount: priceRows.length, freshnessDays: 60 });
+  return {
+    drug_id: args.drug_id, country: args.country.toUpperCase(),
+    window_days: window, total_price_points: priceRows.length, shortage_events: shortageRows.length,
+    correlations,
+    confidence: { ...confidence, basis: `${priceRows.length} price points across ${shortageRows.length} shortage events; window ±${window}d. Coverage best for UK + AU.` },
+  };
+}
+
+async function getManagementGuidance(args: { drug_id: string; country?: string }) {
+  if (!args.drug_id) return { status: "unanswerable", reason: "missing_drug_id", hint: "Pass a drug UUID." };
+  const sb = getSupabase();
+  let q = sb.from("shortage_events")
+    .select("country_code,management_action,reason,status,severity,start_date,source_url")
+    .eq("drug_id", args.drug_id).not("management_action", "is", null);
+  if (args.country) q = q.eq("country_code", args.country.toUpperCase());
+  const { data } = await q.order("start_date", { ascending: false }).limit(20);
+  const rows = (data ?? []) as any[];
+  if (rows.length === 0) {
+    return { drug_id: args.drug_id, country: args.country?.toUpperCase() ?? null, items: [], confidence: { level: "low", score: 0, basis: "No regulator-published management_action on file. TGA populates this; other regulators sparse." } satisfies Confidence };
+  }
+  const sourcesConsulted = await computeSourcesConsulted(rows as any);
+  return {
+    drug_id: args.drug_id, country: args.country?.toUpperCase() ?? null,
+    items: rows.map((r) => ({
+      country: r.country_code, status: r.status, severity: r.severity, start_date: r.start_date,
+      management_action: r.management_action, reason: r.reason, source_url: r.source_url,
+    })),
+    sources_consulted: sourcesConsulted,
+    confidence: confidenceFromSources(sourcesConsulted, { signalCount: rows.length }),
+  };
+}
+
+async function getRecallLinks(args: { drug_id: string }) {
+  if (!args.drug_id) return { status: "unanswerable", reason: "missing_drug_id", hint: "Pass a drug UUID." };
+  const sb = getSupabase();
+  const { data: recalls } = await sb.from("recalls")
+    .select("id,recall_class,announced_date,reason,country_code,manufacturer,brand_name,press_release_url")
+    .eq("drug_id", args.drug_id).order("announced_date", { ascending: false }).limit(20);
+  const recallRows = (recalls ?? []) as any[];
+  if (recallRows.length === 0) {
+    return { drug_id: args.drug_id, items: [], confidence: { level: "low", score: 0, basis: "No recalls on file for this drug. Recall coverage: US/CA/AU/EU/GB only." } satisfies Confidence };
+  }
+  const recallIds = recallRows.map((r) => r.id);
+  const { data: links } = await sb.from("recall_shortage_links")
+    .select("recall_id,shortage_id,link_type").in("recall_id", recallIds);
+  const linksByRecall = new Map<string, any[]>();
+  for (const l of links ?? []) {
+    const arr = linksByRecall.get((l as any).recall_id) ?? [];
+    arr.push(l); linksByRecall.set((l as any).recall_id, arr);
+  }
+  const items = recallRows.map((r) => ({
+    recall_id: r.id, recall_class: r.recall_class, announced_date: r.announced_date,
+    country: r.country_code, manufacturer: r.manufacturer, brand_name: r.brand_name,
+    reason: r.reason, press_release_url: r.press_release_url,
+    linked_shortages: linksByRecall.get(r.id) ?? [],
+  }));
+  const confidence = computeConfidence({ sourceReliability: 0.95, signalCount: items.length, freshnessDays: 1 });
+  return {
+    drug_id: args.drug_id, total_recalls: items.length, total_links: links?.length ?? 0,
+    items,
+    confidence: { ...confidence, basis: `${items.length} recall${items.length === 1 ? "" : "s"} on file, ${links?.length ?? 0} linked to shortage events.` },
+  };
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, any>,
@@ -2535,6 +3128,29 @@ export async function executeTool(
       return await getResolutionTimeStats(input as any);
     case "get_predictive_signals":
       return await getPredictiveSignals(input as any);
+    // Sprint 2 PR 1 tools
+    case "get_recurring_shortages":
+      return await getRecurringShortages(input as any);
+    case "get_shortage_history":
+      return await getShortageHistory(input as any);
+    case "get_available_brands":
+      return await getAvailableBrands(input as any);
+    case "get_recent_deregistrations":
+      return await getRecentDeregistrations(input as any);
+    case "get_dose_conversion":
+      return await getDoseConversion(input as any);
+    case "get_therapeutic_equivalents":
+      return await getTherapeuticEquivalents(input as any);
+    case "get_supplier_shortage_record":
+      return await getSupplierShortageRecord(input as any);
+    case "get_facility_distress_signals":
+      return await getFacilityDistressSignals(input as any);
+    case "get_price_around_shortage":
+      return await getPriceAroundShortage(input as any);
+    case "get_management_guidance":
+      return await getManagementGuidance(input as any);
+    case "get_recall_links":
+      return await getRecallLinks(input as any);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

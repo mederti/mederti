@@ -1,5 +1,6 @@
 "use client";
 
+// chat page — table renderer + drug link panel
 import { useState, useRef, useEffect, useCallback, useContext, createContext, type ReactNode, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -485,7 +486,7 @@ function DrugPreviewPanel({ drugId, onClose }: { drugId: string | null; onClose:
           opacity: open ? 1 : 0,
           pointerEvents: open ? "auto" : "none",
           transition: "opacity 0.18s ease",
-          zIndex: 90,
+          zIndex: 1090,
         }}
       />
       <aside
@@ -502,7 +503,7 @@ function DrugPreviewPanel({ drugId, onClose }: { drugId: string | null; onClose:
           boxShadow: open ? "-12px 0 32px rgba(15,23,42,0.08)" : "none",
           transform: open ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.22s ease",
-          zIndex: 100,
+          zIndex: 1100,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -793,6 +794,11 @@ function ChatPageInner() {
     const countryMatch = document.cookie.match(/(?:^|; )mederti-country=([A-Z]{2})/);
     const userCountry = countryMatch?.[1] ?? "AU";
 
+    let assistantContent = "";
+    let assistantDrugs: DrugHit[] = [];
+    let assistantShortages: ShortageHit[] = [];
+    let assistantSummary: SummaryData | null = null;
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -808,10 +814,6 @@ function ChatPageInner() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let assistantContent = "";
-      let assistantDrugs: DrugHit[] = [];
-      let assistantShortages: ShortageHit[] = [];
-      let assistantSummary: SummaryData | null = null;
       let buffer = "";
 
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
@@ -891,24 +893,34 @@ function ChatPageInner() {
       if (uniqueNames.length === 0) {
         finalize({});
       } else {
+        // Resolve each name via /api/search (FTS-ranked, top hit wins). Run in
+        // parallel — typically 3–8 drug names per response. Prefer exact /
+        // prefix matches over fuzzy substring matches by checking the top hit.
         try {
-          const r = await fetch("/api/bulk-lookup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ drugNames: uniqueNames }),
-          });
-          if (r.ok) {
-            const j = await r.json();
-            const map: Record<string, string> = {};
-            for (const row of (j.results ?? []) as Array<{ drugName: string; matchedDrug: { drug_id: string } | null; matchConfidence: string }>) {
-              if (row.matchedDrug && row.matchConfidence !== "none") {
-                map[row.drugName] = row.matchedDrug.drug_id;
+          const results = await Promise.all(
+            uniqueNames.map(async (name) => {
+              try {
+                const r = await fetch(`/api/search?q=${encodeURIComponent(name)}&limit=20`);
+                if (!r.ok) return [name, null] as const;
+                const j = await r.json();
+                const hits = (j.results ?? []) as Array<{ drug_id: string; generic_name: string; source: string }>;
+                const drugHits = hits.filter((h) => h.source === "drugs");
+                if (drugHits.length === 0) return [name, null] as const;
+                const lower = name.toLowerCase();
+                const exact = drugHits.find((h) => h.generic_name.toLowerCase() === lower);
+                const prefix = drugHits.find((h) => h.generic_name.toLowerCase().startsWith(lower + " ") || h.generic_name.toLowerCase().startsWith(lower + "/"));
+                const best = exact ?? prefix ?? drugHits[0];
+                return [name, best.drug_id] as const;
+              } catch {
+                return [name, null] as const;
               }
-            }
-            finalize(map);
-          } else {
-            finalize({});
+            })
+          );
+          const map: Record<string, string> = {};
+          for (const [name, id] of results) {
+            if (id) map[name] = id;
           }
+          finalize(map);
         } catch {
           finalize({});
         }

@@ -757,16 +757,28 @@ async function listActiveShortages(args: {
 
   // Build the base query without severity, so we can fall back gracefully if
   // a severity filter wipes the result (severity tagging is sparse across
-  // regulators — many rows are NULL).
+  // regulators — many rows are NULL). ATC filtering is pushed into the embedded
+  // !inner join when set — otherwise a small `limit` on a start_date-ordered
+  // page under-counts classes whose recent activity is sparse.
+  const atc = (args.atc_prefix || "").toUpperCase();
+  // Widen the fetch when we need to post-filter or when an ATC inner-join
+  // could still leave us short on rows (defensive over-fetch).
+  const fetchLimit = allowedDrugIds || atc ? 500 : limit;
   const baseQuery = () => {
+    const embed = atc
+      ? "drugs!inner(id,generic_name,brand_names,atc_code,drug_class)"
+      : "drugs(id,generic_name,brand_names,atc_code,drug_class)";
     let qb = sb
       .from("shortage_events")
-      .select("drug_id,country,country_code,status,severity,reason,start_date,estimated_resolution_date,source_url")
+      .select(
+        `drug_id,country,country_code,status,severity,reason,start_date,estimated_resolution_date,source_url,${embed}`
+      )
       .eq("status", "active")
       .order("start_date", { ascending: false })
-      .limit(allowedDrugIds ? 200 : limit);
+      .limit(fetchLimit);
     if (args.country) qb = qb.eq("country_code", args.country);
     if (allowedDrugIds) qb = qb.in("drug_id", [...allowedDrugIds]);
+    if (atc) qb = qb.like("drugs.atc_code", `${atc}%`);
     return qb;
   };
 
@@ -784,24 +796,17 @@ async function listActiveShortages(args: {
     if (res.error) throw res.error;
   }
   const { data } = res;
-  let rows = (data ?? []) as Array<ShortageRow & { drug_id: string }>;
-  const drugIds = Array.from(new Set(rows.map((r) => r.drug_id).filter(Boolean)));
-  if (drugIds.length === 0) return [];
+  const rows = (data ?? []) as Array<ShortageRow & { drug_id: string; drugs?: any }>;
+  if (rows.length === 0) return [];
 
-  const drugRows = await sb
-    .from("drugs")
-    .select("id,generic_name,brand_names,atc_code,drug_class")
-    .in("id", drugIds);
-  const drugMap = new Map<string, any>((drugRows.data ?? []).map((d: any) => [d.id, d]));
-
-  if (args.atc_prefix) {
-    rows = rows.filter((r) => {
-      const d = drugMap.get(r.drug_id);
-      return d?.atc_code?.startsWith(args.atc_prefix!);
-    });
+  // Embedded drug rows come back as `drugs` per row (singular when !inner is used
+  // on a many-to-one relation). Build a map for the response shape downstream.
+  const drugMap = new Map<string, any>();
+  for (const r of rows) {
+    if (r.drug_id && r.drugs && !drugMap.has(r.drug_id)) drugMap.set(r.drug_id, r.drugs);
   }
 
-  // After post-filters, slice to the requested limit.
+  // After fetch (server-side ATC + severity filters), slice to the requested limit.
   const items = rows.slice(0, limit).map((r) => {
     const d = drugMap.get(r.drug_id) ?? {};
     return {
@@ -951,29 +956,31 @@ async function summarizeShortageLandscape(
   const sb = getSupabase();
   const topN = Math.min(Math.max(args.top_n ?? 8, 1), 15);
 
-  // 1. Fetch active shortage events with embedded drug rows. We pull a wide page
-  //    because severity/ATC tagging is sparse and we want accurate aggregates.
-  //    Cap at 5000 rows — the full active set is ~22k but the long tail is
-  //    dominated by Switzerland's per-product fragmentation.
+  // 1. Fetch active shortage events with embedded drug rows. ATC scoping is
+  //    pushed into the embedded join via !inner so it filters at the DB level —
+  //    client-side filtering against an order-by-start_date sample under-counts
+  //    classes whose recent activity is sparse (J01 vs the Swiss N02 firehose).
+  const atc = (args.atc_prefix || "").toUpperCase();
+  const embed = atc
+    ? "drugs!inner(id,generic_name,brand_names,atc_code,drug_class,who_essential_medicine,critical_medicine_eu)"
+    : "drugs(id,generic_name,brand_names,atc_code,drug_class,who_essential_medicine,critical_medicine_eu)";
   let q = sb
     .from("shortage_events")
-    .select(
-      "drug_id,country_code,severity,start_date,drugs(id,generic_name,brand_names,atc_code,drug_class,who_essential_medicine,critical_medicine_eu)"
-    )
+    .select(`drug_id,country_code,severity,start_date,${embed}`)
     .eq("status", "active")
     .order("start_date", { ascending: false })
     .limit(5000);
   if (args.country) q = q.eq("country_code", args.country);
+  if (atc) q = q.like("drugs.atc_code", `${atc}%`);
 
   const { data, error } = await q;
   if (error) throw error;
   const allRows = (data ?? []) as Array<any>;
-
-  // Filter by ATC client-side (PostgREST embedded filters are awkward across joins).
-  const atc = (args.atc_prefix || "").toUpperCase();
+  // With !inner the join itself drops non-matching rows, but defend against
+  // null drug embeds just in case (orphaned drug_ids exist in the DB).
   const scoped = atc
-    ? allRows.filter((r) => (r.drugs?.atc_code || "").toUpperCase().startsWith(atc))
-    : allRows;
+    ? allRows.filter((r) => r.drugs && (r.drugs.atc_code || "").toUpperCase().startsWith(atc))
+    : allRows.filter((r) => r.drugs);
 
   // 2. Optional severity narrowing — track both broadened and narrowed sets so
   //    we can tell the model honestly when the filter wiped the result.

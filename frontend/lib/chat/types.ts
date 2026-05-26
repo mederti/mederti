@@ -44,6 +44,33 @@ export type SourceConsulted = {
   is_stale: boolean;
 };
 
+export type ClassTopDrug = {
+  drug_id: string;
+  name: string;
+  atc_code: string | null;
+  country_count: number;
+  shortage_event_count: number;
+  who_essential: boolean;
+};
+
+export type ClassSummary = {
+  atc_code: string;
+  atc_name: string;
+  /** "rising" if active events in the last 30d exceed prior 60d window
+   *  proportionally, "falling" if reverse, "stable" otherwise. "insufficient_data"
+   *  when fewer than 10 events total — don't over-interpret a thin signal. */
+  trend: "rising" | "stable" | "falling" | "insufficient_data";
+  trend_note: string;
+  drugs_in_class_with_active_shortage: number;
+  total_active_events: number;
+  countries_affected: number;
+  by_severity: Record<string, number>;
+  who_essential_count: number;
+  eu_critical_count: number;
+  top_drugs: ClassTopDrug[];
+  sources_consulted: SourceConsulted[];
+};
+
 export type DrugDetail = DrugSummary & {
   shortages: ShortageRow[];
   active_shortage_count: number;
@@ -102,6 +129,7 @@ export type ChatApiResponse = {
   content: string;
   drugs: Record<string, DrugDetail>;
   subs?: Record<string, SubstituteRow>;
+  classes?: Record<string, ClassSummary>;
   error?: string;
   tool_calls?: number;
   truncated?: boolean;

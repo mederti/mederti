@@ -2,6 +2,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "./supabase";
 import { coverageGate } from "./coverage";
 import type {
+  ClassSummary,
+  ClassTopDrug,
   DrugDetail,
   DrugSummary,
   RecallRow,
@@ -168,6 +170,25 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
     },
   },
   {
+    name: "get_class_summary",
+    description:
+      "Build a CLASS card for a single ATC code (e.g. 'L01', 'J01CR05', 'C09'). Returns the class name, drug count, severity mix, top affected drugs, a trend signal (rising/stable/falling/insufficient_data), and the regulator provenance — populated into ctx.classes so you can emit <class_card atc=\"L01\" /> and the frontend renders the rich card. Use this for class-scoped Mode C questions ('show oncology shortages', 'how bad are antibiotics globally') INSTEAD of the <kpis> grid. For unscoped multi-class queries ('show critical shortages globally'), keep using <kpis>. The class card replaces the KPI grid — don't emit both.",
+    input_schema: {
+      type: "object",
+      properties: {
+        atc_code: {
+          type: "string",
+          description: "ATC code prefix (any depth — L01 for the L01 anatomical group, J01CR05 for a specific substance class). Case-insensitive.",
+        },
+        country: {
+          type: "string",
+          description: "Optional ISO-2 country scope. Omit for global.",
+        },
+      },
+      required: ["atc_code"],
+    },
+  },
+  {
     name: "search_recalls",
     description:
       "Search recent drug recalls by name. Returns recall_class (I=most severe, III=least), reason, manufacturer, announced_date, and the regulator's press release URL.",
@@ -187,10 +208,13 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
 export type ToolContext = {
   drugs: Record<string, DrugDetail>;
   subs: Record<string, SubstituteRow>;
+  /** Hydrated class summaries keyed by ATC code (uppercase). Populated by
+   *  get_class_summary; consumed by the frontend when it sees <class_card />.*/
+  classes: Record<string, ClassSummary>;
 };
 
 export function newContext(): ToolContext {
-  return { drugs: {}, subs: {} };
+  return { drugs: {}, subs: {}, classes: {} };
 }
 
 const SEV_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
@@ -1286,6 +1310,251 @@ async function summarizeShortageLandscape(
   };
 }
 
+// Canonical ATC names — keyed by exact code. Covers L1 (14 anatomical groups)
+// + the L2 therapeutic subgroups our chat traffic actually queries. The
+// per-drug atc_description field is unreliable for class names (it carries
+// the specific substance name, not the class), so we don't fall back to it.
+// Add new L2 codes here as needed — WHO ATC has ~95 total at this level.
+const ATC_NAMES: Record<string, string> = {
+  // L1 — anatomical main groups
+  A: "Alimentary tract and metabolism",
+  B: "Blood and blood-forming organs",
+  C: "Cardiovascular system",
+  D: "Dermatologicals",
+  G: "Genito-urinary system and sex hormones",
+  H: "Systemic hormonal preparations (excl. sex hormones)",
+  J: "Anti-infectives for systemic use",
+  L: "Antineoplastic and immunomodulating agents",
+  M: "Musculoskeletal system",
+  N: "Nervous system",
+  P: "Antiparasitic products",
+  R: "Respiratory system",
+  S: "Sensory organs",
+  V: "Various",
+  // L2 — the most-queried therapeutic subgroups
+  A02: "Drugs for acid-related disorders",
+  A03: "Drugs for functional gastrointestinal disorders",
+  A04: "Antiemetics and antinauseants",
+  A10: "Drugs used in diabetes",
+  A11: "Vitamins",
+  B01: "Antithrombotic agents",
+  B02: "Antihemorrhagics",
+  B03: "Antianemic preparations",
+  C01: "Cardiac therapy",
+  C02: "Antihypertensives",
+  C03: "Diuretics",
+  C07: "Beta-blocking agents",
+  C08: "Calcium channel blockers",
+  C09: "Agents acting on the renin-angiotensin system",
+  C10: "Lipid-modifying agents",
+  D01: "Antifungals for dermatological use",
+  G03: "Sex hormones and modulators of the genital system",
+  G04: "Urologicals",
+  H01: "Pituitary and hypothalamic hormones",
+  H02: "Corticosteroids for systemic use",
+  H03: "Thyroid therapy",
+  J01: "Antibacterials for systemic use",
+  J02: "Antimycotics for systemic use",
+  J04: "Antimycobacterials",
+  J05: "Antivirals for systemic use",
+  J06: "Immune sera and immunoglobulins",
+  J07: "Vaccines",
+  L01: "Antineoplastic agents",
+  L02: "Endocrine therapy",
+  L03: "Immunostimulants",
+  L04: "Immunosuppressants",
+  M01: "Anti-inflammatory and antirheumatic products",
+  M03: "Muscle relaxants",
+  M05: "Drugs for treatment of bone diseases",
+  N01: "Anesthetics",
+  N02: "Analgesics",
+  N03: "Antiepileptics",
+  N04: "Anti-parkinson drugs",
+  N05: "Psycholeptics",
+  N06: "Psychoanaleptics",
+  N07: "Other nervous system drugs",
+  P01: "Antiprotozoals",
+  P02: "Anthelmintics",
+  R01: "Nasal preparations",
+  R03: "Drugs for obstructive airway diseases",
+  R05: "Cough and cold preparations",
+  R06: "Antihistamines for systemic use",
+  S01: "Ophthalmologicals",
+  V03: "All other therapeutic products",
+  V08: "Contrast media",
+};
+
+function resolveAtcName(atcCode: string): string {
+  const code = atcCode.toUpperCase();
+  // Exact match first (most precise).
+  if (ATC_NAMES[code]) return ATC_NAMES[code];
+  // Walk up the hierarchy: L01CD01 → L01CD → L01C → L01 → L
+  for (let len = code.length - 1; len >= 1; len--) {
+    const prefix = code.slice(0, len);
+    if (ATC_NAMES[prefix]) {
+      return `${ATC_NAMES[prefix]} (${code})`;
+    }
+  }
+  return code;
+}
+
+async function getClassSummary(
+  args: { atc_code: string; country?: string },
+  ctx: ToolContext
+): Promise<ClassSummary | null> {
+  const sb = getSupabase();
+  const atc = args.atc_code.trim().toUpperCase();
+  if (!atc) return null;
+
+  // 1. Pull all active shortage events scoped to this ATC prefix (server-side
+  //    via embedded !inner join — same pattern as summarize_shortage_landscape
+  //    to avoid sample bias). Also fetch a 90d historical window for the trend.
+  const baseSelect =
+    "drug_id,country_code,severity,start_date,drugs!inner(id,generic_name,atc_code,drug_class,atc_description,who_essential_medicine,critical_medicine_eu)";
+
+  let activeQ = sb
+    .from("shortage_events")
+    .select(baseSelect)
+    .eq("status", "active")
+    .like("drugs.atc_code", `${atc}%`)
+    .order("start_date", { ascending: false })
+    .limit(5000);
+  if (args.country) activeQ = activeQ.eq("country_code", args.country);
+
+  // Trend window: count events in the last 30d vs the prior 60d. Cheap proxy.
+  const now = new Date();
+  const day = 24 * 60 * 60 * 1000;
+  const d30 = new Date(now.getTime() - 30 * day).toISOString().slice(0, 10);
+  const d90 = new Date(now.getTime() - 90 * day).toISOString().slice(0, 10);
+
+  const [activeRes, recentRes, priorRes] = await Promise.all([
+    activeQ,
+    sb
+      .from("shortage_events")
+      .select("drugs!inner(atc_code)", { count: "exact", head: true })
+      .like("drugs.atc_code", `${atc}%`)
+      .gte("start_date", d30)
+      .then((r) => r),
+    sb
+      .from("shortage_events")
+      .select("drugs!inner(atc_code)", { count: "exact", head: true })
+      .like("drugs.atc_code", `${atc}%`)
+      .gte("start_date", d90)
+      .lt("start_date", d30)
+      .then((r) => r),
+  ]);
+
+  if (activeRes.error) throw activeRes.error;
+  const rows = (activeRes.data ?? []) as Array<any>;
+  if (rows.length === 0) {
+    // Empty class — still return a shell so the model can say so plainly.
+    const summary: ClassSummary = {
+      atc_code: atc,
+      atc_name: resolveAtcName(atc),
+      trend: "insufficient_data",
+      trend_note: "no active events tracked in this class",
+      drugs_in_class_with_active_shortage: 0,
+      total_active_events: 0,
+      countries_affected: 0,
+      by_severity: {},
+      who_essential_count: 0,
+      eu_critical_count: 0,
+      top_drugs: [],
+      sources_consulted: [],
+    };
+    ctx.classes[atc] = summary;
+    return summary;
+  }
+
+  // 2. Aggregate.
+  const bySeverity: Record<string, number> = {};
+  const countries = new Set<string>();
+  const byDrug = new Map<
+    string,
+    { drug_id: string; name: string; atc_code: string | null; countries: Set<string>; events: number; who_essential: boolean }
+  >();
+  let whoEssentialDrugs = new Set<string>();
+  let euCriticalDrugs = new Set<string>();
+
+  for (const r of rows) {
+    const sev = r.severity || "untagged";
+    bySeverity[sev] = (bySeverity[sev] || 0) + 1;
+    if (r.country_code) countries.add(r.country_code);
+    const d = r.drugs;
+    if (!d?.id) continue;
+    let bucket = byDrug.get(d.id);
+    if (!bucket) {
+      bucket = {
+        drug_id: d.id,
+        name: d.generic_name || "Unknown",
+        atc_code: d.atc_code,
+        countries: new Set<string>(),
+        events: 0,
+        who_essential: !!d.who_essential_medicine,
+      };
+      byDrug.set(d.id, bucket);
+    }
+    bucket.events += 1;
+    if (r.country_code) bucket.countries.add(r.country_code);
+    if (d.who_essential_medicine) whoEssentialDrugs.add(d.id);
+    if (d.critical_medicine_eu) euCriticalDrugs.add(d.id);
+  }
+
+  const topDrugs: ClassTopDrug[] = [...byDrug.values()]
+    .sort((a, b) => b.countries.size - a.countries.size || b.events - a.events)
+    .slice(0, 5)
+    .map((d) => ({
+      drug_id: d.drug_id,
+      name: d.name,
+      atc_code: d.atc_code,
+      country_count: d.countries.size,
+      shortage_event_count: d.events,
+      who_essential: d.who_essential,
+    }));
+
+  // Hydrate top drugs into ctx.drugs so any inline <drug_card /> emitted by
+  // the model alongside the class card lands on a real record.
+  await Promise.all(topDrugs.map((d) => getDrugDetails({ drug_id: d.drug_id }, ctx).catch(() => null)));
+
+  // 3. Trend signal — proportional comparison of last-30d vs prior-60d.
+  //    Normalised because the prior window is twice as wide.
+  const recentCount = (recentRes as any).count ?? 0;
+  const priorCount = (priorRes as any).count ?? 0;
+  let trend: ClassSummary["trend"] = "insufficient_data";
+  let trendNote = `${recentCount} events in last 30d vs ${priorCount} in prior 60d`;
+  const total = recentCount + priorCount;
+  if (total >= 10) {
+    const priorRate = priorCount / 60; // events/day
+    const recentRate = recentCount / 30;
+    const ratio = priorRate === 0 ? Infinity : recentRate / priorRate;
+    if (ratio > 1.3) trend = "rising";
+    else if (ratio < 0.7) trend = "falling";
+    else trend = "stable";
+    trendNote = `${recentCount} new events in last 30d vs ${priorCount} in prior 60d (rate ratio ${ratio.toFixed(2)}×)`;
+  }
+
+  // 4. Sources consulted via the shared helper.
+  const sourcesConsulted = await computeSourcesConsulted(rows);
+
+  const summary: ClassSummary = {
+    atc_code: atc,
+    atc_name: resolveAtcName(atc),
+    trend,
+    trend_note: trendNote,
+    drugs_in_class_with_active_shortage: byDrug.size,
+    total_active_events: rows.length,
+    countries_affected: countries.size,
+    by_severity: bySeverity,
+    who_essential_count: whoEssentialDrugs.size,
+    eu_critical_count: euCriticalDrugs.size,
+    top_drugs: topDrugs,
+    sources_consulted: sourcesConsulted,
+  };
+
+  ctx.classes[atc] = summary;
+  return summary;
+}
+
 async function queryIntelligenceSources(input: {
   query?: string;
   category?: string;
@@ -1361,6 +1630,8 @@ export async function executeTool(
       return await listActiveShortages(input as any, ctx);
     case "summarize_shortage_landscape":
       return await summarizeShortageLandscape(input as any, ctx);
+    case "get_class_summary":
+      return await getClassSummary(input as any, ctx);
     case "get_trade_prices":
       return await getTradePrices(input as any);
     case "search_recalls":

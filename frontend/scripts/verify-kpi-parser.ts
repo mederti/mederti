@@ -98,4 +98,19 @@ assert((ssSrc!.items[1].freshness || "").includes("stale"), "stale tail preserve
 assert((ssSrc!.items[2].freshness || "").startsWith("latest event"), "latest-event fallback label preserved");
 assert(ssSrc!.items[3].freshness === "freshness unknown", "unknown freshness preserved");
 
+// <class_card atc="L01" /> — class card lookup tag.
+const withClass = `<class_card atc="L01" />
+
+Most pinched: Paclitaxel, Temozolomide.
+
+<followups>A|B</followups>`;
+const wc = parseAgentResponse(withClass);
+const classPart = wc.find((p): p is Extract<typeof wc[number], { kind: "class" }> => p.kind === "class");
+assert(!!classPart, "<class_card> tag parsed");
+assert(classPart!.atc === "L01", "atc attribute extracted (uppercased)");
+
+const wcLower = parseAgentResponse(`<class_card atc="j01cr" />`);
+const lc = wcLower.find((p): p is Extract<typeof wcLower[number], { kind: "class" }> => p.kind === "class");
+assert(!!lc && lc.atc === "J01CR", "ATC is normalised to uppercase regardless of input");
+
 console.log("\nALL OK");

@@ -19,7 +19,7 @@ import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 
-import type { ChatApiResponse, ChatMessage, DrugDetail, SubstituteRow } from "@/lib/chat/types";
+import type { ChatApiResponse, ChatMessage, ClassSummary, DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { parseAgentResponse, RenderedResponse } from "./components/parser";
 import { DrugPane } from "./components/DrugPane";
 import { PaneContext, type PaneCtx } from "./components/PaneContext";
@@ -106,6 +106,7 @@ function ChatPageInner() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [drugsMap, setDrugsMap] = useState<Record<string, DrugDetail>>({});
   const [subsMap, setSubsMap] = useState<Record<string, SubstituteRow>>({});
+  const [classesMap, setClassesMap] = useState<Record<string, ClassSummary>>({});
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -201,6 +202,7 @@ function ChatPageInner() {
 
       if (data.drugs) setDrugsMap((prev) => ({ ...prev, ...data.drugs }));
       if (data.subs) setSubsMap((prev) => ({ ...prev, ...data.subs }));
+      if (data.classes) setClassesMap((prev) => ({ ...prev, ...data.classes }));
 
       const assistantId = ++idRef.current;
       setTurns((t) => [
@@ -333,7 +335,7 @@ function ChatPageInner() {
               <div className="chat-welcome">
                 <h1>What do you need to know?</h1>
                 <p>
-                  Ask about drug shortages, recalls, or substitutes across 22 countries. Mederti reads live regulator data and tells you the truth.
+                  Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what's not covered.
                 </p>
                 <div className="chat-suggestions">
                   {SUGGESTIONS.map((s) => (
@@ -363,6 +365,7 @@ function ChatPageInner() {
                           parts={parseAgentResponse(t.text)}
                           drugs={drugsMap}
                           subs={subsMap}
+                          classes={classesMap}
                           onFollowup={send}
                           drugIdByName={t.role === "assistant" ? t.drugIdByName : undefined}
                         />

@@ -161,6 +161,7 @@ export async function POST(req: NextRequest) {
       content: finalText,
       drugs: ctx.drugs,
       subs: ctx.subs,
+      classes: ctx.classes,
       tool_calls: toolCalls,
       truncated,
     });

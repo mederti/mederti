@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext, type ReactNode } from "react";
-import type { DrugDetail, Persona, SubstituteRow } from "@/lib/chat/types";
+import type { ClassSummary, DrugDetail, Persona, SubstituteRow } from "@/lib/chat/types";
 import { DrugCard } from "./DrugCard";
 import { SubCard } from "./SubCard";
 import { PaneContext } from "./PaneContext";
@@ -35,8 +35,11 @@ export type ParsedPart =
   | { kind: "followups"; items: string[] }
   | { kind: "alternates"; items: Array<{ id: string; name: string }> }
   | { kind: "kpis"; items: KpiTile[] }
-  | { kind: "sources"; items: SourceChip[] };
+  | { kind: "sources"; items: SourceChip[] }
+  | { kind: "class"; atc: string };
 
+// Match <class_card atc="L01" /> — frontend looks up ctx.classes[atc].
+const CLASS_TAG_RE = /<class_card\s+([^>]+?)\/>/g;
 // Match <drug_card id="..." /> with optional persona="..." (any attribute order).
 const DRUG_TAG_RE = /<drug_card\s+([^>]+?)\/>/g;
 const SUB_TAG_RE = /<sub_card\s+id="([^"]+)"(?:\s+match="([^"]+)")?\s*\/>/g;
@@ -69,7 +72,7 @@ function normalisePersona(v?: string): Persona | undefined {
   return undefined;
 }
 
-type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis" | "sources"; index: number; length: number; data: any };
+type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis" | "sources" | "class"; index: number; length: number; data: any };
 
 function parseSourcesBody(inner: string): SourceChip[] {
   return inner
@@ -119,6 +122,12 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     if (!id) continue;
     const persona = normalisePersona(extractAttr(attrs, "persona"));
     hits.push({ kind: "drug", index: m.index, length: m[0].length, data: { id, persona } });
+  }
+  CLASS_TAG_RE.lastIndex = 0;
+  for (let m: RegExpExecArray | null; (m = CLASS_TAG_RE.exec(raw)) !== null; ) {
+    const atc = extractAttr(m[1], "atc");
+    if (!atc) continue;
+    hits.push({ kind: "class", index: m.index, length: m[0].length, data: { atc: atc.toUpperCase() } });
   }
   SUB_TAG_RE.lastIndex = 0;
   for (let m: RegExpExecArray | null; (m = SUB_TAG_RE.exec(raw)) !== null; ) {
@@ -225,6 +234,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
   for (const h of hits) {
     if (h.index > cursor) parts.push({ kind: "text", text: raw.slice(cursor, h.index) });
     if (h.kind === "drug") parts.push({ kind: "drug", id: h.data.id, persona: h.data.persona });
+    else if (h.kind === "class") parts.push({ kind: "class", atc: h.data.atc });
     else if (h.kind === "sub") parts.push({ kind: "sub", id: h.data.id, match: h.data.match });
     else if (h.kind === "alternates") parts.push({ kind: "alternates", items: h.data.items });
     else if (h.kind === "kpis") parts.push({ kind: "kpis", items: h.data.items });
@@ -240,13 +250,14 @@ type Props = {
   parts: ParsedPart[];
   drugs: Record<string, DrugDetail>;
   subs: Record<string, SubstituteRow>;
+  classes?: Record<string, ClassSummary>;
   onFollowup: (q: string) => void;
   /** Map of drug name (as it appears in prose / tables) → drug_id, used to
    *  make bolded drug names clickable. Built post-stream from /api/search. */
   drugIdByName?: Record<string, string>;
 };
 
-export function RenderedResponse({ parts, drugs, subs, onFollowup, drugIdByName }: Props): ReactNode {
+export function RenderedResponse({ parts, drugs, subs, classes, onFollowup, drugIdByName }: Props): ReactNode {
   return (
     <>
       {parts.map((p, i) => {
@@ -265,6 +276,17 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup, drugIdByName 
             );
           }
           return <DrugCard key={i} drug={d} personaAttr={p.persona} />;
+        }
+        if (p.kind === "class") {
+          const c = classes?.[p.atc];
+          if (!c) {
+            return (
+              <div key={i} className="err">
+                Missing class data for <span className="font-mono">{p.atc}</span>.
+              </div>
+            );
+          }
+          return <ClassCard key={i} summary={c} onFollowup={onFollowup} />;
         }
         if (p.kind === "sub") {
           const s = subs[p.id];
@@ -399,6 +421,127 @@ function TableBlock({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function ClassCard({ summary, onFollowup }: { summary: ClassSummary; onFollowup: (q: string) => void }) {
+  const sev = summary.by_severity;
+  const sevTotal = Object.values(sev).reduce((a, b) => a + b, 0) || 1;
+  const sevOrder = ["critical", "high", "medium", "low", "untagged"];
+  const sevColors: Record<string, string> = {
+    critical: "#b91c1c", // red-700
+    high: "#c2410c",     // orange-700
+    medium: "#a16207",   // yellow-700
+    low: "#15803d",      // green-700
+    untagged: "#94a3b8", // slate-400
+  };
+  const trendChip =
+    summary.trend === "rising"
+      ? { label: "↑ rising", cls: "class-trend class-trend-rising" }
+      : summary.trend === "falling"
+      ? { label: "↓ improving", cls: "class-trend class-trend-falling" }
+      : summary.trend === "stable"
+      ? { label: "→ stable", cls: "class-trend class-trend-stable" }
+      : { label: "— thin signal", cls: "class-trend class-trend-thin" };
+
+  return (
+    <div className="class-card">
+      <div className="class-card-head">
+        <div className="class-card-atc">{summary.atc_code}</div>
+        <div className="class-card-name">{summary.atc_name}</div>
+        <div className={trendChip.cls} title={summary.trend_note}>
+          {trendChip.label}
+        </div>
+      </div>
+
+      <div className="class-card-kpis">
+        <div className="class-kpi">
+          <div className="class-kpi-value">{summary.drugs_in_class_with_active_shortage}</div>
+          <div className="class-kpi-label">drugs in shortage</div>
+        </div>
+        <div className="class-kpi">
+          <div className="class-kpi-value">{summary.total_active_events}</div>
+          <div className="class-kpi-label">active events</div>
+        </div>
+        <div className="class-kpi">
+          <div className="class-kpi-value">{summary.countries_affected}</div>
+          <div className="class-kpi-label">countries affected</div>
+        </div>
+        <div className="class-kpi">
+          <div className="class-kpi-value">{summary.who_essential_count}</div>
+          <div className="class-kpi-label">WHO essential</div>
+        </div>
+      </div>
+
+      {summary.total_active_events > 0 ? (
+        <div className="class-severity">
+          <div className="class-severity-label">severity mix</div>
+          <div className="class-severity-bar">
+            {sevOrder.map((s) => {
+              const n = sev[s] || 0;
+              if (n === 0) return null;
+              const pct = (n / sevTotal) * 100;
+              return (
+                <div
+                  key={s}
+                  className="class-severity-seg"
+                  style={{ width: `${pct}%`, background: sevColors[s] }}
+                  title={`${s}: ${n}`}
+                />
+              );
+            })}
+          </div>
+          <div className="class-severity-legend">
+            {sevOrder.map((s) => {
+              const n = sev[s] || 0;
+              if (n === 0) return null;
+              return (
+                <span key={s} className="class-severity-tag">
+                  <span className="class-severity-dot" style={{ background: sevColors[s] }} />
+                  {s} {n}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {summary.top_drugs.length > 0 ? (
+        <div className="class-top-drugs">
+          <div className="class-top-drugs-label">most pinched</div>
+          <ul className="class-top-drugs-list">
+            {summary.top_drugs.map((d) => (
+              <li key={d.drug_id}>
+                <button
+                  type="button"
+                  className="class-top-drug-link"
+                  onClick={() => onFollowup(`Tell me about ${d.name}`)}
+                  title={d.atc_code || ""}
+                >
+                  {d.name}
+                  {d.who_essential ? <span className="class-top-who" title="WHO Essential Medicine">WHO</span> : null}
+                </button>
+                <span className="class-top-drug-meta">
+                  {d.country_count} {d.country_count === 1 ? "country" : "countries"} · {d.shortage_event_count} events
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {summary.sources_consulted.length > 0 ? (
+        <SourceTrail
+          chips={summary.sources_consulted.map((s) => ({
+            code: s.regulator_code,
+            country: s.country_code,
+            rows: s.rows_contributed,
+            freshness: s.freshness_label,
+            url: s.source_url ?? undefined,
+          }))}
+        />
+      ) : null}
     </div>
   );
 }

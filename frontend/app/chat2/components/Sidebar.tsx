@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bookmark,
@@ -38,7 +38,7 @@ import {
   type SavedChat,
 } from "../chatStore";
 import { createWatchlist, useWatchlists, type Watchlist } from "../watchlistStore";
-import { createFolder, useFolders, type Folder } from "../folderStore";
+import { createFolder, useFolders, type Folder as FolderRecord } from "../folderStore";
 
 const LS_FOLDERS = "chat2:sidebar:expandedFolders";
 const LS_WATCHLISTS = "chat2:sidebar:expandedWatchlists";
@@ -170,7 +170,7 @@ function ChatKebabMenu({
 }: {
   chatId: string;
   currentFolderId: string | null;
-  folders: Folder[];
+  folders: FolderRecord[];
   isSaved: boolean;
   isStarred: boolean;
   onClose: () => void;
@@ -285,7 +285,7 @@ function ChatHistoryItem({
   active?: boolean;
   isStarred?: boolean;
   folderId?: string | null;
-  folders: Folder[];
+  folders: FolderRecord[];
   // True when this row represents a chat in the real localStorage store.
   // Seeded-demo rows pass false; their kebab actions stay stubbed.
   isPersisted: boolean;
@@ -541,8 +541,8 @@ export function Sidebar({
           </button>
         ) : null}
 
-        {/* Folders — only in demo */}
-        {folders.length > 0 ? (
+        {/* Folders */}
+        {realFolders.length > 0 ? (
           <button
             type="button"
             onClick={onCollapse}
@@ -773,8 +773,97 @@ export function Sidebar({
         ) : null}
       </div>
 
-      {/* User footer */}
-      <div className="border-t border-slate-200 px-3 py-2.5 flex items-center gap-2.5 bg-slate-50/60">
+      {/* User footer + profile popover */}
+      <UserFooter onToast={onToast} />
+    </aside>
+  );
+}
+
+function UserFooter({ onToast }: { onToast: (msg: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative border-t border-slate-200 bg-slate-50/60">
+      {/* Profile popover — opens upward */}
+      {open ? (
+        <div
+          className="absolute bottom-full left-2 right-2 mb-2 bg-white border border-slate-200 rounded-xl p-1 z-40"
+          style={{ boxShadow: "0 12px 32px rgba(15,23,42,0.10), 0 3px 10px rgba(15,23,42,0.06)" }}
+        >
+          {/* Profile header */}
+          <div className="flex items-center gap-3 px-3 py-3">
+            <span
+              className="w-9 h-9 rounded-full inline-flex items-center justify-center text-white text-[13px] font-semibold shrink-0"
+              style={{ background: "linear-gradient(135deg, #0d9488, #14b8a6)" }}
+            >
+              R
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold text-slate-900 leading-tight">Rob</div>
+              <div className="text-[11px] text-slate-500 leading-tight">Mederti · Founder</div>
+            </div>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
+              Founder
+            </span>
+          </div>
+
+          <div className="h-px bg-slate-100 mx-1 mb-1" />
+
+          {/* Actions */}
+          <Link
+            href="/account"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12.5px] text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+            </svg>
+            Account settings
+          </Link>
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onToast("Keyboard shortcuts — coming soon"); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12.5px] text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+            </svg>
+            Keyboard shortcuts
+          </button>
+
+          <div className="h-px bg-slate-100 mx-1 my-1" />
+
+          <Link
+            href="/login"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12.5px] text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+            </svg>
+            Sign out
+          </Link>
+        </div>
+      ) : null}
+
+      {/* Footer row — click anywhere to open */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-100/70 transition-colors text-left"
+      >
         <span
           className="w-7 h-7 rounded-full inline-flex items-center justify-center text-white text-[11px] font-semibold shrink-0"
           style={{ background: "linear-gradient(135deg, #0d9488, #14b8a6)" }}
@@ -785,15 +874,13 @@ export function Sidebar({
           <div className="text-[13px] font-medium text-slate-900 leading-tight">Rob</div>
           <div className="text-[11px] text-slate-400 leading-tight">Mederti · Founder</div>
         </div>
-        <button
-          type="button"
-          onClick={() => onToast("User menu — coming soon")}
-          className="text-slate-400 hover:text-slate-700 text-base px-1"
-          title="More"
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
         >
-          ⋯
-        </button>
-      </div>
-    </aside>
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+    </div>
   );
 }

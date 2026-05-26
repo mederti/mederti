@@ -17,6 +17,13 @@ import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { DrugCard } from "@/app/chat/components/DrugCard";
 
 export type KpiTile = { value: string; label: string };
+export type SourceChip = {
+  code: string;
+  country: string;
+  rows?: number;
+  freshness?: string;
+  url?: string;
+};
 
 export type ParsedPart =
   | { kind: "text"; text: string }
@@ -24,7 +31,8 @@ export type ParsedPart =
   | { kind: "sub"; id: string; match: string }
   | { kind: "followups"; items: string[] }
   | { kind: "alternates"; items: Array<{ id: string; name: string }> }
-  | { kind: "kpis"; items: KpiTile[] };
+  | { kind: "kpis"; items: KpiTile[] }
+  | { kind: "sources"; items: SourceChip[] };
 
 const DRUG_TAG_RE = /<drug_card\s+([^>]+?)\/>/g;
 const SUB_TAG_RE = /<sub_card\s+id="([^"]+)"(?:\s+match="([^"]+)")?\s*\/>/g;
@@ -35,6 +43,26 @@ const ALTERNATES_RE = /<alternates>([\s\S]*?)<\/alternates>/g;
 const ALTERNATES_UNCLOSED_RE = /<alternates>([\s\S]*?)$/g;
 const KPIS_RE = /<kpis>([\s\S]*?)<\/kpis>/g;
 const KPIS_UNCLOSED_RE = /<kpis>([\s\S]*?)$/g;
+const SOURCES_RE = /<sources>([\s\S]*?)<\/sources>/g;
+const SOURCES_UNCLOSED_RE = /<sources>([\s\S]*?)$/g;
+
+function parseSourcesBody(inner: string): SourceChip[] {
+  return inner
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s): SourceChip | null => {
+      const httpAt = s.search(/\bhttps?:\/\//);
+      const head = httpAt === -1 ? s : s.slice(0, httpAt).replace(/:\s*$/, "");
+      const url = httpAt === -1 ? undefined : s.slice(httpAt).trim();
+      const parts = head.split(":").map((x) => x.trim());
+      const [code, country, rowsRaw, freshness] = parts;
+      if (!code || !country) return null;
+      const rows = rowsRaw && /^\d+$/.test(rowsRaw) ? parseInt(rowsRaw, 10) : undefined;
+      return { code, country, rows, freshness: freshness || undefined, url };
+    })
+    .filter((x): x is SourceChip => x !== null);
+}
 
 function parseKpiBody(inner: string): KpiTile[] {
   return inner
@@ -57,7 +85,7 @@ function extractAttr(attrs: string, name: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
-type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis"; index: number; length: number; data: any };
+type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis" | "sources"; index: number; length: number; data: any };
 
 export function parseAgentResponse(raw: string): ParsedPart[] {
   const hits: Hit[] = [];
@@ -146,6 +174,24 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     if (items.length === 0) continue;
     hits.push({ kind: "kpis", index: m.index, length: m[0].length, data: { items } });
   }
+  // <sources>...</sources> regulator chips
+  SOURCES_RE.lastIndex = 0;
+  const closedSourcesRanges: Array<[number, number]> = [];
+  for (let m: RegExpExecArray | null; (m = SOURCES_RE.exec(raw)) !== null; ) {
+    const items = parseSourcesBody(m[1]);
+    if (items.length === 0) continue;
+    hits.push({ kind: "sources", index: m.index, length: m[0].length, data: { items } });
+    closedSourcesRanges.push([m.index, m.index + m[0].length]);
+  }
+  SOURCES_UNCLOSED_RE.lastIndex = 0;
+  for (let m: RegExpExecArray | null; (m = SOURCES_UNCLOSED_RE.exec(raw)) !== null; ) {
+    const overlaps = closedSourcesRanges.some(([s, e]) => m!.index >= s && m!.index < e);
+    if (overlaps) continue;
+    const inner = m[1].replace(/<\/?sources>?$/, "");
+    const items = parseSourcesBody(inner);
+    if (items.length === 0) continue;
+    hits.push({ kind: "sources", index: m.index, length: m[0].length, data: { items } });
+  }
   hits.sort((a, b) => a.index - b.index);
 
   const parts: ParsedPart[] = [];
@@ -156,6 +202,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     else if (h.kind === "sub") parts.push({ kind: "sub", id: h.data.id, match: h.data.match });
     else if (h.kind === "alternates") parts.push({ kind: "alternates", items: h.data.items });
     else if (h.kind === "kpis") parts.push({ kind: "kpis", items: h.data.items });
+    else if (h.kind === "sources") parts.push({ kind: "sources", items: h.data.items });
     else parts.push({ kind: "followups", items: h.data.items });
     cursor = h.index + h.length;
   }
@@ -318,6 +365,47 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): Rea
               </div>
             </div>
           ))}
+        </div>
+      );
+    } else if (p.kind === "sources" && p.items.length > 0) {
+      out.push(
+        <div key={i} className="mt-4 border-t border-slate-200 pt-3">
+          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-500 font-medium mb-2">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500" aria-hidden />
+            Verified across {p.items.length} regulator{p.items.length === 1 ? "" : "s"}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {p.items.map((c, k) => {
+              const inner = (
+                <>
+                  <span className="font-semibold text-slate-800">{c.code}</span>
+                  <span className="text-slate-400">{c.country}</span>
+                  {c.rows != null ? (
+                    <span className="text-slate-500">· {c.rows.toLocaleString()} rows</span>
+                  ) : null}
+                  {c.freshness ? (
+                    <span className="text-slate-500">· {c.freshness}</span>
+                  ) : null}
+                </>
+              );
+              const cls =
+                "inline-flex items-center gap-1 bg-white border border-slate-200 rounded px-2 py-1 text-[12px] hover:border-teal-300 hover:bg-teal-50 transition-colors";
+              return c.url ? (
+                <a
+                  key={k}
+                  href={c.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cls}
+                  title={`Open ${c.code} (${c.country}) at source`}
+                >
+                  {inner}
+                </a>
+              ) : (
+                <span key={k} className={cls}>{inner}</span>
+              );
+            })}
+          </div>
         </div>
       );
     } else if (p.kind === "alternates" && p.items.length > 0) {

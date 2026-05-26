@@ -8,13 +8,26 @@ import { PaneContext } from "./PaneContext";
 
 export type KpiTile = { value: string; label: string };
 
+/** One regulator chip in the SourceTrail. `freshness` is a free-form display
+ *  string ("6h", "2d", "May 26") set by the model from data_sources.last_scraped_at
+ *  or latest_event_date — kept as a string so the model can be honest about
+ *  which signal it's quoting. */
+export type SourceChip = {
+  code: string;
+  country: string;
+  rows?: number;
+  freshness?: string;
+  url?: string;
+};
+
 export type ParsedPart =
   | { kind: "text"; text: string }
   | { kind: "drug"; id: string; persona?: Persona }
   | { kind: "sub"; id: string; match: string }
   | { kind: "followups"; items: string[] }
   | { kind: "alternates"; items: Array<{ id: string; name: string }> }
-  | { kind: "kpis"; items: KpiTile[] };
+  | { kind: "kpis"; items: KpiTile[] }
+  | { kind: "sources"; items: SourceChip[] };
 
 // Match <drug_card id="..." /> with optional persona="..." (any attribute order).
 const DRUG_TAG_RE = /<drug_card\s+([^>]+?)\/>/g;
@@ -31,6 +44,12 @@ const ALTERNATES_UNCLOSED_RE = /<alternates>([\s\S]*?)$/g;
 // asked about — "91 active shortages", "11 countries", etc.
 const KPIS_RE = /<kpis>([\s\S]*?)<\/kpis>/g;
 const KPIS_UNCLOSED_RE = /<kpis>([\s\S]*?)$/g;
+// <sources>CODE:COUNTRY:rows:freshness:url|...</sources> — regulator chips
+// proving Mederti pulled from authoritative feeds, not generic web search.
+// Each field after CODE:COUNTRY is optional; first colon splits code from
+// country, the rest splits on ':' positionally.
+const SOURCES_RE = /<sources>([\s\S]*?)<\/sources>/g;
+const SOURCES_UNCLOSED_RE = /<sources>([\s\S]*?)$/g;
 
 function extractAttr(attrs: string, name: string): string | undefined {
   const m = new RegExp(`${name}="([^"]+)"`).exec(attrs);
@@ -42,7 +61,29 @@ function normalisePersona(v?: string): Persona | undefined {
   return undefined;
 }
 
-type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis"; index: number; length: number; data: any };
+type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis" | "sources"; index: number; length: number; data: any };
+
+function parseSourcesBody(inner: string): SourceChip[] {
+  return inner
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s): SourceChip | null => {
+      // Format: CODE:COUNTRY[:rows[:freshness[:url]]]
+      // We split max 5 parts but the URL may contain colons (https://), so the
+      // URL is anchored to the FIRST occurrence of "http" and everything from
+      // there is the URL.
+      const httpAt = s.search(/\bhttps?:\/\//);
+      const head = httpAt === -1 ? s : s.slice(0, httpAt).replace(/:\s*$/, "");
+      const url = httpAt === -1 ? undefined : s.slice(httpAt).trim();
+      const parts = head.split(":").map((x) => x.trim());
+      const [code, country, rowsRaw, freshness] = parts;
+      if (!code || !country) return null;
+      const rows = rowsRaw && /^\d+$/.test(rowsRaw) ? parseInt(rowsRaw, 10) : undefined;
+      return { code, country, rows, freshness: freshness || undefined, url };
+    })
+    .filter((x): x is SourceChip => x !== null);
+}
 
 function parseKpiBody(inner: string): KpiTile[] {
   return inner
@@ -151,6 +192,24 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     if (items.length === 0) continue;
     hits.push({ kind: "kpis", index: m.index, length: m[0].length, data: { items } });
   }
+  // <sources>...</sources> regulator provenance chips
+  SOURCES_RE.lastIndex = 0;
+  const closedSourcesRanges: Array<[number, number]> = [];
+  for (let m: RegExpExecArray | null; (m = SOURCES_RE.exec(raw)) !== null; ) {
+    const items = parseSourcesBody(m[1]);
+    if (items.length === 0) continue;
+    hits.push({ kind: "sources", index: m.index, length: m[0].length, data: { items } });
+    closedSourcesRanges.push([m.index, m.index + m[0].length]);
+  }
+  SOURCES_UNCLOSED_RE.lastIndex = 0;
+  for (let m: RegExpExecArray | null; (m = SOURCES_UNCLOSED_RE.exec(raw)) !== null; ) {
+    const overlaps = closedSourcesRanges.some(([s, e]) => m!.index >= s && m!.index < e);
+    if (overlaps) continue;
+    const inner = m[1].replace(/<\/?sources>?$/, "");
+    const items = parseSourcesBody(inner);
+    if (items.length === 0) continue;
+    hits.push({ kind: "sources", index: m.index, length: m[0].length, data: { items } });
+  }
   hits.sort((a, b) => a.index - b.index);
 
   const parts: ParsedPart[] = [];
@@ -161,6 +220,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     else if (h.kind === "sub") parts.push({ kind: "sub", id: h.data.id, match: h.data.match });
     else if (h.kind === "alternates") parts.push({ kind: "alternates", items: h.data.items });
     else if (h.kind === "kpis") parts.push({ kind: "kpis", items: h.data.items });
+    else if (h.kind === "sources") parts.push({ kind: "sources", items: h.data.items });
     else parts.push({ kind: "followups", items: h.data.items });
     cursor = h.index + h.length;
   }
@@ -252,6 +312,10 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup, drugIdByName 
             </div>
           );
         }
+        if (p.kind === "sources") {
+          if (p.items.length === 0) return null;
+          return <SourceTrail key={i} chips={p.items} />;
+        }
         return null;
       })}
     </>
@@ -327,6 +391,49 @@ function TableBlock({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function SourceTrail({ chips }: { chips: SourceChip[] }) {
+  return (
+    <div className="source-trail">
+      <div className="source-trail-label">
+        <span className="source-trail-dot" aria-hidden />
+        Verified across {chips.length} regulator{chips.length === 1 ? "" : "s"}
+      </div>
+      <div className="source-trail-chips">
+        {chips.map((c, i) => {
+          const inner = (
+            <>
+              <span className="source-chip-code">{c.code}</span>
+              <span className="source-chip-country">{c.country}</span>
+              {c.rows != null ? (
+                <span className="source-chip-rows">· {c.rows.toLocaleString()} rows</span>
+              ) : null}
+              {c.freshness ? (
+                <span className="source-chip-fresh">· {c.freshness}</span>
+              ) : null}
+            </>
+          );
+          return c.url ? (
+            <a
+              key={i}
+              className="source-chip source-chip-link"
+              href={c.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open ${c.code} (${c.country}) at source`}
+            >
+              {inner}
+            </a>
+          ) : (
+            <span key={i} className="source-chip">
+              {inner}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "./supabase";
+import { coverageGate } from "./coverage";
 import type {
   DrugDetail,
   DrugSummary,
@@ -139,7 +140,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "summarize_shortage_landscape",
     description:
-      "ONE-CALL landscape summary for class/region/severity-level questions ('show critical antibiotic shortages globally', 'what's in shortage in oncology in the EU', 'how bad is the cardiovascular shortage picture'). Returns: aggregate counts, severity distribution, country distribution, top affected drugs (with drug_ids you can drug_card), WHO essential / EU critical overlap, and a notes block flagging data caveats (sparse severity tagging, country coverage gaps). PREFER this over multiple list_active_shortages calls when the user is asking for a landscape — a single tool call beats N row-level fetches and lets you spend tokens on synthesis.",
+      "ONE-CALL landscape summary for class/region/severity-level questions ('show critical antibiotic shortages globally', 'what's in shortage in oncology in the EU', 'how bad is the cardiovascular shortage picture'). Returns: aggregate counts, severity distribution, country distribution, top affected drugs (with drug_ids you can drug_card), WHO essential / EU critical overlap, **sources_consulted** (the regulators whose feeds backed this answer — TGA, FDA, MHRA, ANVISA etc. — with row counts, latest event dates, and last_scraped_at where available), and a notes block flagging data caveats. PREFER this over multiple list_active_shortages calls when the user is asking for a landscape — a single tool call beats N row-level fetches and lets you spend tokens on synthesis. The sources_consulted block is what makes Mederti's answer verifiable in a way pure web-search answers can't be — always surface it as a <sources>...</sources> block in the response.",
     input_schema: {
       type: "object",
       properties: {
@@ -945,6 +946,53 @@ export async function hydrateReferencedIds(text: string, ctx: ToolContext): Prom
   }
 }
 
+// Primary medicines regulator per ISO country code. Used to attribute shortage
+// rows back to the regulator the scraper pulls from. Multi-source countries
+// (US has FDA Drug Shortages + FDA Enforcement, CH has Swissmedic + drugshortage.ch)
+// collapse to the canonical regulator name — the per-row source_url still carries
+// the precise URL the scraper saw. Codes match data_sources.abbreviation where
+// possible.
+const REGULATORS: Record<string, { code: string; name: string }> = {
+  AU: { code: "TGA", name: "Therapeutic Goods Administration" },
+  US: { code: "FDA", name: "Food and Drug Administration" },
+  CA: { code: "Health Canada", name: "Health Canada" },
+  GB: { code: "MHRA", name: "Medicines and Healthcare products Regulatory Agency" },
+  EU: { code: "EMA", name: "European Medicines Agency" },
+  DE: { code: "BfArM", name: "Bundesinstitut für Arzneimittel und Medizinprodukte" },
+  FR: { code: "ANSM", name: "Agence nationale de sécurité du médicament" },
+  IT: { code: "AIFA", name: "Agenzia Italiana del Farmaco" },
+  ES: { code: "AEMPS", name: "Agencia Española de Medicamentos y Productos Sanitarios" },
+  SG: { code: "HSA", name: "Health Sciences Authority" },
+  NZ: { code: "Pharmac", name: "Pharmac" },
+  CH: { code: "Swissmedic", name: "Swissmedic" },
+  AT: { code: "AGES", name: "Austrian Agency for Health and Food Safety" },
+  NL: { code: "CBG-MEB", name: "Medicines Evaluation Board (NL)" },
+  DK: { code: "DKMA", name: "Danish Medicines Agency" },
+  FI: { code: "Fimea", name: "Finnish Medicines Agency" },
+  IE: { code: "HPRA", name: "Health Products Regulatory Authority" },
+  SE: { code: "Läkemedelsverket", name: "Swedish Medical Products Agency" },
+  CZ: { code: "SÚKL", name: "State Institute for Drug Control (CZ)" },
+  HU: { code: "OGYÉI", name: "National Institute of Pharmacy and Nutrition" },
+  NO: { code: "NoMA", name: "Norwegian Medicines Agency" },
+  BE: { code: "FAMHP", name: "Federal Agency for Medicines and Health Products" },
+  BR: { code: "ANVISA", name: "Agência Nacional de Vigilância Sanitária" },
+  JP: { code: "PMDA", name: "Pharmaceuticals and Medical Devices Agency" },
+  KR: { code: "MFDS", name: "Ministry of Food and Drug Safety" },
+  MX: { code: "Cofepris", name: "Comisión Federal para la Protección contra Riesgos Sanitarios" },
+  ZA: { code: "SAHPRA", name: "South African Health Products Regulatory Authority" },
+  NG: { code: "NAFDAC", name: "National Agency for Food and Drug Administration and Control" },
+  SA: { code: "SFDA", name: "Saudi Food and Drug Authority" },
+  PT: { code: "INFARMED", name: "INFARMED (PT)" },
+};
+
+function regulatorFor(countryCode: string | null | undefined): { code: string; name: string; country_code: string } | null {
+  if (!countryCode) return null;
+  const cc = countryCode.toUpperCase();
+  const r = REGULATORS[cc];
+  if (!r) return null;
+  return { ...r, country_code: cc };
+}
+
 // Landscape summary — single call returns enough data for the model to write a
 // class/region answer (KPIs + top drugs + geo distribution) without making N
 // per-row tool calls. Drug ids in `top_drugs` are populated into ctx.drugs so the
@@ -1059,6 +1107,75 @@ async function summarizeShortageLandscape(
     .slice(0, 15)
     .map(([country_code, count]) => ({ country_code, count }));
 
+  // 4b. Source provenance — which regulators backed this answer? Aggregate
+  //     per-regulator row counts + latest event date from the working set,
+  //     then enrich with last_scraped_at from data_sources (best-effort).
+  type ProvAgg = { code: string; name: string; country_code: string; rows_contributed: number; latest_event_date: string | null };
+  const provByCountry = new Map<string, ProvAgg>();
+  for (const r of working) {
+    const reg = regulatorFor(r.country_code);
+    if (!reg) continue;
+    let p = provByCountry.get(reg.country_code);
+    if (!p) {
+      p = { code: reg.code, name: reg.name, country_code: reg.country_code, rows_contributed: 0, latest_event_date: null };
+      provByCountry.set(reg.country_code, p);
+    }
+    p.rows_contributed += 1;
+    if (r.start_date && (!p.latest_event_date || r.start_date > p.latest_event_date)) {
+      p.latest_event_date = r.start_date;
+    }
+  }
+
+  // Try to attach last_scraped_at + source_url from data_sources for the
+  // countries we touched. Doesn't matter if the table is sparse — we keep
+  // freshness honestly labelled as "latest_event_date" when last_scraped_at
+  // isn't available.
+  const touchedCountries = [...provByCountry.keys()];
+  let scrapeMeta = new Map<string, { last_scraped_at: string | null; source_url: string | null }>();
+  if (touchedCountries.length > 0) {
+    try {
+      const { data: dsRows } = await sb
+        .from("data_sources")
+        .select("country_code,last_scraped_at,source_url,is_active")
+        .in("country_code", touchedCountries)
+        .eq("is_active", true);
+      // Pick the freshest last_scraped_at per country if there are multiple sources.
+      for (const r of dsRows ?? []) {
+        const cc = (r as any).country_code as string | null;
+        if (!cc) continue;
+        const ex = scrapeMeta.get(cc);
+        const next = {
+          last_scraped_at: (r as any).last_scraped_at as string | null,
+          source_url: (r as any).source_url as string | null,
+        };
+        if (!ex) {
+          scrapeMeta.set(cc, next);
+        } else if (next.last_scraped_at && (!ex.last_scraped_at || next.last_scraped_at > ex.last_scraped_at)) {
+          scrapeMeta.set(cc, next);
+        }
+      }
+    } catch (e) {
+      // Provenance enrichment is best-effort; if data_sources is unreachable
+      // we still return the regulator + row counts derived from working rows.
+      console.error("[summarize_shortage_landscape] data_sources lookup failed:", e);
+    }
+  }
+
+  const sourcesConsulted = [...provByCountry.values()]
+    .map((p) => {
+      const meta = scrapeMeta.get(p.country_code);
+      return {
+        regulator_code: p.code,
+        regulator_name: p.name,
+        country_code: p.country_code,
+        rows_contributed: p.rows_contributed,
+        latest_event_date: p.latest_event_date,
+        last_scraped_at: meta?.last_scraped_at ?? null,
+        source_url: meta?.source_url ?? null,
+      };
+    })
+    .sort((a, b) => b.rows_contributed - a.rows_contributed);
+
   const notes: string[] = [];
   if (usingFallback) {
     notes.push(
@@ -1099,6 +1216,7 @@ async function summarizeShortageLandscape(
       severities: [...d.severities],
       shortage_event_count: d.shortage_count,
     })),
+    sources_consulted: sourcesConsulted,
     notes,
   };
 }
@@ -1152,6 +1270,21 @@ export async function executeTool(
   input: Record<string, any>,
   ctx: ToolContext
 ): Promise<unknown> {
+  // Pre-flight coverage gate: short-circuit country-filtered tool calls when
+  // the country isn't in our live allowlist, so the model never sees an
+  // ambiguous empty array for an uncovered country.
+  if (name === "search_recalls") {
+    const gate = coverageGate("recalls", (input as any).country);
+    if (gate) return gate;
+  }
+  if (
+    name === "list_active_shortages" ||
+    name === "summarize_shortage_landscape"
+  ) {
+    const gate = coverageGate("shortages", (input as any).country);
+    if (gate) return gate;
+  }
+
   switch (name) {
     case "search_drugs":
       return await searchDrugs(input as any);

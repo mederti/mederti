@@ -288,6 +288,64 @@
   margin-top: 6px;
 }@media (max-width: 600px){
   .mederti-chat-root .kpi-grid-3, .mederti-chat-root .kpi-grid-4{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}.mederti-chat-root /* ===== Source trail (regulator provenance chips) ===== */
+.source-trail{
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}.mederti-chat-root .source-trail-label{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 500;
+  margin-bottom: 8px;
+}.mederti-chat-root .source-trail-dot{
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--teal);
+  display: inline-block;
+}.mederti-chat-root .source-trail-chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}.mederti-chat-root .source-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  font-family: inherit;
+  white-space: nowrap;
+}.mederti-chat-root .source-chip-link{
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}.mederti-chat-root .source-chip-link:hover{
+  border-color: var(--teal-b);
+  background: var(--teal-bg);
+  color: var(--teal);
+}.mederti-chat-root .source-chip-code{
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}.mederti-chat-root .source-chip-link:hover .source-chip-code{ color: var(--teal); }.mederti-chat-root
+.source-chip-country{
+  color: var(--text-4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}.mederti-chat-root .source-chip-rows, .mederti-chat-root .source-chip-fresh{
+  color: var(--text-3);
+  font-size: 11px;
 }.mederti-chat-root /* ===== Follow-up chips ===== */
 .followups{
   display: flex;

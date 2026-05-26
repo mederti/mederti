@@ -60,4 +60,30 @@ const ct = parseAgentResponse(closedThenText);
 const textPart = ct.find((p) => p.kind === "text");
 assert(!!textPart, "text after closed <kpis> survives");
 
+// <sources>...</sources> regulator chips — the heart of the verifiability story.
+const withSources = `Vancomycin in shortage.
+
+<drug_card id="11111111-2222-3333-4444-555555555555" />
+
+<sources>TGA:AU:812:scraped today:https://www.tga.gov.au/resources/resource/shortages|AIFA:IT:54:scraped 6h ago|Health Canada:CA:22:scraped 4h ago|FDA:US:12:scraped 18h ago</sources>
+
+<followups>A|B|C</followups>`;
+const ws = parseAgentResponse(withSources);
+const sources = ws.find((p): p is Extract<typeof ws[number], { kind: "sources" }> => p.kind === "sources");
+assert(!!sources, "<sources> tag parsed");
+assert(sources!.items.length === 4, "4 source chips parsed");
+assert(sources!.items[0].code === "TGA" && sources!.items[0].country === "AU", "first chip code+country");
+assert(sources!.items[0].rows === 812, "first chip row count parsed as number");
+assert(sources!.items[0].freshness === "scraped today", "first chip freshness");
+assert(sources!.items[0].url === "https://www.tga.gov.au/resources/resource/shortages", "first chip URL extracted");
+assert(sources!.items[1].url === undefined, "chip without URL leaves url undefined");
+assert(sources!.items[2].code === "Health Canada", "multi-word code allowed");
+
+// Truncated mid-tag — the model might cut off mid-URL.
+const truncSources = `<sources>TGA:AU:812:scraped today|AIFA:IT:54`;
+const tsParts = parseAgentResponse(truncSources);
+const tsSrc = tsParts.find((p): p is Extract<typeof tsParts[number], { kind: "sources" }> => p.kind === "sources");
+assert(!!tsSrc, "unclosed <sources> still parsed via tolerant fallback");
+assert(tsSrc!.items.length === 2, "2 chips recovered from truncated <sources>");
+
 console.log("\nALL OK");

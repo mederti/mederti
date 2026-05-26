@@ -20,12 +20,12 @@ const content: PersonaContent = {
     {
       icon: "\uD83D\uDCE1",
       title: "Unmet demand signals",
-      desc: "Identify drugs currently in shortage across 22 countries where demand is unmet and supply is needed. See severity, affected countries, and how long the shortage has persisted.",
+      desc: "Identify drugs currently in shortage across the markets Mederti indexes — where demand is unmet and supply is needed. See severity, affected countries, and how long the shortage has persisted.",
     },
     {
       icon: "\uD83C\uDF10",
       title: "Global regulatory monitoring",
-      desc: "Track shortage declarations across 30+ regulatory bodies in real time. Be the first to know when a new shortage is declared in a market you serve.",
+      desc: "Track shortage declarations across regulatory bodies worldwide in real time. Be the first to know when a new shortage is declared in a market you serve.",
     },
     {
       icon: "\uD83D\uDCCA",

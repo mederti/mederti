@@ -2,16 +2,42 @@
 
 import { useEffect, useRef } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
-import { BarChart, Bell, ChatBubble, Grid, Send } from "./icons";
+import {
+  BarChart, Bell, ChatBubble, Close, FileChip, Grid, ImageChip,
+  Paperclip, ScanBarcode, Send, SheetChip,
+} from "./icons";
 import { parseAgentResponse, RenderedResponse } from "./parser2";
 import { DashboardView } from "./DashboardView";
 import { IntelligenceView } from "./IntelligenceView";
+import BulkUpload from "@/app/components/bulk-upload";
 
 export type ActiveView = "chat" | "dashboard" | "intelligence";
 
 export type Turn =
   | { id: number; role: "user"; text: string }
   | { id: number; role: "assistant"; text: string; error?: string };
+
+export interface AttachedFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  preview?: string;
+}
+
+const SPREADSHEET_EXTS = ["csv", "tsv", "xlsx", "xls"];
+
+export function isSpreadsheet(f: File): boolean {
+  const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+  return SPREADSHEET_EXTS.includes(ext);
+}
+
+function chipIcon(type: string, name: string) {
+  if (type.startsWith("image/")) return <ImageChip size={12} />;
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (SPREADSHEET_EXTS.includes(ext)) return <SheetChip size={12} />;
+  return <FileChip size={12} />;
+}
 
 const WELCOME_SUGGESTIONS = [
   "How will Iran's Strait of Hormuz closure affect critical injectable shortages?",
@@ -83,6 +109,11 @@ export function ChatMain({
   activeView,
   onViewChange,
   onAskFromView,
+  attachedFiles,
+  onFilesPicked,
+  onRemoveAttachment,
+  bulkFile,
+  onBulkClose,
 }: {
   turns: Turn[];
   pending: boolean;
@@ -96,7 +127,14 @@ export function ChatMain({
   onViewChange: (v: ActiveView) => void;
   // Called when a dashboard/intelligence row is clicked — switches to chat + sends
   onAskFromView: (q: string) => void;
+  attachedFiles: AttachedFile[];
+  onFilesPicked: (fl: FileList | null) => void;
+  onRemoveAttachment: (id: string) => void;
+  bulkFile: File | null;
+  onBulkClose: () => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const lastUserId = (() => {
     for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "user") return turns[i].id;
@@ -130,7 +168,13 @@ export function ChatMain({
         <IntelligenceView onAsk={onAskFromView} />
       ) : null}
 
-      {activeView === "chat" ? (
+      {activeView === "chat" && bulkFile ? (
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+          <BulkUpload file={bulkFile} onClose={onBulkClose} />
+        </div>
+      ) : null}
+
+      {activeView === "chat" && !bulkFile ? (
         <>
         <div className="flex-1 overflow-y-auto pt-6 pb-8">
         <div className="max-w-[760px] mx-auto px-8">
@@ -140,7 +184,7 @@ export function ChatMain({
                 What do you need to know?
               </h1>
               <p className="text-[14px] text-slate-500 max-w-[480px] mx-auto">
-                Ask about drug shortages, recalls, or substitutes across 22 countries. Mederti reads live regulator data and tells you the truth.
+                Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what's not covered.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mt-7">
                 {WELCOME_SUGGESTIONS.map((s) => (
@@ -218,34 +262,107 @@ export function ChatMain({
 
       <div className="shrink-0 px-8 pt-3 pb-4 bg-white">
         <div className="max-w-[760px] mx-auto">
-          <div className="flex items-end gap-2 bg-white border border-slate-200 rounded-2xl pl-4 pr-1.5 py-1.5 shadow-sm focus-within:border-slate-300 focus-within:shadow-md transition-all">
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={(e) => onDraftChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  onSend(draft);
-                }
-              }}
-              placeholder="Ask anything about drug shortages…"
-              rows={1}
-              disabled={pending}
-              className="flex-1 border-0 outline-none bg-transparent text-[14px] text-slate-900 placeholder:text-slate-400 py-2.5 resize-none leading-snug max-h-[200px] min-h-[24px]"
-            />
-            <button
-              type="button"
-              onClick={() => onSend(draft)}
-              disabled={pending || draft.trim().length === 0}
-              className="w-9 h-9 inline-flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-100 disabled:hover:text-slate-500 transition-colors shrink-0"
-              aria-label="Send"
-            >
-              <Send size={14} />
-            </button>
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm focus-within:border-slate-300 focus-within:shadow-md transition-all overflow-hidden">
+            {attachedFiles.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 px-3 pt-2.5 pb-1 border-b border-slate-100">
+                {attachedFiles.map((f) => (
+                  <div
+                    key={f.id}
+                    className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md bg-slate-50 border border-slate-200 text-[12px] text-slate-700"
+                  >
+                    {f.preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={f.preview} alt="" className="w-4 h-4 rounded-sm object-cover" />
+                    ) : (
+                      <span className="text-slate-400">{chipIcon(f.type, f.name)}</span>
+                    )}
+                    <span className="max-w-[160px] truncate">{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveAttachment(f.id)}
+                      className="p-0.5 text-slate-400 hover:text-slate-700"
+                      aria-label={`Remove ${f.name}`}
+                    >
+                      <Close size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="flex items-end gap-1 pl-2 pr-1.5 py-1.5">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={pending}
+                title="Attach files (CSV, Excel, PDF, images)"
+                aria-label="Attach files"
+                className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-teal-600 hover:bg-slate-50 transition-colors shrink-0"
+              >
+                <Paperclip size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={pending}
+                title="Scan barcode or take photo of product"
+                aria-label="Scan barcode or take photo"
+                className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-teal-600 hover:bg-slate-50 transition-colors shrink-0"
+              >
+                <ScanBarcode size={16} />
+              </button>
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                onChange={(e) => onDraftChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onSend(draft);
+                  }
+                }}
+                placeholder="Ask anything, upload a spreadsheet, or scan a barcode…"
+                rows={1}
+                disabled={pending}
+                className="flex-1 border-0 outline-none bg-transparent text-[14px] text-slate-900 placeholder:text-slate-400 px-2 py-2.5 resize-none leading-snug max-h-[200px] min-h-[24px]"
+              />
+              <button
+                type="button"
+                onClick={() => onSend(draft)}
+                disabled={pending || draft.trim().length === 0}
+                className="w-9 h-9 inline-flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-100 disabled:hover:text-slate-500 transition-colors shrink-0"
+                aria-label="Send"
+              >
+                <Send size={14} />
+              </button>
+            </div>
           </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".csv,.tsv,.xlsx,.xls,.pdf,image/*"
+            className="hidden"
+            onChange={(e) => {
+              onFilesPicked(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              onFilesPicked(e.target.files);
+              e.target.value = "";
+            }}
+          />
+
           <div className="text-center text-[11px] text-slate-400 mt-2.5">
-            AI-powered · 30+ regulatory sources · Not medical advice
+            AI-powered · regulatory sources worldwide · Not medical advice
           </div>
         </div>
       </div>

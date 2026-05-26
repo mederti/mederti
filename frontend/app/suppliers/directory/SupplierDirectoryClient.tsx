@@ -62,7 +62,7 @@ export default function SupplierDirectoryClient() {
             Supplier directory
           </div>
           <h1 style={{ fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 12 }}>
-            Pharmaceutical wholesalers across 22 countries.
+            Pharmaceutical wholesalers across major markets worldwide.
           </h1>
           <p style={{ fontSize: 16, color: "var(--app-text-3)", lineHeight: 1.5, maxWidth: 720, marginBottom: 28 }}>
             Browse verified suppliers and distributors. Filter by country to find wholesalers serving your market.

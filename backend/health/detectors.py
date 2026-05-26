@@ -251,12 +251,119 @@ def detect_no_recent_shortages(db: Any | None = None, hours: int = 48) -> Findin
                    metrics={"recent": recent, "window_hours": hours})
 
 
+# ── Detector 5: silent-failure scrapers ─────────────────────────────────────
+# A scraper can update its data_sources.last_scraped_at row even when it
+# writes ZERO records (HTTP succeeds, parser returns empty list, framework
+# marks "complete"). detect_stale_sources doesn't catch this — last_scraped_at
+# is fresh. This detector cross-checks: if a source is "active" and "scraped
+# recently" but the corresponding country has no rows in either shortage_events
+# or recalls for `lookback_days`, it's silently failing.
+def detect_silent_failure_scrapers(
+    db: Any | None = None,
+    lookback_days: int = 14,
+    fresh_scrape_hours: int = 48,
+) -> Finding:
+    db = db or get_supabase_client()
+    name = "silent_failure_scrapers"
+
+    try:
+        sources = (
+            db.table("data_sources")
+            .select("id, abbreviation, country_code, last_scraped_at, is_active")
+            .eq("is_active", True)
+            .execute()
+        ).data or []
+    except Exception as exc:
+        return Finding(name, SEV_WARN, "Could not query data_sources",
+                       detail=f"Supabase error: {exc}")
+
+    now = datetime.now(timezone.utc)
+    scrape_cutoff = now - timedelta(hours=fresh_scrape_hours)
+    row_cutoff = (now - timedelta(days=lookback_days)).isoformat()
+
+    # Aggregate sources by country_code: a country is "covered" if ANY of its
+    # sources have written rows recently to either table.
+    countries_with_active_scrape: dict[str, list[dict]] = {}
+    for s in sources:
+        cc = s.get("country_code")
+        last = s.get("last_scraped_at")
+        if not cc or not last:
+            continue
+        try:
+            ts = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if ts < scrape_cutoff:
+            continue
+        countries_with_active_scrape.setdefault(cc, []).append(s)
+
+    silent: list[dict[str, Any]] = []
+    for cc, srcs in countries_with_active_scrape.items():
+        try:
+            sh = (
+                db.table("shortage_events")
+                .select("id", count="exact")
+                .eq("country_code", cc)
+                .gte("created_at", row_cutoff)
+                .limit(1)
+                .execute()
+            )
+            sh_n = getattr(sh, "count", None) or 0
+            rc = (
+                db.table("recalls")
+                .select("id", count="exact")
+                .eq("country_code", cc)
+                .gte("created_at", row_cutoff)
+                .limit(1)
+                .execute()
+            )
+            rc_n = getattr(rc, "count", None) or 0
+        except Exception as exc:
+            log.warning("silent_failure row count failed",
+                        extra={"country_code": cc, "error": str(exc)})
+            continue
+
+        if sh_n == 0 and rc_n == 0:
+            silent.append({
+                "country_code": cc,
+                "sources": [s.get("abbreviation") for s in srcs],
+                "shortage_rows_last_n_days": sh_n,
+                "recall_rows_last_n_days": rc_n,
+            })
+
+    if not silent:
+        return Finding(
+            name, SEV_OK,
+            "All actively-scraping countries produced rows recently",
+            metrics={"countries_checked": len(countries_with_active_scrape),
+                     "lookback_days": lookback_days},
+        )
+
+    return Finding(
+        name, SEV_ERROR,
+        f"{len(silent)} country source(s) scraping but writing zero rows",
+        detail=(
+            f"data_sources.last_scraped_at within last {fresh_scrape_hours}h "
+            f"but ZERO rows in shortage_events or recalls for that country in "
+            f"last {lookback_days}d. Likely silent upstream-format change, "
+            f"selector breakage, or country-code mismatch."
+        ),
+        metrics={
+            "silent_countries": len(silent),
+            "lookback_days": lookback_days,
+            "fresh_scrape_hours": fresh_scrape_hours,
+        },
+        samples=silent[:15],
+    )
+
+
 # ── Aggregator ──────────────────────────────────────────────────────────────
 ALL_DETECTORS = (
     detect_drug_pollution,
     detect_stale_sources,
     detect_hc_canary,
     detect_no_recent_shortages,
+    detect_silent_failure_scrapers,
 )
 
 

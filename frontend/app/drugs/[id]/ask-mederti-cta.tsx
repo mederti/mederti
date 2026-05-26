@@ -87,9 +87,9 @@ export function AskMedertiCta({ drugName }: { drugName: string }) {
           marginTop: 4,
         }}
       >
-        Mederti reads live regulator data across 22 countries and answers in plain
-        English. Tools include shortage history, alternatives, recalls, and
-        macro signals.
+        Mederti reads live regulator data from major markets worldwide and
+        answers in plain English. Tools include shortage history, alternatives,
+        recalls, and macro signals.
       </div>
     </div>
   );

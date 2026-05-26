@@ -155,14 +155,14 @@ export function pageDescription(
     const severity = sevs.includes("critical") ? "critical" : sevs[0];
     return [
       `${name} is in ${severity} shortage in ${countries.join(", ")}${activeShortages.length > countries.length ? " and more" : ""}.`,
-      `See live status, manufacturers, alternatives and registered products across ${countriesCount} countries.`,
-      "Tracked by Mederti from 47 regulatory sources.",
+      `See live status, manufacturers, alternatives and registered products across the markets we index.`,
+      "Tracked by Mederti from regulatory sources worldwide.",
     ].join(" ");
   }
 
   return [
     `${name} supply status, registered manufacturers, brand names and clinical alternatives.`,
-    `Tracked by Mederti from 47 regulatory sources across ${countriesCount || 20}+ countries.`,
+    `Tracked by Mederti from regulatory sources across major markets worldwide.`,
   ].join(" ");
 }
 

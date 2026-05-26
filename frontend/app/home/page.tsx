@@ -176,7 +176,7 @@ export default async function HomePage() {
             Find Short-Supply Medicines Globally.
           </h1>
           <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.6, maxWidth: 560, margin: "0 auto" }}>
-            Pharmacists, hospitals, and suppliers use Mederti to track drug shortages, find alternatives, and plan ahead — across 42 regulatory sources in 20+ countries.
+            Pharmacists, hospitals, and suppliers use Mederti to track drug shortages, find alternatives, and plan ahead — across regulatory sources in major markets worldwide.
           </p>
         </div>
 
@@ -188,8 +188,8 @@ export default async function HomePage() {
         }}>
           {[
             { val: (summary?.total_active ?? "…").toLocaleString(), label: "active shortages tracked", href: "/shortages?status=active" },
-            { val: "42",   label: "regulatory sources", href: "/shortages" },
-            { val: "20+",  label: "countries monitored", href: "/shortages" },
+            { val: "live", label: "regulatory sources", href: "/shortages" },
+            { val: "global",  label: "markets monitored", href: "/shortages" },
             { val: "live", label: "updated every 30 min", href: "/shortages" },
           ].map(({ val, label, href }) => (
             <Link key={label} href={href} style={{

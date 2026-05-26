@@ -20,7 +20,7 @@ export default function SiteFooter() {
           <div>
             <img src="/logo-black.png" alt="Mederti" style={{ height: 30, marginBottom: 20, filter: "invert(1) brightness(2)" }} />
             <p style={{ fontSize: 13, lineHeight: 1.7, color: "rgba(255,255,255,0.4)", maxWidth: 280, margin: 0 }}>
-              Global pharmaceutical shortage intelligence. Real-time data from 47 regulatory sources across 22 countries.
+              Global pharmaceutical shortage intelligence. Real-time data from regulatory sources across major markets worldwide.
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
               <a href="https://twitter.com/mederti" aria-label="Twitter" style={{ color: "rgba(255,255,255,0.35)", transition: "color 0.15s" }}>

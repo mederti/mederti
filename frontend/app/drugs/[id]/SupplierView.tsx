@@ -865,8 +865,8 @@ export default function SupplierView({
                 No active regulator notices
               </div>
               <div style={{ fontSize: 11, color: "var(--app-text-3)", lineHeight: 1.5 }}>
-                40 regulators continuously monitored. None currently report
-                an active shortage event for this drug.
+                Regulators continuously monitored across major markets. None
+                currently report an active shortage event for this drug.
               </div>
             </div>
           </div>

@@ -21,7 +21,7 @@ const SEV_BADGE: Record<Sev, string> = {
 };
 
 const STATS = [
-  { label: "Active Shortages", value: "2,847", sub: "22 countries tracked", delta: "+38 this week", up: true },
+  { label: "Active Shortages", value: "2,847", sub: "global markets tracked", delta: "+38 this week", up: true },
   { label: "Critical", value: "143", sub: "severe supply risk", delta: "+12 vs last week", up: true },
   { label: "New (7 days)", value: "38", sub: "newly reported", delta: "−5 vs prior week", up: false },
   { label: "Resolved (7d)", value: "24", sub: "closed shortages", delta: null, up: null as boolean | null },
@@ -57,7 +57,7 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
               Global Supply Dashboard
             </h1>
             <p className="text-[13px] text-slate-500 mt-0.5">
-              Real-time shortage intelligence · 22 countries · 30+ regulatory sources
+              Real-time shortage intelligence · global markets · regulatory sources worldwide
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-[12px] text-slate-500">

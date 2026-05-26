@@ -84,7 +84,7 @@ export default function SupplierInboxClient() {
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Set up your supplier profile</h1>
           <p style={{ fontSize: 15, color: "var(--app-text-4)", lineHeight: 1.6, marginBottom: 28, maxWidth: 480, margin: "0 auto 28px" }}>
-            Add your company details and the countries you supply to start receiving real-time enquiries from hospitals and pharmacies across 22 countries.
+            Add your company details and the countries you supply to start receiving real-time enquiries from hospitals and pharmacies across major markets worldwide.
           </p>
           <Link href="/supplier-dashboard/profile" style={{
             display: "inline-flex", alignItems: "center", gap: 8,

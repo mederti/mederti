@@ -27,7 +27,7 @@ const content: PersonaContent = {
     {
       icon: "\uD83D\uDD0D",
       title: "Instant shortage lookup",
-      desc: "Search any drug in seconds. See real-time availability across Australia and 12 other countries.",
+      desc: "Search any drug in seconds. See real-time availability across Australia and other major markets.",
     },
     {
       icon: "\uD83E\uDDE0",

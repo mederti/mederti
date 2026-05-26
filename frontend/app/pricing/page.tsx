@@ -53,7 +53,7 @@ const FAQS = [
   },
   {
     q: "How often is the data refreshed?",
-    a: "All users get data updated every 30 minutes from 42 regulatory sources across 20+ countries. Enterprise customers can request priority refresh intervals.",
+    a: "All users get data updated every 30 minutes from regulatory sources across major markets worldwide. Enterprise customers can request priority refresh intervals.",
   },
   {
     q: "Is there an API for integrating shortage data into our systems?",

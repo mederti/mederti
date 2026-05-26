@@ -43,6 +43,10 @@ export default async function AboutPage() {
   const sb = getSupabaseAdmin();
 
   /* ── parallel data fetches ── */
+  // Live country count comes from shortage_events with rows in the last 30 days
+  // — data_sources.country_code includes scrapers that haven't produced rows in
+  // months and overcounts the truly-indexed market list.
+  const recentCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const [
     { count: activeShortages },
     { count: totalDrugs },
@@ -52,10 +56,10 @@ export default async function AboutPage() {
     sb.from("shortage_events").select("*", { count: "exact", head: true }).eq("status", "active"),
     sb.from("drugs").select("*", { count: "exact", head: true }),
     sb.from("data_sources").select("*", { count: "exact", head: true }).eq("is_active", true),
-    sb.from("data_sources").select("country_code").eq("is_active", true),
+    sb.from("shortage_events").select("country_code").gte("created_at", recentCutoff),
   ]);
 
-  const countries = new Set((countryRows ?? []).map((r: { country_code: string }) => r.country_code));
+  const countries = new Set((countryRows ?? []).map((r: { country_code: string }) => r.country_code).filter(Boolean));
   const activeCount = activeShortages ?? 0;
   const drugCount = totalDrugs ?? 0;
   const sourceCount = totalSources ?? 0;

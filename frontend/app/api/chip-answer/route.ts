@@ -166,12 +166,12 @@ function generateFallback(question: string, ctx: DrugContext): string {
 
   if (q.includes("country") || q.includes("affected")) {
     if (ctx.affectedCountries.length > 0) {
-      return `${ctx.genericName} shortages are currently reported in: ${ctx.affectedCountries.join(", ")}.${ctx.anticipatedCountries.length > 0 ? ` Additional shortages are anticipated in: ${ctx.anticipatedCountries.join(", ")}.` : ""} Countries not listed may still be affected — our database covers 20+ major markets but not all regions.`;
+      return `${ctx.genericName} shortages are currently reported in: ${ctx.affectedCountries.join(", ")}.${ctx.anticipatedCountries.length > 0 ? ` Additional shortages are anticipated in: ${ctx.anticipatedCountries.join(", ")}.` : ""} Mederti only indexes a subset of markets — a country not listed here may still be affected if it's outside our coverage.`;
     }
     if (ctx.anticipatedCountries.length > 0) {
       return `While no confirmed shortages exist yet, ${ctx.genericName} shortages are anticipated in: ${ctx.anticipatedCountries.join(", ")}. This early warning comes from regulatory filings and supply intelligence. Monitor closely.`;
     }
-    return `No shortages are currently reported for ${ctx.genericName} in any of our monitored markets (20+ countries including AU, US, GB, CA, DE, FR, NZ, and more). Supply appears stable.`;
+    return `No shortages are currently reported for ${ctx.genericName} in any of the markets Mederti indexes. Coverage is not global — countries outside our index could still be affected.`;
   }
 
   if (q.includes("historical") || q.includes("pattern")) {

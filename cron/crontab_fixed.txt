@@ -57,14 +57,38 @@ SHELL=/bin/bash
 0   5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nafdac        >> logs/cron.log 2>&1
 15  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py sfda          >> logs/cron.log 2>&1
 
-# ─── Recall scrapers (daily at 05:30-06:45 UTC) ───
-30  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py tga_recalls   >> logs/cron.log 2>&1
-45  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_recalls   >> logs/cron.log 2>&1
-0   6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py health_canada_recalls >> logs/cron.log 2>&1
-15  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py ema_recalls   >> logs/cron.log 2>&1
-30  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py mhra_recalls  >> logs/cron.log 2>&1
-45  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_medwatch  >> logs/cron.log 2>&1
+# ─── Phase 10: New country shortage scrapers (staggered 15 min from 04:45 UTC) ───
+# Scraper            UTC time
+# belgium_famhp      04:45   (629 records — BE)
+# greece_eof         05:00   (270 records — GR)
+# portugal_infarmed  05:15   (34 records  — PT)
+# argentina_anmat    05:30   (320 records — AR)
+# malaysia_npra      05:45   (148 records — MY safety alerts)
+# poland_mz          05:50   (286 records — PL, Excel attachment via index nav)
+45  4 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py belgium_famhp      >> logs/cron.log 2>&1
+0   5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py greece_eof         >> logs/cron.log 2>&1
+15  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py portugal_infarmed  >> logs/cron.log 2>&1
+30  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py argentina_anmat   >> logs/cron.log 2>&1
+45  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py malaysia_npra     >> logs/cron.log 2>&1
+50  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py poland_mz         >> logs/cron.log 2>&1
+55  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py uae_mohap         >> logs/cron.log 2>&1
 
-# ─── Daily data-health digest (07:00 UTC = 18:00 AEST). Emails OPS_ALERT_EMAIL ───
+# ─── Recall scrapers (daily at 06:00-07:15 UTC) ───
+0   6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py tga_recalls        >> logs/cron.log 2>&1
+10  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_recalls        >> logs/cron.log 2>&1
+20  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py health_canada_recalls >> logs/cron.log 2>&1
+30  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py ema_recalls        >> logs/cron.log 2>&1
+40  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py mhra_recalls       >> logs/cron.log 2>&1
+50  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_medwatch       >> logs/cron.log 2>&1
+0   7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py aifa_recalls       >> logs/cron.log 2>&1
+10  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py ansm_recalls       >> logs/cron.log 2>&1
+20  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py medsafe_recalls    >> logs/cron.log 2>&1
+30  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py aemps_recalls      >> logs/cron.log 2>&1
+# 40  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py bfarm_recalls      >> logs/cron.log 2>&1
+# bfarm_recalls disabled 2026-05-26: live run fetched 50 records but DB upsert
+# returns 400 Bad Request on every row (schema/payload mismatch in
+# backend/scrapers/bfarm_recalls_scraper.py). Diagnose then re-enable.
+
+# ─── Daily data-health digest (08:00 UTC = 18:00 AEST + 1). Emails OPS_ALERT_EMAIL ───
 # only when something is actionable (use --force-email to override).
-0   7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.health.daily_check >> logs/health.log 2>&1
+0   8 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.health.daily_check >> logs/health.log 2>&1

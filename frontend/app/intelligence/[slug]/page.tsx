@@ -315,7 +315,7 @@ export default async function IntelligenceArticlePage({ params }: Props) {
               Explore the data behind this article
             </div>
             <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", margin: "0 0 24px", lineHeight: 1.6 }}>
-              Search real-time shortage data across 20+ countries on the Mederti platform.
+              Search real-time shortage data across major markets on the Mederti platform.
             </p>
             <div style={{ display: "flex", gap: 12 }}>
               <Link href="/dashboard" style={{

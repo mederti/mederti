@@ -5,7 +5,7 @@ import RegulatoryCalendarClient from "./RegulatoryCalendarClient";
 
 export const metadata: Metadata = {
   title: "Regulatory Calendar — Mederti Intelligence",
-  description: "Upcoming FDA Advisory Committee meetings, EMA CHMP opinions, and regulatory decisions across 22 countries.",
+  description: "Upcoming FDA Advisory Committee meetings, EMA CHMP opinions, and regulatory decisions across major markets worldwide.",
 };
 
 export default function CalendarPage() {

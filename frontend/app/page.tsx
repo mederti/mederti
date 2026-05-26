@@ -13,12 +13,12 @@ export const revalidate = 300; // 5 min ISR
 export const metadata: Metadata = {
   title: "Mederti — Global Drug Shortage Intelligence Platform",
   description:
-    "Real-time pharmaceutical shortage tracking across 20+ countries. 216,000+ drugs monitored. TGA, FDA, MHRA, EMA and 43 more regulatory sources. Used by pharmacists, hospitals, and health systems.",
+    "Real-time pharmaceutical shortage tracking across major markets. 216,000+ drugs monitored. TGA, FDA, MHRA, EMA and more regulatory sources. Used by pharmacists, hospitals, and health systems.",
   keywords: ["drug shortage", "medicine shortage", "pharmaceutical shortage", "TGA shortage", "FDA drug shortage", "MHRA shortage", "medicine availability"],
   openGraph: {
     title: "Mederti — Global Drug Shortage Intelligence",
     description:
-      "Track drug shortages across 20+ countries in real time. 216,000+ drugs monitored from 47 regulatory sources.",
+      "Track drug shortages across major markets in real time. 216,000+ drugs monitored from regulatory sources worldwide.",
     url: "https://mederti.vercel.app",
     siteName: "Mederti",
     type: "website",
@@ -64,7 +64,9 @@ export default async function Home() {
     const admin = getSupabaseAdmin();
     const [activeRes, countriesRes, sourcesRes, totalRes, anticipatedRes, recallsRes, catalogueRes] = await Promise.all([
       admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
-      admin.from("data_sources").select("country_code").eq("is_active", true),
+      // Live country count: only countries with shortage rows in the last 30 days.
+      // data_sources.country_code includes broken scrapers that haven't produced rows.
+      admin.from("shortage_events").select("country_code").gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
       admin.from("data_sources").select("id", { count: "exact", head: true }),
       admin.from("shortage_events").select("id", { count: "exact", head: true }),
       admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "anticipated"),

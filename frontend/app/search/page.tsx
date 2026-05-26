@@ -395,7 +395,7 @@ export default function SearchPage() {
             </h1>
           </div>
           <p style={{ fontSize: 14, color: "var(--app-text-3)", margin: 0 }}>
-            95,000+ registered drugs · 42 regulatory sources · 20+ countries
+            95,000+ registered drugs · regulatory sources worldwide · major markets indexed
           </p>
         </div>
       </div>

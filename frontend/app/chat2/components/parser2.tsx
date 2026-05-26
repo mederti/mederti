@@ -160,11 +160,28 @@ export function Chat2DrugRow({
   );
 }
 
-export function Chat2SubRow({ sub }: { sub: SubstituteRow }) {
+export function Chat2SubRow({
+  sub,
+  onAsk,
+}: {
+  sub: SubstituteRow;
+  onAsk: (q: string) => void;
+}) {
+  // Click → send a new chat turn asking the AI about this alternative.
+  // The agent will reply with a full drug card below, matching the existing
+  // `<alternates>` chip behaviour. We use the AI path (not the preview pane)
+  // so the response lands in the conversation thread as the user asked.
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 my-2 flex items-center justify-between gap-3.5">
+    <button
+      type="button"
+      onClick={() => onAsk(`Show me ${sub.name}`)}
+      className="group w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 my-2 flex items-center justify-between gap-3.5 text-left hover:bg-teal-50 hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer"
+    >
       <div className="min-w-0">
-        <div className="text-[14px] font-medium text-slate-900 truncate">{sub.name}</div>
+        <div className="text-[14px] font-medium text-slate-900 truncate group-hover:text-teal-700 flex items-center gap-1.5">
+          {sub.name}
+          <span className="text-slate-300 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all">→</span>
+        </div>
         <div className="text-[12px] text-slate-500 mt-px">
           {sub.atc_code ? `${sub.atc_code} · ` : ""}{sub.drug_class || "Alternative"}
         </div>
@@ -177,7 +194,7 @@ export function Chat2SubRow({ sub }: { sub: SubstituteRow }) {
           {Math.round(sub.similarity_score * 100)}% match
         </span>
       ) : null}
-    </div>
+    </button>
   );
 }
 
@@ -274,7 +291,7 @@ export function RenderedResponse({ parts, drugs, subs, activeDrugId, onOpenDrug,
       if (p.text.trim()) out.push(<TextBlock key={i} text={p.text} />);
     } else if (p.kind === "sub") {
       const s = subs[p.id];
-      if (s) out.push(<Chat2SubRow key={i} sub={s} />);
+      if (s) out.push(<Chat2SubRow key={i} sub={s} onAsk={onFollowup} />);
     } else if (p.kind === "followups") {
       out.push(
         <div key={i} className="flex flex-wrap gap-2 mt-3.5">

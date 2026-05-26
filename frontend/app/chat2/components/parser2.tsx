@@ -262,14 +262,72 @@ function renderInline(text: string): ReactNode[] {
   return out;
 }
 
+function parseTableBlock(
+  lines: string[]
+): { header: string[]; rows: string[][] } | null {
+  const nonEmpty = lines.filter((l) => l.trim() !== "");
+  if (nonEmpty.length < 2) return null;
+  if (!nonEmpty.every((l) => l.includes("|"))) return null;
+  if (!/^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(nonEmpty[1])) return null;
+
+  const splitRow = (row: string): string[] => {
+    let r = row.trim();
+    if (r.startsWith("|")) r = r.slice(1);
+    if (r.endsWith("|")) r = r.slice(0, -1);
+    return r.split("|").map((c) => c.trim());
+  };
+
+  const header = splitRow(nonEmpty[0]);
+  const rows = nonEmpty.slice(2).map(splitRow);
+  if (rows.length === 0) return null;
+  return { header, rows };
+}
+
+function TableBlock({ header, rows }: { header: string[]; rows: string[][] }) {
+  return (
+    <div className="my-3 overflow-x-auto rounded-lg border border-slate-200">
+      <table className="w-full text-[13px] text-left">
+        <thead className="bg-slate-50">
+          <tr>
+            {header.map((h, ci) => (
+              <th
+                key={ci}
+                className="px-3 py-2 font-semibold text-slate-900 border-b border-slate-200 align-bottom"
+              >
+                {renderInline(h)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri} className="border-b border-slate-100 last:border-b-0">
+              {row.map((cell, ci) => (
+                <td key={ci} className="px-3 py-2 text-slate-700 align-top">
+                  {renderInline(cell)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function TextBlock({ text }: { text: string }) {
-  // Split paragraphs, support h1/h2/hr — same vocab as /chat.
-  const lines = text.split(/\n{2,}/);
+  // Split paragraphs, support h1/h2/hr/tables — same vocab as /chat.
+  const blocks = text.split(/\n{2,}/);
   return (
     <div className="text-[14px] leading-[1.65] text-slate-700">
-      {lines.map((p, i) => {
+      {blocks.map((p, i) => {
         const t = p.trim();
         if (!t) return null;
+        const lines = p.split("\n");
+        const table = parseTableBlock(lines);
+        if (table) {
+          return <TableBlock key={i} header={table.header} rows={table.rows} />;
+        }
         if (t.startsWith("# ")) {
           return (
             <h1 key={i} className="text-[18px] font-semibold text-slate-900 mt-5 mb-3 tracking-tight">

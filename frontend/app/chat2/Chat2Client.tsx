@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChatApiResponse, ChatMessage, DrugDetail, SubstituteRow } from "@/lib/chat/types";
-import { ChatMain, type Turn } from "./components/ChatMain";
+import { ChatMain, type Turn, type ActiveView } from "./components/ChatMain";
 import { PreviewPane } from "./components/PreviewPane";
 import { Sidebar } from "./components/Sidebar";
 import {
@@ -64,6 +64,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<ActiveView>("chat");
   const idRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -257,6 +258,16 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     []
   );
 
+  // Called when a dashboard or intelligence row is clicked. Switches to the
+  // chat view and immediately sends the question so the user lands on a reply.
+  const askFromView = useCallback(
+    (q: string) => {
+      setActiveView("chat");
+      send(q);
+    },
+    [send]
+  );
+
   const paneCtx = useMemo(
     () => ({
       open: (id: string) => openDrug(id),
@@ -311,6 +322,9 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               onDraftChange={setDraft}
               onSend={send}
               textareaRef={textareaRef}
+              activeView={activeView}
+              onViewChange={setActiveView}
+              onAskFromView={askFromView}
             />
 
             {drugIdParam ? (

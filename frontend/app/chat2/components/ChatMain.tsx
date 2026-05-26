@@ -4,6 +4,10 @@ import { useEffect, useRef } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { BarChart, Bell, ChatBubble, Grid, Send } from "./icons";
 import { parseAgentResponse, RenderedResponse } from "./parser2";
+import { DashboardView } from "./DashboardView";
+import { IntelligenceView } from "./IntelligenceView";
+
+export type ActiveView = "chat" | "dashboard" | "intelligence";
 
 export type Turn =
   | { id: number; role: "user"; text: string }
@@ -16,22 +20,37 @@ const WELCOME_SUGGESTIONS = [
   "What's substitutable for hydrochlorothiazide?",
 ];
 
-export function Chat2TopBar() {
+export function Chat2TopBar({
+  activeView,
+  onViewChange,
+}: {
+  activeView: ActiveView;
+  onViewChange: (v: ActiveView) => void;
+}) {
+  const navBtn = (view: ActiveView, icon: React.ReactNode, label: string) => {
+    const active = activeView === view;
+    return (
+      <button
+        type="button"
+        onClick={() => onViewChange(view)}
+        className={`text-[13px] px-3 py-1.5 rounded-md inline-flex items-center gap-1.5 transition-colors ${
+          active
+            ? "text-slate-900 font-medium bg-slate-100"
+            : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+        }`}
+      >
+        {icon}
+        {label}
+      </button>
+    );
+  };
+
   return (
-    <div className="h-14 flex items-center px-6 gap-3.5 shrink-0">
+    <div className="h-14 flex items-center px-6 gap-3.5 shrink-0 border-b border-slate-100">
       <div className="mr-auto flex items-center gap-1">
-        <a className="text-[13px] text-slate-500 hover:text-slate-900 px-3 py-1.5 rounded-md hover:bg-slate-100 inline-flex items-center gap-1.5">
-          <Grid size={14} />
-          Dashboard
-        </a>
-        <a className="text-[13px] text-slate-900 font-medium px-3 py-1.5 rounded-md inline-flex items-center gap-1.5">
-          <ChatBubble size={14} />
-          Chat
-        </a>
-        <a className="text-[13px] text-slate-500 hover:text-slate-900 px-3 py-1.5 rounded-md hover:bg-slate-100 inline-flex items-center gap-1.5">
-          <BarChart size={14} />
-          Intelligence
-        </a>
+        {navBtn("dashboard", <Grid size={14} />, "Dashboard")}
+        {navBtn("chat", <ChatBubble size={14} />, "Chat")}
+        {navBtn("intelligence", <BarChart size={14} />, "Intelligence")}
       </div>
       <button
         type="button"
@@ -61,6 +80,9 @@ export function ChatMain({
   onDraftChange,
   onSend,
   textareaRef,
+  activeView,
+  onViewChange,
+  onAskFromView,
 }: {
   turns: Turn[];
   pending: boolean;
@@ -70,6 +92,10 @@ export function ChatMain({
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  activeView: ActiveView;
+  onViewChange: (v: ActiveView) => void;
+  // Called when a dashboard/intelligence row is clicked — switches to chat + sends
+  onAskFromView: (q: string) => void;
 }) {
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const lastUserId = (() => {
@@ -96,9 +122,17 @@ export function ChatMain({
 
   return (
     <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
-      <Chat2TopBar />
+      <Chat2TopBar activeView={activeView} onViewChange={onViewChange} />
 
-      <div className="flex-1 overflow-y-auto pt-6 pb-8">
+      {activeView === "dashboard" ? (
+        <DashboardView onAsk={onAskFromView} />
+      ) : activeView === "intelligence" ? (
+        <IntelligenceView onAsk={onAskFromView} />
+      ) : null}
+
+      {activeView === "chat" ? (
+        <>
+        <div className="flex-1 overflow-y-auto pt-6 pb-8">
         <div className="max-w-[760px] mx-auto px-8">
           {isEmpty ? (
             <div className="text-center pt-14 pb-6">
@@ -215,6 +249,8 @@ export function ChatMain({
           </div>
         </div>
       </div>
+        </>
+      ) : null}
     </main>
   );
 }

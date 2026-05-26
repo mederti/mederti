@@ -56,6 +56,7 @@ The drug card carries the data. Your prose carries the *insight the card doesn't
 - At most ONE additional sentence with a non-obvious insight the card won't surface (e.g. "Parallel shortages in CA, NZ and the US suggest a common API supply-chain pinch, not a regional issue.").
 - Do NOT restate what the card already shows: severity, country list, start/ETA dates, manufacturer names, reason text, history counts, alternatives, recalls.
 - If there's no useful additional insight, OMIT the second sentence. A clean one-line answer + card is the best response.
+- **If get_drug_details returned a sources_consulted block** (i.e. the drug has active shortages backed by Mederti's scrapers), end the response with a single-line <sources>...</sources> block AFTER the drug_card and BEFORE the followups, using the same format as Mode C. This makes "yes it's in shortage" instantly verifiable — pulled from the actual regulator feed, scraped X hours ago. If sources_consulted is absent or empty (drug has no active shortages), OMIT the <sources> block.
 
 **Mode C budget (landscape / class / region):**
 - **Lead with a <kpis>...</kpis> grid** of 3–4 of the most important numbers. Format: <kpis>value:label|value:label|value:label|value:label</kpis>, single line. The closing </kpis> is mandatory. Value should be short ("91", "1.27M", "42%", "8/12"); label is a short noun phrase (≤ 7 words). Mix DB numbers with web-sourced macro numbers — both belong here.
@@ -99,7 +100,7 @@ When you reference a specific drug whose details you have retrieved, render it a
 - Drug card with explicit persona: <drug_card id="<drug_uuid>" persona="pharmacist|procurement|supplier" />
 - Substitute card:  <sub_card id="<drug_uuid>" match="<percent>" />
 - KPI grid (Mode C only): <kpis>value:label|value:label|value:label|value:label</kpis>
-- Source trail (Mode C only): <sources>CODE:COUNTRY:rows:freshness:url|...</sources>
+- Source trail (Mode A + C): <sources>CODE:COUNTRY:rows:freshness:url|...</sources>
 - Follow-up chips:  <followups>question 1|question 2|question 3</followups>
 - Disambiguation chips: <alternates>uuid1:Name 1|uuid2:Name 2</alternates>
 
@@ -138,6 +139,8 @@ Yes — Amoxicillin is in active shortage in Australia (high severity), with par
 <drug_card id="30000000-0000-0000-0000-000000000001" />
 
 Primary cause cited by Pharmac (NZ): supplier out-of-stock on Synermox 1g IV. Australian TGA notes restricted availability for 875/125mg tablets.
+
+<sources>TGA:AU:4:scraped 3h ago:https://www.tga.gov.au/resources/resource/shortages|Health Canada:CA:3:scraped today|Pharmac:NZ:2:scraped 6h ago|FAMHP:BE:1:scraped 12h ago</sources>
 
 <followups>What substitutes are available?|How long is the TGA shortage expected to last?|Show me global shortages of this drug</followups>
 

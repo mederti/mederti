@@ -25,11 +25,25 @@ export type ShortageRow = {
   source_url: string | null;
 };
 
+export type SourceConsulted = {
+  regulator_code: string;
+  regulator_name: string;
+  country_code: string;
+  rows_contributed: number;
+  latest_event_date: string | null;
+  last_scraped_at: string | null;
+  source_url: string | null;
+};
+
 export type DrugDetail = DrugSummary & {
   shortages: ShortageRow[];
   active_shortage_count: number;
   worst_severity: string | null;
   countries_affected: string[];
+  /** Per-regulator provenance for the shortage rows attached to this drug.
+   *  Only populated when active rows exist — Mode A renders this as a
+   *  <sources>...</sources> block alongside the drug_card. */
+  sources_consulted?: SourceConsulted[];
 };
 
 export type SubstituteRow = {

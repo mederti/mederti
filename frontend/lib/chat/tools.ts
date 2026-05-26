@@ -295,6 +295,14 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
   const rows: ShortageRow[] = (shortages.data ?? []) as ShortageRow[];
   const summary = shortageSummary(rows);
 
+  // Per-drug provenance — only attribute regulators where this drug has an
+  // ACTIVE row. A drug that resolved everywhere shouldn't claim "verified by
+  // TGA" just because there's a historical entry.
+  const activeRows = rows.filter((r) => r.status === "active");
+  const sourcesConsulted = activeRows.length > 0
+    ? await computeSourcesConsulted(activeRows as any)
+    : undefined;
+
   const detail: DrugDetail = {
     drug_id: d.id,
     name: d.generic_name,
@@ -311,6 +319,7 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     critical_medicine_eu: !!d.critical_medicine_eu,
     shortages: rows,
     ...summary,
+    sources_consulted: sourcesConsulted,
   };
 
   ctx.drugs[detail.drug_id] = detail;
@@ -993,6 +1002,90 @@ function regulatorFor(countryCode: string | null | undefined): { code: string; n
   return { ...r, country_code: cc };
 }
 
+/** Aggregate a set of {country_code, start_date} rows into per-regulator
+ *  provenance and (best-effort) attach last_scraped_at + source_url from
+ *  data_sources. Shared between summarize_shortage_landscape (landscape-level)
+ *  and get_drug_details (per-drug). Rows without a recognised country code
+ *  are silently dropped — Mederti doesn't claim coverage it doesn't have. */
+async function computeSourcesConsulted(
+  rows: Array<{ country_code: string | null | undefined; start_date?: string | null }>
+) {
+  type Agg = {
+    code: string;
+    name: string;
+    country_code: string;
+    rows_contributed: number;
+    latest_event_date: string | null;
+  };
+  const byCountry = new Map<string, Agg>();
+  for (const r of rows) {
+    const reg = regulatorFor(r.country_code);
+    if (!reg) continue;
+    let p = byCountry.get(reg.country_code);
+    if (!p) {
+      p = {
+        code: reg.code,
+        name: reg.name,
+        country_code: reg.country_code,
+        rows_contributed: 0,
+        latest_event_date: null,
+      };
+      byCountry.set(reg.country_code, p);
+    }
+    p.rows_contributed += 1;
+    if (r.start_date && (!p.latest_event_date || r.start_date > p.latest_event_date)) {
+      p.latest_event_date = r.start_date;
+    }
+  }
+
+  const countries = [...byCountry.keys()];
+  const scrapeMeta = new Map<
+    string,
+    { last_scraped_at: string | null; source_url: string | null }
+  >();
+  if (countries.length > 0) {
+    try {
+      const sb = getSupabase();
+      const { data } = await sb
+        .from("data_sources")
+        .select("country_code,last_scraped_at,source_url,is_active")
+        .in("country_code", countries)
+        .eq("is_active", true);
+      for (const r of data ?? []) {
+        const cc = (r as any).country_code as string | null;
+        if (!cc) continue;
+        const next = {
+          last_scraped_at: (r as any).last_scraped_at as string | null,
+          source_url: (r as any).source_url as string | null,
+        };
+        const ex = scrapeMeta.get(cc);
+        if (!ex) scrapeMeta.set(cc, next);
+        else if (next.last_scraped_at && (!ex.last_scraped_at || next.last_scraped_at > ex.last_scraped_at)) {
+          scrapeMeta.set(cc, next);
+        }
+      }
+    } catch (e) {
+      // Best-effort; absence of data_sources rows is non-fatal.
+      console.error("[computeSourcesConsulted] data_sources lookup failed:", e);
+    }
+  }
+
+  return [...byCountry.values()]
+    .map((p) => {
+      const meta = scrapeMeta.get(p.country_code);
+      return {
+        regulator_code: p.code,
+        regulator_name: p.name,
+        country_code: p.country_code,
+        rows_contributed: p.rows_contributed,
+        latest_event_date: p.latest_event_date,
+        last_scraped_at: meta?.last_scraped_at ?? null,
+        source_url: meta?.source_url ?? null,
+      };
+    })
+    .sort((a, b) => b.rows_contributed - a.rows_contributed);
+}
+
 // Landscape summary — single call returns enough data for the model to write a
 // class/region answer (KPIs + top drugs + geo distribution) without making N
 // per-row tool calls. Drug ids in `top_drugs` are populated into ctx.drugs so the
@@ -1107,74 +1200,9 @@ async function summarizeShortageLandscape(
     .slice(0, 15)
     .map(([country_code, count]) => ({ country_code, count }));
 
-  // 4b. Source provenance — which regulators backed this answer? Aggregate
-  //     per-regulator row counts + latest event date from the working set,
-  //     then enrich with last_scraped_at from data_sources (best-effort).
-  type ProvAgg = { code: string; name: string; country_code: string; rows_contributed: number; latest_event_date: string | null };
-  const provByCountry = new Map<string, ProvAgg>();
-  for (const r of working) {
-    const reg = regulatorFor(r.country_code);
-    if (!reg) continue;
-    let p = provByCountry.get(reg.country_code);
-    if (!p) {
-      p = { code: reg.code, name: reg.name, country_code: reg.country_code, rows_contributed: 0, latest_event_date: null };
-      provByCountry.set(reg.country_code, p);
-    }
-    p.rows_contributed += 1;
-    if (r.start_date && (!p.latest_event_date || r.start_date > p.latest_event_date)) {
-      p.latest_event_date = r.start_date;
-    }
-  }
-
-  // Try to attach last_scraped_at + source_url from data_sources for the
-  // countries we touched. Doesn't matter if the table is sparse — we keep
-  // freshness honestly labelled as "latest_event_date" when last_scraped_at
-  // isn't available.
-  const touchedCountries = [...provByCountry.keys()];
-  let scrapeMeta = new Map<string, { last_scraped_at: string | null; source_url: string | null }>();
-  if (touchedCountries.length > 0) {
-    try {
-      const { data: dsRows } = await sb
-        .from("data_sources")
-        .select("country_code,last_scraped_at,source_url,is_active")
-        .in("country_code", touchedCountries)
-        .eq("is_active", true);
-      // Pick the freshest last_scraped_at per country if there are multiple sources.
-      for (const r of dsRows ?? []) {
-        const cc = (r as any).country_code as string | null;
-        if (!cc) continue;
-        const ex = scrapeMeta.get(cc);
-        const next = {
-          last_scraped_at: (r as any).last_scraped_at as string | null,
-          source_url: (r as any).source_url as string | null,
-        };
-        if (!ex) {
-          scrapeMeta.set(cc, next);
-        } else if (next.last_scraped_at && (!ex.last_scraped_at || next.last_scraped_at > ex.last_scraped_at)) {
-          scrapeMeta.set(cc, next);
-        }
-      }
-    } catch (e) {
-      // Provenance enrichment is best-effort; if data_sources is unreachable
-      // we still return the regulator + row counts derived from working rows.
-      console.error("[summarize_shortage_landscape] data_sources lookup failed:", e);
-    }
-  }
-
-  const sourcesConsulted = [...provByCountry.values()]
-    .map((p) => {
-      const meta = scrapeMeta.get(p.country_code);
-      return {
-        regulator_code: p.code,
-        regulator_name: p.name,
-        country_code: p.country_code,
-        rows_contributed: p.rows_contributed,
-        latest_event_date: p.latest_event_date,
-        last_scraped_at: meta?.last_scraped_at ?? null,
-        source_url: meta?.source_url ?? null,
-      };
-    })
-    .sort((a, b) => b.rows_contributed - a.rows_contributed);
+  // 4b. Source provenance — which regulators backed this answer? Shared
+  //     helper aggregates rows by regulator + attaches data_sources metadata.
+  const sourcesConsulted = await computeSourcesConsulted(working);
 
   const notes: string[] = [];
   if (usingFallback) {

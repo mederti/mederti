@@ -104,6 +104,15 @@ export function toggleStarChat(id: string) {
   writeStore(store);
 }
 
+export function moveChatToFolder(id: string, folderId: string | null) {
+  const store = readStore();
+  const chat = store.chats[id];
+  if (!chat) return;
+  chat.folderId = folderId;
+  chat.updatedAt = Date.now();
+  writeStore(store);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 export function newChatId(): string {

@@ -17,7 +17,13 @@ import {
   Plus,
   ChatBubble,
 } from "./icons";
-import { SEED_WATCHLISTS } from "../seedData";
+import {
+  addDrugToWatchlist,
+  createWatchlist,
+  removeDrugFromWatchlist,
+  useWatchlists,
+  type WatchlistStatus,
+} from "../watchlistStore";
 
 const FLAG_BY_CC: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹",
@@ -240,10 +246,17 @@ function StatusCard({ bundle }: { bundle: DrugDetailBundle }) {
   );
 }
 
-function AddToWatchlistButton({ drugName }: { drugName: string }) {
+function AddToWatchlistButton({
+  drugId,
+  drugName,
+  drugStatus,
+}: {
+  drugId: string;
+  drugName: string;
+  drugStatus: WatchlistStatus;
+}) {
   const [open, setOpen] = useState(false);
-  // Local in-component state — wires to real watchlist tables in v2.
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(["wl-2"]));
+  const watchlists = useWatchlists();
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -255,23 +268,38 @@ function AddToWatchlistButton({ drugName }: { drugName: string }) {
     return () => window.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  const toggle = (id: string) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const toggle = (watchlistId: string, currentlyIn: boolean) => {
+    if (currentlyIn) {
+      removeDrugFromWatchlist(watchlistId, drugId);
+    } else {
+      addDrugToWatchlist(watchlistId, { drug_id: drugId, drug_name: drugName, status: drugStatus });
+    }
+  };
+
+  const handleCreateAndAdd = () => {
+    const name = window.prompt("Watchlist name", "My Watchlist");
+    if (name == null) return;
+    const wl = createWatchlist(name);
+    addDrugToWatchlist(wl.id, { drug_id: drugId, drug_name: drugName, status: drugStatus });
+    setOpen(false);
+  };
+
+  // True if the drug is in at least one watchlist — used for button label
+  const isWatched = watchlists.some((wl) => wl.items.some((i) => i.drug_id === drugId));
 
   return (
     <div ref={wrapRef} className="relative flex-1">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-[12.5px] font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+        className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-[12.5px] font-medium border transition-colors ${
+          isWatched
+            ? "bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100"
+            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+        }`}
       >
         <Bookmark size={13} />
-        Add to watchlist
+        {isWatched ? "Watching" : "Add to watchlist"}
         <ChevronDown size={10} />
       </button>
       {open ? (
@@ -280,16 +308,15 @@ function AddToWatchlistButton({ drugName }: { drugName: string }) {
           style={{ boxShadow: "0 10px 30px rgba(15,23,42,0.08), 0 3px 10px rgba(15,23,42,0.04)" }}
         >
           <div className="text-[10px] uppercase tracking-wider text-slate-400 px-2.5 pt-1.5 pb-1">
-            Add {drugName} to
+            {watchlists.length === 0 ? "No watchlists yet" : `Add ${drugName} to`}
           </div>
-          {SEED_WATCHLISTS.map((wl) => {
-            const checked = picked.has(wl.id);
-            const count = wl.items.length || wl.itemCount || 0;
+          {watchlists.map((wl) => {
+            const checked = wl.items.some((i) => i.drug_id === drugId);
             return (
               <button
                 key={wl.id}
                 type="button"
-                onClick={() => toggle(wl.id)}
+                onClick={() => toggle(wl.id, checked)}
                 className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[12.5px] text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-left"
               >
                 <span
@@ -306,7 +333,7 @@ function AddToWatchlistButton({ drugName }: { drugName: string }) {
                   className="text-[10px] text-slate-400"
                   style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
                 >
-                  {count}
+                  {wl.items.length}
                 </span>
               </button>
             );
@@ -314,11 +341,11 @@ function AddToWatchlistButton({ drugName }: { drugName: string }) {
           <div className="h-px bg-slate-200 my-1" />
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={handleCreateAndAdd}
             className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[12px] text-teal-600 font-medium hover:bg-teal-50"
           >
             <Plus size={11} />
-            Create new watchlist…
+            {watchlists.length === 0 ? "Create a watchlist…" : "New watchlist…"}
           </button>
         </div>
       ) : null}
@@ -536,7 +563,11 @@ export function PreviewPane({
 
             {/* Actions */}
             <div className="flex gap-2 mb-4">
-              <AddToWatchlistButton drugName={bundle.drug.name} />
+              <AddToWatchlistButton
+                drugId={bundle.drug.drug_id}
+                drugName={bundle.drug.name}
+                drugStatus={worstAvailability(bundle.drug.shortages)}
+              />
               <button
                 type="button"
                 onClick={() => onToast("Alerts — coming soon")}

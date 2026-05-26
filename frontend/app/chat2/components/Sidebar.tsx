@@ -31,11 +31,14 @@ import {
   BUCKET_ORDER,
   bucketFor,
   deleteChat,
+  moveChatToFolder,
   renameChat,
   toggleStarChat,
   type Bucket,
   type SavedChat,
 } from "../chatStore";
+import { createWatchlist, useWatchlists, type Watchlist } from "../watchlistStore";
+import { createFolder, useFolders, type Folder } from "../folderStore";
 
 const LS_FOLDERS = "chat2:sidebar:expandedFolders";
 const LS_WATCHLISTS = "chat2:sidebar:expandedWatchlists";
@@ -154,23 +157,41 @@ function GroupRow({
 }
 
 function ChatKebabMenu({
+  chatId,
+  currentFolderId,
+  folders,
   isSaved,
   isStarred,
   onClose,
   onRename,
   onToggleStar,
   onDelete,
-  onStub,
+  onToast,
 }: {
+  chatId: string;
+  currentFolderId: string | null;
+  folders: Folder[];
   isSaved: boolean;
   isStarred: boolean;
   onClose: () => void;
   onRename: () => void;
   onToggleStar: () => void;
   onDelete: () => void;
-  onStub: (label: string) => void;
+  onToast: (msg: string) => void;
 }) {
-  const folders = SEED_FOLDERS;
+  const handleMoveToFolder = (folderId: string | null) => {
+    moveChatToFolder(chatId, folderId);
+    onClose();
+  };
+
+  const handleNewFolder = () => {
+    const name = window.prompt("Folder name", "New Folder");
+    if (name == null) return;
+    const f = createFolder(name);
+    moveChatToFolder(chatId, f.id);
+    onClose();
+  };
+
   return (
     <>
       <div className="fixed inset-0 z-20" onClick={onClose} />
@@ -182,20 +203,33 @@ function ChatKebabMenu({
         <div className="text-[10px] uppercase tracking-wider text-slate-400 px-2 pt-1.5 pb-1">
           Move to folder
         </div>
+        {currentFolderId ? (
+          <button
+            type="button"
+            onClick={() => handleMoveToFolder(null)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-500 hover:bg-slate-100 rounded text-left"
+          >
+            <Folder size={12} />
+            Remove from folder
+          </button>
+        ) : null}
         {folders.map((f) => (
           <button
             key={f.id}
             type="button"
-            onClick={() => onStub(`Moved to ${f.name} — folders persist in Pass 4`)}
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left"
+            onClick={() => handleMoveToFolder(f.id)}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] hover:bg-slate-100 rounded text-left ${
+              currentFolderId === f.id ? "text-teal-700 font-medium" : "text-slate-700"
+            }`}
           >
             <Folder size={12} />
             {f.name}
+            {currentFolderId === f.id ? <span className="ml-auto text-teal-500 text-[10px]">✓</span> : null}
           </button>
         ))}
         <button
           type="button"
-          onClick={() => onStub("New folder — coming in Pass 4")}
+          onClick={handleNewFolder}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-teal-600 hover:bg-teal-50 rounded text-left"
         >
           <Plus size={12} />
@@ -204,7 +238,7 @@ function ChatKebabMenu({
         <div className="h-px bg-slate-200 my-1" />
         <button
           type="button"
-          onClick={isSaved ? onRename : () => onStub("Save the chat first")}
+          onClick={isSaved ? onRename : () => onToast("Save the chat first")}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-100 rounded text-left disabled:opacity-40"
           disabled={!isSaved}
         >
@@ -213,7 +247,7 @@ function ChatKebabMenu({
         </button>
         <button
           type="button"
-          onClick={isSaved ? onToggleStar : () => onStub("Save the chat first")}
+          onClick={isSaved ? onToggleStar : () => onToast("Save the chat first")}
           className={`w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] hover:bg-slate-100 rounded text-left disabled:opacity-40 ${
             isStarred ? "text-amber-600" : "text-slate-700"
           }`}
@@ -224,7 +258,7 @@ function ChatKebabMenu({
         </button>
         <button
           type="button"
-          onClick={isSaved ? onDelete : () => onStub("Save the chat first")}
+          onClick={isSaved ? onDelete : () => onToast("Save the chat first")}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-red-600 hover:bg-red-50 rounded text-left disabled:opacity-40"
           disabled={!isSaved}
         >
@@ -241,6 +275,8 @@ function ChatHistoryItem({
   title,
   active,
   isStarred,
+  folderId,
+  folders,
   isPersisted,
   onToast,
 }: {
@@ -248,6 +284,8 @@ function ChatHistoryItem({
   title: string;
   active?: boolean;
   isStarred?: boolean;
+  folderId?: string | null;
+  folders: Folder[];
   // True when this row represents a chat in the real localStorage store.
   // Seeded-demo rows pass false; their kebab actions stay stubbed.
   isPersisted: boolean;
@@ -304,13 +342,16 @@ function ChatHistoryItem({
       </div>
       {menuOpen ? (
         <ChatKebabMenu
+          chatId={chatId}
+          currentFolderId={folderId ?? null}
+          folders={folders}
           isSaved={isPersisted}
           isStarred={!!isStarred}
           onClose={() => setMenuOpen(false)}
           onRename={handleRename}
           onToggleStar={handleToggleStar}
           onDelete={handleDelete}
-          onStub={(label) => {
+          onToast={(label) => {
             setMenuOpen(false);
             onToast(label);
           }}
@@ -375,11 +416,31 @@ export function Sidebar({
   const wl = useExpandedSet(LS_WATCHLISTS, ["wl-1"]);
   const fl = useExpandedSet(LS_FOLDERS, ["f-1"]);
 
-  // Watchlists + folders stay seeded for now (Pass 3 & 4). Recents is the
-  // real localStorage list once we have any saved chats — falls back to
-  // seed only in demo mode for design review.
-  const watchlists = isDemo ? SEED_WATCHLISTS : [];
-  const folders = isDemo ? SEED_FOLDERS : [];
+  // Real stores — always preferred over seed data.
+  const realWatchlists = useWatchlists();
+  const realFolders = useFolders();
+
+  // Fall back to seed data only in demo mode and only when the real store
+  // is empty — so a first-time user in demo mode sees populated sections,
+  // but any real data they create takes over immediately.
+  const watchlists: Array<{ id: string; name: string; items: Array<{ drug_id?: string; drug_slug?: string; drug_name: string; status: "red" | "amber" | "green" }> }> =
+    realWatchlists.length > 0
+      ? realWatchlists
+      : isDemo
+      ? SEED_WATCHLISTS.map((w) => ({ ...w, items: w.items.map((i) => ({ ...i, drug_id: i.drug_slug })) }))
+      : [];
+
+  const handleNewWatchlist = () => {
+    const name = window.prompt("Watchlist name", "My Watchlist");
+    if (name == null) return;
+    createWatchlist(name);
+  };
+
+  const handleNewFolder = () => {
+    const name = window.prompt("Folder name", "New Folder");
+    if (name == null) return;
+    createFolder(name);
+  };
 
   // Bucket real chats by recency. Starred chats float to the top of their
   // bucket so they stay discoverable as the list grows.
@@ -409,11 +470,8 @@ export function Sidebar({
     return Array.from(groups.entries());
   }, [showSeedRecents]);
 
-  const hasAnyChat =
-    chats.length > 0 ||
-    showSeedRecents ||
-    folders.some((f) => f.chats.length > 0);
-  const hasAnyContent = watchlists.length > 0 || folders.length > 0 || hasAnyChat;
+  const hasAnyChat = chats.length > 0 || showSeedRecents;
+  const hasAnyContent = watchlists.length > 0 || realFolders.length > 0 || hasAnyChat;
 
   // ── Icon rail (collapsed state) ───────────────────────────────────────────
   if (collapsed) {
@@ -571,31 +629,35 @@ export function Sidebar({
       {/* Scrolling sections — each hides when empty so a fresh sidebar
           shows just New chat + footer, like Claude / ChatGPT on day one. */}
       <div className="flex-1 overflow-y-auto px-2.5 pb-4">
+
+        {/* Watchlists */}
         {watchlists.length > 0 ? (
           <div className="mt-1">
-            <SectionHeader label="Watchlists" onAdd={() => onToast("New watchlist — coming soon")} />
+            <SectionHeader label="Watchlists" onAdd={handleNewWatchlist} />
             {watchlists.map((w) => {
               const isOpen = wl.open.has(w.id);
-              const count = w.items.length || w.itemCount || 0;
               return (
                 <div key={w.id}>
                   <GroupRow
                     isOpen={isOpen}
                     icon={<Bookmark size={13} />}
                     label={w.name}
-                    count={count}
+                    count={w.items.length}
                     onClick={() => wl.toggle(w.id)}
                   />
                   {isOpen && w.items.length > 0 ? (
                     <div className="pl-[18px] mt-px">
-                      {w.items.map((it) => (
-                        <WatchlistDrugRow
-                          key={it.drug_slug}
-                          item={it}
-                          active={it.drug_slug === activeDrugSlug}
-                          onOpen={onOpenDrugPreview}
-                        />
-                      ))}
+                      {w.items.map((it) => {
+                        const itemId = it.drug_id ?? (it as any).drug_slug ?? "";
+                        return (
+                          <WatchlistDrugRow
+                            key={itemId}
+                            item={{ drug_slug: itemId, drug_name: it.drug_name, status: it.status }}
+                            active={itemId === activeDrugSlug}
+                            onOpen={onOpenDrugPreview}
+                          />
+                        );
+                      })}
                     </div>
                   ) : null}
                 </div>
@@ -604,33 +666,41 @@ export function Sidebar({
           </div>
         ) : null}
 
-        {folders.length > 0 ? (
+        {/* Folders — show real folders, fall back to seed in demo only */}
+        {realFolders.length > 0 ? (
           <div className="mt-3.5">
-            <SectionHeader label="Folders" onAdd={() => onToast("New folder — coming soon")} />
-            {folders.map((f) => {
+            <SectionHeader label="Folders" onAdd={handleNewFolder} />
+            {realFolders.map((f) => {
               const isOpen = fl.open.has(f.id);
-              const count = f.chats.length || f.chatCount || 0;
+              const folderChats = chats.filter((c) => c.folderId === f.id);
               return (
                 <div key={f.id}>
                   <GroupRow
                     isOpen={isOpen}
                     icon={<Folder size={13} />}
                     label={f.name}
-                    count={count}
+                    count={folderChats.length}
                     onClick={() => fl.toggle(f.id)}
                   />
-                  {isOpen && f.chats.length > 0 ? (
+                  {isOpen && folderChats.length > 0 ? (
                     <div className="pl-[18px] mt-px">
-                      {f.chats.map((c) => (
+                      {folderChats.map((c) => (
                         <ChatHistoryItem
                           key={c.id}
                           chatId={c.id}
                           title={c.title}
                           active={c.id === activeChatId}
-                          isPersisted={false}
+                          isStarred={c.isStarred}
+                          folderId={c.folderId}
+                          folders={realFolders}
+                          isPersisted
                           onToast={onToast}
                         />
                       ))}
+                    </div>
+                  ) : isOpen ? (
+                    <div className="pl-[28px] py-1.5 text-[11px] text-slate-400">
+                      No chats yet — move a chat here from its menu
                     </div>
                   ) : null}
                 </div>
@@ -639,26 +709,35 @@ export function Sidebar({
           </div>
         ) : null}
 
+        {/* Recent chats (not in any folder) */}
         {realRecentsByBucket.length > 0 ? (
           <div className="mt-3.5">
-            {realRecentsByBucket.map(([bucket, items]) => (
-              <div key={bucket}>
-                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2.5 pt-2.5 pb-1">
-                  {BUCKET_LABELS[bucket]}
+            {realRecentsByBucket
+              .map(([bucket, items]) => ({
+                bucket,
+                items: items.filter((c) => !c.folderId),
+              }))
+              .filter(({ items }) => items.length > 0)
+              .map(({ bucket, items }) => (
+                <div key={bucket}>
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-2.5 pt-2.5 pb-1">
+                    {BUCKET_LABELS[bucket]}
+                  </div>
+                  {items.map((c) => (
+                    <ChatHistoryItem
+                      key={c.id}
+                      chatId={c.id}
+                      title={c.title}
+                      active={c.id === activeChatId}
+                      isStarred={c.isStarred}
+                      folderId={c.folderId}
+                      folders={realFolders}
+                      isPersisted
+                      onToast={onToast}
+                    />
+                  ))}
                 </div>
-                {items.map((c) => (
-                  <ChatHistoryItem
-                    key={c.id}
-                    chatId={c.id}
-                    title={c.title}
-                    active={c.id === activeChatId}
-                    isStarred={c.isStarred}
-                    isPersisted
-                    onToast={onToast}
-                  />
-                ))}
-              </div>
-            ))}
+              ))}
           </div>
         ) : showSeedRecents ? (
           <div className="mt-3.5">
@@ -673,6 +752,7 @@ export function Sidebar({
                     chatId={c.id}
                     title={c.title}
                     active={c.id === activeChatId}
+                    folders={realFolders}
                     isPersisted={false}
                     onToast={onToast}
                   />

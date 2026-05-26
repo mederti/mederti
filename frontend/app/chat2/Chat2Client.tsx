@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChatApiResponse, ChatMessage, DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { ChatMain, type Turn } from "./components/ChatMain";
@@ -14,6 +14,17 @@ import {
   useChatList,
   type SavedChat,
 } from "./chatStore";
+// Contexts the rich /chat drug cards expect. We provide them at this level
+// so DrugCard → PharmacistCard / ProcurementCard / SupplierCard can open
+// the preview pane, send follow-ups, and trigger lead-capture intents
+// without knowing they're rendering inside chat2.
+import { PaneContext } from "@/app/chat/components/PaneContext";
+import { ChatContext } from "@/app/chat/components/ChatContext";
+import { LeadContext } from "@/app/chat/components/LeadContext";
+// The scoped chat.css defines the .mederti-chat-root variables and rules
+// the cards rely on. Importing here puts the styles in the bundle; the
+// wrapping <div className="mederti-chat-root"> below scopes them.
+import "@/app/chat/chat.css";
 
 // /chat2 is intentionally public during layout iteration — no auth gate. The
 // chat backend handles its own rate limiting; flip back on when promoting.
@@ -198,6 +209,18 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         const finalTurns = [...nextTurns, okTurn];
         setTurns(finalTurns);
         persist(id!, finalTurns, newDrugs, newSubs);
+
+        // Auto-open preview when this *response* references exactly one
+        // drug. We look at the freshly-returned drugs (not the full map)
+        // so a multi-drug history doesn't suppress single-drug responses.
+        // Read window.location to bypass the stale searchParams closure.
+        const newDrugIds = data.drugs ? Object.keys(data.drugs) : [];
+        if (newDrugIds.length === 1) {
+          const currentDrugParam = new URLSearchParams(window.location.search).get("drug");
+          if (!currentDrugParam) {
+            setDrugInUrl(newDrugIds[0]);
+          }
+        }
       } catch (e) {
         if (activeIdRef.current !== id) return;
         const msg = e instanceof Error ? e.message : String(e);
@@ -234,54 +257,87 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     []
   );
 
+  const paneCtx = useMemo(
+    () => ({
+      open: (id: string) => openDrug(id),
+      close: closeDrug,
+      back: closeDrug,
+      current: drugIdParam,
+      previousId: null,
+    }),
+    [openDrug, closeDrug, drugIdParam]
+  );
+
+  const chatCtx = useMemo(() => ({ send }), [send]);
+
+  const leadCtx = useMemo(
+    () => ({
+      // Cards' Pre-order / Supplier-interest CTAs route here. v1 stub
+      // until we want to surface the LeadCaptureModal in chat2 too.
+      open: () => setToast("Lead capture flow not yet wired in chat2"),
+    }),
+    []
+  );
+
   return (
-    <div className="flex h-screen overflow-hidden bg-white text-slate-900" style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}>
-      {sidebarCollapsed ? null : (
-        <Sidebar
-          activeChatId={chatId}
-          activeDrugSlug={drugIdParam}
-          isDemo={isDemo}
-          chats={chatList}
-          onCollapse={toggleSidebar}
-          onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
-          onToast={setToast}
-        />
-      )}
+    <PaneContext.Provider value={paneCtx}>
+      <ChatContext.Provider value={chatCtx}>
+        <LeadContext.Provider value={leadCtx}>
+          {/* mederti-chat-root unlocks the scoped chat.css that the rich
+              DrugCard variants depend on. It only sets CSS variables +
+              styles inside the scope, so the rest of our Tailwind layout
+              keeps working. */}
+          <div
+            className="mederti-chat-root flex h-screen overflow-hidden bg-white text-slate-900"
+            style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}
+          >
+            {sidebarCollapsed ? null : (
+              <Sidebar
+                activeChatId={chatId}
+                activeDrugSlug={drugIdParam}
+                isDemo={isDemo}
+                chats={chatList}
+                onCollapse={toggleSidebar}
+                onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
+                onToast={setToast}
+              />
+            )}
 
-      <ChatMain
-        turns={turns}
-        pending={pending}
-        drugsMap={drugsMap}
-        subsMap={subsMap}
-        activeDrugId={drugIdParam}
-        draft={draft}
-        onDraftChange={setDraft}
-        onSend={send}
-        onOpenDrug={openDrug}
-        textareaRef={textareaRef}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
-      />
+            <ChatMain
+              turns={turns}
+              pending={pending}
+              drugsMap={drugsMap}
+              subsMap={subsMap}
+              draft={draft}
+              onDraftChange={setDraft}
+              onSend={send}
+              textareaRef={textareaRef}
+              sidebarCollapsed={sidebarCollapsed}
+              onToggleSidebar={toggleSidebar}
+            />
 
-      {drugIdParam ? (
-        <PreviewPane
-          key={drugIdParam}
-          drugId={drugIdParam}
-          onClose={closeDrug}
-          onOpenDrug={openDrug}
-          onAskAbout={askAboutDrug}
-          onToast={setToast}
-        />
-      ) : null}
+            {drugIdParam ? (
+              <PreviewPane
+                key={drugIdParam}
+                drugId={drugIdParam}
+                onClose={closeDrug}
+                onOpenDrug={openDrug}
+                onAskAbout={askAboutDrug}
+                onToast={setToast}
+              />
+            ) : null}
 
-      {toast ? (
-        <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-900 text-white text-[13px] rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200"
-          role="status"
-        >
-          {toast}
-        </div>
-      ) : null}
-    </div>
+            {toast ? (
+              <div
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-900 text-white text-[13px] rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200"
+                role="status"
+              >
+                {toast}
+              </div>
+            ) : null}
+          </div>
+        </LeadContext.Provider>
+      </ChatContext.Provider>
+    </PaneContext.Provider>
   );
 }

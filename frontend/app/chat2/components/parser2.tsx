@@ -2,13 +2,19 @@
 
 /*
  * Parses the AI agent response stream — same tag vocabulary as /chat's
- * parser.tsx, but the rendering swaps the heavy <DrugCard> for a compact
- * clickable <Chat2DrugRow>. The row, when clicked, opens the preview pane via
- * the ?drug= URL param.
+ * parser.tsx. Renders the full rich <DrugCard> from /chat/components for
+ * info density; the right preview pane is the *secondary* surface that
+ * single-drug responses auto-open into.
+ *
+ * NOTE — currently importing DrugCard directly from /chat to avoid a 1.5k
+ * line copy-paste while we're still iterating on chat2. When chat2 is
+ * promoted to replace /chat we fork the cards and delete the old route;
+ * if chat2 stays parallel long-term, this is the file to clone first.
  */
 
 import type { ReactNode } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
+import { DrugCard } from "@/app/chat/components/DrugCard";
 
 export type ParsedPart =
   | { kind: "text"; text: string }
@@ -78,86 +84,6 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
   }
   if (cursor < raw.length) parts.push({ kind: "text", text: raw.slice(cursor) });
   return parts;
-}
-
-function severityForDrug(d: DrugDetail): "critical" | "high" | "medium" | "low" | null {
-  const s = (d.worst_severity || "").toLowerCase();
-  if (s === "critical" || s === "high" || s === "medium" || s === "low") return s;
-  if (d.active_shortage_count > 0) return "medium";
-  return null;
-}
-
-function severityPill(sev: ReturnType<typeof severityForDrug>) {
-  if (!sev || sev === "low") return null;
-  const styles: Record<string, string> = {
-    critical: "bg-red-50 text-red-600 border-red-200",
-    high: "bg-orange-50 text-orange-600 border-orange-200",
-    medium: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  };
-  return (
-    <span
-      className={`inline-block text-[10px] font-semibold tracking-wider px-1.5 py-px rounded border uppercase ${styles[sev]}`}
-    >
-      {sev}
-    </span>
-  );
-}
-
-function firstCC(d: DrugDetail): string {
-  const cc = d.shortages.find((s) => s.country_code)?.country_code;
-  return cc?.toUpperCase() || "—";
-}
-
-function latestDate(d: DrugDetail): string {
-  // Latest start_date across shortages.
-  let latest: string | null = null;
-  for (const s of d.shortages) {
-    const v = s.start_date;
-    if (!v) continue;
-    if (!latest || v > latest) latest = v;
-  }
-  return latest || "";
-}
-
-export function Chat2DrugRow({
-  drug,
-  active,
-  onOpen,
-}: {
-  drug: DrugDetail;
-  active: boolean;
-  onOpen: (drugId: string) => void;
-}) {
-  const sev = severityForDrug(drug);
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(drug.drug_id)}
-      className={`group w-full grid items-center gap-3 px-2 py-2.5 -mx-2 rounded transition-colors text-left border-b last:border-b-0 ${
-        active
-          ? "bg-teal-50 border-teal-200"
-          : "border-slate-200 hover:bg-slate-50"
-      }`}
-      style={{ gridTemplateColumns: "40px 1fr auto" }}
-    >
-      <span
-        className="text-[11px] font-medium tracking-wider text-slate-400 uppercase"
-        style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
-      >
-        {firstCC(drug)}
-      </span>
-      <span className="flex items-center gap-2.5 text-[14px] text-slate-900 font-medium min-w-0">
-        <span className="truncate">{drug.name}</span>
-        {severityPill(sev)}
-      </span>
-      <span
-        className="text-[11px] text-slate-400"
-        style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
-      >
-        {latestDate(drug)}
-      </span>
-    </button>
-  );
 }
 
 export function Chat2SubRow({
@@ -251,42 +177,29 @@ type Props = {
   parts: ParsedPart[];
   drugs: Record<string, DrugDetail>;
   subs: Record<string, SubstituteRow>;
-  activeDrugId: string | null;
-  onOpenDrug: (id: string) => void;
   onFollowup: (q: string) => void;
 };
 
-export function RenderedResponse({ parts, drugs, subs, activeDrugId, onOpenDrug, onFollowup }: Props): ReactNode {
-  // Collapse consecutive drug rows into a single bordered group.
+export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): ReactNode {
   const out: ReactNode[] = [];
-  let drugGroup: { id: string; drug: DrugDetail }[] = [];
-  const flush = () => {
-    if (drugGroup.length === 0) return;
-    out.push(
-      <div key={`group-${out.length}`} className="mt-3 mb-3 px-2 -mx-2">
-        {drugGroup.map(({ id, drug }) => (
-          <Chat2DrugRow key={id} drug={drug} active={id === activeDrugId} onOpen={onOpenDrug} />
-        ))}
-      </div>
-    );
-    drugGroup = [];
-  };
 
   parts.forEach((p, i) => {
     if (p.kind === "drug") {
       const d = drugs[p.id];
-      if (d) drugGroup.push({ id: p.id, drug: d });
-      else {
-        flush();
+      if (!d) {
         out.push(
           <div key={i} className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 my-2">
             Missing drug data for <code>{p.id}</code>.
           </div>
         );
+      } else {
+        // Full rich card (PharmacistCard / ProcurementCard / SupplierCard)
+        // — clicking the drug name inside still opens the right preview pane
+        // via the shared PaneContext provided by Chat2Client.
+        out.push(<DrugCard key={i} drug={d} />);
       }
       return;
     }
-    flush();
     if (p.kind === "text") {
       if (p.text.trim()) out.push(<TextBlock key={i} text={p.text} />);
     } else if (p.kind === "sub") {
@@ -325,7 +238,6 @@ export function RenderedResponse({ parts, drugs, subs, activeDrugId, onOpenDrug,
       );
     }
   });
-  flush();
 
   return <>{out}</>;
 }

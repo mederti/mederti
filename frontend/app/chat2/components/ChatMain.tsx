@@ -77,11 +77,9 @@ export function ChatMain({
   pending,
   drugsMap,
   subsMap,
-  activeDrugId,
   draft,
   onDraftChange,
   onSend,
-  onOpenDrug,
   textareaRef,
   sidebarCollapsed,
   onToggleSidebar,
@@ -90,11 +88,9 @@ export function ChatMain({
   pending: boolean;
   drugsMap: Record<string, DrugDetail>;
   subsMap: Record<string, SubstituteRow>;
-  activeDrugId: string | null;
   draft: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
-  onOpenDrug: (id: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
@@ -185,8 +181,6 @@ export function ChatMain({
                         parts={parseAgentResponse(t.text)}
                         drugs={drugsMap}
                         subs={subsMap}
-                        activeDrugId={activeDrugId}
-                        onOpenDrug={onOpenDrug}
                         onFollowup={onSend}
                       />
                     )}

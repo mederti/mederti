@@ -16,12 +16,15 @@ import type { ReactNode } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { DrugCard } from "@/app/chat/components/DrugCard";
 
+export type KpiTile = { value: string; label: string };
+
 export type ParsedPart =
   | { kind: "text"; text: string }
   | { kind: "drug"; id: string }
   | { kind: "sub"; id: string; match: string }
   | { kind: "followups"; items: string[] }
-  | { kind: "alternates"; items: Array<{ id: string; name: string }> };
+  | { kind: "alternates"; items: Array<{ id: string; name: string }> }
+  | { kind: "kpis"; items: KpiTile[] };
 
 const DRUG_TAG_RE = /<drug_card\s+([^>]+?)\/>/g;
 const SUB_TAG_RE = /<sub_card\s+id="([^"]+)"(?:\s+match="([^"]+)")?\s*\/>/g;
@@ -30,13 +33,31 @@ const FOLLOWUP_RE = /<followups>([\s\S]*?)<\/followups>/g;
 const FOLLOWUP_UNCLOSED_RE = /<followups>([\s\S]*?)$/g;
 const ALTERNATES_RE = /<alternates>([\s\S]*?)<\/alternates>/g;
 const ALTERNATES_UNCLOSED_RE = /<alternates>([\s\S]*?)$/g;
+const KPIS_RE = /<kpis>([\s\S]*?)<\/kpis>/g;
+const KPIS_UNCLOSED_RE = /<kpis>([\s\S]*?)$/g;
+
+function parseKpiBody(inner: string): KpiTile[] {
+  return inner
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      const idx = s.indexOf(":");
+      if (idx === -1) return null;
+      const value = s.slice(0, idx).trim();
+      const label = s.slice(idx + 1).trim();
+      if (!value || !label) return null;
+      return { value, label };
+    })
+    .filter((x): x is KpiTile => x !== null);
+}
 
 function extractAttr(attrs: string, name: string): string | undefined {
   const m = new RegExp(`${name}="([^"]+)"`).exec(attrs);
   return m ? m[1] : undefined;
 }
 
-type Hit = { kind: "drug" | "sub" | "followup" | "alternates"; index: number; length: number; data: any };
+type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis"; index: number; length: number; data: any };
 
 export function parseAgentResponse(raw: string): ParsedPart[] {
   const hits: Hit[] = [];
@@ -107,6 +128,24 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     if (items.length === 0) continue;
     hits.push({ kind: "alternates", index: m.index, length: m[0].length, data: { items } });
   }
+  // KPI grid (closed + unclosed-trailing fallback).
+  KPIS_RE.lastIndex = 0;
+  const closedKpisRanges: Array<[number, number]> = [];
+  for (let m: RegExpExecArray | null; (m = KPIS_RE.exec(raw)) !== null; ) {
+    const items = parseKpiBody(m[1]);
+    if (items.length === 0) continue;
+    hits.push({ kind: "kpis", index: m.index, length: m[0].length, data: { items } });
+    closedKpisRanges.push([m.index, m.index + m[0].length]);
+  }
+  KPIS_UNCLOSED_RE.lastIndex = 0;
+  for (let m: RegExpExecArray | null; (m = KPIS_UNCLOSED_RE.exec(raw)) !== null; ) {
+    const overlaps = closedKpisRanges.some(([s, e]) => m!.index >= s && m!.index < e);
+    if (overlaps) continue;
+    const inner = m[1].replace(/<\/?kpis>?$/, "");
+    const items = parseKpiBody(inner);
+    if (items.length === 0) continue;
+    hits.push({ kind: "kpis", index: m.index, length: m[0].length, data: { items } });
+  }
   hits.sort((a, b) => a.index - b.index);
 
   const parts: ParsedPart[] = [];
@@ -116,6 +155,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     if (h.kind === "drug") parts.push({ kind: "drug", id: h.data.id });
     else if (h.kind === "sub") parts.push({ kind: "sub", id: h.data.id, match: h.data.match });
     else if (h.kind === "alternates") parts.push({ kind: "alternates", items: h.data.items });
+    else if (h.kind === "kpis") parts.push({ kind: "kpis", items: h.data.items });
     else parts.push({ kind: "followups", items: h.data.items });
     cursor = h.index + h.length;
   }
@@ -254,6 +294,29 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): Rea
             >
               {q}
             </button>
+          ))}
+        </div>
+      );
+    } else if (p.kind === "kpis" && p.items.length > 0) {
+      const cols = Math.min(p.items.length, 4);
+      out.push(
+        <div
+          key={i}
+          className="grid gap-3 mb-4 mt-2"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
+          {p.items.map((tile, k) => (
+            <div
+              key={k}
+              className="bg-slate-50 border border-slate-200 rounded-lg p-3.5"
+            >
+              <div className="text-[24px] font-semibold text-slate-900 leading-tight tracking-tight">
+                {tile.value}
+              </div>
+              <div className="text-[12px] text-slate-500 mt-1.5 leading-snug">
+                {tile.label}
+              </div>
+            </div>
           ))}
         </div>
       );

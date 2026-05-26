@@ -260,6 +260,34 @@
   padding: 3px 8px;
   border-radius: 6px;
   white-space: nowrap;
+}.mederti-chat-root /* ===== KPI tile grid (Mode C landscape headers) ===== */
+.kpi-grid{
+  display: grid;
+  gap: 12px;
+  margin: 6px 0 18px;
+}.mederti-chat-root .kpi-grid-1{ grid-template-columns: 1fr; }.mederti-chat-root
+.kpi-grid-2{ grid-template-columns: repeat(2, minmax(0, 1fr)); }.mederti-chat-root
+.kpi-grid-3{ grid-template-columns: repeat(3, minmax(0, 1fr)); }.mederti-chat-root
+.kpi-grid-4{ grid-template-columns: repeat(4, minmax(0, 1fr)); }.mederti-chat-root
+.kpi-tile{
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 14px 13px;
+}.mederti-chat-root .kpi-value{
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}.mederti-chat-root .kpi-label{
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+  margin-top: 6px;
+}@media (max-width: 600px){
+  .mederti-chat-root .kpi-grid-3, .mederti-chat-root .kpi-grid-4{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }.mederti-chat-root /* ===== Follow-up chips ===== */
 .followups{
   display: flex;

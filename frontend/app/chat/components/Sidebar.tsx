@@ -39,6 +39,7 @@ import {
 } from "../chatStore";
 import { createWatchlist, useWatchlists, type Watchlist } from "../watchlistStore";
 import { createFolder, useFolders, type Folder as FolderRecord } from "../folderStore";
+import { SearchChatsModal } from "./SearchChatsModal";
 
 const LS_FOLDERS = "chat2:sidebar:expandedFolders";
 const LS_WATCHLISTS = "chat2:sidebar:expandedWatchlists";
@@ -398,6 +399,7 @@ export function Sidebar({
   chats,
   collapsed,
   onCollapse,
+  onNewChat,
   onOpenDrugPreview,
   onToast,
 }: {
@@ -410,25 +412,45 @@ export function Sidebar({
   collapsed: boolean;
   // Toggle collapse/expand.
   onCollapse: () => void;
+  // Reset the active chat to a fresh new-chat state. We can't rely on a plain
+  // <Link href="/chat"> because send() updates the URL via history.replaceState
+  // (bypassing Next's router), leaving the router state stuck on /chat — so
+  // Link sees "already on /chat" and skips the nav.
+  onNewChat: () => void;
   onOpenDrugPreview: (slug: string) => void;
   onToast: (msg: string) => void;
 }) {
   const wl = useExpandedSet(LS_WATCHLISTS, ["wl-1"]);
   const fl = useExpandedSet(LS_FOLDERS, ["f-1"]);
 
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // ⌘K / Ctrl-K — only meaningful when there's something to search.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        if (chats.length === 0) return;
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [chats.length]);
+
   // Real stores — always preferred over seed data.
   const realWatchlists = useWatchlists();
   const realFolders = useFolders();
 
-  // Fall back to seed data only in demo mode and only when the real store
-  // is empty — so a first-time user in demo mode sees populated sections,
-  // but any real data they create takes over immediately.
-  const watchlists: Array<{ id: string; name: string; items: Array<{ drug_id?: string; drug_slug?: string; drug_name: string; status: "red" | "amber" | "green" }> }> =
+  // Fall back to seed data when the real store is empty — first-time users see
+  // populated sections that communicate the structure (Critical for AU,
+  // Geopolitical signals, etc.), and any real data they create takes over.
+  const watchlists: Array<{ id: string; name: string; itemCount?: number; items: Array<{ drug_id?: string; drug_slug?: string; drug_name: string; status: "red" | "amber" | "green" }> }> =
     realWatchlists.length > 0
       ? realWatchlists
-      : isDemo
-      ? SEED_WATCHLISTS.map((w) => ({ ...w, items: w.items.map((i) => ({ ...i, drug_id: i.drug_slug })) }))
-      : [];
+      : SEED_WATCHLISTS.map((w) => ({ ...w, items: w.items.map((i) => ({ ...i, drug_id: i.drug_slug })) }));
+
+  const showSeedFolders = realFolders.length === 0;
 
   const handleNewWatchlist = () => {
     const name = window.prompt("Watchlist name", "My Watchlist");
@@ -503,29 +525,34 @@ export function Sidebar({
         </button>
 
         {/* New chat */}
-        <Link
-          href="/chat"
+        <button
+          type="button"
+          onClick={onNewChat}
           className={railBtn}
           title="New chat"
           aria-label="New chat"
         >
           <Plus size={16} />
-        </Link>
+        </button>
 
-        {/* Search — only when there's history */}
-        {hasAnyChat ? (
-          <button
-            type="button"
-            onClick={() => {
-              onCollapse(); // expand first, then toast
-              onToast("Search chats — coming soon");
-            }}
-            className={railBtn}
-            title="Search chats"
-            aria-label="Search chats"
-          >
-            <Search size={15} />
-          </button>
+        {/* Search — only when there's real chat history to search */}
+        {chats.length > 0 ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className={railBtn}
+              title="Search chats (⌘K)"
+              aria-label="Search chats"
+            >
+              <Search size={15} />
+            </button>
+            <SearchChatsModal
+              open={searchOpen}
+              chats={chats}
+              onClose={() => setSearchOpen(false)}
+            />
+          </>
         ) : null}
 
         {/* Watchlists — only in demo */}
@@ -542,7 +569,7 @@ export function Sidebar({
         ) : null}
 
         {/* Folders */}
-        {realFolders.length > 0 ? (
+        {realFolders.length > 0 || showSeedFolders ? (
           <button
             type="button"
             onClick={onCollapse}
@@ -607,21 +634,26 @@ export function Sidebar({
 
       {/* Primary actions — Search hides until there's history to search */}
       <div className="px-2.5 pb-2.5 flex flex-col gap-0.5">
-        <Link
-          href="/chat"
-          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+        <button
+          type="button"
+          onClick={onNewChat}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors text-left"
         >
           <Plus size={14} />
           <span>New chat</span>
-        </Link>
-        {hasAnyChat ? (
+        </button>
+        {chats.length > 0 ? (
           <button
             type="button"
-            onClick={() => onToast("Search chats — coming soon")}
+            onClick={() => setSearchOpen(true)}
             className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-slate-700 hover:bg-slate-900/[0.04] hover:text-slate-900 transition-colors text-left"
+            title="Search chats (⌘K)"
           >
             <Search size={14} />
-            <span>Search chats</span>
+            <span className="flex-1">Search chats</span>
+            <kbd className="hidden sm:inline-flex items-center px-1 py-0.5 rounded text-[9.5px] font-mono text-slate-400 bg-slate-100/70 border border-slate-200" style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}>
+              ⌘K
+            </kbd>
           </button>
         ) : null}
       </div>
@@ -642,7 +674,7 @@ export function Sidebar({
                     isOpen={isOpen}
                     icon={<Bookmark size={13} />}
                     label={w.name}
-                    count={w.items.length}
+                    count={w.items.length > 0 ? w.items.length : w.itemCount ?? 0}
                     onClick={() => wl.toggle(w.id)}
                   />
                   {isOpen && w.items.length > 0 ? (
@@ -666,7 +698,7 @@ export function Sidebar({
           </div>
         ) : null}
 
-        {/* Folders — show real folders, fall back to seed in demo only */}
+        {/* Folders — show real folders, fall back to seed when empty */}
         {realFolders.length > 0 ? (
           <div className="mt-3.5">
             <SectionHeader label="Folders" onAdd={handleNewFolder} />
@@ -701,6 +733,39 @@ export function Sidebar({
                   ) : isOpen ? (
                     <div className="pl-[28px] py-1.5 text-[11px] text-slate-400">
                       No chats yet — move a chat here from its menu
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : showSeedFolders ? (
+          <div className="mt-3.5">
+            <SectionHeader label="Folders" onAdd={handleNewFolder} />
+            {SEED_FOLDERS.map((f) => {
+              const isOpen = fl.open.has(f.id);
+              const count = f.chats.length > 0 ? f.chats.length : f.chatCount ?? 0;
+              return (
+                <div key={f.id}>
+                  <GroupRow
+                    isOpen={isOpen}
+                    icon={<Folder size={13} />}
+                    label={f.name}
+                    count={count}
+                    onClick={() => fl.toggle(f.id)}
+                  />
+                  {isOpen && f.chats.length > 0 ? (
+                    <div className="pl-[18px] mt-px">
+                      {f.chats.map((c) => (
+                        <ChatHistoryItem
+                          key={c.id}
+                          chatId={c.id}
+                          title={c.title}
+                          folders={realFolders}
+                          isPersisted={false}
+                          onToast={onToast}
+                        />
+                      ))}
                     </div>
                   ) : null}
                 </div>
@@ -775,6 +840,12 @@ export function Sidebar({
 
       {/* User footer + profile popover */}
       <UserFooter onToast={onToast} />
+
+      <SearchChatsModal
+        open={searchOpen}
+        chats={chats}
+        onClose={() => setSearchOpen(false)}
+      />
     </aside>
   );
 }

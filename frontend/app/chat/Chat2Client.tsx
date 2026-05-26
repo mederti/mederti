@@ -290,6 +290,24 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     [setDrugInUrl]
   );
 
+  // Reset to a fresh new-chat state. Can't just navigate to /chat because
+  // send() writes the URL via history.replaceState — Next's router state is
+  // still "/chat", so a <Link href="/chat"> no-ops. Reset state ourselves and
+  // rewrite the URL the same way.
+  const handleNewChat = useCallback(() => {
+    activeIdRef.current = null;
+    setTurns([]);
+    setDrugsMap({});
+    setSubsMap({});
+    setDraft("");
+    setAttachedFiles([]);
+    setBulkFile(null);
+    setActiveView("chat");
+    idRef.current = 0;
+    setDrugId(null);
+    window.history.replaceState(null, "", "/chat");
+  }, []);
+
   const closeDrug = useCallback(() => setDrugInUrl(null), [setDrugInUrl]);
 
   const askAboutDrug = useCallback(
@@ -419,6 +437,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               chats={chatList}
               collapsed={sidebarCollapsed}
               onCollapse={toggleSidebar}
+              onNewChat={handleNewChat}
               onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
               onToast={setToast}
             />

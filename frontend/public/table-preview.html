@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mederti — table preview</title>
+  <style>
+    :root {
+      --app-bg: #ffffff;
+      --app-bg-2: #f8fafc;
+      --app-text: #0f172a;
+      --app-text-3: #64748b;
+      --app-text-4: #94a3b8;
+      --app-border: #e2e8f0;
+      --teal: #0d9488;
+      --teal-bg: #ccfbf1;
+      --crit: #b91c1c;
+      --crit-bg: #fee2e2;
+      --hi: #b45309;
+      --hi-bg: #fef3c7;
+      --med: #a16207;
+      --med-bg: #fef9c3;
+      --low: #15803d;
+      --low-bg: #dcfce7;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Arial, sans-serif;
+      color: var(--app-text);
+      background: var(--app-bg);
+      margin: 0;
+      padding: 40px 24px 60px;
+      line-height: 1.5;
+    }
+    .container { max-width: 880px; margin: 0 auto; }
+    h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--app-text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0 0 24px;
+    }
+    .lead {
+      font-size: 15px;
+      line-height: 1.65;
+      margin: 0 0 16px;
+      color: var(--app-text);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      line-height: 1.55;
+      margin-bottom: 18px;
+    }
+    th {
+      text-align: left;
+      padding: 0 20px 10px 0;
+      font-weight: 600;
+      color: var(--app-text);
+      border-bottom: 1px solid var(--app-border);
+      vertical-align: top;
+    }
+    td {
+      padding: 14px 20px 14px 0;
+      vertical-align: top;
+      text-align: left;
+      border-bottom: 1px solid var(--app-border);
+      color: var(--app-text);
+    }
+    tr:last-child td { border-bottom: none; }
+
+    button.drug-link {
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      font: inherit;
+      color: var(--app-text);
+      cursor: pointer;
+      text-align: left;
+      text-decoration: underline;
+      text-decoration-color: var(--app-text-4);
+      text-decoration-thickness: 1px;
+      text-decoration-style: dotted;
+      text-underline-offset: 3px;
+      font-weight: 600;
+    }
+    button.drug-link:hover {
+      color: var(--teal);
+      text-decoration-color: var(--teal);
+    }
+
+    .followup {
+      font-size: 14px;
+      color: var(--app-text);
+      margin-top: 4px;
+    }
+
+    /* ── Side panel ── */
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.18);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+      z-index: 90;
+    }
+    .panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(480px, 100vw);
+      background: var(--app-bg);
+      border-left: 1px solid var(--app-border);
+      box-shadow: none;
+      transform: translateX(100%);
+      transition: transform 0.22s ease;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel.open { transform: translateX(0); box-shadow: -12px 0 32px rgba(15,23,42,0.08); }
+    .backdrop.open { opacity: 1; pointer-events: auto; }
+
+    .panel header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--app-border);
+    }
+    .panel header .title { flex: 1; min-width: 0; }
+    .panel header .name {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 4px;
+      color: var(--app-text);
+    }
+    .panel header .brands {
+      font-size: 12px;
+      color: var(--app-text-4);
+    }
+    .panel header .atc {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--teal);
+      background: var(--teal-bg);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: ui-monospace, "SF Mono", Monaco, monospace;
+      flex-shrink: 0;
+    }
+    .panel header .close {
+      background: none;
+      border: none;
+      padding: 4px;
+      cursor: pointer;
+      color: var(--app-text-3);
+      flex-shrink: 0;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .panel .body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px 24px;
+    }
+    .panel section { margin-bottom: 20px; }
+    .panel .label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--app-text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    .panel .stat {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .panel .stat .n {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .panel .stat .desc {
+      font-size: 13px;
+      color: var(--app-text-3);
+    }
+    .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+    .badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge.critical { background: var(--crit-bg); color: var(--crit); }
+    .badge.high     { background: var(--hi-bg);   color: var(--hi);   }
+    .badge.medium   { background: var(--med-bg);  color: var(--med);  }
+    .badge.low      { background: var(--low-bg);  color: var(--low);  }
+
+    .event {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 13px;
+      border-bottom: 1px solid var(--app-border);
+    }
+    .event:last-child { border-bottom: none; }
+    .event .cc {
+      font-weight: 600;
+      font-size: 11px;
+      color: var(--app-text-3);
+      font-family: ui-monospace, monospace;
+      min-width: 24px;
+      letter-spacing: 0.02em;
+    }
+    .event .reason { color: var(--app-text-3); font-size: 12px; flex: 1; }
+    .event .date {
+      color: var(--app-text-4);
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+    }
+
+    .alt {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 13px;
+      color: var(--app-text);
+      text-decoration: none;
+    }
+    .alt .name { font-weight: 500; flex: 1; }
+    .alt .grade {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: var(--app-bg-2);
+      color: var(--app-text-3);
+      font-family: ui-monospace, monospace;
+      letter-spacing: 0.04em;
+    }
+    .alt .sim {
+      font-size: 11px;
+      color: var(--app-text-4);
+      font-family: ui-monospace, monospace;
+    }
+
+    .panel footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--app-border);
+      background: var(--app-bg);
+    }
+    .panel footer a {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--teal);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Table preview</h1>
+    <p class="lead">
+      Five drugs on the global watchlist heading into June — the picture is concentrated in oncology
+      and endocrinology, with antibiotic pressure still rolling on from Q1.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Drug</th>
+          <th>Used For</th>
+          <th>Why It's On The Watchlist</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <p class="followup">
+      Want me to drill into any one of these — recent events, severity breakdown, supplier
+      concentration, or alternatives?
+    </p>
+  </div>
+
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="panel" id="panel" role="dialog" aria-label="Drug preview">
+    <header>
+      <div class="title">
+        <div class="name" id="p-name"></div>
+        <div class="brands" id="p-brands"></div>
+      </div>
+      <span class="atc" id="p-atc"></span>
+      <button class="close" id="p-close" aria-label="Close preview">×</button>
+    </header>
+    <div class="body" id="p-body"></div>
+    <footer>
+      <a id="p-view" href="#">View full profile →</a>
+    </footer>
+  </aside>
+
+  <script>
+    const drugs = [
+      {
+        slug: "cisplatin",
+        name: "Cisplatin",
+        usedFor: "Platinum-based chemotherapy, Class I oncology",
+        why: "API concentration in 2 Indian generic manufacturers; post-Intas remediation still constraining US supply",
+        atc: "L01XA01",
+        brands: ["Platinol", "DBL Cisplatin"],
+        activeCount: 9,
+        countries: 4,
+        severities: ["critical", "high", "medium"],
+        recent: [
+          { cc: "US", sev: "critical", reason: "manufacturing_issue", date: "2026-04-18" },
+          { cc: "US", sev: "high",     reason: "supply_chain",        date: "2026-03-22" },
+          { cc: "CA", sev: "high",     reason: "demand_surge",        date: "2026-02-14" },
+          { cc: "AU", sev: "medium",   reason: "manufacturing_issue", date: "2026-01-30" },
+          { cc: "GB", sev: "medium",   reason: "regulatory_action",   date: "2025-12-12" }
+        ],
+        alts: [
+          { name: "Carboplatin",  grade: "A", sim: 0.85 },
+          { name: "Oxaliplatin",  grade: "B", sim: 0.70 },
+          { name: "Nedaplatin",   grade: "C", sim: 0.55 },
+          { name: "Doxorubicin",  grade: "D", sim: 0.40 }
+        ]
+      },
+      {
+        slug: "insulin-glargine",
+        name: "Insulin glargine",
+        usedFor: "Type 1 & 2 diabetes, basal coverage",
+        why: "Persistent global tightness on Lantus; biosimilar substitution uneven across markets",
+        atc: "A10AE04",
+        brands: ["Lantus", "Toujeo", "Basaglar"],
+        activeCount: 20,
+        countries: 8,
+        severities: ["high", "medium"],
+        recent: [
+          { cc: "US", sev: "high",   reason: "manufacturing_issue", date: "2026-05-04" },
+          { cc: "DE", sev: "high",   reason: "supply_chain",        date: "2026-04-12" },
+          { cc: "FR", sev: "high",   reason: "demand_surge",        date: "2026-04-02" },
+          { cc: "GB", sev: "medium", reason: "regulatory_action",   date: "2026-03-18" },
+          { cc: "AU", sev: "medium", reason: "manufacturing_issue", date: "2026-02-26" }
+        ],
+        alts: [
+          { name: "Insulin degludec", grade: "A", sim: 0.90 },
+          { name: "Insulin detemir",  grade: "A", sim: 0.80 },
+          { name: "NPH insulin",      grade: "B", sim: 0.65 },
+          { name: "Insulin aspart",   grade: "C", sim: 0.45 }
+        ]
+      },
+      {
+        slug: "amoxicillin",
+        name: "Amoxicillin",
+        usedFor: "First-line antibiotic, paediatric mainstay",
+        why: "Active shortages reported in EU, AU, CA — suspension formulations under most pressure",
+        atc: "J01CA04",
+        brands: ["Amoxil", "Trimox", "Moxatag"],
+        activeCount: 17,
+        countries: 6,
+        severities: ["high", "medium"],
+        recent: [
+          { cc: "CA", sev: "high",   reason: "manufacturing_issue", date: "2026-05-12" },
+          { cc: "CA", sev: "high",   reason: "demand_surge",        date: "2026-04-20" },
+          { cc: "CA", sev: "high",   reason: "supply_chain",        date: "2026-03-23" },
+          { cc: "CA", sev: "high",   reason: "manufacturing_issue", date: "2026-03-12" },
+          { cc: "BE", sev: "medium", reason: "unknown",             date: "2026-03-10" }
+        ],
+        alts: [
+          { name: "Piperacillin/Tazobactam",  grade: "D", sim: 0.65 },
+          { name: "Amoxicillin/Clavulanate",  grade: "D", sim: 0.65 },
+          { name: "Azithromycin",             grade: "D", sim: 0.50 },
+          { name: "Ceftriaxone",              grade: "D", sim: 0.50 }
+        ]
+      },
+      {
+        slug: "tamoxifen",
+        name: "Tamoxifen",
+        usedFor: "Hormone-receptor-positive breast cancer",
+        why: "Hexal/Sandoz API disruption; parallel export to higher-priced EU markets compounding",
+        atc: "L02BA01",
+        brands: ["Nolvadex", "Soltamox"],
+        activeCount: 11,
+        countries: 5,
+        severities: ["critical", "high"],
+        recent: [
+          { cc: "DE", sev: "critical", reason: "supply_chain",        date: "2026-05-08" },
+          { cc: "IT", sev: "high",     reason: "parallel_export",     date: "2026-04-15" },
+          { cc: "FR", sev: "high",     reason: "manufacturing_issue", date: "2026-03-26" },
+          { cc: "ES", sev: "high",     reason: "supply_chain",        date: "2026-02-18" },
+          { cc: "GB", sev: "high",     reason: "demand_surge",        date: "2026-01-30" }
+        ],
+        alts: [
+          { name: "Anastrozole", grade: "A", sim: 0.80 },
+          { name: "Letrozole",   grade: "A", sim: 0.78 },
+          { name: "Exemestane",  grade: "B", sim: 0.65 },
+          { name: "Fulvestrant", grade: "C", sim: 0.50 }
+        ]
+      },
+      {
+        slug: "semaglutide",
+        name: "Semaglutide",
+        usedFor: "GLP-1 for diabetes and obesity",
+        why: "Novo Nordisk global allocation; off-label demand continues to outpace supply",
+        atc: "A10BJ06",
+        brands: ["Ozempic", "Wegovy", "Rybelsus"],
+        activeCount: 15,
+        countries: 5,
+        severities: ["critical", "high", "medium"],
+        recent: [
+          { cc: "PT", sev: "medium", reason: "manufacturing_issue", date: "2026-03-22" },
+          { cc: "US", sev: "high",   reason: "regulatory_action",   date: "2026-02-26" },
+          { cc: "US", sev: "high",   reason: "regulatory_action",   date: "2026-02-13" },
+          { cc: "US", sev: "high",   reason: "manufacturing_issue", date: "2026-02-13" },
+          { cc: "AU", sev: "high",   reason: "discontinuation",     date: "2025-12-01" }
+        ],
+        alts: [
+          { name: "Sitagliptin", grade: "D", sim: 0.65 },
+          { name: "Gliclazide",  grade: "D", sim: 0.65 },
+          { name: "Repaglinide", grade: "D", sim: 0.65 },
+          { name: "Metformin",   grade: "D", sim: 0.65 }
+        ]
+      }
+    ];
+
+    /* ── Render rows ── */
+    const rows = document.getElementById("rows");
+    for (const d of drugs) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><button class="drug-link" data-slug="${d.slug}">${d.name}</button></td>
+        <td>${d.usedFor}</td>
+        <td>${d.why}</td>
+      `;
+      rows.appendChild(tr);
+    }
+
+    /* ── Panel ── */
+    const panel    = document.getElementById("panel");
+    const backdrop = document.getElementById("backdrop");
+    const pName    = document.getElementById("p-name");
+    const pBrands  = document.getElementById("p-brands");
+    const pAtc     = document.getElementById("p-atc");
+    const pBody    = document.getElementById("p-body");
+    const pView    = document.getElementById("p-view");
+    const pClose   = document.getElementById("p-close");
+
+    function openDrug(slug) {
+      const d = drugs.find(x => x.slug === slug);
+      if (!d) return;
+      pName.textContent = d.name;
+      pBrands.textContent = d.brands.length ? d.brands.join(" · ") : "";
+      pAtc.textContent = d.atc;
+      pView.href = `https://mederti.vercel.app/drugs/${d.slug}`;
+
+      const badges = d.severities.map(s => `<span class="badge ${s}">${s}</span>`).join("");
+      const events = d.recent.map(e => `
+        <div class="event">
+          <span class="cc">${e.cc}</span>
+          <span class="badge ${e.sev}">${e.sev}</span>
+          <span class="reason">${e.reason}</span>
+          <span class="date">${e.date}</span>
+        </div>
+      `).join("");
+      const alts = d.alts.map(a => `
+        <div class="alt">
+          <span class="name">${a.name}</span>
+          <span class="grade">${a.grade}</span>
+          <span class="sim">${Math.round(a.sim * 100)}%</span>
+        </div>
+      `).join("");
+
+      pBody.innerHTML = `
+        <section>
+          <div class="label">Current supply</div>
+          <div class="stat">
+            <span class="n">${d.activeCount}</span>
+            <span class="desc">active shortages across ${d.countries} countr${d.countries === 1 ? "y" : "ies"}</span>
+          </div>
+          <div class="badges">${badges}</div>
+        </section>
+        <section>
+          <div class="label">Recent events</div>
+          ${events}
+        </section>
+        <section>
+          <div class="label">Therapeutic alternatives</div>
+          ${alts}
+        </section>
+      `;
+
+      panel.classList.add("open");
+      backdrop.classList.add("open");
+    }
+
+    function closeDrug() {
+      panel.classList.remove("open");
+      backdrop.classList.remove("open");
+    }
+
+    document.addEventListener("click", (e) => {
+      const link = e.target.closest("button.drug-link");
+      if (link) openDrug(link.dataset.slug);
+    });
+    backdrop.addEventListener("click", closeDrug);
+    pClose.addEventListener("click", closeDrug);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrug(); });
+  </script>
+</body>
+</html>

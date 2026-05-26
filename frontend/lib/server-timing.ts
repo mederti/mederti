@@ -12,7 +12,13 @@ export class ServerTimer {
   private entries: Array<{ name: string; dur: number; desc?: string }> = [];
   private startedAt = performance.now();
 
-  async track<T>(name: string, fn: () => Promise<T>, desc?: string): Promise<T> {
+  // Accept PromiseLike too — Supabase query builders are thenable but not
+  // true Promises, and `await` handles both.
+  async track<T>(
+    name: string,
+    fn: () => Promise<T> | PromiseLike<T>,
+    desc?: string,
+  ): Promise<T> {
     const start = performance.now();
     try {
       return await fn();

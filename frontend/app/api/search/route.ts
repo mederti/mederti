@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ServerTimer } from "@/lib/server-timing";
+
+// Pin to Mumbai to sit next to the Supabase project (ap-south-1).
+// On Hobby plan this is ignored — set the project default in Vercel
+// dashboard → Settings → Functions → Region instead.
+export const preferredRegion = "bom1";
 
 interface SearchHit {
   drug_id: string;
@@ -7,11 +13,18 @@ interface SearchHit {
   brand_names: string[];
   atc_code: string | null;
   active_shortage_count: number;
+  alternatives_count: number;
   source: "drugs" | "catalogue";
   source_country?: string;
   source_name?: string;
   registration_number?: string;
 }
+
+// PostgrestSingleResponse-shaped value we can ignore the full type of.
+type PgResult<T> = { data: T[] | null; error?: { message: string } | null };
+
+const DRUG_COLS = "id, generic_name, brand_names, atc_code";
+const CAT_COLS  = "id, drug_id, generic_name, brand_name, atc_code, source_country, source_name, registration_number";
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim();
@@ -22,49 +35,106 @@ export async function GET(req: NextRequest) {
   }
 
   const sb = getSupabaseAdmin();
+  const timer = new ServerTimer();
+  const catLimit = limit + 20; // overfetch for dedup against drugs
 
-  // ── 1. Search canonical drugs table (shortage-tracked) ──────────────
-  let drugRows: Record<string, unknown>[] = [];
-  try {
-    const resp = await sb
-      .from("drugs")
-      .select("id, generic_name, brand_names, atc_code")
-      .textSearch("search_vector", q, { config: "english" })
-      .limit(limit);
-    drugRows = resp.data ?? [];
-  } catch {
-    // fall through to ilike
-  }
+  // ── Round 1: drugs FTS + catalogue FTS in parallel ──────────────────
+  const [drugFts, catFts] = await Promise.all([
+    timer.track("db_drugs_fts", () =>
+      sb.from("drugs")
+        .select(DRUG_COLS)
+        .textSearch("search_vector", q, { config: "english" })
+        .limit(limit)
+        .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+    ),
+    timer.track("db_catalogue_fts", () =>
+      sb.from("drug_catalogue")
+        .select(CAT_COLS)
+        .textSearch("search_vector", q, { config: "english" })
+        .limit(catLimit)
+        .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+    ),
+  ]);
 
+  let drugRows = drugFts.data ?? [];
+  let catRows = catFts.data ?? [];
+
+  // ── Round 2: ilike fallbacks (only when FTS returned nothing) ───────
+  // Run any required fallbacks in parallel with each other so we don't
+  // pay two RTTs in series when both branches need ilike.
+  const fallbackJobs: Promise<void>[] = [];
   if (drugRows.length === 0) {
-    const resp = await sb
-      .from("drugs")
-      .select("id, generic_name, brand_names, atc_code")
-      .ilike("generic_name", `%${q}%`)
-      .limit(limit);
-    if (resp.error) {
-      return NextResponse.json({ error: resp.error.message }, { status: 500 });
-    }
-    drugRows = resp.data ?? [];
+    fallbackJobs.push(
+      timer
+        .track("db_drugs_ilike", () =>
+          sb.from("drugs")
+            .select(DRUG_COLS)
+            .ilike("generic_name", `%${q}%`)
+            .limit(limit)
+            .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+        )
+        .then((r) => {
+          drugRows = r.data ?? [];
+        })
+    );
   }
+  if (catRows.length === 0) {
+    fallbackJobs.push(
+      timer
+        .track("db_catalogue_ilike", () =>
+          sb.from("drug_catalogue")
+            .select(CAT_COLS)
+            .ilike("generic_name", `%${q}%`)
+            .limit(catLimit)
+            .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+        )
+        .then((r) => {
+          catRows = r.data ?? [];
+        })
+    );
+  }
+  if (fallbackJobs.length > 0) await Promise.all(fallbackJobs);
 
-  // Fetch active shortage counts for drug results
   const drugIds = drugRows.map((r) => r.id as string);
-  const shortageCounts: Record<string, number> = Object.fromEntries(drugIds.map((id) => [id, 0]));
 
+  // ── Round 3: shortage + alternatives counts in parallel ─────────────
+  const shortageCounts: Record<string, number> = {};
+  const altCounts: Record<string, number> = {};
   if (drugIds.length > 0) {
-    try {
-      const sc = await sb
-        .from("shortage_events")
-        .select("drug_id")
-        .in("drug_id", drugIds)
-        .in("status", ["active", "anticipated"]);
-      for (const row of sc.data ?? []) {
-        shortageCounts[row.drug_id] = (shortageCounts[row.drug_id] ?? 0) + 1;
-      }
-    } catch {
-      // counts stay 0
-    }
+    await Promise.all([
+      timer
+        .track("db_shortage_counts", () =>
+          sb.from("shortage_events")
+            .select("drug_id")
+            .in("drug_id", drugIds)
+            .in("status", ["active", "anticipated"])
+            .then(
+              (r) => r as PgResult<{ drug_id: string }>,
+              () => ({ data: null })
+            )
+        )
+        .then((r) => {
+          for (const row of r.data ?? []) {
+            shortageCounts[row.drug_id] = (shortageCounts[row.drug_id] ?? 0) + 1;
+          }
+        }),
+      timer
+        .track("db_alt_counts", () =>
+          sb.from("drug_alternatives")
+            .select("drug_id")
+            .in("drug_id", drugIds)
+            .eq("is_approved", true)
+            .then(
+              (r) => r as PgResult<{ drug_id: string }>,
+              () => ({ data: null })
+            )
+        )
+        .then((r) => {
+          for (const row of r.data ?? []) {
+            altCounts[row.drug_id] = (altCounts[row.drug_id] ?? 0) + 1;
+          }
+        }),
+    ]);
   }
 
   const drugResults: SearchHit[] = drugRows.map((r) => ({
@@ -73,40 +143,17 @@ export async function GET(req: NextRequest) {
     brand_names: (r.brand_names as string[]) ?? [],
     atc_code: (r.atc_code as string) ?? null,
     active_shortage_count: shortageCounts[r.id as string] ?? 0,
+    alternatives_count: altCounts[r.id as string] ?? 0,
     source: "drugs" as const,
   }));
 
-  // ── 2. Search drug_catalogue for additional hits ────────────────────
+  // ── Dedup catalogue entries against drugs hits ──────────────────────
   const remaining = limit - drugResults.length;
   let catResults: SearchHit[] = [];
 
-  if (remaining > 0) {
-    // Collect drug_ids already in results to avoid duplicates
+  if (remaining > 0 && catRows.length > 0) {
     const seenDrugIds = new Set(drugIds);
     const seenNames = new Set(drugRows.map((r) => (r.generic_name as string).toLowerCase()));
-
-    let catRows: Record<string, unknown>[] = [];
-    try {
-      const resp = await sb
-        .from("drug_catalogue")
-        .select("id, drug_id, generic_name, brand_name, atc_code, source_country, source_name, registration_number")
-        .textSearch("search_vector", q, { config: "english" })
-        .limit(remaining + 20); // fetch extra to allow dedup
-      catRows = resp.data ?? [];
-    } catch {
-      // fall through to ilike
-    }
-
-    if (catRows.length === 0) {
-      const resp = await sb
-        .from("drug_catalogue")
-        .select("id, drug_id, generic_name, brand_name, atc_code, source_country, source_name, registration_number")
-        .ilike("generic_name", `%${q}%`)
-        .limit(remaining + 20);
-      catRows = resp.data ?? [];
-    }
-
-    // Deduplicate: skip catalogue entries whose drug_id or generic_name already appears
     const dedupedCat: Record<string, unknown>[] = [];
     const seenCatNames = new Set<string>();
     for (const r of catRows) {
@@ -126,6 +173,7 @@ export async function GET(req: NextRequest) {
       brand_names: (r.brand_name as string) ? [r.brand_name as string] : [],
       atc_code: (r.atc_code as string) ?? null,
       active_shortage_count: 0,
+      alternatives_count: 0,
       source: "catalogue" as const,
       source_country: r.source_country as string,
       source_name: r.source_name as string,
@@ -134,5 +182,8 @@ export async function GET(req: NextRequest) {
   }
 
   const results = [...drugResults, ...catResults];
-  return NextResponse.json({ query: q, results, total: results.length });
+  return NextResponse.json(
+    { query: q, results, total: results.length },
+    { headers: timer.headers() }
+  );
 }

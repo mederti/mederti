@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ServerTimer } from "@/lib/server-timing";
+
+// Match Supabase project region (ap-south-1, Mumbai). Ignored on Hobby plan —
+// configure the default region in Vercel dashboard instead.
+export const preferredRegion = "bom1";
 
 export interface AutocompleteItem {
   id: string;
@@ -48,25 +53,28 @@ export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
   const term = `%${q}%`;
   const qLower = q.toLowerCase();
+  const timer = new ServerTimer();
 
   // Round 1: search drugs, products, and catalogue in parallel
-  const [drugsRes, productsRes, catalogueRes] = await Promise.all([
-    sb
-      .from("drugs")
-      .select("id, generic_name, dosage_forms, strengths")
-      .ilike("generic_name", term)
-      .limit(12),
-    sb
-      .from("drug_products")
-      .select("id, product_name, dosage_form, strength, country")
-      .ilike("product_name", term)
-      .limit(12),
-    sb
-      .from("drug_catalogue")
-      .select("id, drug_id, generic_name, brand_name, dosage_form, strength, source_country, source_name")
-      .ilike("generic_name", term)
-      .limit(12),
-  ]);
+  const [drugsRes, productsRes, catalogueRes] = await timer.track("db_round1_parallel", () =>
+    Promise.all([
+      sb
+        .from("drugs")
+        .select("id, generic_name, dosage_forms, strengths")
+        .ilike("generic_name", term)
+        .limit(12),
+      sb
+        .from("drug_products")
+        .select("id, product_name, dosage_form, strength, country")
+        .ilike("product_name", term)
+        .limit(12),
+      sb
+        .from("drug_catalogue")
+        .select("id, drug_id, generic_name, brand_name, dosage_form, strength, source_country, source_name")
+        .ilike("generic_name", term)
+        .limit(12),
+    ])
+  );
 
   const drugRows = drugsRes.data ?? [];
   const productRows = productsRes.data ?? [];
@@ -76,22 +84,24 @@ export async function GET(req: NextRequest) {
   const drugIds = drugRows.map((d) => d.id);
   const productIds = productRows.map((p) => p.id);
 
-  const [shortagesRes, availRes] = await Promise.all([
-    drugIds.length > 0
-      ? sb
-          .from("shortage_events")
-          .select("drug_id, severity")
-          .in("drug_id", drugIds)
-          .in("status", ["active", "anticipated"])
-      : Promise.resolve({ data: [] as { drug_id: string; severity: string }[] }),
-    productIds.length > 0
-      ? sb
-          .from("drug_availability")
-          .select("product_id, severity, status")
-          .in("product_id", productIds)
-          .neq("status", "available")
-      : Promise.resolve({ data: [] as { product_id: string; severity: string; status: string }[] }),
-  ]);
+  const [shortagesRes, availRes] = await timer.track("db_round2_parallel", () =>
+    Promise.all([
+      drugIds.length > 0
+        ? sb
+            .from("shortage_events")
+            .select("drug_id, severity")
+            .in("drug_id", drugIds)
+            .in("status", ["active", "anticipated"])
+        : Promise.resolve({ data: [] as { drug_id: string; severity: string }[] }),
+      productIds.length > 0
+        ? sb
+            .from("drug_availability")
+            .select("product_id, severity, status")
+            .in("product_id", productIds)
+            .neq("status", "available")
+        : Promise.resolve({ data: [] as { product_id: string; severity: string; status: string }[] }),
+    ])
+  );
 
   const shortages = shortagesRes.data ?? [];
   const availability = availRes.data ?? [];
@@ -173,8 +183,11 @@ export async function GET(req: NextRequest) {
     return a.name.localeCompare(b.name);
   });
 
-  return NextResponse.json<AutocompleteResponse>({
-    q,
-    items: items.slice(0, limit),
-  });
+  return NextResponse.json<AutocompleteResponse>(
+    {
+      q,
+      items: items.slice(0, limit),
+    },
+    { headers: timer.headers() }
+  );
 }

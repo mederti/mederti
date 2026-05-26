@@ -14,6 +14,7 @@ export interface DrugHit {
   brand_names: string[];
   atc_code: string | null;
   active_shortage_count: number;
+  alternatives_count?: number;
   source?: "drugs" | "catalogue";
   source_country?: string;
   source_name?: string;

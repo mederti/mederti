@@ -180,16 +180,12 @@ function SearchResults() {
       setResults(data.results.map(d => ({ ...d })));
       setTotal(data.total);
 
-      // Fetch alternatives counts in parallel
+      // Alternatives counts now come folded into /api/search. Map them
+      // into the local lookup so existing DrugCard render keeps working.
       const counts: Record<string, number> = {};
-      await Promise.all(
-        data.results.map(async (drug) => {
-          try {
-            const alts = await api.getDrugAlternatives(drug.drug_id);
-            counts[drug.drug_id] = alts.length;
-          } catch { /* ignore */ }
-        })
-      );
+      for (const drug of data.results) {
+        counts[drug.drug_id] = drug.alternatives_count ?? 0;
+      }
       setAltCounts(counts);
     } catch {
       setResults([]);
@@ -210,7 +206,7 @@ function SearchResults() {
       const url = q.trim() ? `/search?q=${encodeURIComponent(q.trim())}` : "/search";
       router.replace(url, { scroll: false });
       search(q);
-    }, 300);
+    }, 150);
   }
 
   return (

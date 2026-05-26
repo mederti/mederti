@@ -129,7 +129,45 @@
   line-height: 1.6;
   color: var(--text);
   white-space: pre-wrap;
-}.mederti-chat-root .msg-bubble-assistant p{ margin: 0 0 10px; }.mederti-chat-root .msg-bubble-assistant p:last-child{ margin-bottom: 0; }.mederti-chat-root .msg-bubble-assistant strong{ font-weight: 600; }.mederti-chat-root /* ===== Drug card ===== */
+}.mederti-chat-root .msg-bubble-assistant p{ margin: 0 0 10px; }.mederti-chat-root .msg-bubble-assistant p:last-child{ margin-bottom: 0; }.mederti-chat-root .msg-bubble-assistant strong{ font-weight: 600; }
+/* ===== Inline tables (markdown GFM, parsed by parser.tsx) ===== */
+.mederti-chat-root .msg-table-wrap{ margin: 4px 0 16px; overflow-x: auto; }
+.mederti-chat-root .msg-table{ width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.55; }
+.mederti-chat-root .msg-table thead th{
+  text-align: left;
+  padding: 0 20px 10px 0;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.mederti-chat-root .msg-table tbody td{
+  padding: 12px 20px 12px 0;
+  vertical-align: top;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.mederti-chat-root .msg-table tbody tr:last-child td{ border-bottom: none; }
+/* ===== Clickable drug name (bold subject in tables/prose) ===== */
+.mederti-chat-root .msg-drug-link{
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--text-3, #94a3b8);
+  text-decoration-thickness: 1px;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.mederti-chat-root .msg-drug-link:hover{ color: var(--teal, #0d9488); text-decoration-color: var(--teal, #0d9488); }
+.mederti-chat-root /* ===== Drug card ===== */
 .drug-card{
   background: var(--bg);
   border: 1px solid var(--border);

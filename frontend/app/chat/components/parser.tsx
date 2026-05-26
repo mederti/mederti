@@ -1,16 +1,20 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import type { DrugDetail, Persona, SubstituteRow } from "@/lib/chat/types";
 import { DrugCard } from "./DrugCard";
 import { SubCard } from "./SubCard";
+import { PaneContext } from "./PaneContext";
+
+export type KpiTile = { value: string; label: string };
 
 export type ParsedPart =
   | { kind: "text"; text: string }
   | { kind: "drug"; id: string; persona?: Persona }
   | { kind: "sub"; id: string; match: string }
   | { kind: "followups"; items: string[] }
-  | { kind: "alternates"; items: Array<{ id: string; name: string }> };
+  | { kind: "alternates"; items: Array<{ id: string; name: string }> }
+  | { kind: "kpis"; items: KpiTile[] };
 
 // Match <drug_card id="..." /> with optional persona="..." (any attribute order).
 const DRUG_TAG_RE = /<drug_card\s+([^>]+?)\/>/g;
@@ -22,6 +26,11 @@ const FOLLOWUP_UNCLOSED_RE = /<followups>([\s\S]*?)$/g;
 // <alternates>uuid:Name|uuid:Name</alternates> — disambiguation chips when search returned >1 plausible match.
 const ALTERNATES_RE = /<alternates>([\s\S]*?)<\/alternates>/g;
 const ALTERNATES_UNCLOSED_RE = /<alternates>([\s\S]*?)$/g;
+// <kpis>value:label|value:label|...</kpis> — visual KPI tile grid for Mode C
+// landscape headers. Lead with 3–4 of the most important numbers the user
+// asked about — "91 active shortages", "11 countries", etc.
+const KPIS_RE = /<kpis>([\s\S]*?)<\/kpis>/g;
+const KPIS_UNCLOSED_RE = /<kpis>([\s\S]*?)$/g;
 
 function extractAttr(attrs: string, name: string): string | undefined {
   const m = new RegExp(`${name}="([^"]+)"`).exec(attrs);
@@ -33,7 +42,23 @@ function normalisePersona(v?: string): Persona | undefined {
   return undefined;
 }
 
-type Hit = { kind: "drug" | "sub" | "followup" | "alternates"; index: number; length: number; data: any };
+type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis"; index: number; length: number; data: any };
+
+function parseKpiBody(inner: string): KpiTile[] {
+  return inner
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      const idx = s.indexOf(":");
+      if (idx === -1) return null;
+      const value = s.slice(0, idx).trim();
+      const label = s.slice(idx + 1).trim();
+      if (!value || !label) return null;
+      return { value, label };
+    })
+    .filter((x): x is KpiTile => x !== null);
+}
 
 export function parseAgentResponse(raw: string): ParsedPart[] {
   const hits: Hit[] = [];
@@ -108,6 +133,24 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     if (items.length === 0) continue;
     hits.push({ kind: "alternates" as any, index: m.index, length: m[0].length, data: { items } });
   }
+  // KPI grid (closed + unclosed-trailing fallback).
+  KPIS_RE.lastIndex = 0;
+  const closedKpisRanges: Array<[number, number]> = [];
+  for (let m: RegExpExecArray | null; (m = KPIS_RE.exec(raw)) !== null; ) {
+    const items = parseKpiBody(m[1]);
+    if (items.length === 0) continue;
+    hits.push({ kind: "kpis", index: m.index, length: m[0].length, data: { items } });
+    closedKpisRanges.push([m.index, m.index + m[0].length]);
+  }
+  KPIS_UNCLOSED_RE.lastIndex = 0;
+  for (let m: RegExpExecArray | null; (m = KPIS_UNCLOSED_RE.exec(raw)) !== null; ) {
+    const overlaps = closedKpisRanges.some(([s, e]) => m!.index >= s && m!.index < e);
+    if (overlaps) continue;
+    const inner = m[1].replace(/<\/?kpis>?$/, "");
+    const items = parseKpiBody(inner);
+    if (items.length === 0) continue;
+    hits.push({ kind: "kpis", index: m.index, length: m[0].length, data: { items } });
+  }
   hits.sort((a, b) => a.index - b.index);
 
   const parts: ParsedPart[] = [];
@@ -117,6 +160,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     if (h.kind === "drug") parts.push({ kind: "drug", id: h.data.id, persona: h.data.persona });
     else if (h.kind === "sub") parts.push({ kind: "sub", id: h.data.id, match: h.data.match });
     else if (h.kind === "alternates") parts.push({ kind: "alternates", items: h.data.items });
+    else if (h.kind === "kpis") parts.push({ kind: "kpis", items: h.data.items });
     else parts.push({ kind: "followups", items: h.data.items });
     cursor = h.index + h.length;
   }
@@ -129,16 +173,19 @@ type Props = {
   drugs: Record<string, DrugDetail>;
   subs: Record<string, SubstituteRow>;
   onFollowup: (q: string) => void;
+  /** Map of drug name (as it appears in prose / tables) → drug_id, used to
+   *  make bolded drug names clickable. Built post-stream from /api/search. */
+  drugIdByName?: Record<string, string>;
 };
 
-export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): ReactNode {
+export function RenderedResponse({ parts, drugs, subs, onFollowup, drugIdByName }: Props): ReactNode {
   return (
     <>
       {parts.map((p, i) => {
         if (p.kind === "text") {
           const trimmed = p.text.trim();
           if (!trimmed) return null;
-          return <TextBlock key={i} text={trimmed} />;
+          return <TextBlock key={i} text={trimmed} drugIdByName={drugIdByName} />;
         }
         if (p.kind === "drug") {
           const d = drugs[p.id];
@@ -173,6 +220,19 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): Rea
             </div>
           );
         }
+        if (p.kind === "kpis") {
+          if (p.items.length === 0) return null;
+          return (
+            <div key={i} className={`kpi-grid kpi-grid-${Math.min(p.items.length, 4)}`}>
+              {p.items.map((tile, k) => (
+                <div key={k} className="kpi-tile">
+                  <div className="kpi-value">{tile.value}</div>
+                  <div className="kpi-label">{tile.label}</div>
+                </div>
+              ))}
+            </div>
+          );
+        }
         if (p.kind === "alternates") {
           if (p.items.length === 0) return null;
           return (
@@ -198,26 +258,119 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): Rea
   );
 }
 
-function TextBlock({ text }: { text: string }) {
-  // Render paragraphs separated by blank lines; inline **bold** support.
-  const paragraphs = text.split(/\n{2,}/);
+function TextBlock({ text, drugIdByName }: { text: string; drugIdByName?: Record<string, string> }) {
+  // Split into blocks (paragraph or table) separated by blank lines.
+  const blocks = text.split(/\n{2,}/);
   return (
     <div className="msg-bubble-assistant">
-      {paragraphs.map((p, i) => (
-        <p key={i}>{renderInline(p)}</p>
-      ))}
+      {blocks.map((block, i) => {
+        const lines = block.split("\n");
+        const table = parseTableBlock(lines);
+        if (table) {
+          return <TableBlock key={i} header={table.header} rows={table.rows} blockIdx={i} drugIdByName={drugIdByName} />;
+        }
+        return <p key={i}>{renderInline(block, `b${i}`, drugIdByName)}</p>;
+      })}
     </div>
   );
 }
 
-function renderInline(text: string): ReactNode[] {
+function parseTableBlock(
+  lines: string[]
+): { header: string[]; rows: string[][] } | null {
+  const nonEmpty = lines.filter((l) => l.trim() !== "");
+  if (nonEmpty.length < 2) return null;
+  if (!nonEmpty.every((l) => l.includes("|"))) return null;
+  if (!/^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(nonEmpty[1])) return null;
+
+  const splitRow = (row: string): string[] => {
+    let r = row.trim();
+    if (r.startsWith("|")) r = r.slice(1);
+    if (r.endsWith("|")) r = r.slice(0, -1);
+    return r.split("|").map((c) => c.trim());
+  };
+
+  const header = splitRow(nonEmpty[0]);
+  const rows = nonEmpty.slice(2).map(splitRow);
+  if (rows.length === 0) return null;
+  return { header, rows };
+}
+
+function TableBlock({
+  header,
+  rows,
+  blockIdx,
+  drugIdByName,
+}: {
+  header: string[];
+  rows: string[][];
+  blockIdx: number;
+  drugIdByName?: Record<string, string>;
+}) {
+  return (
+    <div className="msg-table-wrap">
+      <table className="msg-table">
+        <thead>
+          <tr>
+            {header.map((h, ci) => (
+              <th key={ci}>{renderInline(h, `t${blockIdx}-h${ci}`, drugIdByName)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci}>{renderInline(cell, `t${blockIdx}-r${ri}-c${ci}`, drugIdByName)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function lookupDrugId(name: string, map?: Record<string, string>): string | null {
+  if (!map) return null;
+  if (map[name]) return map[name];
+  const lower = name.toLowerCase();
+  for (const k of Object.keys(map)) if (k.toLowerCase() === lower) return map[k];
+  return null;
+}
+
+function DrugLink({ name, drugId }: { name: string; drugId: string }) {
+  const ctx = useContext(PaneContext);
+  return (
+    <button
+      type="button"
+      className="msg-drug-link"
+      onClick={() => ctx?.open(drugId)}
+    >
+      {name}
+    </button>
+  );
+}
+
+function renderInline(
+  text: string,
+  keyPrefix: string,
+  drugIdByName?: Record<string, string>
+): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /\*\*([^*]+)\*\*/g;
   let cursor = 0;
   let m: RegExpExecArray | null;
+  let k = 0;
   while ((m = re.exec(text)) !== null) {
     if (m.index > cursor) out.push(text.slice(cursor, m.index));
-    out.push(<strong key={`b${m.index}`}>{m[1]}</strong>);
+    const inner = m[1];
+    const drugId = lookupDrugId(inner, drugIdByName);
+    if (drugId) {
+      out.push(<DrugLink key={`${keyPrefix}-${k++}`} name={inner} drugId={drugId} />);
+    } else {
+      out.push(<strong key={`${keyPrefix}-${k++}`}>{inner}</strong>);
+    }
     cursor = m.index + m[0].length;
   }
   if (cursor < text.length) out.push(text.slice(cursor));

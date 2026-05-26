@@ -31,7 +31,7 @@ import "./chat.css";
 
 type Turn =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "assistant"; text: string; error?: string };
+  | { id: number; role: "assistant"; text: string; error?: string; drugIdByName?: Record<string, string> };
 
 const SUGGESTIONS = [
   "Is amoxicillin in shortage in Australia?",
@@ -39,6 +39,68 @@ const SUGGESTIONS = [
   "What's substitutable for hydrochlorothiazide?",
   "Recent recalls in the US",
 ];
+
+/**
+ * Extract every `**bold**` span from the assistant's response and resolve each
+ * one to a canonical drug_id via /api/search (FTS-ranked). The resulting map
+ * lets parser.tsx wrap matching bold names in clickable DrugLink buttons that
+ * open the PaneContext drug preview.
+ *
+ * Seed with drug_ids the API already hydrated (their generic_name → id is
+ * known for free), then look up any remaining names in parallel.
+ */
+async function resolveDrugNames(
+  content: string,
+  hydrated: Record<string, DrugDetail>
+): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  for (const id of Object.keys(hydrated)) {
+    const d = hydrated[id];
+    if (d?.generic_name) map[d.generic_name] = id;
+  }
+  // Strip <drug_card /> tag bodies and similar so we don't try to "resolve"
+  // raw UUIDs or attribute names. Bold subjects are inside prose / tables.
+  const stripped = content
+    .replace(/<drug_card[^/]*\/>/g, "")
+    .replace(/<sub_card[^/]*\/>/g, "")
+    .replace(/<followups>[\s\S]*?<\/followups>/g, "")
+    .replace(/<alternates>[\s\S]*?<\/alternates>/g, "");
+  const names = [
+    ...new Set(
+      [...stripped.matchAll(/\*\*([^*\n]{2,80})\*\*/g)]
+        .map((m) => m[1].trim())
+        .filter((n) => n.length >= 2 && !map[n])
+    ),
+  ];
+  if (names.length === 0) return map;
+
+  await Promise.all(
+    names.map(async (name) => {
+      try {
+        const r = await fetch(`/api/search?q=${encodeURIComponent(name)}&limit=20`);
+        if (!r.ok) return;
+        const j = await r.json();
+        const hits = (j.results ?? []) as Array<{ drug_id: string; generic_name: string; source: string }>;
+        const drugHits = hits.filter((h) => h.source === "drugs");
+        if (drugHits.length === 0) return;
+        const lower = name.toLowerCase();
+        const exact = drugHits.find((h) => h.generic_name.toLowerCase() === lower);
+        const prefix = drugHits.find(
+          (h) =>
+            h.generic_name.toLowerCase().startsWith(lower + " ") ||
+            h.generic_name.toLowerCase().startsWith(lower + "/")
+        );
+        const best = exact ?? prefix;
+        // Only accept exact/prefix matches — otherwise a name like "Class II"
+        // would resolve to the first drug containing "class" by FTS rank.
+        if (best) map[name] = best.drug_id;
+      } catch {
+        // Network errors silently skip — the bold just stays unclickable.
+      }
+    })
+  );
+  return map;
+}
 
 function ChatPageInner() {
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -140,10 +202,25 @@ function ChatPageInner() {
       if (data.drugs) setDrugsMap((prev) => ({ ...prev, ...data.drugs }));
       if (data.subs) setSubsMap((prev) => ({ ...prev, ...data.subs }));
 
+      const assistantId = ++idRef.current;
       setTurns((t) => [
         ...t,
-        { id: ++idRef.current, role: "assistant", text: data.content },
+        { id: assistantId, role: "assistant", text: data.content },
       ]);
+
+      // Resolve bolded subject names → drug_ids so DrugLink can hook them up.
+      // Seed with the drugs the API already hydrated (those have known UUIDs),
+      // then fill any gaps via /api/search (FTS-ranked, prefers canonical).
+      resolveDrugNames(data.content, data.drugs || {}).then((map) => {
+        if (Object.keys(map).length === 0) return;
+        setTurns((t) =>
+          t.map((tt) =>
+            tt.id === assistantId && tt.role === "assistant"
+              ? { ...tt, drugIdByName: map }
+              : tt
+          )
+        );
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
@@ -287,6 +364,7 @@ function ChatPageInner() {
                           drugs={drugsMap}
                           subs={subsMap}
                           onFollowup={send}
+                          drugIdByName={t.role === "assistant" ? t.drugIdByName : undefined}
                         />
                       )}
                     </div>

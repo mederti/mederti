@@ -86,4 +86,16 @@ const tsSrc = tsParts.find((p): p is Extract<typeof tsParts[number], { kind: "so
 assert(!!tsSrc, "unclosed <sources> still parsed via tolerant fallback");
 assert(tsSrc!.items.length === 2, "2 chips recovered from truncated <sources>");
 
+// Stale freshness label — chip needs to carry the "stale" / "latest event" /
+// "unknown" tail through parsing so the renderer can flag it visually.
+const staleSources = `<sources>TGA:AU:812:scraped today|FAMHP:BE:2:scraped 65d ago — stale|MPA:SE:5:latest event 14d ago|FDA-DD:US:3:freshness unknown</sources>`;
+const ssParts = parseAgentResponse(staleSources);
+const ssSrc = ssParts.find((p): p is Extract<typeof ssParts[number], { kind: "sources" }> => p.kind === "sources");
+assert(!!ssSrc, "<sources> with stale freshness parsed");
+assert(ssSrc!.items.length === 4, "4 chips parsed");
+assert(ssSrc!.items[0].freshness === "scraped today", "fresh chip freshness preserved");
+assert((ssSrc!.items[1].freshness || "").includes("stale"), "stale tail preserved in freshness label");
+assert((ssSrc!.items[2].freshness || "").startsWith("latest event"), "latest-event fallback label preserved");
+assert(ssSrc!.items[3].freshness === "freshness unknown", "unknown freshness preserved");
+
 console.log("\nALL OK");

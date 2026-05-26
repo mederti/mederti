@@ -33,6 +33,15 @@ export type SourceConsulted = {
   latest_event_date: string | null;
   last_scraped_at: string | null;
   source_url: string | null;
+  /** Pre-formatted, honest freshness string ready for the model to emit
+   *  directly into the <sources> chip — never asks the model to compute it.
+   *  Examples: "scraped today", "scraped 3d ago", "scraped 14d ago — stale",
+   *  "freshness unknown", "latest event 6d ago" (when last_scraped_at is null
+   *  but we have an event date). */
+  freshness_label: string;
+  /** True when last_scraped_at is null OR older than 7 days. The renderer
+   *  uses this to visually flag the chip so users aren't misled. */
+  is_stale: boolean;
 };
 
 export type DrugDetail = DrugSummary & {

@@ -9,9 +9,11 @@ import { PaneContext } from "./PaneContext";
 export type KpiTile = { value: string; label: string };
 
 /** One regulator chip in the SourceTrail. `freshness` is a free-form display
- *  string ("6h", "2d", "May 26") set by the model from data_sources.last_scraped_at
- *  or latest_event_date — kept as a string so the model can be honest about
- *  which signal it's quoting. */
+ *  string ("scraped today", "scraped 3d ago — stale", "latest event 6d ago",
+ *  "freshness unknown") emitted by the model from the tool's pre-computed
+ *  freshness_label — model never composes its own freshness string.
+ *  A trailing "stale" segment (after "—") flips the chip into the stale
+ *  visual variant — so the renderer doesn't need separate plumbing. */
 export type SourceChip = {
   code: string;
   country: string;
@@ -19,6 +21,12 @@ export type SourceChip = {
   freshness?: string;
   url?: string;
 };
+
+function chipIsStale(c: { freshness?: string }): boolean {
+  if (!c.freshness) return false;
+  const f = c.freshness.toLowerCase();
+  return f.includes("stale") || f.includes("unknown") || f.startsWith("latest event");
+}
 
 export type ParsedPart =
   | { kind: "text"; text: string }
@@ -396,14 +404,22 @@ function TableBlock({
 }
 
 function SourceTrail({ chips }: { chips: SourceChip[] }) {
+  const freshCount = chips.filter((c) => !chipIsStale(c)).length;
+  const staleCount = chips.length - freshCount;
   return (
     <div className="source-trail">
       <div className="source-trail-label">
         <span className="source-trail-dot" aria-hidden />
         Verified across {chips.length} regulator{chips.length === 1 ? "" : "s"}
+        {staleCount > 0 ? (
+          <span className="source-trail-stale-note">
+            {" "}· {staleCount} stale
+          </span>
+        ) : null}
       </div>
       <div className="source-trail-chips">
         {chips.map((c, i) => {
+          const stale = chipIsStale(c);
           const inner = (
             <>
               <span className="source-chip-code">{c.code}</span>
@@ -412,14 +428,17 @@ function SourceTrail({ chips }: { chips: SourceChip[] }) {
                 <span className="source-chip-rows">· {c.rows.toLocaleString()} rows</span>
               ) : null}
               {c.freshness ? (
-                <span className="source-chip-fresh">· {c.freshness}</span>
+                <span className={stale ? "source-chip-fresh-stale" : "source-chip-fresh"}>
+                  · {c.freshness}
+                </span>
               ) : null}
             </>
           );
+          const cls = `source-chip${c.url ? " source-chip-link" : ""}${stale ? " source-chip-stale" : ""}`;
           return c.url ? (
             <a
               key={i}
-              className="source-chip source-chip-link"
+              className={cls}
               href={c.url}
               target="_blank"
               rel="noopener noreferrer"
@@ -428,7 +447,7 @@ function SourceTrail({ chips }: { chips: SourceChip[] }) {
               {inner}
             </a>
           ) : (
-            <span key={i} className="source-chip">
+            <span key={i} className={cls}>
               {inner}
             </span>
           );

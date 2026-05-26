@@ -346,6 +346,23 @@
 }.mederti-chat-root .source-chip-rows, .mederti-chat-root .source-chip-fresh{
   color: var(--text-3);
   font-size: 11px;
+}.mederti-chat-root .source-chip-fresh-stale{
+  color: #b45309; /* amber-700 — visibly different but not alarming red */
+  font-size: 11px;
+}.mederti-chat-root .source-chip-stale{
+  background: #fffbeb; /* amber-50 */
+  border-color: #fde68a; /* amber-200 */
+}.mederti-chat-root .source-chip-stale .source-chip-code{
+  color: #92400e; /* amber-800 */
+}.mederti-chat-root .source-chip-stale.source-chip-link:hover{
+  background: #fef3c7; /* amber-100 */
+  border-color: #fcd34d; /* amber-300 */
+  color: #92400e;
+}.mederti-chat-root .source-trail-stale-note{
+  color: #b45309;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
 }.mederti-chat-root /* ===== Follow-up chips ===== */
 .followups{
   display: flex;

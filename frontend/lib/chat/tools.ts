@@ -1070,17 +1070,54 @@ async function computeSourcesConsulted(
     }
   }
 
+  // Stale threshold: 7 days. Beyond that the chip carries a "stale" visual flag
+  // and the freshness_label says so — so the user sees the actual age, not a
+  // misleading "scraped today" string the model could fabricate.
+  const STALE_HOURS = 7 * 24;
+  const now = Date.now();
+
+  function describeFreshness(
+    lastScrapedAt: string | null,
+    latestEventDate: string | null
+  ): { label: string; is_stale: boolean } {
+    if (lastScrapedAt) {
+      const ts = new Date(lastScrapedAt).getTime();
+      if (Number.isFinite(ts)) {
+        const hrs = (now - ts) / (1000 * 60 * 60);
+        const days = Math.round(hrs / 24);
+        if (hrs < 24) return { label: "scraped today", is_stale: false };
+        if (hrs < 48) return { label: "scraped yesterday", is_stale: false };
+        if (hrs < STALE_HOURS) return { label: `scraped ${days}d ago`, is_stale: false };
+        return { label: `scraped ${days}d ago — stale`, is_stale: true };
+      }
+    }
+    // No last_scraped_at — fall back to the latest event date the scraper has
+    // captured. Labelled honestly so the user can tell it's not a scrape signal.
+    if (latestEventDate) {
+      const ts = new Date(latestEventDate).getTime();
+      if (Number.isFinite(ts)) {
+        const days = Math.max(0, Math.round((now - ts) / (1000 * 60 * 60 * 24)));
+        return { label: `latest event ${days}d ago`, is_stale: true };
+      }
+    }
+    return { label: "freshness unknown", is_stale: true };
+  }
+
   return [...byCountry.values()]
     .map((p) => {
       const meta = scrapeMeta.get(p.country_code);
+      const last_scraped_at = meta?.last_scraped_at ?? null;
+      const { label, is_stale } = describeFreshness(last_scraped_at, p.latest_event_date);
       return {
         regulator_code: p.code,
         regulator_name: p.name,
         country_code: p.country_code,
         rows_contributed: p.rows_contributed,
         latest_event_date: p.latest_event_date,
-        last_scraped_at: meta?.last_scraped_at ?? null,
+        last_scraped_at,
         source_url: meta?.source_url ?? null,
+        freshness_label: label,
+        is_stale,
       };
     })
     .sort((a, b) => b.rows_contributed - a.rows_contributed);

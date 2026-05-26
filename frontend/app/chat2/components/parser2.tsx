@@ -368,28 +368,42 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): Rea
         </div>
       );
     } else if (p.kind === "sources" && p.items.length > 0) {
+      const isStale = (c: { freshness?: string }) => {
+        if (!c.freshness) return false;
+        const f = c.freshness.toLowerCase();
+        return f.includes("stale") || f.includes("unknown") || f.startsWith("latest event");
+      };
+      const staleCount = p.items.filter(isStale).length;
       out.push(
         <div key={i} className="mt-4 border-t border-slate-200 pt-3">
           <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-500 font-medium mb-2">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500" aria-hidden />
             Verified across {p.items.length} regulator{p.items.length === 1 ? "" : "s"}
+            {staleCount > 0 ? (
+              <span className="normal-case tracking-normal text-amber-700 font-semibold ml-1">
+                · {staleCount} stale
+              </span>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {p.items.map((c, k) => {
+              const stale = isStale(c);
               const inner = (
                 <>
-                  <span className="font-semibold text-slate-800">{c.code}</span>
+                  <span className={stale ? "font-semibold text-amber-800" : "font-semibold text-slate-800"}>{c.code}</span>
                   <span className="text-slate-400">{c.country}</span>
                   {c.rows != null ? (
                     <span className="text-slate-500">· {c.rows.toLocaleString()} rows</span>
                   ) : null}
                   {c.freshness ? (
-                    <span className="text-slate-500">· {c.freshness}</span>
+                    <span className={stale ? "text-amber-700" : "text-slate-500"}>· {c.freshness}</span>
                   ) : null}
                 </>
               );
-              const cls =
-                "inline-flex items-center gap-1 bg-white border border-slate-200 rounded px-2 py-1 text-[12px] hover:border-teal-300 hover:bg-teal-50 transition-colors";
+              const base = "inline-flex items-center gap-1 rounded px-2 py-1 text-[12px] transition-colors";
+              const cls = stale
+                ? `${base} bg-amber-50 border border-amber-200 ${c.url ? "hover:bg-amber-100 hover:border-amber-300" : ""}`
+                : `${base} bg-white border border-slate-200 ${c.url ? "hover:border-teal-300 hover:bg-teal-50" : ""}`;
               return c.url ? (
                 <a
                   key={k}

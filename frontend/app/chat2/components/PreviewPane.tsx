@@ -429,19 +429,9 @@ export function PreviewPane({
               </p>
             </div>
 
-            {/* Country availability */}
-            {bundle.drug.shortages.length > 0 ? (
-              <div className="mb-4.5" style={{ marginBottom: 18 }}>
-                <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
-                  Availability by country
-                </div>
-                {bundle.drug.shortages.slice(0, 6).map((s, i) => (
-                  <CountryRow key={`${s.country_code || "x"}-${i}`} s={s} />
-                ))}
-              </div>
-            ) : null}
-
-            {/* ETA */}
+            {/* ETA — placed directly under the AI insight so the headline
+                ("when will it come back?") sits next to the explanation
+                that introduces it. Country breakdown follows below. */}
             {(() => {
               const eta = bundle.drug.shortages.find((s) => s.estimated_resolution_date);
               if (!eta?.estimated_resolution_date) return null;
@@ -485,6 +475,18 @@ export function PreviewPane({
                 </div>
               );
             })()}
+
+            {/* Country availability */}
+            {bundle.drug.shortages.length > 0 ? (
+              <div className="mb-4.5" style={{ marginBottom: 18 }}>
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
+                  Availability by country
+                </div>
+                {bundle.drug.shortages.slice(0, 6).map((s, i) => (
+                  <CountryRow key={`${s.country_code || "x"}-${i}`} s={s} />
+                ))}
+              </div>
+            ) : null}
 
             {/* Alternatives */}
             {bundle.substitutes.length > 0 ? (

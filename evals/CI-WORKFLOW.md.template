@@ -1,0 +1,102 @@
+name: persona-coverage-eval
+
+# Runs Mederti's 150-question persona-coverage eval per audit §6.5.
+#
+# Two modes:
+#   • On every PR:   30-question subset (6 per persona, weighted toward
+#                    GREEN + ⚠ HALLUCINATION RISK) against the Vercel
+#                    preview deploy. Catches regressions before merge.
+#   • Nightly main:  full 150 against production. Output is a long-running
+#                    coverage trend.
+#
+# Cost ceiling: $15 per full run (audit estimated $5–10). PR runs are ~$3.
+
+on:
+  pull_request:
+    paths:
+      - "frontend/lib/chat/**"
+      - "frontend/app/api/chat/**"
+      - "evals/**"
+  schedule:
+    # Daily at 06:30 UTC — after the scraper window (00:00–06:00 UTC) so the
+    # eval grades against fresh data.
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "full (150) or pr (30)"
+        required: true
+        default: "pr"
+        type: choice
+        options:
+          - pr
+          - full
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MEDERTI_CHAT_URL: ${{ github.event_name == 'pull_request' && format('https://{0}', steps.vercel-preview.outputs.url) || 'https://mederti.vercel.app/api/chat' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve Vercel preview URL
+        id: vercel-preview
+        if: github.event_name == 'pull_request'
+        run: |
+          # Vercel posts preview URLs as PR statuses; resolve via GitHub API.
+          # Placeholder — wire to your Vercel integration's status check name.
+          echo "url=mederti.vercel.app/api/chat" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install eval deps
+        run: |
+          pip install --upgrade pip
+          pip install pyyaml anthropic
+
+      - name: Determine scope
+        id: scope
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "args=--scope-label nightly" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.scope }}" = "full" ]; then
+            echo "args=--scope-label dispatched-full" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=--pr" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run eval
+        run: |
+          python3 evals/runner/run_eval.py ${{ steps.scope.outputs.args }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/reports/*.md
+          retention-days: 90
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const dir = 'evals/reports';
+            const files = fs.readdirSync(dir).filter(f => f.endsWith('.md')).sort();
+            if (!files.length) return;
+            const latest = path.join(dir, files[files.length - 1]);
+            const body = fs.readFileSync(latest, 'utf8').split('\n').slice(0, 40).join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '### Mederti persona-coverage eval\n\n' + body + '\n\n_full report: download eval-report artifact_'
+            });

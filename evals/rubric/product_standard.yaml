@@ -1,0 +1,84 @@
+# Mederti 6-dimension product-standard rubric (audit §6.3)
+# Used by grader_judge.py when prompting Claude-as-judge.
+# A question passes only if all 4 binary dimensions pass AND both 0-2
+# dimensions score ≥ 1.
+
+name: product_standard
+version: 1
+
+dimensions:
+  - id: factually_correct
+    type: binary
+    description: |
+      All numeric claims in the answer match DB rows when the runner re-queries
+      Supabase against the same scope. No claims about countries outside the
+      coverage gate (live/stale/not_indexed sets in coverage.ts).
+    failure_modes:
+      - "Invented row count, severity tag, or regulator name"
+      - "Cited a country outside the indexed set as if it had live data"
+      - "Restated regulator's estimated_resolution_date as a Mederti forecast"
+
+  - id: sourced
+    type: binary
+    description: |
+      The <sources>...</sources> block is present whenever DB rows backed the
+      answer. Every regulator code cited matches a real entry in data_sources.
+      Absent <sources> only acceptable for pure macro/geopolitical answers
+      where no DB rows backed any claim.
+    failure_modes:
+      - "Missing <sources> block on a row-backed answer"
+      - "Fabricated regulator name not in data_sources"
+      - "Freshness label computed by the model instead of copied from the tool"
+
+  - id: confidence_calibrated
+    type: binary
+    description: |
+      Forecast/comparative/strategic answers state confidence explicitly.
+      Sparse-data answers say so. Never present `estimated_resolution_date`
+      as a Mederti-calibrated forecast. Low-confidence tool results trigger
+      hedging language ("regulator-reported", "single source", "preliminary
+      signal", "data is stale").
+    failure_modes:
+      - "Asserts a forecast date with no caveat"
+      - "Treats a single regulator signal as corroborated"
+      - "Rephrases confidence.basis loosely instead of citing verbatim"
+
+  - id: clean_refusal
+    type: binary
+    description: |
+      When data is missing, the answer says so plainly using one of the
+      audit §11 templates. Never falls through to confabulation. Pairs the
+      refusal with what Mederti CAN provide so the user isn't dead-ended.
+    failure_modes:
+      - "Improvises a number (price, patient count, conversion ratio) from priors"
+      - "Generic 'no data found' without naming the specific gap"
+      - "Refuses without surfacing the canonical lookup URL"
+      - "Caveated estimate that anchors expectation without earning authority"
+
+  - id: persona_aware
+    type: scale_0_2
+    description: |
+      If persona signaled (or context_variables set), answer shape matches
+      the JTBD routing in system-prompt §"Jobs to be done". Score:
+        0 = persona ignored
+        1 = partial — answer is useful but persona shape not surfaced
+        2 = full — lead matches JTBD (substitutes-first for pharmacist,
+            ETA+sponsor-diversity for procurement, etc.)
+
+  - id: synthesised
+    type: scale_0_2
+    description: |
+      The answer composes across ≥2 data points where the question demands
+      it (comparative / forecast / strategic). Not a raw row dump.
+        0 = raw retrieval, no synthesis
+        1 = partial composition (e.g. table without integrated narrative)
+        2 = full synthesis (table + structural read + caveat + canonical
+            next step)
+
+pass_threshold:
+  binary_required:
+    - factually_correct
+    - sourced
+    - confidence_calibrated
+    - clean_refusal
+  scale_min_score: 1   # each scale dimension must score ≥ 1

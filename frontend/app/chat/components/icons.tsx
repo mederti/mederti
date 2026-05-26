@@ -136,3 +136,41 @@ export const Send = (p: { size?: number; className?: string }) => (
   </svg>
 );
 
+export const Paperclip = (p: { size?: number; className?: string }) => (
+  <svg width={p.size ?? 16} height={p.size ?? 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={p.className}>
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+  </svg>
+);
+
+export const ScanBarcode = (p: { size?: number; className?: string }) => (
+  <svg width={p.size ?? 16} height={p.size ?? 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={p.className}>
+    <path d="M3 7V5a2 2 0 012-2h2" />
+    <path d="M17 3h2a2 2 0 012 2v2" />
+    <path d="M21 17v2a2 2 0 01-2 2h-2" />
+    <path d="M7 21H5a2 2 0 01-2-2v-2" />
+    <path d="M7 8v8M11 8v8M15 8v8" />
+  </svg>
+);
+
+export const FileChip = (p: { size?: number; className?: string }) => (
+  <svg width={p.size ?? 14} height={p.size ?? 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={p.className}>
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+    <path d="M14 2v6h6" />
+  </svg>
+);
+
+export const ImageChip = (p: { size?: number; className?: string }) => (
+  <svg width={p.size ?? 14} height={p.size ?? 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={p.className}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <path d="M21 15l-5-5L5 21" />
+  </svg>
+);
+
+export const SheetChip = (p: { size?: number; className?: string }) => (
+  <svg width={p.size ?? 14} height={p.size ?? 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={p.className}>
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+    <path d="M14 2v6h6M8 13h8M8 17h8M8 9h2" />
+  </svg>
+);
+

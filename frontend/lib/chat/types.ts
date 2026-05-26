@@ -71,6 +71,32 @@ export type ClassSummary = {
   sources_consulted: SourceConsulted[];
 };
 
+/** External / cross-reference identifiers for a drug. All optional —
+ *  coverage is partial and grows over time as importers (RxNorm, EMA EPAR,
+ *  SNOMED affiliate) fill them in. Surface only the keys with non-null
+ *  values; the chat model must NOT claim coverage of an ID it doesn't see. */
+export type DrugExternalIdentifiers = {
+  /** WHO ATC code (e.g. "C10AA05" for atorvastatin) — same value as
+   *  DrugSummary.atc_code, repeated here so the model has one canonical
+   *  block to consult for identifier questions. */
+  atc_code?: string | null;
+  /** Full L1.L2.L3.L4.L5 ATC chain (e.g. "C-C10-C10A-C10AA-C10AA05"). */
+  atc_code_full?: string | null;
+  /** RxNorm Concept Unique Identifier — US National Library of Medicine. */
+  rxcui?: string | null;
+  /** FDA UNII (Unique Ingredient Identifier) for the active substance. */
+  unii?: string | null;
+  /** CAS Registry Number — universal chemistry identifier. */
+  cas_number?: string | null;
+  /** EMA EPAR procedure number (e.g. "EMEA/H/C/000509") for centrally-
+   *  authorized products. Null for nationally-authorized only. */
+  ema_product_number?: string | null;
+  /** SNOMED CT concept code (SCTID). */
+  snomed_ct_code?: string | null;
+  /** ChEMBL identifier. */
+  chembl_id?: string | null;
+};
+
 export type DrugDetail = DrugSummary & {
   shortages: ShortageRow[];
   active_shortage_count: number;
@@ -80,6 +106,10 @@ export type DrugDetail = DrugSummary & {
    *  Only populated when active rows exist — Mode A renders this as a
    *  <sources>...</sources> block alongside the drug_card. */
   sources_consulted?: SourceConsulted[];
+  /** Cross-reference IDs. Only included on the chat-tool path (getDrugDetails);
+   *  the lighter fetchDrugDetail returns the same shape so the pane can use it
+   *  too. Coverage is partial — never assume every key is non-null. */
+  external_identifiers?: DrugExternalIdentifiers;
 };
 
 export type SubstituteRow = {

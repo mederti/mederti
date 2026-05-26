@@ -13,13 +13,15 @@ import type {
 } from "./types";
 
 export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
-  // Anthropic server-side web search — for macro / geopolitical / news questions
-  // the database can't answer (e.g. "how does X conflict affect pharma supply?").
-  // The API resolves the call itself; we never dispatch to executeTool for this.
+  // Anthropic server-side web search — used freely as a primary research tool
+  // alongside the DB, not just for macro/news questions. Claude-led synthesis
+  // means most substantive answers weave in current reporting and structural
+  // context the DB rows alone can't surface. The API resolves the call itself;
+  // we never dispatch to executeTool for this.
   {
     type: "web_search_20250305",
     name: "web_search",
-    max_uses: 3,
+    max_uses: 5,
   },
   {
     name: "query_intelligence_sources",
@@ -69,7 +71,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "get_drug_details",
     description:
-      "Get the full record for one drug — generic + brand names, ATC code, drug class, dosage forms, strengths, plus its current shortage status across all countries. Call this once you have a drug_id from search_drugs to populate a drug card.",
+      "Get the full record for one drug — generic + brand names, ATC code, drug class, dosage forms, strengths, current shortage status across all countries, AND an `external_identifiers` block carrying any cross-reference IDs the database holds (atc_code, atc_code_full, rxcui, unii, cas_number, ema_product_number, snomed_ct_code, chembl_id). Coverage of external_identifiers is partial — only the keys present in the response have known values; absent keys mean Mederti doesn't have that ID for this drug. Call this once you have a drug_id from search_drugs to populate a drug card, OR when the user asks for a specific identifier (CAS, UNII, RxCUI, EMA number, etc.) for a drug.",
     input_schema: {
       type: "object",
       properties: {
@@ -299,14 +301,34 @@ async function searchDrugs(args: {
 
 async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Promise<DrugDetail | null> {
   const sb = getSupabase();
-  const drug = await sb
+  // Wide select includes external_identifier columns from migrations 024 + 035.
+  // If migration 035 (cas_number, ema_product_number) hasn't been applied to
+  // this DB, PostgREST 400s the whole query — fall back to a safe column set
+  // so drug_card always renders. The external_identifiers block just degrades
+  // to whatever the safe set carries.
+  let drug = await sb
     .from("drugs")
     .select(
-      "id,generic_name,brand_names,atc_code,atc_description,drug_class,dosage_forms,strengths,routes_of_administration,therapeutic_category,who_essential_medicine,critical_medicine_eu"
+      "id,generic_name,brand_names,atc_code,atc_code_full,atc_description,drug_class,dosage_forms,strengths,routes_of_administration,therapeutic_category,who_essential_medicine,critical_medicine_eu,rxcui,unii,cas_number,ema_product_number,snomed_ct_code,chembl_id"
     )
     .eq("id", args.drug_id)
     .single();
-  if (drug.error || !drug.data) return null;
+  if (drug.error) {
+    console.warn(
+      `[getDrugDetails] wide select failed for ${args.drug_id} (${drug.error.message}) — retrying without migration-035 columns`
+    );
+    drug = await sb
+      .from("drugs")
+      .select(
+        "id,generic_name,brand_names,atc_code,atc_description,drug_class,dosage_forms,strengths,routes_of_administration,therapeutic_category,who_essential_medicine,critical_medicine_eu,rxcui,unii,snomed_ct_code,chembl_id"
+      )
+      .eq("id", args.drug_id)
+      .single();
+  }
+  if (drug.error || !drug.data) {
+    console.warn(`[getDrugDetails] fallback select also failed for ${args.drug_id}: ${drug.error?.message ?? "no data"}`);
+    return null;
+  }
   const d: any = drug.data;
 
   const shortages = await sb
@@ -327,6 +349,22 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     ? await computeSourcesConsulted(activeRows as any)
     : undefined;
 
+  // External / cross-reference identifiers. Only include keys we actually
+  // have a value for — passing `null` would let the model claim the drug
+  // "has" the ID. Empty block becomes undefined so it disappears entirely.
+  const externalIdentifiers: Record<string, string> = {};
+  const pickId = (k: string, v: unknown) => {
+    if (typeof v === "string" && v.trim()) externalIdentifiers[k] = v.trim();
+  };
+  pickId("atc_code", d.atc_code);
+  pickId("atc_code_full", d.atc_code_full);
+  pickId("rxcui", d.rxcui);
+  pickId("unii", d.unii);
+  pickId("cas_number", d.cas_number);
+  pickId("ema_product_number", d.ema_product_number);
+  pickId("snomed_ct_code", d.snomed_ct_code);
+  pickId("chembl_id", d.chembl_id);
+
   const detail: DrugDetail = {
     drug_id: d.id,
     name: d.generic_name,
@@ -344,6 +382,9 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     shortages: rows,
     ...summary,
     sources_consulted: sourcesConsulted,
+    external_identifiers: Object.keys(externalIdentifiers).length > 0
+      ? externalIdentifiers
+      : undefined,
   };
 
   ctx.drugs[detail.drug_id] = detail;

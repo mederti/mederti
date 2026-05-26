@@ -1,9 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ChatApiResponse, ChatMessage, DrugDetail, SubstituteRow } from "@/lib/chat/types";
-import { ChatMain, type Turn, type ActiveView } from "./components/ChatMain";
+import {
+  ChatMain,
+  isSpreadsheet,
+  type ActiveView,
+  type AttachedFile,
+  type Turn,
+} from "./components/ChatMain";
 import { PreviewPane } from "./components/PreviewPane";
 import { Sidebar } from "./components/Sidebar";
 import {
@@ -31,9 +37,15 @@ import "@/app/chat/chat.css";
 
 export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const drugIdParam = searchParams.get("drug");
+  // Track the preview-pane drug ID in component state instead of reading it
+  // straight from useSearchParams. Reason: we update the URL via
+  // window.history.replaceState (see send() / setDrugInUrl below) to avoid
+  // remounting Chat2Client across the /chat2 → /chat2/[id] page-segment
+  // boundary mid-fetch, which used to orphan in-flight requests and dump the
+  // user back on the welcome screen. useSearchParams doesn't pick up
+  // history.replaceState changes, so state is the source of truth from here on.
+  const [drugId, setDrugId] = useState<string | null>(searchParams.get("drug"));
   // ?demo=1 populates the sidebar with the seed watchlists/folders/recents
   // for design review. Default is the empty new-user state.
   const isDemo = searchParams.get("demo") === "1";
@@ -65,6 +77,8 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("chat");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
   const idRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -89,7 +103,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     const saved = getChat(chatId);
     if (!saved) {
       // Unknown id (link rot, deleted chat) — silently fall back to new chat
-      router.replace("/chat2", { scroll: false });
+      router.replace("/chat", { scroll: false });
       return;
     }
     setTurns(saved.turns as Turn[]);
@@ -108,13 +122,19 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
 
   const setDrugInUrl = useCallback(
     (id: string | null) => {
-      const params = new URLSearchParams(searchParams.toString());
+      setDrugId(id);
+      // history.replaceState (not router.replace) so we don't trigger Next.js
+      // routing — see the comment on `drugId` above. We read pathname from
+      // window.location so this stays correct even after send() has soft-
+      // updated the URL from /chat2 to /chat2/<id>.
+      const params = new URLSearchParams(window.location.search);
       if (id) params.set("drug", id);
       else params.delete("drug");
       const qs = params.toString();
-      router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
+      const path = window.location.pathname;
+      window.history.replaceState(null, "", `${path}${qs ? `?${qs}` : ""}`);
     },
-    [router, pathname, searchParams]
+    []
   );
 
   // Snapshot the in-memory chat state to storage. Called after every state
@@ -170,7 +190,10 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
       // request is slow or fails.
       persist(id!, nextTurns, drugsMap, subsMap);
       if (isNewChat) {
-        router.replace(`/chat2/${id}`, { scroll: false });
+        // Soft URL update — keeps refresh/share working without remounting
+        // this Chat2Client across the /chat2 → /chat2/[id] page-segment
+        // boundary. router.replace would orphan the in-flight fetch below.
+        window.history.replaceState(null, "", `/chat/${id}`);
       }
 
       // 270-second client timeout — matches the Vercel maxDuration of 300s
@@ -257,7 +280,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         setPending(false);
       }
     },
-    [pending, turns, drugsMap, subsMap, persist, router]
+    [pending, turns, drugsMap, subsMap, persist]
   );
 
   const openDrug = useCallback(
@@ -292,15 +315,78 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     [send]
   );
 
+  // ── URL seed: ?q=<text>&send=1 deep links ──
+  // Powers global SiteNav search bar (router.push to /chat?q=...&send=1) and
+  // the per-drug "Ask Mederti" CTAs on /drugs/[id]. Pre-fills the composer or
+  // auto-sends if send=1. Fires once per unique q+send combo, so re-navigating
+  // with new params re-triggers. Ported from the old /chat page during the
+  // chat2 → chat consolidation so deep links from the rest of the site keep
+  // working after the merge.
+  const lastSeedKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (!q) return;
+    const sendFlag = searchParams.get("send");
+    const key = `${q}|${sendFlag ?? ""}`;
+    if (lastSeedKeyRef.current === key) return;
+    lastSeedKeyRef.current = key;
+    setActiveView("chat");
+    if (sendFlag === "1") {
+      void send(q);
+    } else {
+      setDraft(q);
+      textareaRef.current?.focus();
+    }
+  }, [searchParams, send]);
+
+  // A spreadsheet kicks off the BulkUpload flow immediately (takes over the
+  // chat content area). Anything else (image, PDF, photo) lands as a chip in
+  // the composer — visual parity with the landing-page search bar.
+  const handleFilesPicked = useCallback((fl: FileList | null) => {
+    if (!fl || fl.length === 0) return;
+    const list = Array.from(fl);
+    const sheet = list.find(isSpreadsheet);
+    if (sheet) {
+      setActiveView("chat");
+      setBulkFile(sheet);
+      return;
+    }
+    const additions: AttachedFile[] = list.map((f) => ({
+      id: Math.random().toString(36).slice(2, 10),
+      name: f.name,
+      type: f.type,
+      size: f.size,
+    }));
+    setAttachedFiles((prev) => [...prev, ...additions]);
+    list.forEach((f, i) => {
+      if (!f.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const targetId = additions[i].id;
+        setAttachedFiles((prev) =>
+          prev.map((p) => (p.id === targetId ? { ...p, preview: dataUrl } : p))
+        );
+      };
+      reader.readAsDataURL(f);
+    });
+  }, []);
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
+  const closeBulkUpload = useCallback(() => setBulkFile(null), []);
+
   const paneCtx = useMemo(
     () => ({
       open: (id: string) => openDrug(id),
       close: closeDrug,
       back: closeDrug,
-      current: drugIdParam,
+      current: drugId,
       previousId: null,
     }),
-    [openDrug, closeDrug, drugIdParam]
+    [openDrug, closeDrug, drugId]
   );
 
   const chatCtx = useMemo(() => ({ send }), [send]);
@@ -328,7 +414,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
           >
             <Sidebar
               activeChatId={chatId}
-              activeDrugSlug={drugIdParam}
+              activeDrugSlug={drugId}
               isDemo={isDemo}
               chats={chatList}
               collapsed={sidebarCollapsed}
@@ -349,12 +435,17 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               activeView={activeView}
               onViewChange={setActiveView}
               onAskFromView={askFromView}
+              attachedFiles={attachedFiles}
+              onFilesPicked={handleFilesPicked}
+              onRemoveAttachment={removeAttachment}
+              bulkFile={bulkFile}
+              onBulkClose={closeBulkUpload}
             />
 
-            {drugIdParam ? (
+            {drugId ? (
               <PreviewPane
-                key={drugIdParam}
-                drugId={drugIdParam}
+                key={drugId}
+                drugId={drugId}
                 onClose={closeDrug}
                 onOpenDrug={openDrug}
                 onAskAbout={askAboutDrug}

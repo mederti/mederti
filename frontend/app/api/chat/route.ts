@@ -8,12 +8,12 @@ import type { ChatMessage } from "@/lib/chat/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_ITERATIONS = 8;
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929";
-// Generous output budget so Mode C (landscape) responses have room for KPIs +
-// 3–6 drug cards + 2–4 paragraphs of synthesis. Mode A responses naturally stay
-// short and don't consume this; only Mode C and Mode B push higher.
-const MAX_OUTPUT_TOKENS = 4096;
+const MAX_ITERATIONS = 12;
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-7";
+// Roomy budget — Claude-led synthesis means most answers are 2–5 paragraphs
+// of integrated prose alongside cards. With extended thinking enabled, the
+// budget also has to cover the model's reasoning tokens.
+const MAX_OUTPUT_TOKENS = 16384;
 
 type IncomingBody = {
   messages: ChatMessage[];
@@ -33,13 +33,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return Response.json(
-      { content: "", drugs: {}, error: "Server missing ANTHROPIC_API_KEY." },
-      { status: 500 }
-    );
-  }
-
   let body: IncomingBody;
   try {
     body = (await req.json()) as IncomingBody;
@@ -50,6 +43,15 @@ export async function POST(req: NextRequest) {
   const incoming = Array.isArray(body.messages) ? body.messages : [];
   if (incoming.length === 0) {
     return Response.json({ content: "", drugs: {}, error: "No messages." }, { status: 400 });
+  }
+
+  // No API key → degraded path: do a direct drug lookup against Supabase and
+  // return a drug_card. Honest, useful, and stops the chat from 500-ing in
+  // environments where the key hasn't been provisioned yet.
+  if (!process.env.ANTHROPIC_API_KEY) {
+    const lastUser = [...incoming].reverse().find((m) => m.role === "user");
+    const fallback = await fallbackDrugLookup(lastUser?.text || "");
+    return Response.json(fallback);
   }
 
   const messages: Anthropic.MessageParam[] = incoming.map((m) => ({
@@ -69,6 +71,12 @@ export async function POST(req: NextRequest) {
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: MAX_OUTPUT_TOKENS,
+        thinking: {
+          type: "adaptive",
+        },
+        output_config: {
+          effort: "high",
+        },
         system: [
           {
             type: "text",
@@ -129,6 +137,12 @@ export async function POST(req: NextRequest) {
       lastResponse = await anthropic.messages.create({
         model: MODEL,
         max_tokens: MAX_OUTPUT_TOKENS,
+        thinking: {
+          type: "adaptive",
+        },
+        output_config: {
+          effort: "high",
+        },
         system: [
           {
             type: "text",
@@ -187,4 +201,73 @@ function extractText(msg: Anthropic.Message | null): string {
     .map((b) => b.text)
     .join("\n\n")
     .trim();
+}
+
+async function fallbackDrugLookup(rawQuery: string) {
+  const ctx = newContext();
+  const query = rawQuery.trim();
+  if (!query) {
+    return {
+      content:
+        "The AI assistant isn't configured on this server yet (missing `ANTHROPIC_API_KEY`). I can still look drugs up directly — try typing a drug name like *amoxicillin* or *insulin glargine*.",
+      drugs: ctx.drugs,
+      subs: ctx.subs,
+      classes: ctx.classes,
+      degraded: true,
+    };
+  }
+
+  try {
+    const hits = (await executeTool("search_drugs", { query, limit: 5 }, ctx)) as Array<{
+      drug_id: string;
+      generic_name: string;
+    }>;
+
+    if (!hits || hits.length === 0) {
+      return {
+        content: `I couldn't find a drug matching **${query}** in the Mederti database. The AI assistant isn't configured on this server (missing \`ANTHROPIC_API_KEY\`), so I can only do direct database lookups right now. Try a generic name like *amoxicillin* or *insulin glargine*.`,
+        drugs: ctx.drugs,
+        subs: ctx.subs,
+        classes: ctx.classes,
+        degraded: true,
+      };
+    }
+
+    const top = hits[0];
+    await executeTool("get_drug_details", { drug_id: top.drug_id }, ctx);
+    const detail = ctx.drugs[top.drug_id];
+    const active = detail?.active_shortage_count ?? 0;
+    const countries = detail?.countries_affected?.length ?? 0;
+
+    const headline = active > 0
+      ? `**${detail?.generic_name ?? top.generic_name}** — ${active} active shortage${active === 1 ? "" : "s"} across ${countries} ${countries === 1 ? "country" : "countries"}.`
+      : `**${detail?.generic_name ?? top.generic_name}** — no active shortages on record.`;
+
+    const altLine =
+      hits.length > 1
+        ? `\n\nOther matches: ${hits.slice(1).map((h) => h.generic_name).join(", ")}.`
+        : "";
+
+    const footnote =
+      "\n\n_AI assistant is offline (missing `ANTHROPIC_API_KEY`) — showing direct database lookup. Synthesis, multi-drug comparisons, and macro questions won't work until the key is provisioned._";
+
+    return {
+      content: `${headline}\n\n<drug_card id="${top.drug_id}" />${altLine}${footnote}`,
+      drugs: ctx.drugs,
+      subs: ctx.subs,
+      classes: ctx.classes,
+      degraded: true,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[chat fallback] error:", msg);
+    return {
+      content: "",
+      drugs: ctx.drugs,
+      subs: ctx.subs,
+      classes: ctx.classes,
+      error: `Lookup failed: ${msg}`,
+      degraded: true,
+    };
+  }
 }

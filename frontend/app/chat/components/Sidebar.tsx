@@ -307,7 +307,7 @@ function ChatHistoryItem({
     setMenuOpen(false);
     if (!window.confirm(`Delete "${title}"? This can't be undone.`)) return;
     deleteChat(chatId);
-    if (active) router.replace("/chat2");
+    if (active) router.replace("/chat");
   };
 
   const handleToggleStar = () => {
@@ -320,7 +320,7 @@ function ChatHistoryItem({
       <button
         type="button"
         onClick={() => {
-          router.push(`/chat2/${chatId}`);
+          router.push(`/chat/${chatId}`);
         }}
         className={`w-full flex items-center gap-1.5 pl-2.5 pr-1 py-1.5 rounded-md transition-colors text-left ${
           active
@@ -504,7 +504,7 @@ export function Sidebar({
 
         {/* New chat */}
         <Link
-          href="/chat2"
+          href="/chat"
           className={railBtn}
           title="New chat"
           aria-label="New chat"
@@ -608,7 +608,7 @@ export function Sidebar({
       {/* Primary actions — Search hides until there's history to search */}
       <div className="px-2.5 pb-2.5 flex flex-col gap-0.5">
         <Link
-          href="/chat2"
+          href="/chat"
           className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors"
         >
           <Plus size={14} />

@@ -8,6 +8,7 @@ import { CardHeader, StatusPanel } from "./CardChrome";
 import { SEV_DOT_CLASS, isDrugAvailable, perCountrySeverity, pickPrimary, uniqueRegulatorSources, formatPrice } from "../cardUtils";
 import { ManufacturersStrip, ShortageHistoryLine } from "./ManufacturerAndHistory";
 import { RecallCallout } from "./RecallCallout";
+import { TradePriceStrip } from "./PharmacistCard";
 
 export function ProcurementCard({
   bundle,
@@ -23,6 +24,7 @@ export function ProcurementCard({
   return (
     <div className="card">
       <CardHeader drug={drug} persona={persona} onPersonaChange={onPersonaChange} />
+      <TradePriceStrip tradePrice={bundle.tradePrice} />
       {available
         ? <StateB drug={drug} bundle={bundle} />
         : <StateA drug={drug} bundle={bundle} />}

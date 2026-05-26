@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, type ReactNode, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback, useContext, createContext, type ReactNode, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, X } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { TopicalChip } from "./TopicalChip";
+
+/* ── Drug panel context ────────────────────────────────────── */
+
+const DrugPanelContext = createContext<{ openDrug: (id: string) => void }>({
+  openDrug: () => {},
+});
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -17,6 +23,7 @@ interface ChatMessage {
   drugs?: DrugHit[];
   shortages?: ShortageHit[];
   summary?: SummaryData | null;
+  drugMap?: Record<string, string>;
 }
 
 interface DrugHit {
@@ -48,7 +55,50 @@ interface SummaryData {
 
 /* ── Markdown renderer ─────────────────────────────────────── */
 
-function renderInline(text: string, keyPrefix: string): ReactNode[] {
+function DrugLink({ name, drugId }: { name: string; drugId: string }) {
+  const { openDrug } = useContext(DrugPanelContext);
+  return (
+    <button
+      type="button"
+      onClick={() => openDrug(drugId)}
+      style={{
+        background: "none",
+        border: "none",
+        padding: 0,
+        margin: 0,
+        font: "inherit",
+        color: "inherit",
+        cursor: "pointer",
+        textDecoration: "underline",
+        textDecorationColor: "var(--app-text-4)",
+        textDecorationThickness: "1px",
+        textUnderlineOffset: "3px",
+        textDecorationStyle: "dotted",
+        fontWeight: 600,
+      }}
+      className="chat-drug-link"
+    >
+      {name}
+    </button>
+  );
+}
+
+function lookupDrugId(name: string, drugMap?: Record<string, string>): string | null {
+  if (!drugMap) return null;
+  const direct = drugMap[name];
+  if (direct) return direct;
+  const lower = name.toLowerCase();
+  for (const k of Object.keys(drugMap)) {
+    if (k.toLowerCase() === lower) return drugMap[k];
+  }
+  return null;
+}
+
+function renderInline(
+  text: string,
+  keyPrefix: string,
+  drugMap?: Record<string, string>
+): ReactNode[] {
   const parts: ReactNode[] = [];
   const regex = /\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`/g;
   let last = 0;
@@ -56,7 +106,14 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
   let k = 0;
   while ((match = regex.exec(text)) !== null) {
     if (match.index > last) parts.push(text.slice(last, match.index));
-    if (match[1]) parts.push(<strong key={`${keyPrefix}-${k++}`}>{match[1]}</strong>);
+    if (match[1]) {
+      const drugId = lookupDrugId(match[1], drugMap);
+      if (drugId) {
+        parts.push(<DrugLink key={`${keyPrefix}-${k++}`} name={match[1]} drugId={drugId} />);
+      } else {
+        parts.push(<strong key={`${keyPrefix}-${k++}`}>{match[1]}</strong>);
+      }
+    }
     else if (match[2]) parts.push(<em key={`${keyPrefix}-${k++}`}>{match[2]}</em>);
     else if (match[3]) parts.push(
       <code key={`${keyPrefix}-${k++}`} style={{
@@ -70,24 +127,145 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
   return parts;
 }
 
-function renderMarkdown(text: string): ReactNode {
+function parseTableBlock(
+  lines: string[]
+): { header: string[]; rows: string[][] } | null {
+  const nonEmpty = lines.filter((l) => l.trim() !== "");
+  if (nonEmpty.length < 2) return null;
+  if (!nonEmpty.every((l) => l.includes("|"))) return null;
+  if (!/^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(nonEmpty[1])) return null;
+
+  const splitRow = (row: string): string[] => {
+    let r = row.trim();
+    if (r.startsWith("|")) r = r.slice(1);
+    if (r.endsWith("|")) r = r.slice(0, -1);
+    return r.split("|").map((c) => c.trim());
+  };
+
+  const header = splitRow(nonEmpty[0]);
+  const rows = nonEmpty.slice(2).map(splitRow);
+  if (rows.length === 0) return null;
+  return { header, rows };
+}
+
+function TableBlock({
+  header,
+  rows,
+  blockIdx,
+  drugMap,
+}: {
+  header: string[];
+  rows: string[][];
+  blockIdx: number;
+  drugMap?: Record<string, string>;
+}) {
+  return (
+    <div style={{ margin: "4px 0 18px", overflowX: "auto" }}>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          fontSize: 14,
+          lineHeight: 1.55,
+        }}
+      >
+        <thead>
+          <tr>
+            {header.map((h, ci) => (
+              <th
+                key={ci}
+                style={{
+                  textAlign: "left",
+                  padding: "0 20px 10px 0",
+                  fontWeight: 600,
+                  color: "var(--app-text)",
+                  borderBottom: "1px solid var(--app-border)",
+                  verticalAlign: "top",
+                }}
+              >
+                {renderInline(h, `t${blockIdx}-h${ci}`, drugMap)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td
+                  key={ci}
+                  style={{
+                    padding: "14px 20px 14px 0",
+                    verticalAlign: "top",
+                    borderBottom:
+                      ri < rows.length - 1
+                        ? "1px solid var(--app-border)"
+                        : "none",
+                    color: "var(--app-text)",
+                  }}
+                >
+                  {renderInline(cell, `t${blockIdx}-r${ri}-c${ci}`, drugMap)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function renderMarkdown(text: string, drugMap?: Record<string, string>): ReactNode {
   if (!text) return null;
   const blocks = text.split(/\n\n+/);
 
   return blocks.map((block, bi) => {
     const lines = block.split("\n");
+
+    const table = parseTableBlock(lines);
+    if (table) {
+      return (
+        <TableBlock
+          key={bi}
+          header={table.header}
+          rows={table.rows}
+          blockIdx={bi}
+          drugMap={drugMap}
+        />
+      );
+    }
+
     const allBullets = lines.every((l) => /^\s*[-•]\s/.test(l) || l.trim() === "");
     if (allBullets && lines.some((l) => /^\s*[-•]\s/.test(l))) {
       return (
-        <ul key={bi} style={{ margin: "0 0 16px", paddingLeft: 20, listStyle: "none" }}>
+        <ul key={bi} style={{ margin: "0 0 16px", padding: 0, listStyle: "none" }}>
           {lines
             .filter((l) => /^\s*[-•]\s/.test(l))
             .map((l, li) => {
               const content = l.trimStart().replace(/^[-•]\s/, "");
               return (
-                <li key={li} style={{ position: "relative", paddingLeft: 14, marginBottom: 6, lineHeight: 1.65 }}>
-                  <span style={{ position: "absolute", left: 0, color: "var(--teal)", fontWeight: 600 }}>{"\u2022"}</span>
-                  {renderInline(content, `${bi}-${li}`)}
+                <li
+                  key={li}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    marginBottom: 6,
+                    lineHeight: 1.65,
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      flexShrink: 0,
+                      marginTop: 10,
+                      width: 4,
+                      height: 4,
+                      borderRadius: 99,
+                      background: "var(--app-text-4, #999)",
+                    }}
+                  />
+                  <span style={{ flex: 1 }}>{renderInline(content, `${bi}-${li}`, drugMap)}</span>
                 </li>
               );
             })}
@@ -96,14 +274,11 @@ function renderMarkdown(text: string): ReactNode {
     }
 
     return (
-      <p key={bi} style={{ margin: "0 0 16px", lineHeight: 1.7 }}>
+      <div key={bi} style={{ margin: "0 0 16px", lineHeight: 1.7 }}>
         {lines.map((line, li) => (
-          <span key={li}>
-            {li > 0 && <br />}
-            {renderInline(line, `${bi}-${li}`)}
-          </span>
+          <div key={li}>{renderInline(line, `${bi}-${li}`, drugMap)}</div>
         ))}
-      </p>
+      </div>
     );
   });
 }
@@ -240,6 +415,301 @@ const SUGGESTED_QUERIES = [
   "Which country has the most shortages?",
 ];
 
+/* ── Drug preview panel (slide-in from right) ─────────────── */
+
+interface DrugPreviewData {
+  drug: {
+    id: string;
+    generic_name: string;
+    brand_names: string[] | null;
+    atc_code: string | null;
+    atc_description: string | null;
+    drug_class: string | null;
+  };
+  activeShortageCount: number;
+  severityCount: Record<string, number>;
+  countries: string[];
+  recentShortages: Array<{
+    shortage_id: string;
+    country_code: string;
+    severity: string | null;
+    status: string;
+    start_date: string | null;
+    reason_category: string | null;
+    source_name: string | null;
+  }>;
+  alternatives: Array<{
+    alt_drug_id: string;
+    alt_generic_name: string;
+    similarity_score: number | null;
+    evidence_grade: string | null;
+  }>;
+}
+
+function DrugPreviewPanel({ drugId, onClose }: { drugId: string | null; onClose: () => void }) {
+  const [data, setData] = useState<DrugPreviewData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!drugId) return;
+    setData(null);
+    setLoading(true);
+    setError(null);
+    let cancelled = false;
+    fetch(`/api/drugs/${drugId}/preview`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j) => { if (!cancelled) setData(j); })
+      .catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [drugId]);
+
+  useEffect(() => {
+    if (!drugId) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drugId, onClose]);
+
+  const open = !!drugId;
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(15,23,42,0.18)",
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
+          transition: "opacity 0.18s ease",
+          zIndex: 90,
+        }}
+      />
+      <aside
+        role="dialog"
+        aria-label="Drug preview"
+        style={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: "min(480px, 100vw)",
+          background: "var(--app-bg)",
+          borderLeft: "1px solid var(--app-border)",
+          boxShadow: open ? "-12px 0 32px rgba(15,23,42,0.08)" : "none",
+          transform: open ? "translateX(0)" : "translateX(100%)",
+          transition: "transform 0.22s ease",
+          zIndex: 100,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <header
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            padding: "18px 20px 14px",
+            borderBottom: "1px solid var(--app-border)",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {data ? (
+              <>
+                <div style={{ fontSize: 17, fontWeight: 600, color: "var(--app-text)", letterSpacing: "-0.01em", marginBottom: 4 }}>
+                  {data.drug.generic_name}
+                </div>
+                {data.drug.brand_names && data.drug.brand_names.length > 0 && (
+                  <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
+                    {data.drug.brand_names.slice(0, 4).join(" · ")}
+                    {data.drug.brand_names.length > 4 && ` +${data.drug.brand_names.length - 4}`}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ fontSize: 14, color: "var(--app-text-4)" }}>
+                {loading ? "Loading…" : error ? "Failed to load" : ""}
+              </div>
+            )}
+          </div>
+          {data?.drug.atc_code && (
+            <span style={{
+              fontSize: 11, fontWeight: 600, color: "var(--teal)", background: "var(--teal-bg)",
+              padding: "4px 8px", borderRadius: 4, fontFamily: "var(--font-dm-mono), monospace",
+              flexShrink: 0,
+            }}>
+              {data.drug.atc_code}
+            </span>
+          )}
+          <button
+            onClick={onClose}
+            aria-label="Close preview"
+            style={{
+              background: "none", border: "none", padding: 4, cursor: "pointer",
+              color: "var(--app-text-3)", flexShrink: 0, borderRadius: 4,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <X size={18} />
+          </button>
+        </header>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
+          {data && (
+            <>
+              <section style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--app-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                  Current supply
+                </div>
+                {data.activeShortageCount > 0 ? (
+                  <>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 24, fontWeight: 600, color: "var(--app-text)" }}>
+                        {data.activeShortageCount}
+                      </span>
+                      <span style={{ fontSize: 13, color: "var(--app-text-3)" }}>
+                        active shortage{data.activeShortageCount !== 1 ? "s" : ""}
+                        {data.countries.length > 0 && ` across ${data.countries.length} countr${data.countries.length === 1 ? "y" : "ies"}`}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {(["critical", "high", "medium", "low"] as const).map((sev) => {
+                        const n = data.severityCount[sev] ?? 0;
+                        if (n === 0) return null;
+                        return <SeverityBadge key={sev} severity={sev} />;
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--low)", fontWeight: 500 }}>
+                    No active shortages reported.
+                  </div>
+                )}
+              </section>
+
+              {data.recentShortages.length > 0 && (
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--app-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                    Recent events
+                  </div>
+                  <div>
+                    {data.recentShortages.map((s, i) => (
+                      <div
+                        key={s.shortage_id}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "8px 0",
+                          borderBottom: i < data.recentShortages.length - 1 ? "1px solid var(--app-border)" : "none",
+                          fontSize: 13,
+                        }}
+                      >
+                        <span style={{
+                          fontWeight: 600, fontSize: 11, color: "var(--app-text-3)",
+                          fontFamily: "var(--font-dm-mono), monospace",
+                          minWidth: 24, letterSpacing: "0.02em",
+                        }}>
+                          {s.country_code}
+                        </span>
+                        {s.severity && <SeverityBadge severity={s.severity} />}
+                        <span style={{ color: "var(--app-text-3)", fontSize: 12, flex: 1 }}>
+                          {s.reason_category ?? s.source_name ?? s.status}
+                        </span>
+                        {s.start_date && (
+                          <span style={{
+                            color: "var(--app-text-4)", fontSize: 12,
+                            fontFamily: "var(--font-dm-mono), monospace",
+                          }}>
+                            {s.start_date}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {data.alternatives.length > 0 && (
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--app-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                    Therapeutic alternatives
+                  </div>
+                  <div>
+                    {data.alternatives.map((a) => (
+                      <Link
+                        key={a.alt_drug_id}
+                        href={`/drugs/${a.alt_drug_id}`}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "8px 0",
+                          textDecoration: "none", color: "var(--app-text)",
+                          fontSize: 13,
+                        }}
+                      >
+                        <span style={{ fontWeight: 500, flex: 1 }}>{a.alt_generic_name}</span>
+                        {a.evidence_grade && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 600,
+                            padding: "2px 6px", borderRadius: 3,
+                            background: "var(--app-bg-2, #f8fafc)",
+                            color: "var(--app-text-3)",
+                            fontFamily: "var(--font-dm-mono), monospace",
+                            letterSpacing: "0.04em",
+                          }}>
+                            {a.evidence_grade}
+                          </span>
+                        )}
+                        {a.similarity_score != null && (
+                          <span style={{
+                            fontSize: 11, color: "var(--app-text-4)",
+                            fontFamily: "var(--font-dm-mono), monospace",
+                          }}>
+                            {Math.round(a.similarity_score * 100)}%
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+          {!data && loading && (
+            <div style={{ fontSize: 13, color: "var(--app-text-4)" }}>Loading drug preview…</div>
+          )}
+          {!data && error && (
+            <div style={{ fontSize: 13, color: "var(--crit)" }}>Could not load preview ({error}).</div>
+          )}
+        </div>
+
+        {drugId && (
+          <footer
+            style={{
+              padding: "12px 20px",
+              borderTop: "1px solid var(--app-border)",
+              background: "var(--app-bg)",
+            }}
+          >
+            <Link
+              href={`/drugs/${drugId}`}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                fontSize: 13, fontWeight: 500,
+                color: "var(--teal)", textDecoration: "none",
+              }}
+            >
+              View full profile →
+            </Link>
+          </footer>
+        )}
+      </aside>
+    </>
+  );
+}
+
 /* ── Thinking indicator ────────────────────────────────────── */
 
 function ThinkingIndicator() {
@@ -264,9 +734,13 @@ function ChatPageInner() {
   const [streaming, setStreaming] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
+  const [previewDrugId, setPreviewDrugId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const openDrug = useCallback((id: string) => setPreviewDrugId(id), []);
+  const closeDrug = useCallback(() => setPreviewDrugId(null), []);
 
   useEffect(() => {
     createBrowserClient().auth.getSession().then(({ data: { session } }) => {
@@ -391,6 +865,54 @@ function ChatPageInner() {
     } finally {
       setStreaming(false);
       inputRef.current?.focus();
+
+      // Resolve all bolded names in the assistant response to drug_ids for
+      // inline linking. Seed with the drugs the chat already tool-searched.
+      const seedMap: Record<string, string> = {};
+      for (const d of assistantDrugs) {
+        if (d.generic_name && d.drug_id) seedMap[d.generic_name] = d.drug_id;
+      }
+      const boldMatches = [...assistantContent.matchAll(/\*\*([^*\n]{2,80})\*\*/g)].map((m) => m[1].trim());
+      const uniqueNames = [...new Set(boldMatches)].filter((n) => n && !seedMap[n]);
+
+      const finalize = (lookupMap: Record<string, string>) => {
+        const merged = { ...seedMap, ...lookupMap };
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last.role === "assistant") {
+            updated[updated.length - 1] = { ...last, drugMap: merged };
+          }
+          return updated;
+        });
+      };
+
+      if (uniqueNames.length === 0) {
+        finalize({});
+      } else {
+        try {
+          const r = await fetch("/api/bulk-lookup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ drugNames: uniqueNames }),
+          });
+          if (r.ok) {
+            const j = await r.json();
+            const map: Record<string, string> = {};
+            for (const row of (j.results ?? []) as Array<{ drugName: string; matchedDrug: { drug_id: string } | null; matchConfidence: string }>) {
+              if (row.matchedDrug && row.matchConfidence !== "none") {
+                map[row.drugName] = row.matchedDrug.drug_id;
+              }
+            }
+            finalize(map);
+          } else {
+            finalize({});
+          }
+        } catch {
+          finalize({});
+        }
+      }
     }
   }, [messages, streaming]);
 
@@ -447,6 +969,8 @@ function ChatPageInner() {
   }
 
   return (
+    <DrugPanelContext.Provider value={{ openDrug }}>
+      <DrugPreviewPanel drugId={previewDrugId} onClose={closeDrug} />
     <div style={{
       display: "flex", flexDirection: "column",
       height: "100vh", background: "var(--app-bg)",
@@ -579,7 +1103,7 @@ function ChatPageInner() {
                           color: "var(--app-text-2)",
                           marginTop: (msg.drugs || msg.shortages || msg.summary) ? 12 : 0,
                         }}>
-                          {renderMarkdown(msg.content)}
+                          {renderMarkdown(msg.content, msg.drugMap)}
                         </div>
                       ) : (
                         streaming && i === messages.length - 1 && (
@@ -688,8 +1212,13 @@ function ChatPageInner() {
         @media (max-width: 640px) {
           .chat-chip { font-size: 12px !important; padding: 10px 14px !important; }
         }
+        .chat-drug-link:hover {
+          color: var(--teal) !important;
+          text-decoration-color: var(--teal) !important;
+        }
       `}</style>
     </div>
+    </DrugPanelContext.Provider>
   );
 }
 

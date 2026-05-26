@@ -190,7 +190,7 @@ ls supabase/migrations/                          # 001 → 032
 - **Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, `@supabase/ssr`, Anthropic SDK, Lucide, React Simple Maps
 - **Database:** PostgreSQL via Supabase (RLS, FTS via `tsvector` + trigram, JSONB structured fields)
 - **Deployment:** Vercel (frontend + Route Handlers), Supabase (DB), Mac cron + Railway (scrapers — hybrid during migration)
-- **AI:** `claude-sonnet-4-20250514` in `/api/chat` (worth upgrading to a newer Sonnet/Opus — see `frontend/app/api/chat/route.ts:978`)
+- **AI:** `claude-sonnet-4-6` in `/api/chat`, with Anthropic's `web_search_20250305` server tool enabled. Tool surface covers per-drug lookups, cross-cutting event search (`query_shortage_events` over 29k events) and the macro signals catalogue (`query_intelligence_sources` over 124 entries). Source-priority guidance (regulators → journals → specialist → investigative → national press) is in the system prompt. When `ANTHROPIC_API_KEY` is missing, the route falls back to rule-based pattern matching that handles drug/country/summary lookups but tells the user macro questions are unanswerable — does not pretend to understand them.
 
 ---
 

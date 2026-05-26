@@ -42,8 +42,30 @@ The user is in **${userCountry}** (${homeLabel}). For drug-specific or country-s
 - Country-level shortage and recall browsing with severity and class filters
 - Aggregate statistics: breakdowns by country, severity, reason category, and monthly trends
 - Per-drug shortage timeline (how a drug's shortage picture has evolved over months)
+- **SKU variant disambiguation** — \`get_drug_variants\` lists the distinct strength × dosage-form combinations registered for a canonical drug (e.g. amoxicillin → 250mg/5mL suspension, 500mg capsule, 875mg tablet, IV powder). The same generic often has 5–20 SKUs; aggregating across all of them can mislead.
+- **Cross-cutting event search** — \`query_shortage_events\` lets you search the full 29,000+ event table by reason category, country, severity, time window, and free-text on the event reason/notes. Use for macro/thematic questions that are NOT anchored to a single drug.
+- **Macro signals catalogue** — \`query_intelligence_sources\` exposes our 124-entry catalogue of external macro signals (trade flows, sanctions trackers, procurement portals, logistics indicators, corporate disclosures, pricing references). Use to ground answers about what Mederti monitors beyond shortage events.
+- **Live web search** — \`web_search\` is available for current external facts (manufacturer news, policy moves, market events) that aren't in our database. Use it when the question is genuinely time-sensitive and our internal data can't answer it. Apply the source hierarchy below to the queries (prefer regulators, journals, specialist outlets).
 
 You have tools for all of the above. Call them eagerly when a specific fact would strengthen the answer. Chain multiple tool calls per turn — there's no premium on terseness in tool use. A rich answer often involves 3–6 calls.
+
+## Disambiguation — when to ask before answering
+
+Drug data is rarely as singular as the name suggests. Two situations call for **a short clarifying question, not a guess**:
+
+1. **Multi-generic ambiguity** — \`search_drugs\` returns 2+ distinct generic names (e.g. "amoxicillin" vs "amoxicillin/clavulanic acid" vs "amoxicillin trihydrate"; "insulin" vs "insulin glargine" vs "insulin aspart"; "statin" vs the specific statins). If the query was ambiguous, list the candidates as a short bulleted set ("Which did you mean — **amoxicillin**, **amoxicillin/clavulanic acid (Augmentin)**, or **amoxicillin trihydrate**?") and stop. Don't silently pick the top hit.
+
+2. **Variant-sensitive question on a multi-SKU drug** — \`search_drugs\` returns \`variant_count\` and \`sample_variants\` per result. If \`variant_count\` ≥ 2 **and** the question depends on the specific SKU, call \`get_drug_variants\` and ask the user which one. Variant-sensitive questions include:
+   - Dosing, formulation, or route of administration ("can I switch from IV to oral?", "is the 500mg the same as the 875mg?")
+   - A recall, shortage, or supplier query that named a specific strength/brand
+   - Clinical use that only applies to one form (e.g. ophthalmic vs systemic, paediatric suspension vs adult tablet)
+   - Procurement / quoting / pricing — the SKU matters
+
+   Format the question like: "There are **${"${variant_count}"} variants** of **\${name}** in our catalogue — which one are you asking about?" followed by a short bulleted list (top 5 by product count) showing strength + form. Default: don't pick.
+
+3. **Variant-agnostic question** ("is amoxicillin in shortage globally?", "what's the recall history of metformin?") — you may aggregate across SKUs. But disclose it: "Aggregating across all **N** registered variants of amoxicillin in our catalogue:". Don't hide the aggregation.
+
+If the user types "the first one" / "the 500mg" / "the IV" / "all of them" in reply, proceed accordingly. If they don't reply specifically, default to the highest-product-count variant and disclose the choice.
 
 ## When to reach for tools vs knowledge
 
@@ -51,13 +73,17 @@ You have tools for all of the above. Call them eagerly when a specific fact woul
 - Country-level or severity-filtered → \`browse_shortages\`, \`browse_recalls\`.
 - "How many" / "what's the picture" → \`get_shortage_summary\` or \`get_shortage_statistics\`.
 - "How has X evolved" → \`get_shortage_timeline\`.
-- Macro / "why" / "what causes" / "how does X work" / policy / economics → lead with your knowledge; pull data when a concrete illustration would land harder than abstract analysis.
-- Mixed → do both. The user gains more from \`amoxicillin shortage is driven by [macro reason]; here are the 4 active EU events confirming it\` than from either half alone.
+- **Macro / thematic / aggregate** ("shortages caused by X", "events mentioning Y", "what's happening with manufacturing-issue shortages in Europe") → \`query_shortage_events\` with structured filters and/or free-text. Don't force these into per-drug tools.
+- **Geopolitics / macro context** ("how do sanctions affect supply", "what signals do you track for tariff impact") → \`query_intelligence_sources\` to surface what we monitor, then \`web_search\` for current events, then weave in your own analysis.
+- **Current external events** (regulatory announcements in the last few days, named manufacturer news, policy moves) → \`web_search\` — but only when our internal data genuinely can't answer. Cite per the source hierarchy below.
+- "Why" / "what causes" / "how does X work" / policy / economics → lead with your knowledge; pull data and macro signals when a concrete illustration lands harder than abstract analysis.
+- Mixed → do both. The user gains more from \`amoxicillin shortage is driven by [macro reason]; here are the 4 active EU events confirming it; here's what the FDA said last week\` than from either half alone.
 
 ## Style
 
 - Lead with the substantive answer. No "let me look that up", no "great question", no preambles.
-- **Bold** drug names and critical facts. Bullets for enumeration; paragraphs for reasoning. Headers for multi-section answers.
+- **Bold** drug names and critical facts. Bullets for short enumeration; paragraphs for reasoning; headers for multi-section answers.
+- **Tables for comparisons.** When listing 3+ items that share the same attributes — drugs with use + current status, countries with shortage counts + severity, suppliers with location + capacity, alternatives with evidence grade + similarity — render a markdown table, like a summary table in a business paper. Lead with one sentence framing the table, then the table itself. Keep to 3–4 columns; put the subject (drug, country, supplier) in the first column and **bold** each subject so the eye lands on it. Don't use a table for a single item, for prose-shaped reasoning, or when the columns would mostly be empty.
 - Cite \`source_name\` when reporting a specific live data point (shortage status, recall date, supplier name). For analysis grounded in general industry knowledge, no citation is needed — but make it clear which kind of claim you're making when it matters.
 - Typos: "amoxicilin" → search "amoxicillin", "Ausrtalia" → "Australia". Acknowledge once ("Showing **amoxicillin**:"), don't lecture.
 - Flag **critical** and **Class I** findings prominently.
@@ -90,7 +116,11 @@ Our database is the primary source for live shortage, recall, and resilience fac
 
 /* ── Tool definitions ───────────────────────────────────────── */
 
-const tools: Anthropic.Tool[] = [
+// Custom tools have an executor in executeTool() below.
+// The web_search server tool (added at the end) is executed by Anthropic; no executor needed.
+type ToolDef = Anthropic.Tool | { type: "web_search_20250305"; name: "web_search"; max_uses?: number };
+
+const tools: ToolDef[] = [
   {
     name: "search_drugs",
     description: "Search the drug database by name. Returns matching drugs with active shortage counts. Use this first when the user mentions a specific drug name.",
@@ -208,6 +238,51 @@ const tools: Anthropic.Tool[] = [
       required: ["drug_id"],
     },
   },
+  {
+    name: "get_drug_variants",
+    description: "List the SKU variants (strength × dosage form combinations) registered for a canonical drug. Use BEFORE answering when the question depends on a specific variant — dosing-specific advice, a recall lookup, a formulation-specific shortage, a clinical use that only applies to one form (e.g. amoxicillin IV vs oral suspension). The same generic may have 5–20 distinct SKUs across countries; aggregating across all of them can mislead. Returns variant groups with brand examples, sponsors, and country coverage. If only 1 variant exists, no disambiguation is needed.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        drug_id: { type: "string", description: "UUID of the drug" },
+        country: { type: "string", description: "Optional ISO 2-letter country code to scope variants to one market" },
+      },
+      required: ["drug_id"],
+    },
+  },
+  {
+    name: "query_shortage_events",
+    description: "Flexible search across the full 29,000+ event table — use for macro / aggregate / thematic questions NOT anchored to one drug. Examples: 'shortages caused by manufacturing issues in Europe this year', 'regulatory-action shortages in India', 'critical supply-chain disruptions since Jan 2025', 'shortages mentioning API'. Combine free-text search (reason/notes) with structured filters (reason_category, country, severity, status, date window). Returns total match count plus a sample of events.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        text: { type: "string", description: "Optional free-text ILIKE search across event reason and notes (e.g. 'API supply', 'GMP audit', 'tariff', 'capacity', 'tender'). Combine with structured filters for best results." },
+        reason_category: { type: "string", enum: ["regulatory_action", "supply_chain", "manufacturing_issue", "discontinuation", "demand_surge", "raw_material", "unknown"], description: "Structured reason category" },
+        country: { type: "string", description: "ISO 2-letter country code (e.g. 'AU', 'US', 'DE')" },
+        severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
+        status: { type: "string", enum: ["active", "anticipated", "resolved", "stale"], description: "Default: active" },
+        since: { type: "string", description: "Only events whose start_date is on/after this YYYY-MM-DD" },
+        until: { type: "string", description: "Only events whose start_date is on/before this YYYY-MM-DD" },
+        limit: { type: "number", description: "Max sample events to return (default 15, max 30)" },
+      },
+    },
+  },
+  {
+    name: "query_intelligence_sources",
+    description: "Search our catalog of 124 external macro signals — trade flows, procurement portals, sanctions trackers, epidemic data, logistics indicators, corporate disclosures, pricing references. Use when the question is macro / geopolitical / economic and the user is asking what signals Mederti monitors beyond shortage events themselves. Returns catalog entries (name, category, what they cover) — these are pointers to data sources, not the data itself.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        category: { type: "string", enum: ["availability_ground_truth", "logistics", "procurement", "macro", "external_shocks", "reference_data", "pricing", "pipeline", "data_portals_and_discovery", "sanctions", "trade", "utilization", "corporate_disclosure", "public_health", "funding_and_aid_flows", "early_warning"] },
+        text: { type: "string", description: "Optional free-text ILIKE search across source name, notes, subcategory" },
+        priority: { type: "string", enum: ["high", "medium", "low"], description: "Daily-monitoring priority" },
+        limit: { type: "number", description: "Max results (default 10, max 30)" },
+      },
+    },
+  },
+  // Server tool — Anthropic executes the search and returns results as a tool result block.
+  // No executor case needed. Use sparingly: each call has a per-search cost.
+  { type: "web_search_20250305", name: "web_search", max_uses: 4 },
 ];
 
 /* ── Tool executors ─────────────────────────────────────────── */
@@ -260,10 +335,43 @@ async function executeTool(name: string, input: Record<string, any>): Promise<an
         for (const row of sc.data ?? []) counts[row.drug_id] = (counts[row.drug_id] ?? 0) + 1;
       } catch { /* counts stay 0 */ }
 
+      // Variant signal: count distinct (strength, dosage_form) SKUs per drug
+      // in drug_catalogue. Gives Claude a "this drug has 7 variants — consider
+      // asking which one" hint without a second tool call.
+      const variantCounts: Record<string, number> = Object.fromEntries(ids.map((id) => [id, 0]));
+      const sampleVariants: Record<string, string[]> = Object.fromEntries(ids.map((id) => [id, []]));
+      try {
+        const vc = await db.from("drug_catalogue")
+          .select("drug_id, strength, dosage_form")
+          .in("drug_id", ids).limit(2000);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const buckets: Record<string, Set<string>> = {};
+        for (const row of (vc.data ?? []) as any[]) {
+          if (!row.drug_id) continue;
+          const key = `${(row.strength ?? "").trim()}|${(row.dosage_form ?? "").trim()}`;
+          if (!buckets[row.drug_id]) buckets[row.drug_id] = new Set();
+          buckets[row.drug_id].add(key);
+        }
+        for (const id of ids) {
+          const set = buckets[id] ?? new Set();
+          variantCounts[id] = set.size;
+          sampleVariants[id] = Array.from(set)
+            .filter((k) => k !== "|")
+            .slice(0, 3)
+            .map((k) => {
+              const [s, f] = k.split("|");
+              return [s, f].filter(Boolean).join(" ");
+            })
+            .filter(Boolean);
+        }
+      } catch { /* variant info stays empty — non-fatal */ }
+
       const results = rows.map((r) => ({
         drug_id: r.id, generic_name: r.generic_name,
         brand_names: r.brand_names ?? [], atc_code: r.atc_code ?? null,
         active_shortage_count: counts[r.id as string] ?? 0,
+        variant_count: variantCounts[r.id as string] ?? 0,
+        sample_variants: sampleVariants[r.id as string] ?? [],
       }));
       return { query: q, results, total: results.length };
     }
@@ -571,6 +679,182 @@ async function executeTool(name: string, input: Record<string, any>): Promise<an
       };
     }
 
+    case "get_drug_variants": {
+      // Follow drug_synonyms so paracetamol↔acetaminophen variants are unified.
+      const synRes = await db.from("drug_synonyms").select("synonym_normalised").eq("drug_id", input.drug_id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const synonyms = ((synRes.data ?? []) as any[]).map((s) => s.synonym_normalised).filter(Boolean);
+
+      let query = db.from("drug_catalogue")
+        .select("source_country, brand_name, sponsor, strength, dosage_form, registration_status, registration_number, source_name")
+        .limit(2000);
+
+      if (synonyms.length > 0) {
+        const orFilter = [
+          `drug_id.eq.${input.drug_id}`,
+          `generic_normalised.in.(${synonyms.map((s: string) => `"${s}"`).join(",")})`,
+        ].join(",");
+        query = query.or(orFilter);
+      } else {
+        query = query.eq("drug_id", input.drug_id);
+      }
+
+      if (input.country) query = query.eq("source_country", String(input.country).toUpperCase());
+
+      const { data } = await query;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = (data ?? []) as any[];
+
+      if (rows.length === 0) {
+        return {
+          drug_id: input.drug_id,
+          country_filter: input.country ?? null,
+          total_variants: 0,
+          total_products: 0,
+          variants: [],
+          note: "No catalogue entries found. Catalogue coverage is currently AU / GB / US / CA / EU; other countries may register the drug without appearing here.",
+        };
+      }
+
+      type VariantBucket = {
+        strength: string | null;
+        dosage_form: string | null;
+        product_count: number;
+        active_count: number;
+        countries: Set<string>;
+        brands: Map<string, number>;
+        sponsors: Map<string, number>;
+      };
+      const buckets: Map<string, VariantBucket> = new Map();
+
+      for (const r of rows) {
+        const strength = (r.strength ?? "").trim() || null;
+        const form = (r.dosage_form ?? "").trim() || null;
+        const key = `${strength ?? "?"}|${form ?? "?"}`;
+        if (!buckets.has(key)) {
+          buckets.set(key, {
+            strength, dosage_form: form,
+            product_count: 0, active_count: 0,
+            countries: new Set(), brands: new Map(), sponsors: new Map(),
+          });
+        }
+        const b = buckets.get(key)!;
+        b.product_count++;
+        if (((r.registration_status ?? "") as string).toLowerCase() === "active") b.active_count++;
+        if (r.source_country) b.countries.add(String(r.source_country).toUpperCase());
+        if (r.brand_name) {
+          const k = String(r.brand_name).trim();
+          if (k) b.brands.set(k, (b.brands.get(k) ?? 0) + 1);
+        }
+        if (r.sponsor) {
+          const k = String(r.sponsor).trim();
+          if (k) b.sponsors.set(k, (b.sponsors.get(k) ?? 0) + 1);
+        }
+      }
+
+      const variants = Array.from(buckets.values())
+        .map((b) => ({
+          strength: b.strength,
+          dosage_form: b.dosage_form,
+          product_count: b.product_count,
+          active_count: b.active_count,
+          countries: Array.from(b.countries).sort(),
+          top_brands: Array.from(b.brands.entries()).sort((a, b2) => b2[1] - a[1]).slice(0, 5).map(([name]) => name),
+          top_sponsors: Array.from(b.sponsors.entries()).sort((a, b2) => b2[1] - a[1]).slice(0, 3).map(([name]) => name),
+        }))
+        .sort((a, b) => b.product_count - a.product_count);
+
+      return {
+        drug_id: input.drug_id,
+        country_filter: input.country ?? null,
+        total_variants: variants.length,
+        total_products: rows.length,
+        variants,
+      };
+    }
+
+    case "query_shortage_events": {
+      const limit = Math.min(input.limit ?? 15, 30);
+      const status = input.status ?? "active";
+
+      const baseFilters = (q: ReturnType<typeof db.from> extends infer T ? T : never) => q;
+      void baseFilters;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const applyFilters = (q: any) => {
+        q = q.eq("status", status);
+        if (input.reason_category) q = q.eq("reason_category", input.reason_category);
+        if (input.country) q = q.eq("country_code", String(input.country).toUpperCase());
+        if (input.severity) q = q.eq("severity", input.severity);
+        if (input.since) q = q.gte("start_date", input.since);
+        if (input.until) q = q.lte("start_date", input.until);
+        if (input.text) {
+          const pattern = `%${String(input.text).replace(/[%,]/g, "")}%`;
+          q = q.or(`reason.ilike.${pattern},notes.ilike.${pattern}`);
+        }
+        return q;
+      };
+
+      const countQ = applyFilters(db.from("shortage_events").select("id", { count: "exact", head: true }));
+      const listQ = applyFilters(
+        db.from("shortage_events")
+          .select("shortage_id, drug_id, country_code, country, status, severity, reason, reason_category, start_date, estimated_resolution_date, source_url, drugs(generic_name, brand_names), data_sources(name)")
+          .order("start_date", { ascending: false })
+          .range(0, limit - 1)
+      );
+
+      const [{ count }, { data: rows }] = await Promise.all([countQ, listQ]);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const events = ((rows ?? []) as any[]).map((r) => ({
+        shortage_id: r.shortage_id, drug_id: r.drug_id,
+        generic_name: (r.drugs ?? {}).generic_name ?? null,
+        brand_names: (r.drugs ?? {}).brand_names ?? null,
+        country: r.country, country_code: r.country_code,
+        status: r.status, severity: r.severity,
+        reason_category: r.reason_category,
+        reason_excerpt: typeof r.reason === "string" ? r.reason.slice(0, 240) : null,
+        start_date: r.start_date,
+        estimated_resolution_date: r.estimated_resolution_date,
+        source_name: (r.data_sources ?? {}).name ?? null,
+        source_url: r.source_url,
+      }));
+
+      return {
+        total_matched: count ?? 0,
+        returned: events.length,
+        filters: {
+          text: input.text ?? null,
+          reason_category: input.reason_category ?? null,
+          country: input.country ?? null,
+          severity: input.severity ?? null,
+          status,
+          since: input.since ?? null,
+          until: input.until ?? null,
+        },
+        events,
+      };
+    }
+
+    case "query_intelligence_sources": {
+      const limit = Math.min(input.limit ?? 10, 30);
+      let q = db.from("intelligence_sources")
+        .select("source_id, name, owner_org, category, subcategory, geography_coverage, update_frequency_expected, priority_for_daily_monitoring, notes", { count: "exact" })
+        .limit(limit);
+      if (input.category) q = q.eq("category", input.category);
+      if (input.priority) q = q.eq("priority_for_daily_monitoring", input.priority);
+      if (input.text) {
+        const pattern = `%${String(input.text).replace(/[%,]/g, "")}%`;
+        q = q.or(`name.ilike.${pattern},notes.ilike.${pattern},subcategory.ilike.${pattern}`);
+      }
+      const { data, count } = await q;
+      return {
+        total_matched: count ?? 0,
+        returned: (data ?? []).length,
+        sources: data ?? [],
+      };
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }
@@ -840,10 +1124,35 @@ async function conversationalFallback(
             const drugName = extractDrugName(query);
             if (drugName) {
               // Drug + country query
-              const searchResult = await executeTool("search_drugs", { query: drugName, limit: 3 });
-              if (searchResult.results.length > 0) {
-                const drug = searchResult.results[0];
+              const searchResult = await executeTool("search_drugs", { query: drugName, limit: 6 });
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const exactHits = (searchResult.results as any[]).filter(
+                (r) => String(r.generic_name).toLowerCase() === drugName.toLowerCase()
+              );
+              if (searchResult.results.length > 1 && exactHits.length !== 1) {
                 emit(controller, encoder, "drugs", searchResult.results);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const names = (searchResult.results as any[]).slice(0, 6).map((r) => `**${r.generic_name}**`).join(", ");
+                emit(controller, encoder, "text",
+                  `I found ${searchResult.results.length} drugs matching "${drugName}" — ${names}. ` +
+                  `Which one are you asking about in ${countryName}? Click one above or reply with the full name.`
+                );
+                break;
+              }
+              if (searchResult.results.length > 0) {
+                const drug = exactHits[0] ?? searchResult.results[0];
+                emit(controller, encoder, "drugs", searchResult.results);
+                // If the chosen drug has multiple SKU variants, surface the choice
+                if ((drug.variant_count ?? 0) >= 2) {
+                  const sample = (drug.sample_variants ?? []).slice(0, 3).filter(Boolean);
+                  if (sample.length > 0) {
+                    emit(controller, encoder, "text",
+                      `Note: **${drug.generic_name}** has **${drug.variant_count} SKU variants** in our catalogue ` +
+                      `(e.g. ${sample.join("; ")}). The figures below aggregate across all of them — ` +
+                      `tell me a specific strength or formulation if you need to narrow down.`
+                    );
+                  }
+                }
 
                 const shortages = await executeTool("get_drug_shortages", { drug_id: drug.drug_id, country: cc! });
                 if (Array.isArray(shortages) && shortages.length > 0) {
@@ -905,14 +1214,60 @@ async function conversationalFallback(
               if (ctx) drugName = ctx;
             }
 
+            // Honest degraded-mode bail-out: if the query is clearly macro/thematic
+            // (geopolitics, policy, supply chain causes, etc.) the rule-based
+            // fallback can't answer it. Tell the user the AI brain is offline
+            // instead of pretending it was a misspelt drug.
+            const looksMacro = /\b(geopolitic|sanction|tariff|macro|why|cause|driven|drives|impact|policy|trade war|supply chain|trend|outlook|latest news|government|monopoly|concentration|economic|economy|tension|war|conflict|china|russia|india|trump|biden|inflation|currency)\b/i.test(query);
+            const tokenCount = drugName.split(/\s+/).filter(Boolean).length;
+            if (looksMacro || tokenCount > 3) {
+              emit(controller, encoder, "text",
+                "I'm running in **degraded mode** — the AI brain is offline (the server is missing its `ANTHROPIC_API_KEY`), so I can't take on macro or open-ended questions right now.\n\n" +
+                "I can still help with:\n\n" +
+                "- A specific drug — *\"amoxicillin\"*, *\"insulin glargine\"*\n" +
+                "- A country view — *\"shortages in Germany\"*\n" +
+                "- Alternatives — *\"alternatives to metformin\"*\n" +
+                "- Recalls or a global summary\n\n" +
+                "For broader natural-language questions, the operator needs to set the API key."
+              );
+              break;
+            }
+
             let result = await executeTool("search_drugs", { query: drugName, limit: 6 });
             if (result.results.length === 0 && drugName !== query.trim()) {
               result = await executeTool("search_drugs", { query: query.trim(), limit: 6 });
             }
 
-            if (result.results.length > 0) {
-              const topDrug = result.results[0];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const exactHits = (result.results as any[]).filter(
+              (r) => String(r.generic_name).toLowerCase() === drugName.toLowerCase()
+            );
+            if (result.results.length > 1 && exactHits.length !== 1) {
               emit(controller, encoder, "drugs", result.results);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const names = (result.results as any[]).slice(0, 6).map((r) => `**${r.generic_name}**`).join(", ");
+              emit(controller, encoder, "text",
+                `I found ${result.results.length} drugs matching "${drugName}" — ${names}. ` +
+                `Which one did you mean? Click one above or reply with the full name.`
+              );
+              break;
+            }
+
+            if (result.results.length > 0) {
+              const topDrug = exactHits[0] ?? result.results[0];
+              emit(controller, encoder, "drugs", result.results);
+
+              // Multi-SKU variant disclosure
+              if ((topDrug.variant_count ?? 0) >= 2) {
+                const sample = (topDrug.sample_variants ?? []).slice(0, 3).filter(Boolean);
+                if (sample.length > 0) {
+                  emit(controller, encoder, "text",
+                    `**${topDrug.generic_name}** has **${topDrug.variant_count} SKU variants** in our catalogue ` +
+                    `(e.g. ${sample.join("; ")}). I'll summarise across all of them below — ` +
+                    `mention a specific strength or formulation if you need to narrow down.`
+                  );
+                }
+              }
 
               // Also fetch shortages for the top hit
               const shortages = await executeTool("get_drug_shortages", { drug_id: topDrug.drug_id });
@@ -1010,10 +1365,12 @@ export async function POST(req: NextRequest) {
           iterations++;
 
           const response = await anthropic.messages.create({
-            model: "claude-sonnet-4-20250514",
+            model: "claude-sonnet-4-6",
             max_tokens: 4096,
             system: buildSystemPrompt(userCountry),
-            tools,
+            // ToolDef is our union (custom + web_search server tool); the SDK accepts both
+            // in the same array but doesn't expose a single union type cleanly across versions.
+            tools: tools as unknown as Anthropic.Tool[],
             messages: currentMessages,
           });
 

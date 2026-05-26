@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Folder,
   Kebab,
+  PanelLeft,
   Pencil,
   Plus,
   Search,
@@ -354,6 +355,7 @@ export function Sidebar({
   activeDrugSlug,
   isDemo,
   chats,
+  onCollapse,
   onOpenDrugPreview,
   onToast,
 }: {
@@ -362,6 +364,8 @@ export function Sidebar({
   isDemo: boolean;
   // Real chats from the localStorage store (already sorted updatedAt desc).
   chats: SavedChat[];
+  // Triggers full collapse — sidebar unmounts, topbar shows re-expand button.
+  onCollapse: () => void;
   onOpenDrugPreview: (slug: string) => void;
   onToast: (msg: string) => void;
 }) {
@@ -410,16 +414,24 @@ export function Sidebar({
 
   return (
     <aside className="w-[268px] shrink-0 bg-slate-50/60 border-r border-slate-200 flex flex-col h-screen">
-      {/* Brand — use the real lockup. PNG keeps the type proportions
-          exact; the wordmark is part of the asset so we drop the inline
-          "mederti" text. */}
-      <div className="flex items-center px-4 pt-4 pb-3.5">
+      {/* Brand row — collapse toggle on the right so the brand stays in
+          its expected spot on the left. */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-3.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/logo-black.png"
           alt="Mederti"
           style={{ height: 22, width: "auto", display: "block" }}
         />
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="w-7 h-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-900/[0.06] hover:text-slate-700 transition-colors"
+          title="Collapse sidebar"
+          aria-label="Collapse sidebar"
+        >
+          <PanelLeft size={15} />
+        </button>
       </div>
 
       {/* Primary actions — Search hides until there's history to search */}

@@ -29,6 +29,24 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
 
   const chatList = useChatList();
 
+  // Sidebar collapse — persisted to localStorage so it survives reloads.
+  // SSR safety: start collapsed=false, hydrate on mount.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("chat2:sidebar:collapsed") === "1") setSidebarCollapsed(true);
+    } catch {}
+  }, []);
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("chat2:sidebar:collapsed", next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const [turns, setTurns] = useState<Turn[]>([]);
   const [drugsMap, setDrugsMap] = useState<Record<string, DrugDetail>>({});
   const [subsMap, setSubsMap] = useState<Record<string, SubstituteRow>>({});
@@ -218,14 +236,17 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-white text-slate-900" style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}>
-      <Sidebar
-        activeChatId={chatId}
-        activeDrugSlug={drugIdParam}
-        isDemo={isDemo}
-        chats={chatList}
-        onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
-        onToast={setToast}
-      />
+      {sidebarCollapsed ? null : (
+        <Sidebar
+          activeChatId={chatId}
+          activeDrugSlug={drugIdParam}
+          isDemo={isDemo}
+          chats={chatList}
+          onCollapse={toggleSidebar}
+          onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
+          onToast={setToast}
+        />
+      )}
 
       <ChatMain
         turns={turns}
@@ -238,6 +259,8 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         onSend={send}
         onOpenDrug={openDrug}
         textareaRef={textareaRef}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
       />
 
       {drugIdParam ? (

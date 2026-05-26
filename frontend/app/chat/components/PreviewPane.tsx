@@ -25,6 +25,11 @@ import {
   type WatchlistStatus,
 } from "../watchlistStore";
 
+// The chat panel is scoped to the user's home country: the headline answers
+// "is this drug available *here*?", not "is it short *anywhere*?". Hardcoded
+// to AU for now — wire to user_profiles.country once that's available.
+const HOME_COUNTRY = "AU";
+
 const FLAG_BY_CC: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹",
   ES: "🇪🇸", CA: "🇨🇦", NL: "🇳🇱", IE: "🇮🇪", NZ: "🇳🇿", SE: "🇸🇪",
@@ -226,14 +231,37 @@ function Chat2DrugImage({ name }: { name: string }) {
   );
 }
 
-function StatusCard({ bundle }: { bundle: DrugDetailBundle }) {
-  const a = worstAvailability(bundle.drug.shortages);
+function StatusCard({ bundle, homeCountry }: { bundle: DrugDetailBundle; homeCountry: string }) {
+  const cc = homeCountry.toUpperCase();
+  const homeActive = bundle.drug.shortages.filter(
+    (s) => (s.country_code || "").toUpperCase() === cc && s.status === "active"
+  );
+  const a = worstAvailability(homeActive);
   const c = availabilityColor(a);
-  const title =
-    a === "red" ? "Critical shortage" : a === "amber" ? "Limited supply" : "Available";
-  const sub =
-    bundle.drug.shortages.find((s) => s.reason)?.reason ||
-    `${bundle.drug.active_shortage_count} active shortage${bundle.drug.active_shortage_count === 1 ? "" : "s"} across ${bundle.drug.countries_affected.length} countries`;
+
+  const otherActive = bundle.drug.active_shortage_count - homeActive.length;
+  const otherCountries = bundle.drug.countries_affected.filter(
+    (k) => (k || "").toUpperCase() !== cc
+  ).length;
+  const otherLabel = otherCountries === 1 ? "country" : "countries";
+
+  let title: string;
+  let sub: string;
+  if (homeActive.length === 0) {
+    title = `Available in ${cc}`;
+    sub = otherActive > 0
+      ? `No active shortage in ${cc} · ${otherActive} active in ${otherCountries} other ${otherLabel}`
+      : "No active shortages on file";
+  } else {
+    title = a === "red" ? `Critical shortage in ${cc}` : `Limited supply in ${cc}`;
+    const reason = homeActive.find((s) => s.reason)?.reason;
+    sub = reason
+      ? reason
+      : `${homeActive.length} active shortage${homeActive.length === 1 ? "" : "s"} in ${cc}${
+          otherActive > 0 ? ` · ${otherActive} in ${otherCountries} other ${otherLabel}` : ""
+        }`;
+  }
+
   return (
     <div className={`${c.bg} ${c.border} border rounded-xl px-4 py-3.5 mb-3.5`}>
       <div className={`flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest mb-1 ${c.text}`}>
@@ -454,7 +482,7 @@ export function PreviewPane({
     setLoading(true);
     setErr(null);
     setBundle(null);
-    fetch(`/api/drug/${drugId}?country=AU`)
+    fetch(`/api/drug/${drugId}?country=${HOME_COUNTRY}`)
       .then((r) => r.json())
       .then((data: DrugDetailBundle) => {
         if (cancelled) return;
@@ -559,7 +587,7 @@ export function PreviewPane({
             <Chat2DrugImage name={bundle.drug.generic_name || bundle.drug.name} />
 
             {/* Status */}
-            <StatusCard bundle={bundle} />
+            <StatusCard bundle={bundle} homeCountry={HOME_COUNTRY} />
 
             {/* Actions */}
             <div className="flex gap-2 mb-4">

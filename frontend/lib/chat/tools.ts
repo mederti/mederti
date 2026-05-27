@@ -443,6 +443,21 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
       required: ["drug_id"],
     },
   },
+  // ── Sprint 3 PR 2 — buyer-side demand telemetry ─────────────────────────
+  {
+    name: "get_demand_signal_summary",
+    description:
+      "Weekly buyer-side demand-signal summary for a drug — searches, drug-card views, supplier enquiries, watchlist adds, chip clicks. Returns only buckets above the k-anonymity floor of 5 distinct sessions per drug × country × week. Use for SUP-08/09/26/27/28 — buyer demand-side questions. Returns a 'no data' envelope when the route-handler instrumentation hasn't yet wired up to populate demand_signals.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID. Required." },
+        country: { type: "string", description: "Optional ISO-2 country code to narrow scope." },
+        weeks: { type: "number", description: "Lookback in weeks (default 12, max 52)." },
+      },
+      required: ["drug_id"],
+    },
+  },
 ];
 
 export type ToolContext = {
@@ -3168,6 +3183,84 @@ async function getRecallLinks(args: { drug_id: string }) {
   };
 }
 
+// ─── Sprint 3 PR 2: get_demand_signal_summary (audit cluster D) ─────────────
+//
+// Reads from v_demand_signal_summary (migration 041) — the k-anonymity ≥ 5
+// aggregate view over demand_signals. Direct SELECT on demand_signals is
+// denied by RLS; this view is the only supported read path. Buckets with
+// fewer than 5 distinct session_hashes are suppressed by the view's HAVING
+// clause — privacy floor below which we don't release counts.
+async function getDemandSignalSummary(args: { drug_id: string; country?: string; weeks?: number }) {
+  if (!args.drug_id) return { status: "unanswerable", reason: "missing_drug_id", hint: "Pass a drug UUID." };
+  const sb = getSupabase();
+  const weeks = Math.min(Math.max(args.weeks ?? 12, 1), 52);
+  const since = new Date(Date.now() - weeks * 7 * 86400_000).toISOString().slice(0, 10);
+
+  let q = sb.from("v_demand_signal_summary")
+    .select("drug_id,country_code,signal_type,week_starting,unique_signals,total_signals")
+    .eq("drug_id", args.drug_id)
+    .gte("week_starting", since)
+    .order("week_starting", { ascending: false })
+    .limit(500);
+  if (args.country) q = q.eq("country_code", args.country.toUpperCase());
+
+  let rows: any[] = [];
+  try {
+    const { data, error } = await q;
+    if (error) throw error;
+    rows = (data ?? []) as any[];
+  } catch {
+    rows = []; // migration 041 may not be applied — degrade silently
+  }
+
+  if (rows.length === 0) {
+    return {
+      status: "unanswerable",
+      reason: "no_demand_signal",
+      hint: "Mederti's demand-signal telemetry either has no data above the k-anonymity floor (≥5 distinct sessions per drug × country × week) for this scope, or the instrumentation isn't yet wired into the route handlers. Either way: no buyer-side demand signal to share. Use shortage prevalence + manufacturer concentration as proxies instead.",
+      drug_id: args.drug_id,
+      country: args.country?.toUpperCase() ?? null,
+      weeks,
+      confidence: { level: "low", score: 0, basis: "No demand_signals buckets above k-anonymity floor for this scope." } satisfies Confidence,
+    };
+  }
+
+  const byType = new Map<string, { weeks: any[]; total_unique: number; total_signals: number }>();
+  for (const r of rows) {
+    let b = byType.get(r.signal_type);
+    if (!b) { b = { weeks: [], total_unique: 0, total_signals: 0 }; byType.set(r.signal_type, b); }
+    b.weeks.push({ week_starting: r.week_starting, unique_signals: r.unique_signals, total_signals: r.total_signals, country: r.country_code });
+    b.total_unique += r.unique_signals;
+    b.total_signals += r.total_signals;
+  }
+
+  const confidence = computeConfidence({
+    sourceReliability: 0.85,
+    signalCount: rows.length,
+    freshnessDays: 1,
+  });
+  return {
+    drug_id: args.drug_id,
+    country: args.country?.toUpperCase() ?? null,
+    weeks,
+    privacy: {
+      k_anonymity_floor: 5,
+      note: "Buckets with <5 distinct sessions per drug × country × week are suppressed by the v_demand_signal_summary view. Session identifiers are hashed with a daily-rotating salt before storage.",
+    },
+    by_signal_type: [...byType.entries()].map(([type, b]) => ({
+      signal_type: type,
+      total_unique_sessions: b.total_unique,
+      total_signals: b.total_signals,
+      weeks: b.weeks.slice(0, 12),
+    })),
+    confidence: { ...confidence, basis: `${rows.length} weekly buckets across ${byType.size} signal type${byType.size === 1 ? "" : "s"}, all above the k-anonymity floor of 5.` },
+    notes: [
+      "Signal types: search (text query landed on this drug), drug_view (drug card opened), enquiry (supplier-marketplace enquiry submitted), watchlist_add (user added to watch list), chip_click (clicked a chip suggesting this drug).",
+      "Use for SUP-08 (queries received per drug), SUP-09 (highest unmet-demand quarter), SUP-26 (buyers searching for products I supply), SUP-27 (anonymous demand by region), SUP-28 (watchlist subscribers).",
+    ],
+  };
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, any>,
@@ -3244,6 +3337,9 @@ export async function executeTool(
       return await getManagementGuidance(input as any);
     case "get_recall_links":
       return await getRecallLinks(input as any);
+    // Sprint 3 PR 2 — demand signals
+    case "get_demand_signal_summary":
+      return await getDemandSignalSummary(input as any);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

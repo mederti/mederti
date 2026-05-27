@@ -1,10 +1,29 @@
 "use client";
 
+import { useMemo, useRef, useState, useEffect } from "react";
+import { Search, ChevronDown } from "./icons";
+
 // Static mock — realistic numbers hardcoded for design review.
 // Wire to real Supabase queries (same pattern as /dashboard components) once
 // the view is promoted from mock to production.
 
 type Sev = "Critical" | "High" | "Moderate" | "Low";
+type Period = "24h" | "7d" | "30d" | "90d" | "All";
+type SevFilter = Sev | "All";
+
+// Region groupings — used by the country dropdown so users can pick a whole
+// continent or drill down to a single market.
+const REGIONS: Array<{ id: string; label: string; countries: string[] }> = [
+  { id: "world", label: "World (All Countries)", countries: [] },
+  { id: "na", label: "North America", countries: ["US", "CA", "MX"] },
+  { id: "eu", label: "Europe", countries: ["GB", "DE", "FR", "IT", "ES", "NL", "BE", "SE", "DK", "FI", "NO", "CH", "AT", "IE", "PL", "PT", "CZ", "HU", "GR"] },
+  { id: "apac", label: "Asia-Pacific", countries: ["AU", "NZ", "JP", "KR", "SG", "HK", "MY", "IN", "CN", "TH"] },
+  { id: "latam", label: "Latin America", countries: ["BR", "AR", "MX", "CL", "CO"] },
+  { id: "mea", label: "Middle East & Africa", countries: ["AE", "SA", "IL", "ZA", "NG", "EG"] },
+];
+
+const PERIODS: Period[] = ["24h", "7d", "30d", "90d", "All"];
+const SEV_FILTERS: SevFilter[] = ["All", "Critical", "High", "Moderate", "Low"];
 
 const SEV_DOT: Record<Sev, string> = {
   Critical: "bg-red-500",
@@ -46,6 +65,77 @@ const ALERTS = [
 ];
 
 export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
+  const [query, setQuery] = useState("");
+  const [regionId, setRegionId] = useState("world");
+  const [period, setPeriod] = useState<Period>("All");
+  const [severity, setSeverity] = useState<SevFilter>("All");
+  const [regionOpen, setRegionOpen] = useState(false);
+  const regionRef = useRef<HTMLDivElement>(null);
+
+  // Close the region dropdown on outside click.
+  useEffect(() => {
+    if (!regionOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (regionRef.current && !regionRef.current.contains(e.target as Node)) {
+        setRegionOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [regionOpen]);
+
+  const activeRegion = REGIONS.find((r) => r.id === regionId) ?? REGIONS[0];
+
+  const filteredRisks = useMemo(() => {
+    return RISKS.filter((r) => {
+      if (query && !r.name.toLowerCase().includes(query.toLowerCase())) return false;
+      if (activeRegion.countries.length > 0) {
+        const overlap = r.countries.some((c) => activeRegion.countries.includes(c));
+        if (!overlap) return false;
+      }
+      return true;
+    });
+  }, [query, activeRegion]);
+
+  const insight = useMemo(() => {
+    // One-line takeaway, adapts to the active filters.
+    if (severity === "Critical" && activeRegion.id === "apac") {
+      return "AU dominates APAC critical risk — Morphine (inj.) manufacturing disruption is the highest-impact open signal; no domestic substitute.";
+    }
+    if (severity === "Critical") {
+      return "Manufacturing disruption is driving 3 of the last 24h critical alerts; injectable oncology and analgesia are most exposed.";
+    }
+    if (activeRegion.id === "apac") {
+      return "Pip/Taz API concentration in a single Indian plant is the standout APAC choke point — AU appears in 4 of 5 filtered risks.";
+    }
+    if (activeRegion.id === "eu") {
+      return "Methotrexate's primary-EU supplier shutdown is the lead signal; post-winter demand pressure on Amoxicillin is the secondary one.";
+    }
+    if (activeRegion.id === "na") {
+      return "Cisplatin's FDA enforcement action is the dominant NA signal — 2 sole-source manufacturers, no near-term substitute.";
+    }
+    if (query) {
+      return `Filtering on "${query}" — ${filteredRisks.length} risk rows match; ask the AI for a deeper read.`;
+    }
+    return "Injectable oncology drugs dominate this week — 3 of the top 6 risks are hospital-only with no easy substitute.";
+  }, [severity, activeRegion, query, filteredRisks.length]);
+
+  const filteredAlerts = useMemo(() => {
+    const flagToCountry: Record<string, string> = {
+      "🇦🇺": "AU", "🇬🇧": "GB", "🇨🇦": "CA", "🇩🇪": "DE",
+      "🇺🇸": "US", "🇳🇿": "NZ", "🇫🇷": "FR", "🇯🇵": "JP",
+    };
+    return ALERTS.filter((a) => {
+      if (query && !a.drug.toLowerCase().includes(query.toLowerCase())) return false;
+      if (severity !== "All" && a.sev !== severity) return false;
+      if (activeRegion.countries.length > 0) {
+        const country = flagToCountry[a.flag];
+        if (!country || !activeRegion.countries.includes(country)) return false;
+      }
+      return true;
+    });
+  }, [query, severity, activeRegion]);
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-[900px] mx-auto px-8 pt-6 pb-12">
@@ -66,8 +156,117 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
           </div>
         </div>
 
+        {/* Filter bar */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-3 py-2.5 mb-3 flex items-center gap-3 flex-wrap">
+          {/* Medicine search */}
+          <div className="flex items-center gap-2 flex-1 min-w-[260px]">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+              <Search size={14} />
+            </div>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by drug name or active ingredient…"
+              className="flex-1 text-[13px] text-slate-800 placeholder:text-slate-400 bg-transparent outline-none"
+            />
+          </div>
+
+          {/* Region / country */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Filter by
+            </span>
+            <div className="relative" ref={regionRef}>
+              <button
+                type="button"
+                onClick={() => setRegionOpen((v) => !v)}
+                className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-[13px] text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <span className="text-slate-400">🌐</span>
+                <span className="font-medium">{activeRegion.label}</span>
+                <ChevronDown size={11} className="text-slate-400" />
+              </button>
+              {regionOpen ? (
+                <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1">
+                  {REGIONS.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => {
+                        setRegionId(r.id);
+                        setRegionOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-slate-50 ${
+                        r.id === regionId ? "text-teal-700 font-medium" : "text-slate-700"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Period toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Period
+            </span>
+            <div className="flex bg-slate-100 rounded-lg p-0.5">
+              {PERIODS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPeriod(p)}
+                  className={`px-2.5 py-1 text-[12px] font-medium rounded-md transition-colors ${
+                    period === p
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary filter row — severity */}
+        <div className="flex items-center gap-2 mb-6 text-[12px]">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mr-1">
+            Severity
+          </span>
+          {SEV_FILTERS.map((s) => {
+            const active = severity === s;
+            const dotColor =
+              s === "Critical" ? "bg-red-500" :
+              s === "High" ? "bg-orange-400" :
+              s === "Moderate" ? "bg-yellow-400" :
+              s === "Low" ? "bg-green-400" : "";
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSeverity(s)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-colors ${
+                  active
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {s !== "All" ? (
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                ) : null}
+                {s}
+              </button>
+            );
+          })}
+        </div>
+
         {/* KPI cards */}
-        <div className="grid grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-4 gap-3 mb-3">
           {STATS.map((s) => (
             <div
               key={s.label}
@@ -93,6 +292,29 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
           ))}
         </div>
 
+        {/* AI insight strip — one-line takeaway, adapts to filters */}
+        <button
+          type="button"
+          onClick={() => onAsk(insight)}
+          className="w-full text-left bg-gradient-to-r from-teal-50 via-teal-50/60 to-white border border-teal-100 rounded-xl px-3.5 py-2.5 mb-8 flex items-center gap-2.5 hover:from-teal-100/70 hover:via-teal-50 transition-colors group"
+        >
+          <span className="shrink-0 w-6 h-6 rounded-md bg-teal-500/10 flex items-center justify-center text-teal-600">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z" />
+              <path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z" />
+            </svg>
+          </span>
+          <span className="text-[10.5px] font-semibold uppercase tracking-wider text-teal-700 shrink-0">
+            AI insight
+          </span>
+          <span className="text-[12.5px] text-slate-700 flex-1 leading-snug">
+            {insight}
+          </span>
+          <span className="text-[11px] text-teal-600 font-medium shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            Ask →
+          </span>
+        </button>
+
         {/* Supply Risk Index */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
@@ -102,7 +324,11 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
                 Composite risk score · click any row to ask the AI
               </p>
             </div>
-            <span className="text-[12px] text-slate-400">Top 6 of 847 at-risk medicines</span>
+            <span className="text-[12px] text-slate-400">
+              {filteredRisks.length === RISKS.length
+                ? "Top 6 of 847 at-risk medicines"
+                : `${filteredRisks.length} of 847 (filtered)`}
+            </span>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
             <table className="w-full">
@@ -126,7 +352,14 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {RISKS.map((r) => {
+                {filteredRisks.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-[12px] text-slate-400">
+                      No medicines match the current filters.
+                    </td>
+                  </tr>
+                ) : null}
+                {filteredRisks.map((r) => {
                   const barColor =
                     r.score >= 80 ? "bg-red-500" : r.score >= 60 ? "bg-orange-400" : "bg-yellow-400";
                   const numColor =
@@ -195,10 +428,19 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
                 Last 24 hours · click to ask the AI
               </p>
             </div>
-            <span className="text-[12px] text-slate-400">6 of 38 alerts</span>
+            <span className="text-[12px] text-slate-400">
+              {filteredAlerts.length === ALERTS.length
+                ? "6 of 38 alerts"
+                : `${filteredAlerts.length} of 38 (filtered)`}
+            </span>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm divide-y divide-slate-100">
-            {ALERTS.map((a, i) => (
+            {filteredAlerts.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[12px] text-slate-400">
+                No alerts match the current filters.
+              </div>
+            ) : null}
+            {filteredAlerts.map((a, i) => (
               <div
                 key={i}
                 onClick={() => onAsk(`Tell me about the ${a.drug} shortage`)}

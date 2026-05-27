@@ -224,7 +224,13 @@ function mapMarketSignals(m: MarketDataResp | null): MarketSignal[] {
   return signals.length > 0 ? signals : mapMarketSignals(null);
 }
 
-export function IntelligenceView({ onAsk }: { onAsk: (q: string) => void }) {
+export function IntelligenceView({
+  onAsk,
+  onOpenArticle,
+}: {
+  onAsk: (q: string) => void;
+  onOpenArticle?: (article: ArticleCard) => void;
+}) {
   const [briefing, setBriefing] = useState<BriefingPayload>(FALLBACK_BRIEFING);
   const [articles, setArticles] = useState<ArticleCard[]>(FALLBACK_ARTICLES);
   const [calendar, setCalendar] = useState<CalendarEvent[]>(FALLBACK_CALENDAR);
@@ -353,14 +359,17 @@ export function IntelligenceView({ onAsk }: { onAsk: (q: string) => void }) {
               <div
                 key={a.slug}
                 onClick={() => {
-                  // Open in a fresh chat. Hard nav so Chat2Client remounts with
-                  // empty turns; the existing ?q=...&send=1 seed handler picks
-                  // up the prompt and auto-sends.
-                  const params = new URLSearchParams({
-                    q: `Tell me more about: ${a.title}`,
-                    send: "1",
-                  });
-                  window.location.assign(`/chat?${params.toString()}`);
+                  if (onOpenArticle) {
+                    onOpenArticle(a);
+                  } else {
+                    // Fallback: open in a fresh chat via the ?q=...&send=1
+                    // seed handler.
+                    const params = new URLSearchParams({
+                      q: `Tell me more about: ${a.title}`,
+                      send: "1",
+                    });
+                    window.location.assign(`/chat?${params.toString()}`);
+                  }
                 }}
                 className="bg-white border border-slate-200 rounded-xl p-4 hover:border-teal-200 hover:shadow-md cursor-pointer transition-all group shadow-sm"
               >

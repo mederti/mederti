@@ -13,6 +13,7 @@ import {
 } from "./components/ChatMain";
 import { collectDrugCandidates } from "./components/parser2";
 import { PreviewPane } from "./components/PreviewPane";
+import { ArticlePreviewPane, type ArticlePreviewItem } from "./components/ArticlePreviewPane";
 import { Sidebar } from "./components/Sidebar";
 import {
   deriveTitle,
@@ -114,6 +115,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("chat");
+  const [previewArticle, setPreviewArticle] = useState<ArticlePreviewItem | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const idRef = useRef(0);
@@ -762,6 +764,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               activeView={activeView}
               onViewChange={setActiveView}
               onAskFromView={askFromView}
+              onOpenArticle={setPreviewArticle}
               attachedFiles={attachedFiles}
               onFilesPicked={handleFilesPicked}
               onRemoveAttachment={removeAttachment}
@@ -789,6 +792,18 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
                   onToast={setToast}
                 />
               </>
+            ) : null}
+
+            {previewArticle ? (
+              <ArticlePreviewPane
+                key={previewArticle.slug}
+                article={previewArticle}
+                onClose={() => setPreviewArticle(null)}
+                onAsk={(q) => {
+                  setPreviewArticle(null);
+                  askFromView(q);
+                }}
+              />
             ) : null}
 
             {toast ? (

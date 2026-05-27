@@ -230,6 +230,7 @@ export function ChatMain({
   onRemoveAttachment,
   bulkFile,
   onBulkClose,
+  onOpenArticle,
 }: {
   turns: Turn[];
   pending: boolean;
@@ -251,6 +252,7 @@ export function ChatMain({
   onRemoveAttachment: (id: string) => void;
   bulkFile: File | null;
   onBulkClose: () => void;
+  onOpenArticle: (article: import("./ArticlePreviewPane").ArticlePreviewItem) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -328,7 +330,7 @@ export function ChatMain({
       {activeView === "dashboard" ? (
         <DashboardView onAsk={onAskFromView} />
       ) : activeView === "intelligence" ? (
-        <IntelligenceView onAsk={onAskFromView} />
+        <IntelligenceView onAsk={onAskFromView} onOpenArticle={onOpenArticle} />
       ) : null}
 
       {activeView === "chat" && bulkFile ? (

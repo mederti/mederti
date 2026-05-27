@@ -184,6 +184,17 @@ def _maybe_auto_create_shortage(
     shortage_id_raw = f"{drug_id}|{source_id}|{country_code}|{announced_date}"
     shortage_id = hashlib.md5(shortage_id_raw.encode()).hexdigest()
 
+    # Audit FINDING-D2-08: auto-created rows MUST carry the recall reference.
+    # If we can't even reach the parent recall id, refuse to create — better
+    # to log nothing than to surface an orphaned high-severity ghost.
+    recall_uuid = recall.get("id")
+    if not recall_uuid:
+        log.warning(
+            "Refused auto-shortage: missing recall id",
+            extra={"drug_id": drug_id, "country": country_code},
+        )
+        return False
+
     try:
         db.table("shortage_events").upsert(
             {
@@ -196,14 +207,20 @@ def _maybe_auto_create_shortage(
                 "reason_category":  "regulatory_action",
                 "start_date":       announced_date,
                 "source_url":       recall.get("press_release_url", ""),
-                "notes":            f"Auto-generated from Class I recall {recall['id']}",
+                "notes":            f"Auto-generated from Class I recall {recall_uuid}",
+                # FINDING-D2-08: flag as synthetic so public-facing queries
+                # can exclude these. Migration 046 added the column; rows
+                # created before that migration applied will be FALSE by
+                # default which is correct (those came from regulator feeds,
+                # not from this auto-create path).
+                "synthetic":        True,
                 "last_verified_at": datetime.now(timezone.utc).isoformat(),
             },
             on_conflict="shortage_id",
         ).execute()
         log.info(
             "Auto-created anticipated shortage from Class I recall",
-            extra={"drug_id": drug_id, "recall_uuid": recall["id"]},
+            extra={"drug_id": drug_id, "recall_uuid": recall_uuid, "synthetic": True},
         )
         return True
     except Exception as exc:

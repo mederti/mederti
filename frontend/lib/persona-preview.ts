@@ -47,6 +47,12 @@ export async function getLivePreviewRows(opts: {
       .eq("status", "active")
       .not("severity", "is", null);
 
+    // Audit FINDING-D2-08: never show a synthetic (recall_linker
+    // auto-created) shortage on a public preview. The persona landing
+    // pages are the most-visible "we have data" surface — they must
+    // never display a phantom row.
+    q = q.eq("synthetic", false);
+
     if (opts.countryCode) {
       q = q.eq("country_code", opts.countryCode.toUpperCase());
     }

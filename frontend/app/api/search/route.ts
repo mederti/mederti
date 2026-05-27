@@ -9,6 +9,15 @@ import { getClientIp } from "@/lib/chat/rate-limit";
 // dashboard → Settings → Functions → Region instead.
 export const preferredRegion = "bom1";
 
+// 60-second edge cache. Search results for the same ?q= rarely change
+// within a minute (new shortages land from scrapers running every 4h+),
+// so common queries (amoxicillin, paracetamol) hit the edge repeatedly.
+// Trade-off: recordDemandSignal() inside the GET only fires on cache
+// miss — repeat searches within 60s from any IP don't re-log. Acceptable
+// because the demand_signals table already dedupes via session_hash.
+// Closes more of audit FINDING-P5-01.
+export const revalidate = 60;
+
 interface SearchHit {
   drug_id: string;
   generic_name: string;

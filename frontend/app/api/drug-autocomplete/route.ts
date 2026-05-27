@@ -6,6 +6,13 @@ import { ServerTimer } from "@/lib/server-timing";
 // configure the default region in Vercel dashboard instead.
 export const preferredRegion = "bom1";
 
+// 5-minute edge cache. Autocomplete is hit on EVERY keystroke; repeated
+// prefix patterns (amox, amoxi, amoxic, amoxici, ...) across many user
+// sessions land on the same cache entries. The underlying drug catalogue
+// only changes when scrapers/importers run — minutes-stale autocomplete
+// is invisible to users. Closes more of audit FINDING-P5-01.
+export const revalidate = 300;
+
 export interface AutocompleteItem {
   id: string;
   type: "drug" | "product";

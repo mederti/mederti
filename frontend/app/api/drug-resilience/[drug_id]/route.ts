@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export const dynamic = "force-dynamic";
+// 10-minute edge cache. Resilience scoring does 5 parallel Supabase
+// queries + JS cross-referencing of supplier-companies-to-facility-names
+// (the audit's FINDING-B3-06 logic-location concern). Bounded cardinality
+// (one entry per drug UUID; ~10k drugs total) means high cache hit rate
+// for popular drugs. Underlying tables update from scrapers on multi-hour
+// cycles — 10-min staleness is invisible. Closes more of FINDING-P5-01.
+export const revalidate = 600;
 
 /**
  * GET /api/drug-resilience/[drug_id]

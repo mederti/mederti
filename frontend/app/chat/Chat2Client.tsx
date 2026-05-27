@@ -262,48 +262,177 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         // floor — it would corrupt whichever chat they're now viewing.
         if (activeIdRef.current !== id) return;
 
-        // Vercel can return an HTML error page (504, etc.) — guard the parse.
-        let data: ChatApiResponse;
-        try {
-          data = (await resp.json()) as ChatApiResponse;
-        } catch {
-          throw new Error(`Server error (${resp.status}) — please try again`);
-        }
-
-        if (!resp.ok || data.error) {
+        // Streaming-aware error handling. A streaming success returns 200
+        // with an NDJSON body; on rate-limit or hard failure the route
+        // still returns JSON (the pre-stream early returns). Try the body
+        // as NDJSON; if there's no reader (e.g. Vercel HTML error page),
+        // fall through to a thrown error.
+        if (!resp.ok && resp.headers.get("content-type")?.includes("application/json")) {
+          let errBody: ChatApiResponse | null = null;
+          try {
+            errBody = (await resp.json()) as ChatApiResponse;
+          } catch {
+            // fall through
+          }
           const errTurn: Turn = {
             id: ++idRef.current,
             role: "assistant",
             text: "",
-            error: data.error || `Request failed (${resp.status})`,
+            error: errBody?.error || `Request failed (${resp.status})`,
           };
           const finalTurns = [...nextTurns, errTurn];
           setTurns(finalTurns);
           persist(id!, finalTurns, drugsMap, subsMap, drugIdByName);
           return;
         }
-        const newDrugs = data.drugs ? { ...drugsMap, ...data.drugs } : drugsMap;
-        const newSubs = data.subs ? { ...subsMap, ...data.subs } : subsMap;
-        if (data.drugs) setDrugsMap(newDrugs);
-        if (data.subs) setSubsMap(newSubs);
+
+        if (!resp.body) {
+          throw new Error(`Server error (${resp.status}) — please try again`);
+        }
+
+        // Add the assistant turn upfront with an empty body; text_delta
+        // events from the route mutate its `text` in place as they arrive.
+        // This is what makes tokens appear immediately instead of after a
+        // 30–40s wait.
+        const assistantTurnId = ++idRef.current;
+        let assistantTurn: Turn = { id: assistantTurnId, role: "assistant", text: "" };
+        let turnsWithAssistant = [...nextTurns, assistantTurn];
+        setTurns(turnsWithAssistant);
+
+        // Final-event payload — assembled from the terminal "done" frame.
+        // We only run the drug-name resolver / preview-auto-open / persist
+        // logic once "done" arrives, since those depend on the complete
+        // text and the full drugs map.
+        let doneData: {
+          content: string;
+          drugs?: Record<string, DrugDetail>;
+          subs?: Record<string, SubstituteRow>;
+        } | null = null;
+        let streamError: string | null = null;
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            // Pull complete lines out of the buffer; keep the trailing
+            // partial line for the next chunk.
+            let nl = buffer.indexOf("\n");
+            while (nl !== -1) {
+              const line = buffer.slice(0, nl).trim();
+              buffer = buffer.slice(nl + 1);
+              if (line) {
+                try {
+                  const evt = JSON.parse(line) as
+                    | { type: "text_delta"; delta: string }
+                    | { type: "tool_start"; name: string; id: string }
+                    | { type: "tool_done"; name: string; id: string; ms: number }
+                    | {
+                        type: "done";
+                        content: string;
+                        drugs?: Record<string, DrugDetail>;
+                        subs?: Record<string, SubstituteRow>;
+                      }
+                    | { type: "error"; message: string };
+
+                  if (evt.type === "text_delta") {
+                    // Bail if the user switched chats mid-stream.
+                    if (activeIdRef.current !== id) {
+                      try { await reader.cancel(); } catch {}
+                      return;
+                    }
+                    // Mutate the assistant turn's text in place and re-set
+                    // turns so React renders the new text. Using a fresh
+                    // object identity for the mutated turn forces the
+                    // diff for that row.
+                    assistantTurn = {
+                      ...assistantTurn,
+                      text: assistantTurn.text + evt.delta,
+                    };
+                    turnsWithAssistant = turnsWithAssistant.map((t) =>
+                      t.id === assistantTurnId ? assistantTurn : t
+                    );
+                    setTurns(turnsWithAssistant);
+                  } else if (evt.type === "done") {
+                    doneData = {
+                      content: evt.content,
+                      drugs: evt.drugs,
+                      subs: evt.subs,
+                    };
+                  } else if (evt.type === "error") {
+                    streamError = evt.message;
+                  }
+                  // tool_start / tool_done events are accepted but not
+                  // yet surfaced in the UI — they're useful for a future
+                  // "Searching shortage events…" indicator.
+                } catch {
+                  // Malformed NDJSON line — skip it rather than crash.
+                }
+              }
+              nl = buffer.indexOf("\n");
+            }
+          }
+        } finally {
+          try { reader.releaseLock(); } catch {}
+        }
+
+        if (streamError) {
+          const errTurn: Turn = {
+            id: assistantTurnId,
+            role: "assistant",
+            text: assistantTurn.text,
+            error: streamError,
+          };
+          const finalTurns = turnsWithAssistant.map((t) =>
+            t.id === assistantTurnId ? errTurn : t
+          );
+          setTurns(finalTurns);
+          persist(id!, finalTurns, drugsMap, subsMap, drugIdByName);
+          return;
+        }
+
+        // No "done" frame — the stream closed early. Keep whatever text
+        // we've accumulated; just persist and bail without the
+        // drugs/subs/preview side-effects.
+        if (!doneData) {
+          persist(id!, turnsWithAssistant, drugsMap, subsMap, drugIdByName);
+          return;
+        }
+
+        const newDrugs = doneData.drugs ? { ...drugsMap, ...doneData.drugs } : drugsMap;
+        const newSubs = doneData.subs ? { ...subsMap, ...doneData.subs } : subsMap;
+        if (doneData.drugs) setDrugsMap(newDrugs);
+        if (doneData.subs) setSubsMap(newSubs);
+
+        // Replace the streamed text with the canonical `content` from the
+        // server — handles edge cases (e.g. structured text-block
+        // extraction with web-search citations) where the deltas and the
+        // final message may not exactly agree.
         const okTurn: Turn = {
-          id: ++idRef.current,
+          id: assistantTurnId,
           role: "assistant",
-          text: data.content,
+          text: doneData.content || assistantTurn.text,
         };
+
         // Seed the drug-name map with the canonical name → id pairs the
         // chat API already returned (one per cited <drug_card>). Free hits
         // — no extra round-trip needed for these.
         const seedFromTurnDrugs: Record<string, string> = {};
-        if (data.drugs) {
-          for (const [id2, det] of Object.entries(data.drugs)) {
+        if (doneData.drugs) {
+          for (const [id2, det] of Object.entries(doneData.drugs)) {
             const name = (det as { generic_name?: string }).generic_name;
             if (name) seedFromTurnDrugs[name] = id2;
           }
         }
         const nameMapSeed = { ...drugIdByName, ...seedFromTurnDrugs };
 
-        const finalTurns = [...nextTurns, okTurn];
+        const finalTurns = turnsWithAssistant.map((t) =>
+          t.id === assistantTurnId ? okTurn : t
+        );
         setTurns(finalTurns);
         // Persist the seed so reloads keep links live even if the resolver
         // round-trip below never completes.
@@ -316,7 +445,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         // (bolded names + markdown table cells) so they become clickable
         // into the preview pane. Fire-and-forget — failures just leave the
         // names as plain text.
-        const candidates = collectDrugCandidates(data.content || "");
+        const candidates = collectDrugCandidates(okTurn.text || "");
         const knownLower = new Set(Object.keys(nameMapSeed).map((n) => n.toLowerCase()));
         const unresolved = candidates.filter((n) => !knownLower.has(n.toLowerCase()));
 
@@ -345,7 +474,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         // drug. We look at the freshly-returned drugs (not the full map)
         // so a multi-drug history doesn't suppress single-drug responses.
         // Read window.location to bypass the stale searchParams closure.
-        const newDrugIds = data.drugs ? Object.keys(data.drugs) : [];
+        const newDrugIds = doneData.drugs ? Object.keys(doneData.drugs) : [];
         if (newDrugIds.length === 1) {
           const currentDrugParam = new URLSearchParams(window.location.search).get("drug");
           if (!currentDrugParam) {

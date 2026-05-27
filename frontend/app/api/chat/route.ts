@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_ITERATIONS = 12;
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-7";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 // Roomy budget — Claude-led synthesis means most answers are 2–5 paragraphs
 // of integrated prose alongside cards. With extended thinking enabled, the
 // budget also has to cover the model's reasoning tokens.
@@ -21,6 +21,34 @@ const MAX_OUTPUT_TOKENS = 16384;
 type IncomingBody = {
   messages: ChatMessage[];
 };
+
+// ── Wire protocol ─────────────────────────────────────────────────────────
+// NDJSON: one JSON object per line. Event shapes:
+//   { type: "text_delta", delta: string }
+//   { type: "tool_start", name: string, id: string }
+//   { type: "tool_done",  name: string, id: string, ms: number }
+//   { type: "done", content, drugs, subs, classes, tool_calls, truncated }
+//   { type: "error", message: string }
+//
+// The non-streaming JSON contract (content/drugs/subs/classes/tool_calls/
+// truncated) is preserved verbatim inside the terminal "done" event, so the
+// existing ChatApiResponse type still describes the final payload shape.
+// ──────────────────────────────────────────────────────────────────────────
+
+type StreamEvent =
+  | { type: "text_delta"; delta: string }
+  | { type: "tool_start"; name: string; id: string }
+  | { type: "tool_done"; name: string; id: string; ms: number }
+  | {
+      type: "done";
+      content: string;
+      drugs: Record<string, unknown>;
+      subs?: Record<string, unknown>;
+      classes?: Record<string, unknown>;
+      tool_calls: number;
+      truncated: boolean;
+    }
+  | { type: "error"; message: string };
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
@@ -50,11 +78,23 @@ export async function POST(req: NextRequest) {
 
   // No API key → degraded path: do a direct drug lookup against Supabase and
   // return a drug_card. Honest, useful, and stops the chat from 500-ing in
-  // environments where the key hasn't been provisioned yet.
+  // environments where the key hasn't been provisioned yet. Wrapped as a
+  // single "done" NDJSON event so the streaming client doesn't need a
+  // separate code path for the fallback.
   if (!process.env.ANTHROPIC_API_KEY) {
     const lastUser = [...incoming].reverse().find((m) => m.role === "user");
     const fallback = await fallbackDrugLookup(lastUser?.text || "");
-    return Response.json(fallback);
+    return ndjsonResponse(async (write) => {
+      await write({
+        type: "done",
+        content: fallback.content,
+        drugs: fallback.drugs,
+        subs: fallback.subs,
+        classes: fallback.classes,
+        tool_calls: 0,
+        truncated: false,
+      });
+    });
   }
 
   const messages: Anthropic.MessageParam[] = incoming.map((m) => ({
@@ -77,159 +117,237 @@ export async function POST(req: NextRequest) {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const ctx = newContext({ user_id: userId });
-
-  let truncated = false;
-  let toolCalls = 0;
-  let lastResponse: Anthropic.Message | null = null;
   const t0 = Date.now();
 
-  try {
-    for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-      const response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        thinking: {
-          type: "adaptive",
-        },
-        output_config: {
-          effort: "high",
-        },
-        system: [
-          {
-            type: "text",
-            text: SYSTEM_PROMPT,
-            cache_control: { type: "ephemeral" },
-          },
-        ],
-        tools: TOOL_DEFINITIONS,
-        messages,
-      });
-
-      lastResponse = response;
-
-      messages.push({ role: "assistant", content: response.content });
-
-      if (response.stop_reason !== "tool_use") break;
-
-      const toolUses = response.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
-      );
-
-      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-        toolUses.map(async (tu) => {
-          toolCalls += 1;
-          try {
-            const result = await executeTool(tu.name, tu.input as Record<string, any>, ctx);
-            return {
-              type: "tool_result" as const,
-              tool_use_id: tu.id,
-              content: JSON.stringify(result ?? null),
-            };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[tool ${tu.name}] error:`, msg);
-            return {
-              type: "tool_result" as const,
-              tool_use_id: tu.id,
-              content: JSON.stringify({ error: msg }),
-              is_error: true,
-            };
-          }
-        })
-      );
-
-      messages.push({ role: "user", content: toolResults });
-    }
-
-    // If we exited the loop while Claude was still calling tools, force one
-    // final no-tools synthesis so the user gets an answer (not an interim
-    // "let me search for more…" thought).
-    if (lastResponse && lastResponse.stop_reason === "tool_use") {
-      truncated = true;
-      messages.push({
-        role: "user",
-        content:
-          "You've hit the tool-call budget for this turn. Do not call any more tools. Synthesize a final answer for the user from the data already collected. If the data is incomplete, say so honestly and surface the best partial answer you can.",
-      });
-      lastResponse = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        thinking: {
-          type: "adaptive",
-        },
-        output_config: {
-          effort: "high",
-        },
-        system: [
-          {
-            type: "text",
-            text: SYSTEM_PROMPT,
-            cache_control: { type: "ephemeral" },
-          },
-        ],
-        // Intentionally omit `tools` — forces Claude to produce a text answer.
-        messages,
-      });
-      messages.push({ role: "assistant", content: lastResponse.content });
-    }
-
-    const finalText = extractText(lastResponse);
+  return ndjsonResponse(async (write) => {
+    let truncated = false;
+    let toolCalls = 0;
+    let lastResponse: Anthropic.Message | null = null;
+    let assembledText = "";
 
     try {
-      await hydrateReferencedIds(finalText, ctx);
-    } catch (err) {
-      console.error("[chat] hydrate error (non-fatal):", err);
-    }
+      for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+        const stream = anthropic.messages.stream({
+          model: MODEL,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          thinking: {
+            type: "adaptive",
+          },
+          output_config: {
+            effort: "medium",
+          },
+          system: [
+            {
+              type: "text",
+              text: SYSTEM_PROMPT,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          tools: TOOL_DEFINITIONS,
+          messages,
+        });
 
-    if (lastResponse) {
-      const usage = lastResponse.usage;
-      console.log(
-        `[chat] ip=${ip} model=${MODEL} tool_calls=${toolCalls} in=${usage?.input_tokens ?? "?"} out=${usage?.output_tokens ?? "?"} truncated=${truncated}`
-      );
-      recordAiUsage({
-        route: "/api/chat",
-        model: MODEL,
-        response: lastResponse,
-        latency_ms: Date.now() - t0,
+        // Forward text deltas to the client as they arrive. Thinking deltas
+        // and tool_use input deltas are intentionally swallowed — the user
+        // sees prose only, with tool calls represented as discrete status
+        // events below.
+        stream.on("text", (textDelta: string) => {
+          if (!textDelta) return;
+          assembledText += textDelta;
+          // Fire-and-forget; if the client has disconnected the write will
+          // become a no-op (closed flag inside ndjsonResponse).
+          void write({ type: "text_delta", delta: textDelta });
+        });
+
+        const response = await stream.finalMessage();
+        lastResponse = response;
+        messages.push({ role: "assistant", content: response.content });
+
+        if (response.stop_reason !== "tool_use") break;
+
+        const toolUses = response.content.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+        );
+
+        const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+          toolUses.map(async (tu) => {
+            toolCalls += 1;
+            const startedAt = Date.now();
+            await write({ type: "tool_start", name: tu.name, id: tu.id });
+            try {
+              const result = await executeTool(tu.name, tu.input as Record<string, any>, ctx);
+              await write({
+                type: "tool_done",
+                name: tu.name,
+                id: tu.id,
+                ms: Date.now() - startedAt,
+              });
+              return {
+                type: "tool_result" as const,
+                tool_use_id: tu.id,
+                content: JSON.stringify(result ?? null),
+              };
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.error(`[tool ${tu.name}] error:`, msg);
+              await write({
+                type: "tool_done",
+                name: tu.name,
+                id: tu.id,
+                ms: Date.now() - startedAt,
+              });
+              return {
+                type: "tool_result" as const,
+                tool_use_id: tu.id,
+                content: JSON.stringify({ error: msg }),
+                is_error: true,
+              };
+            }
+          })
+        );
+
+        messages.push({ role: "user", content: toolResults });
+      }
+
+      // If we exited the loop while Claude was still calling tools, force one
+      // final no-tools synthesis so the user gets an answer (not an interim
+      // "let me search for more…" thought).
+      if (lastResponse && lastResponse.stop_reason === "tool_use") {
+        truncated = true;
+        messages.push({
+          role: "user",
+          content:
+            "You've hit the tool-call budget for this turn. Do not call any more tools. Synthesize a final answer for the user from the data already collected. If the data is incomplete, say so honestly and surface the best partial answer you can.",
+        });
+        const finalStream = anthropic.messages.stream({
+          model: MODEL,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          thinking: {
+            type: "adaptive",
+          },
+          output_config: {
+            effort: "medium",
+          },
+          system: [
+            {
+              type: "text",
+              text: SYSTEM_PROMPT,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          // Intentionally omit `tools` — forces Claude to produce a text answer.
+          messages,
+        });
+        finalStream.on("text", (textDelta: string) => {
+          if (!textDelta) return;
+          assembledText += textDelta;
+          void write({ type: "text_delta", delta: textDelta });
+        });
+        lastResponse = await finalStream.finalMessage();
+        messages.push({ role: "assistant", content: lastResponse.content });
+      }
+
+      // Prefer the structured extract from the final Message (handles split
+      // text blocks from web search citations). Fall back to the
+      // concatenated stream text only if extract returns empty.
+      const finalText = extractText(lastResponse) || assembledText;
+
+      try {
+        await hydrateReferencedIds(finalText, ctx);
+      } catch (err) {
+        console.error("[chat] hydrate error (non-fatal):", err);
+      }
+
+      if (lastResponse) {
+        const usage = lastResponse.usage;
+        console.log(
+          `[chat] ip=${ip} model=${MODEL} tool_calls=${toolCalls} in=${usage?.input_tokens ?? "?"} out=${usage?.output_tokens ?? "?"} truncated=${truncated}`
+        );
+        recordAiUsage({
+          route: "/api/chat",
+          model: MODEL,
+          response: lastResponse,
+          latency_ms: Date.now() - t0,
+          tool_calls: toolCalls,
+          truncated,
+          user_id: userId,
+        });
+      }
+
+      // Demand-signal instrumentation — chip_click signal per drug surfaced
+      // in the answer. ctx.drugs is keyed by UUID and populated by tool
+      // hydration as the model emits <drug_card /> tags. One signal per
+      // distinct drug per chat turn — buyer-side demand picture.
+      for (const drugId of Object.keys(ctx.drugs)) {
+        recordDemandSignal({
+          signal_type: "chip_click",
+          drug_id: drugId,
+          identifier: ip,
+        });
+      }
+
+      await write({
+        type: "done",
+        content: finalText,
+        drugs: ctx.drugs,
+        subs: ctx.subs,
+        classes: ctx.classes,
         tool_calls: toolCalls,
         truncated,
-        user_id: userId,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[chat] fatal:", msg);
+      await write({
+        type: "error",
+        message: `Sorry, the assistant had a hiccup: ${msg}`,
       });
     }
+  });
+}
 
-    // Demand-signal instrumentation — chip_click signal per drug surfaced
-    // in the answer. ctx.drugs is keyed by UUID and populated by tool
-    // hydration as the model emits <drug_card /> tags. One signal per
-    // distinct drug per chat turn — buyer-side demand picture.
-    for (const drugId of Object.keys(ctx.drugs)) {
-      recordDemandSignal({
-        signal_type: "chip_click",
-        drug_id: drugId,
-        identifier: ip,
-      });
-    }
+// Wrap an async producer in an NDJSON ReadableStream Response. Each event is
+// JSON.stringify'd and followed by a newline. The producer is invoked once
+// with a `write(event)` helper; the response closes when the producer
+// resolves. Writes after client-disconnect become no-ops instead of throwing.
+function ndjsonResponse(
+  producer: (write: (event: StreamEvent) => Promise<void>) => Promise<void>
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      let closed = false;
+      const write = async (event: StreamEvent) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+        } catch {
+          // Client disconnected — stop trying to write.
+          closed = true;
+        }
+      };
+      try {
+        await producer(write);
+      } finally {
+        if (!closed) {
+          try {
+            controller.close();
+          } catch {
+            // Already closed — no-op.
+          }
+        }
+      }
+    },
+  });
 
-    return Response.json({
-      content: finalText,
-      drugs: ctx.drugs,
-      subs: ctx.subs,
-      classes: ctx.classes,
-      tool_calls: toolCalls,
-      truncated,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[chat] fatal:", msg);
-    const status = /429|rate/i.test(msg) ? 429 : 500;
-    return Response.json(
-      {
-        content: "",
-        drugs: {},
-        error: `Sorry, the assistant had a hiccup: ${msg}`,
-      },
-      { status }
-    );
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      // Disable proxy buffering so deltas reach the browser immediately.
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 
 function extractText(msg: Anthropic.Message | null): string {

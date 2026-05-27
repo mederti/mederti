@@ -17,6 +17,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from run_all_scrapers import SCRAPERS, _setup_logging
 
+# Sentry init — inert until SENTRY_DSN is set. See docs/sentry-setup.md.
+try:
+    from backend.utils.sentry import init_sentry
+    init_sentry("shortage-scrapers")
+except Exception:
+    pass  # never let observability scaffolding block a scraper run
+
 CORE_SHORTAGE_SCRAPERS = [
     "tga", "fda", "health_canada", "mhra", "ema", "bfarm",
     "ansm", "aifa", "aemps", "fda_enforcement", "hsa", "pharmac",

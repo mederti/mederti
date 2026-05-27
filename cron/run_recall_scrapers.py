@@ -15,6 +15,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from run_all_scrapers import SCRAPERS, _setup_logging
 
+# Sentry init — inert until SENTRY_DSN is set. See docs/sentry-setup.md.
+try:
+    from backend.utils.sentry import init_sentry
+    init_sentry("recall-scrapers")
+except Exception:
+    pass  # never let observability scaffolding block a scraper run
+
 RECALL_SCRAPERS = [
     # Verified working in production / daily cron
     "tga_recalls", "fda_recalls", "fda_medwatch",

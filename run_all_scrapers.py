@@ -362,5 +362,12 @@ def main(keys: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Sentry init — inert until SENTRY_DSN is set. See docs/sentry-setup.md.
+    try:
+        from backend.utils.sentry import init_sentry
+        init_sentry("run-all-scrapers")
+    except Exception:
+        pass  # never let observability scaffolding block a scraper run
+
     keys = sys.argv[1:] or None
     sys.exit(main(keys))

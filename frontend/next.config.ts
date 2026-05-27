@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   async redirects() {
@@ -15,4 +16,23 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry wrapping is a no-op unless SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN are
+// set; safe to land before the Sentry project is provisioned. See
+// docs/sentry-setup.md for the env-var checklist.
+export default withSentryConfig(nextConfig, {
+  // Only upload source maps when an auth token is available (CI). Skipped
+  // for local dev builds.
+  silent: !process.env.CI,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // Source-map upload is gated on SENTRY_AUTH_TOKEN; if unset, the wrapper
+  // is purely runtime instrumentation.
+  widenClientFileUpload: true,
+  // Hide source maps from public bundles in prod.
+  hideSourceMaps: true,
+  // Don't fail the build if Sentry isn't reachable.
+  errorHandler: (err) => {
+    console.warn("[sentry build] non-fatal:", err.message);
+  },
+});

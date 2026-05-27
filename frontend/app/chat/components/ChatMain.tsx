@@ -259,6 +259,9 @@ export function ChatMain({
   const spacerRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragDepthRef = useRef(0);
+  const [attachModalOpen, setAttachModalOpen] = useState(false);
+  const [modalDragging, setModalDragging] = useState(false);
+  const modalDragDepthRef = useRef(0);
   const lastUserId = (() => {
     for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "user") return turns[i].id;
     return null;
@@ -296,6 +299,15 @@ export function ChatMain({
     if (lastUserId === null) return;
     lastUserMsgRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
   }, [lastUserId, pending]);
+
+  useEffect(() => {
+    if (!attachModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAttachModalOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [attachModalOpen]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -481,7 +493,7 @@ export function ChatMain({
             <div className="flex items-end gap-1 pl-2 pr-1.5 py-1.5">
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => setAttachModalOpen(true)}
                 disabled={pending}
                 title="Attach files (CSV, Excel, PDF, images)"
                 aria-label="Attach files"
@@ -533,8 +545,10 @@ export function ChatMain({
             accept=".csv,.tsv,.xlsx,.xls,.pdf,image/*"
             className="hidden"
             onChange={(e) => {
-              onFilesPicked(e.target.files);
+              const fl = e.target.files;
+              onFilesPicked(fl);
               e.target.value = "";
+              if (fl && fl.length > 0) setAttachModalOpen(false);
             }}
           />
           <input
@@ -554,6 +568,93 @@ export function ChatMain({
           </div>
         </div>
       </div>
+
+      {attachModalOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="attach-modal-title"
+          onClick={() => setAttachModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-[560px] bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 animate-in zoom-in-95 fade-in duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h2 id="attach-modal-title" className="text-[16px] font-semibold text-slate-900">
+                Upload your list
+              </h2>
+              <button
+                type="button"
+                onClick={() => setAttachModalOpen(false)}
+                aria-label="Close"
+                className="w-7 h-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100"
+              >
+                <Close size={14} />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              onDragEnter={(e) => {
+                if (e.dataTransfer?.types?.includes("Files")) {
+                  e.preventDefault();
+                  modalDragDepthRef.current += 1;
+                  setModalDragging(true);
+                }
+              }}
+              onDragOver={(e) => {
+                if (e.dataTransfer?.types?.includes("Files")) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.dataTransfer?.types?.includes("Files")) {
+                  modalDragDepthRef.current = Math.max(0, modalDragDepthRef.current - 1);
+                  if (modalDragDepthRef.current === 0) setModalDragging(false);
+                }
+              }}
+              onDrop={(e) => {
+                if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+                  e.preventDefault();
+                  modalDragDepthRef.current = 0;
+                  setModalDragging(false);
+                  onFilesPicked(e.dataTransfer.files);
+                  setAttachModalOpen(false);
+                }
+              }}
+              className={`w-full flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-10 px-6 transition-colors cursor-pointer ${
+                modalDragging
+                  ? "border-teal-400 bg-teal-50/50"
+                  : "border-slate-200 bg-slate-50/60 hover:bg-slate-50 hover:border-slate-300"
+              }`}
+            >
+              <div className={`w-10 h-10 inline-flex items-center justify-center rounded-full ${
+                modalDragging ? "bg-teal-100 text-teal-700" : "bg-white border border-slate-200 text-slate-500"
+              }`}>
+                <SheetChip size={18} />
+              </div>
+              <div className="text-[14px] text-slate-700">
+                <span className="font-medium">Drag a file here</span>
+                <span className="text-slate-500"> or </span>
+                <span className="text-teal-700 underline underline-offset-2">browse</span>
+              </div>
+              <div className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">
+                CSV · Excel · PDF · JPG · PNG
+              </div>
+            </button>
+
+            <div className="mt-4 flex items-center justify-between text-[12px] text-slate-500">
+              <span>
+                Upload a medicine list to check shortages across all your products at once.
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
         </>
       ) : null}
     </main>

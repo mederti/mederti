@@ -31,6 +31,7 @@ import { LeadContext } from "@/app/chat/components/LeadContext";
 // the cards rely on. Importing here puts the styles in the bundle; the
 // wrapping <div className="mederti-chat-root"> below scopes them.
 import "@/app/chat/chat.css";
+import { DesktopOnly } from "@/app/components/DesktopOnly";
 
 // /chat2 is intentionally public during layout iteration — no auth gate. The
 // chat backend handles its own rate limiting; flip back on when promoting.
@@ -425,7 +426,13 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
           {/* mederti-chat-root unlocks the scoped chat.css that the rich
               DrugCard variants depend on. It only sets CSS variables +
               styles inside the scope, so the rest of our Tailwind layout
-              keeps working. */}
+              keeps working.
+
+              Below 1024 the whole three-pane shell is replaced by a
+              "best on desktop" splash (DesktopOnly). Between 1024 and 1439
+              the sidebar + chat stay inline and PreviewPane becomes an
+              overlay drawer (see its className + the backdrop below). */}
+          <DesktopOnly>
           <div
             className="mederti-chat-root flex h-screen overflow-hidden bg-white text-slate-900"
             style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}
@@ -462,14 +469,25 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
             />
 
             {drugId ? (
-              <PreviewPane
-                key={drugId}
-                drugId={drugId}
-                onClose={closeDrug}
-                onOpenDrug={openDrug}
-                onAskAbout={askAboutDrug}
-                onToast={setToast}
-              />
+              <>
+                {/* Backdrop only renders below 3xl where the pane overlays
+                    chat content. At 3xl+ the pane sits inline, so the
+                    backdrop is hidden and chat stays usable beside it. */}
+                <button
+                  type="button"
+                  aria-label="Close preview"
+                  onClick={closeDrug}
+                  className="3xl:hidden fixed inset-0 z-20 bg-slate-900/30 backdrop-blur-[1px] animate-in fade-in duration-150"
+                />
+                <PreviewPane
+                  key={drugId}
+                  drugId={drugId}
+                  onClose={closeDrug}
+                  onOpenDrug={openDrug}
+                  onAskAbout={askAboutDrug}
+                  onToast={setToast}
+                />
+              </>
             ) : null}
 
             {toast ? (
@@ -481,6 +499,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               </div>
             ) : null}
           </div>
+          </DesktopOnly>
         </LeadContext.Provider>
       </ChatContext.Provider>
     </PaneContext.Provider>

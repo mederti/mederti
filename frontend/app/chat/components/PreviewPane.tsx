@@ -474,7 +474,7 @@ export function PreviewPane({
 
   return (
     <aside
-      className="w-[420px] shrink-0 bg-slate-50/40 border-l border-slate-200 flex flex-col h-screen animate-in slide-in-from-right-4 fade-in duration-200"
+      className="fixed inset-y-0 right-0 z-30 w-[420px] bg-slate-50/95 backdrop-blur-sm border-l border-slate-200 flex flex-col h-screen shadow-2xl 3xl:static 3xl:bg-slate-50/40 3xl:backdrop-blur-none 3xl:shadow-none 3xl:shrink-0 animate-in slide-in-from-right-4 fade-in duration-200"
       style={{ animationFillMode: "both" }}
     >
       {/* Header */}

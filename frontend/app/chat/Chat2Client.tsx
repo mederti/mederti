@@ -10,6 +10,7 @@ import {
   type AttachedFile,
   type Turn,
 } from "./components/ChatMain";
+import { collectDrugCandidates } from "./components/parser2";
 import { PreviewPane } from "./components/PreviewPane";
 import { Sidebar } from "./components/Sidebar";
 import {
@@ -74,6 +75,11 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [drugsMap, setDrugsMap] = useState<Record<string, DrugDetail>>({});
   const [subsMap, setSubsMap] = useState<Record<string, SubstituteRow>>({});
+  // Name → drug_id map for clickable drug names inside markdown tables /
+  // bolded prose. Populated by /api/resolve-drug-names after each assistant
+  // turn; accumulates across the chat so once a drug is resolved, every
+  // future mention of it (and re-renders of prior turns) is clickable.
+  const [drugIdByName, setDrugIdByName] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -98,6 +104,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
       setTurns([]);
       setDrugsMap({});
       setSubsMap({});
+      setDrugIdByName({});
       idRef.current = 0;
       return;
     }
@@ -110,9 +117,46 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     setTurns(saved.turns as Turn[]);
     setDrugsMap(saved.drugsMap);
     setSubsMap(saved.subsMap);
+    const existingNameMap = saved.drugIdByName ?? {};
+    setDrugIdByName(existingNameMap);
     // Make sure new turn IDs don't collide with loaded ones
     const maxId = saved.turns.reduce((m, t) => (t.id > m ? t.id : m), 0);
     idRef.current = maxId;
+
+    // Back-fill the name map for chats saved before clickable table names
+    // shipped — or for chats whose resolver call never completed (network
+    // failure, tab closed mid-flight). Walk every assistant turn, gather
+    // candidates, and resolve any we don't already know.
+    const allText = saved.turns
+      .filter((t) => t.role === "assistant" && !t.error)
+      .map((t) => t.text)
+      .join("\n\n");
+    const candidates = collectDrugCandidates(allText);
+    if (candidates.length === 0) return;
+    const knownLower = new Set(Object.keys(existingNameMap).map((n) => n.toLowerCase()));
+    const unresolved = candidates.filter((n) => !knownLower.has(n.toLowerCase()));
+    if (unresolved.length === 0) return;
+
+    void fetch("/api/resolve-drug-names", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ names: unresolved }),
+    })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((resolved: Record<string, string>) => {
+        if (activeIdRef.current !== chatId) return;
+        if (!resolved || Object.keys(resolved).length === 0) return;
+        const merged = { ...existingNameMap, ...resolved };
+        setDrugIdByName(merged);
+        // Persist so the next reload skips the round-trip.
+        const current = getChat(chatId);
+        if (current) {
+          upsertChat({ ...current, drugIdByName: merged });
+        }
+      })
+      .catch(() => {
+        // Silent — clickable links are a nice-to-have, not critical.
+      });
   }, [chatId, router]);
 
   useEffect(() => {
@@ -145,7 +189,8 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
       id: string,
       nextTurns: Turn[],
       nextDrugs: Record<string, DrugDetail>,
-      nextSubs: Record<string, SubstituteRow>
+      nextSubs: Record<string, SubstituteRow>,
+      nextNameMap: Record<string, string>
     ) => {
       const existing = getChat(id);
       const now = Date.now();
@@ -160,6 +205,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         turns: nextTurns,
         drugsMap: nextDrugs,
         subsMap: nextSubs,
+        drugIdByName: nextNameMap,
       };
       upsertChat(chat);
     },
@@ -189,7 +235,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
 
       // Save eagerly so the chat shows up in the sidebar even if the
       // request is slow or fails.
-      persist(id!, nextTurns, drugsMap, subsMap);
+      persist(id!, nextTurns, drugsMap, subsMap, drugIdByName);
       if (isNewChat) {
         // Soft URL update — keeps refresh/share working without remounting
         // this Chat2Client across the /chat2 → /chat2/[id] page-segment
@@ -233,7 +279,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
           };
           const finalTurns = [...nextTurns, errTurn];
           setTurns(finalTurns);
-          persist(id!, finalTurns, drugsMap, subsMap);
+          persist(id!, finalTurns, drugsMap, subsMap, drugIdByName);
           return;
         }
         const newDrugs = data.drugs ? { ...drugsMap, ...data.drugs } : drugsMap;
@@ -245,9 +291,55 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
           role: "assistant",
           text: data.content,
         };
+        // Seed the drug-name map with the canonical name → id pairs the
+        // chat API already returned (one per cited <drug_card>). Free hits
+        // — no extra round-trip needed for these.
+        const seedFromTurnDrugs: Record<string, string> = {};
+        if (data.drugs) {
+          for (const [id2, det] of Object.entries(data.drugs)) {
+            const name = (det as { generic_name?: string }).generic_name;
+            if (name) seedFromTurnDrugs[name] = id2;
+          }
+        }
+        const nameMapSeed = { ...drugIdByName, ...seedFromTurnDrugs };
+
         const finalTurns = [...nextTurns, okTurn];
         setTurns(finalTurns);
-        persist(id!, finalTurns, newDrugs, newSubs);
+        // Persist the seed so reloads keep links live even if the resolver
+        // round-trip below never completes.
+        persist(id!, finalTurns, newDrugs, newSubs, nameMapSeed);
+        if (Object.keys(seedFromTurnDrugs).length > 0) {
+          setDrugIdByName(nameMapSeed);
+        }
+
+        // Resolve the rest of the drug-name candidates from this response
+        // (bolded names + markdown table cells) so they become clickable
+        // into the preview pane. Fire-and-forget — failures just leave the
+        // names as plain text.
+        const candidates = collectDrugCandidates(data.content || "");
+        const knownLower = new Set(Object.keys(nameMapSeed).map((n) => n.toLowerCase()));
+        const unresolved = candidates.filter((n) => !knownLower.has(n.toLowerCase()));
+
+        if (unresolved.length > 0) {
+          void fetch("/api/resolve-drug-names", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ names: unresolved }),
+          })
+            .then((r) => (r.ok ? r.json() : {}))
+            .then((resolved: Record<string, string>) => {
+              if (activeIdRef.current !== id) return;
+              if (!resolved || Object.keys(resolved).length === 0) return;
+              const merged = { ...nameMapSeed, ...resolved };
+              setDrugIdByName(merged);
+              // Re-persist with the resolver hits folded in so they
+              // survive a reload of this chat.
+              persist(id!, finalTurns, newDrugs, newSubs, merged);
+            })
+            .catch(() => {
+              // Silent — clickable links are a nice-to-have, not critical.
+            });
+        }
 
         // Auto-open preview when this *response* references exactly one
         // drug. We look at the freshly-returned drugs (not the full map)
@@ -275,13 +367,13 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         const errTurn: Turn = { id: ++idRef.current, role: "assistant", text: "", error: msg };
         const finalTurns = [...nextTurns, errTurn];
         setTurns(finalTurns);
-        persist(id!, finalTurns, drugsMap, subsMap);
+        persist(id!, finalTurns, drugsMap, subsMap, drugIdByName);
       } finally {
         clearTimeout(timeoutId);
         setPending(false);
       }
     },
-    [pending, turns, drugsMap, subsMap, persist]
+    [pending, turns, drugsMap, subsMap, drugIdByName, persist]
   );
 
   const openDrug = useCallback(
@@ -300,6 +392,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     setTurns([]);
     setDrugsMap({});
     setSubsMap({});
+    setDrugIdByName({});
     setDraft("");
     setAttachedFiles([]);
     setBulkFile(null);
@@ -454,6 +547,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               pending={pending}
               drugsMap={drugsMap}
               subsMap={subsMap}
+              drugIdByName={drugIdByName}
               draft={draft}
               onDraftChange={setDraft}
               onSend={send}

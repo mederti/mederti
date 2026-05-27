@@ -31,6 +31,9 @@ export type SavedChat = {
   turns: SavedTurn[];
   drugsMap: Record<string, DrugDetail>;
   subsMap: Record<string, SubstituteRow>;
+  // Optional on read for back-compat with chats saved before clickable
+  // table drug-names landed; always written on save going forward.
+  drugIdByName?: Record<string, string>;
 };
 
 type Store = { chats: Record<string, SavedChat> };

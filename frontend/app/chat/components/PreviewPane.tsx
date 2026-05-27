@@ -540,11 +540,17 @@ export function PreviewPane({
             <div className="text-[20px] font-semibold tracking-tight text-slate-900 leading-tight mb-1">
               {bundle.drug.name}
             </div>
-            <div className="text-[12px] text-slate-500 mb-3">
+            <div className="text-[12px] text-slate-500 mb-1.5">
               {[bundle.drug.generic_name, bundle.drug.dosage_forms?.[0], bundle.drug.strengths?.[0]]
                 .filter(Boolean)
                 .join(" · ") || bundle.drug.atc_code || "—"}
             </div>
+            {bundle.drug.drug_class || bundle.drug.atc_description ? (
+              <div className="text-[12px] text-slate-600 mb-3 leading-snug">
+                <span className="text-slate-400">Used for: </span>
+                {bundle.drug.drug_class || bundle.drug.atc_description}
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-1.5 mb-4">
               {bundle.drug.therapeutic_category ? <Tag>{bundle.drug.therapeutic_category}</Tag> : null}
               {bundle.drug.dosage_forms?.[0] ? <Tag>{bundle.drug.dosage_forms[0]}</Tag> : null}

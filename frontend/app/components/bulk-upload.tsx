@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useContext } from "react";
 import Link from "next/link";
 import {
   FileSpreadsheet, Download, ExternalLink, AlertTriangle,
   CheckCircle2, Loader2, X, ArrowLeft, FileDown,
 } from "lucide-react";
 import { downloadSampleCSV } from "./bulk-upload-sample";
+import { PaneContext } from "@/app/chat/components/PaneContext";
 
 /* ── Types ── */
 
@@ -129,6 +130,7 @@ interface BulkUploadProps {
 }
 
 export default function BulkUpload({ file, onClose }: BulkUploadProps) {
+  const pane = useContext(PaneContext);
   const [phase, setPhase] = useState<Phase>("parsing");
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
@@ -756,14 +758,29 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
                     )}
                   </div>
 
-                  {/* Link */}
+                  {/* Link — opens the right-side preview pane when running inside
+                     chat; falls back to the standalone drug page elsewhere. */}
                   {r.lookup.matchedDrug ? (
-                    <Link href={`/drugs/${r.lookup.matchedDrug.drug_id}`}
-                      style={{ display: "flex", alignItems: "center", color: "var(--teal)" }}
-                      title="View drug detail"
-                    >
-                      <ExternalLink style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
-                    </Link>
+                    pane ? (
+                      <button
+                        type="button"
+                        onClick={() => pane.open(r.lookup.matchedDrug!.drug_id)}
+                        style={{
+                          display: "flex", alignItems: "center", color: "var(--teal)",
+                          background: "none", border: "none", padding: 0, cursor: "pointer",
+                        }}
+                        title="Open drug preview"
+                      >
+                        <ExternalLink style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
+                      </button>
+                    ) : (
+                      <Link href={`/drugs/${r.lookup.matchedDrug.drug_id}`}
+                        style={{ display: "flex", alignItems: "center", color: "var(--teal)" }}
+                        title="View drug detail"
+                      >
+                        <ExternalLink style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
+                      </Link>
+                    )
                   ) : (
                     <span />
                   )}

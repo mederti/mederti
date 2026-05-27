@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import {
   BarChart, Bell, ChatBubble, Close, FileChip, Grid, ImageChip,
@@ -102,6 +102,7 @@ export function ChatMain({
   pending,
   drugsMap,
   subsMap,
+  drugIdByName,
   draft,
   onDraftChange,
   onSend,
@@ -119,6 +120,9 @@ export function ChatMain({
   pending: boolean;
   drugsMap: Record<string, DrugDetail>;
   subsMap: Record<string, SubstituteRow>;
+  // Name → drug_id map, accumulated across turns by Chat2Client, used by
+  // the parser to make bold names + table cells clickable into the pane.
+  drugIdByName: Record<string, string>;
   draft: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
@@ -136,10 +140,40 @@ export function ChatMain({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const spacerRef = useRef<HTMLDivElement | null>(null);
   const lastUserId = (() => {
     for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "user") return turns[i].id;
     return null;
   })();
+
+  // Size the bottom spacer to exactly what's needed for the last user message
+  // to scroll to the top of the viewport — no more, no less. Avoids the empty
+  // gap under short answers while still allowing scroll-to-top on new turns.
+  useLayoutEffect(() => {
+    if (lastUserId === null) return;
+    const scroller = scrollerRef.current;
+    const lastMsg = lastUserMsgRef.current;
+    const spacer = spacerRef.current;
+    if (!scroller || !lastMsg || !spacer) return;
+
+    const adjust = () => {
+      const currentSpacer = spacer.offsetHeight;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const lastMsgRect = lastMsg.getBoundingClientRect();
+      const lastMsgTop = scroller.scrollTop + (lastMsgRect.top - scrollerRect.top);
+      const tailWithoutSpacer = scroller.scrollHeight - lastMsgTop - currentSpacer;
+      const needed = Math.max(0, scroller.clientHeight - tailWithoutSpacer);
+      if (Math.abs(needed - currentSpacer) > 1) {
+        spacer.style.height = `${needed}px`;
+      }
+    };
+
+    adjust();
+    const onResize = () => adjust();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [lastUserId, pending, turns]);
 
   useEffect(() => {
     if (lastUserId === null) return;
@@ -176,7 +210,7 @@ export function ChatMain({
 
       {activeView === "chat" && !bulkFile ? (
         <>
-        <div className="flex-1 overflow-y-auto pt-6 pb-8">
+        <div ref={scrollerRef} className="flex-1 overflow-y-auto pt-6 pb-8">
         <div className="max-w-[760px] mx-auto px-8">
           {isEmpty ? (
             <div className="text-center pt-14 pb-6">
@@ -235,6 +269,7 @@ export function ChatMain({
                         parts={parseAgentResponse(t.text)}
                         drugs={drugsMap}
                         subs={subsMap}
+                        drugIdByName={drugIdByName}
                         onFollowup={onSend}
                       />
                     )}
@@ -254,7 +289,7 @@ export function ChatMain({
                   />
                 </div>
               ) : null}
-              <div className="min-h-[40vh]" aria-hidden />
+              <div ref={spacerRef} aria-hidden />
             </div>
           )}
         </div>

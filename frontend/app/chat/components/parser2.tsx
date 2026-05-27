@@ -12,9 +12,10 @@
  * if chat2 stays parallel long-term, this is the file to clone first.
  */
 
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { DrugCard } from "@/app/chat/components/DrugCard";
+import { PaneContext } from "@/app/chat/components/PaneContext";
 
 export type KpiTile = { value: string; label: string };
 export type SourceChip = {
@@ -210,6 +211,54 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
   return parts;
 }
 
+/**
+ * Scan a raw chat-response string for drug-name candidates worth resolving
+ * server-side. Pulls (a) every **bolded** token and (b) the cells of every
+ * markdown table — those are the surfaces the renderer will turn into
+ * clickable preview-pane links if the candidate maps to a real drug.
+ *
+ * Heuristic filters keep the list small + sensible: 2–80 chars, contains a
+ * letter, and skips known non-drug header words ("Drug", "ATC match", etc.)
+ * so we don't waste round-trips. Final dedup happens after lowercasing.
+ */
+export function collectDrugCandidates(raw: string): string[] {
+  if (!raw) return [];
+  const out = new Set<string>();
+  const accept = (name: string) => {
+    const t = name.trim();
+    if (t.length < 2 || t.length > 80) return;
+    if (!/[a-z]/i.test(t)) return;
+    // Reject text that's mostly punctuation or contains markdown noise.
+    if (/[<>{}|]/.test(t)) return;
+    out.add(t);
+  };
+
+  // (a) Bolded tokens — `**foo**`.
+  const boldRe = /\*\*([^*\n]{2,80})\*\*/g;
+  let m: RegExpExecArray | null;
+  while ((m = boldRe.exec(raw)) !== null) accept(m[1]);
+
+  // (b) Markdown table cells — split block-by-block, parse, then push each
+  // cell value through the same accept filter. We deliberately push every
+  // cell (not just the first column) because layouts vary — the resolver
+  // will reject the ones that aren't drugs.
+  const blocks = raw.split(/\n{2,}/);
+  for (const block of blocks) {
+    const lines = block.split("\n");
+    const table = parseTableBlock(lines);
+    if (!table) continue;
+    for (const row of table.rows) {
+      for (const cell of row) {
+        // Strip surrounding bold so "**Amoxicillin**" → "Amoxicillin".
+        const stripped = cell.trim().replace(/^\*\*(.+)\*\*$/, "$1").trim();
+        accept(stripped);
+      }
+    }
+  }
+
+  return Array.from(out);
+}
+
 export function Chat2SubRow({
   sub,
   onAsk,
@@ -248,14 +297,52 @@ export function Chat2SubRow({
   );
 }
 
-function renderInline(text: string): ReactNode[] {
+function lookupDrugId(name: string, map?: Record<string, string>): string | null {
+  if (!map) return null;
+  const trimmed = name.trim();
+  if (map[trimmed]) return map[trimmed];
+  const lower = trimmed.toLowerCase();
+  for (const k of Object.keys(map)) {
+    if (k.toLowerCase() === lower) return map[k];
+  }
+  return null;
+}
+
+function DrugLink({ name, drugId, asCell }: { name: string; drugId: string; asCell?: boolean }) {
+  const ctx = useContext(PaneContext);
+  const cls = asCell
+    ? "font-semibold text-teal-700 hover:text-teal-800 hover:underline underline-offset-2 cursor-pointer text-left"
+    : "font-semibold text-teal-700 hover:text-teal-800 hover:underline underline-offset-2 cursor-pointer";
+  return (
+    <button
+      type="button"
+      className={cls}
+      onClick={() => ctx?.open(drugId)}
+      title="Open drug detail"
+    >
+      {name}
+    </button>
+  );
+}
+
+function renderInline(text: string, drugIdByName?: Record<string, string>): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /\*\*([^*]+)\*\*/g;
   let cursor = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index > cursor) out.push(text.slice(cursor, m.index));
-    out.push(<strong key={`b${m.index}`} className="font-semibold text-slate-900">{m[1]}</strong>);
+    const inner = m[1];
+    const drugId = lookupDrugId(inner, drugIdByName);
+    if (drugId) {
+      out.push(<DrugLink key={`b${m.index}`} name={inner} drugId={drugId} />);
+    } else {
+      out.push(
+        <strong key={`b${m.index}`} className="font-semibold text-slate-900">
+          {inner}
+        </strong>
+      );
+    }
     cursor = m.index + m[0].length;
   }
   if (cursor < text.length) out.push(text.slice(cursor));
@@ -283,7 +370,24 @@ function parseTableBlock(
   return { header, rows };
 }
 
-function TableBlock({ header, rows }: { header: string[]; rows: string[][] }) {
+function TableBlock({
+  header,
+  rows,
+  drugIdByName,
+}: {
+  header: string[];
+  rows: string[][];
+  drugIdByName?: Record<string, string>;
+}) {
+  // Treat a cell as a "whole-cell drug link" when its text — stripped of
+  // any leading/trailing bold markers — matches a known drug. Catches
+  // model output that lists the name without bolding it.
+  const cellWholeDrugId = (cell: string): string | null => {
+    const stripped = cell.trim().replace(/^\*\*(.+)\*\*$/, "$1").trim();
+    if (!stripped) return null;
+    return lookupDrugId(stripped, drugIdByName);
+  };
+
   return (
     <div className="my-3 overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full text-[13px] text-left">
@@ -294,7 +398,7 @@ function TableBlock({ header, rows }: { header: string[]; rows: string[][] }) {
                 key={ci}
                 className="px-3 py-2 font-semibold text-slate-900 border-b border-slate-200 align-bottom"
               >
-                {renderInline(h)}
+                {renderInline(h, drugIdByName)}
               </th>
             ))}
           </tr>
@@ -302,11 +406,19 @@ function TableBlock({ header, rows }: { header: string[]; rows: string[][] }) {
         <tbody>
           {rows.map((row, ri) => (
             <tr key={ri} className="border-b border-slate-100 last:border-b-0">
-              {row.map((cell, ci) => (
-                <td key={ci} className="px-3 py-2 text-slate-700 align-top">
-                  {renderInline(cell)}
-                </td>
-              ))}
+              {row.map((cell, ci) => {
+                const wholeId = cellWholeDrugId(cell);
+                const displayName = cell.trim().replace(/^\*\*(.+)\*\*$/, "$1").trim();
+                return (
+                  <td key={ci} className="px-3 py-2 text-slate-700 align-top">
+                    {wholeId ? (
+                      <DrugLink name={displayName} drugId={wholeId} asCell />
+                    ) : (
+                      renderInline(cell, drugIdByName)
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
@@ -315,7 +427,7 @@ function TableBlock({ header, rows }: { header: string[]; rows: string[][] }) {
   );
 }
 
-function TextBlock({ text }: { text: string }) {
+function TextBlock({ text, drugIdByName }: { text: string; drugIdByName?: Record<string, string> }) {
   // Split paragraphs, support h1/h2/hr/tables — same vocab as /chat.
   const blocks = text.split(/\n{2,}/);
   return (
@@ -326,19 +438,19 @@ function TextBlock({ text }: { text: string }) {
         const lines = p.split("\n");
         const table = parseTableBlock(lines);
         if (table) {
-          return <TableBlock key={i} header={table.header} rows={table.rows} />;
+          return <TableBlock key={i} header={table.header} rows={table.rows} drugIdByName={drugIdByName} />;
         }
         if (t.startsWith("# ")) {
           return (
             <h1 key={i} className="text-[18px] font-semibold text-slate-900 mt-5 mb-3 tracking-tight">
-              {renderInline(t.slice(2))}
+              {renderInline(t.slice(2), drugIdByName)}
             </h1>
           );
         }
         if (t.startsWith("## ")) {
           return (
             <h2 key={i} className="text-[15px] font-semibold text-slate-900 mt-4 mb-2">
-              {renderInline(t.slice(3))}
+              {renderInline(t.slice(3), drugIdByName)}
             </h2>
           );
         }
@@ -347,7 +459,7 @@ function TextBlock({ text }: { text: string }) {
         }
         return (
           <p key={i} className="mb-3.5">
-            {renderInline(t)}
+            {renderInline(t, drugIdByName)}
           </p>
         );
       })}
@@ -360,9 +472,13 @@ type Props = {
   drugs: Record<string, DrugDetail>;
   subs: Record<string, SubstituteRow>;
   onFollowup: (q: string) => void;
+  /** Name → drug_id map built post-stream by /api/resolve-drug-names. Lets
+   *  bolded names + first-column table cells become clickable, opening the
+   *  preview pane. Undefined while resolution is in flight. */
+  drugIdByName?: Record<string, string>;
 };
 
-export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): ReactNode {
+export function RenderedResponse({ parts, drugs, subs, onFollowup, drugIdByName }: Props): ReactNode {
   const out: ReactNode[] = [];
 
   parts.forEach((p, i) => {
@@ -383,7 +499,7 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup }: Props): Rea
       return;
     }
     if (p.kind === "text") {
-      if (p.text.trim()) out.push(<TextBlock key={i} text={p.text} />);
+      if (p.text.trim()) out.push(<TextBlock key={i} text={p.text} drugIdByName={drugIdByName} />);
     } else if (p.kind === "sub") {
       const s = subs[p.id];
       if (s) out.push(<Chat2SubRow key={i} sub={s} onAsk={onFollowup} />);

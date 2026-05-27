@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useContext } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   FileSpreadsheet, Download, ExternalLink, AlertTriangle,
@@ -8,6 +9,7 @@ import {
 } from "lucide-react";
 import { downloadSampleCSV } from "./bulk-upload-sample";
 import { PaneContext } from "@/app/chat/components/PaneContext";
+import { PreviewPane } from "@/app/chat/components/PreviewPane";
 
 /* ── Types ── */
 
@@ -131,12 +133,29 @@ interface BulkUploadProps {
 
 export default function BulkUpload({ file, onClose }: BulkUploadProps) {
   const pane = useContext(PaneContext);
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>("parsing");
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [totalParsed, setTotalParsed] = useState(0);
   const [truncated, setTruncated] = useState(false);
+  const [previewDrugId, setPreviewDrugId] = useState<string | null>(null);
+  const [previewToast, setPreviewToast] = useState<string | null>(null);
+
+  const openPreview = useCallback(
+    (drugId: string) => {
+      if (pane) pane.open(drugId);
+      else setPreviewDrugId(drugId);
+    },
+    [pane]
+  );
+
+  useEffect(() => {
+    if (!previewToast) return;
+    const t = setTimeout(() => setPreviewToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [previewToast]);
 
   const processFile = useCallback(async () => {
     try {
@@ -626,15 +645,38 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
               const matchedName = r.lookup.matchedDrug?.generic_name;
               const showMatchedName = matchedName && matchedName.toLowerCase() !== r.drugDescription.toLowerCase();
 
+              const clickable = !!r.lookup.matchedDrug;
               return (
-                <div key={i} className="bu-row" style={{
-                  display: "grid",
-                  gridTemplateColumns: "36px 1.5fr 0.8fr 64px 64px 100px 70px 80px 36px",
-                  gap: 8, padding: "10px 16px", alignItems: "center",
-                  borderBottom: i < rows.length - 1 ? "1px solid var(--app-bg-2)" : "none",
-                  borderLeft: r.hasBackorder ? "3px solid #f59e0b" : "3px solid transparent",
-                  opacity: noMatch ? 0.6 : 1,
-                }}>
+                <div
+                  key={i}
+                  className={clickable ? "bu-row bu-row-clickable" : "bu-row"}
+                  role={clickable ? "button" : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onClick={
+                    clickable
+                      ? () => openPreview(r.lookup.matchedDrug!.drug_id)
+                      : undefined
+                  }
+                  onKeyDown={
+                    clickable
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openPreview(r.lookup.matchedDrug!.drug_id);
+                          }
+                        }
+                      : undefined
+                  }
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "36px 1.5fr 0.8fr 64px 64px 100px 70px 80px 36px",
+                    gap: 8, padding: "10px 16px", alignItems: "center",
+                    borderBottom: i < rows.length - 1 ? "1px solid var(--app-bg-2)" : "none",
+                    borderLeft: r.hasBackorder ? "3px solid #f59e0b" : "3px solid transparent",
+                    opacity: noMatch ? 0.6 : 1,
+                    cursor: clickable ? "pointer" : "default",
+                  }}
+                >
                   {/* # */}
                   <span style={{
                     fontSize: 11, color: "var(--app-text-4)",
@@ -758,29 +800,23 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
                     )}
                   </div>
 
-                  {/* Link — opens the right-side preview pane when running inside
-                     chat; falls back to the standalone drug page elsewhere. */}
+                  {/* Visual affordance — the whole row is clickable; this icon
+                      mirrors the action so the column reads as interactive. */}
                   {r.lookup.matchedDrug ? (
-                    pane ? (
-                      <button
-                        type="button"
-                        onClick={() => pane.open(r.lookup.matchedDrug!.drug_id)}
-                        style={{
-                          display: "flex", alignItems: "center", color: "var(--teal)",
-                          background: "none", border: "none", padding: 0, cursor: "pointer",
-                        }}
-                        title="Open drug preview"
-                      >
-                        <ExternalLink style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
-                      </button>
-                    ) : (
-                      <Link href={`/drugs/${r.lookup.matchedDrug.drug_id}`}
-                        style={{ display: "flex", alignItems: "center", color: "var(--teal)" }}
-                        title="View drug detail"
-                      >
-                        <ExternalLink style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
-                      </Link>
-                    )
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openPreview(r.lookup.matchedDrug!.drug_id);
+                      }}
+                      style={{
+                        display: "flex", alignItems: "center", color: "var(--teal)",
+                        background: "none", border: "none", padding: 0, cursor: "pointer",
+                      }}
+                      title="Open drug preview"
+                    >
+                      <ExternalLink style={{ width: 14, height: 14, strokeWidth: 1.5 }} />
+                    </button>
                   ) : (
                     <span />
                   )}
@@ -811,6 +847,17 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
       {/* Responsive + animation styles */}
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .bu-row-clickable {
+          transition: background-color 120ms ease;
+        }
+        .bu-row-clickable:hover {
+          background: var(--app-bg);
+        }
+        .bu-row-clickable:focus-visible {
+          outline: none;
+          background: var(--app-bg);
+          box-shadow: inset 2px 0 0 0 var(--teal);
+        }
         /* Container query — fires on the bu-root's inline size, so the layout
            collapses correctly when embedded in narrower panes (e.g. chat2's
            main column next to the sidebar), not only on small viewports. */
@@ -832,6 +879,50 @@ export default function BulkUpload({ file, onClose }: BulkUploadProps) {
           }
         }
       `}</style>
+
+      {/* In-page preview pane — only renders when there's no parent PaneContext
+          (e.g. on the public landing page). Inside chat, pane.open() handles
+          this and the parent shell renders its own PreviewPane. */}
+      {previewDrugId && !pane ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close preview"
+            onClick={() => setPreviewDrugId(null)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 30,
+              background: "rgba(15, 23, 42, 0.3)",
+              backdropFilter: "blur(1px)",
+              border: "none", padding: 0, cursor: "pointer",
+            }}
+          />
+          <PreviewPane
+            key={previewDrugId}
+            drugId={previewDrugId}
+            onClose={() => setPreviewDrugId(null)}
+            onOpenDrug={(id) => setPreviewDrugId(id)}
+            onAskAbout={(name) => {
+              router.push(`/chat?q=${encodeURIComponent(`Tell me more about ${name}`)}`);
+            }}
+            onToast={(msg) => setPreviewToast(msg)}
+          />
+        </>
+      ) : null}
+
+      {previewToast ? (
+        <div
+          style={{
+            position: "fixed", bottom: 24, left: "50%",
+            transform: "translateX(-50%)", zIndex: 50,
+            padding: "10px 16px", background: "#0f172a", color: "#fff",
+            fontSize: 13, borderRadius: 8,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+          }}
+          role="status"
+        >
+          {previewToast}
+        </div>
+      ) : null}
     </div>
   );
 }

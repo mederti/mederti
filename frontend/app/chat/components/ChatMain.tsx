@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import {
   BarChart, Bell, ChatBubble, Check, Close, FileChip, Grid, ImageChip,
@@ -257,6 +257,8 @@ export function ChatMain({
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const spacerRef = useRef<HTMLDivElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragDepthRef = useRef(0);
   const lastUserId = (() => {
     for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "user") return turns[i].id;
     return null;
@@ -415,7 +417,40 @@ export function ChatMain({
 
       <div className="shrink-0 px-8 pt-3 pb-4 bg-white">
         <div className="max-w-[900px] mx-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm focus-within:border-slate-300 focus-within:shadow-md transition-all overflow-hidden">
+          <div
+            className={`bg-white border rounded-2xl shadow-sm focus-within:border-slate-300 focus-within:shadow-md transition-all overflow-hidden relative ${
+              isDragging
+                ? "border-teal-400 ring-2 ring-teal-100"
+                : "border-slate-200"
+            }`}
+            onDragEnter={(e) => {
+              if (e.dataTransfer?.types?.includes("Files")) {
+                e.preventDefault();
+                dragDepthRef.current += 1;
+                setIsDragging(true);
+              }
+            }}
+            onDragOver={(e) => {
+              if (e.dataTransfer?.types?.includes("Files")) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+              }
+            }}
+            onDragLeave={(e) => {
+              if (e.dataTransfer?.types?.includes("Files")) {
+                dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+                if (dragDepthRef.current === 0) setIsDragging(false);
+              }
+            }}
+            onDrop={(e) => {
+              if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+                e.preventDefault();
+                dragDepthRef.current = 0;
+                setIsDragging(false);
+                onFilesPicked(e.dataTransfer.files);
+              }
+            }}
+          >
             {attachedFiles.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 px-3 pt-2.5 pb-1 border-b border-slate-100">
                 {attachedFiles.map((f) => (

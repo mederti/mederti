@@ -13,7 +13,7 @@ import type {
   SubstituteRow,
   SupplierPriceRow,
 } from "./types";
-import { computeConfidence, confidenceFromSources } from "./confidence";
+import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
 
 export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   // Anthropic server-side web search — used freely as a primary research tool

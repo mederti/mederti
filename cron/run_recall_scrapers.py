@@ -74,5 +74,23 @@ if __name__ == "__main__":
         else:
             failed += 1
 
+    # Recall→shortage causal linker (audit FINDING-D2-07).
+    # Previously ran only at end of run_all_scrapers.py (Mac cron). If Mac
+    # cron disappears, the causal edges stop populating silently. Run it
+    # here too so Railway is independently capable. Idempotent — running
+    # twice the same day from both runtimes is harmless.
+    try:
+        from backend.scrapers.recall_linker import link_unlinked_recalls
+        from backend.utils.db import get_supabase_client
+        link_summary = link_unlinked_recalls(get_supabase_client())
+        log.info(
+            f"recall_linker             checked={link_summary.get('checked', 0):4d}  "
+            f"linked={link_summary.get('linked', 0):4d}  "
+            f"auto_shortages={link_summary.get('auto_shortages', 0):3d}  "
+            f"errors={link_summary.get('errors', 0):2d}"
+        )
+    except Exception as exc:
+        log.error(f"recall_linker failed (non-fatal): {exc}")
+
     log.info(f"Done. Succeeded: {succeeded}  Failed: {failed}")
     sys.exit(0 if failed == 0 else 1)

@@ -12,10 +12,52 @@
  * if chat2 stays parallel long-term, this is the file to clone first.
  */
 
-import { useContext, type ReactNode } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { DrugCard } from "@/app/chat/components/DrugCard";
 import { PaneContext } from "@/app/chat/components/PaneContext";
+
+// Lazy fallback: when a <drug_card> tag references a UUID not yet in
+// drugsMap (mid-stream flash, or a chat turn persisted before the
+// server populated `done.drugs`), fetch the drug from /api/drug/[id]
+// instead of showing a red "Missing drug data" error. Falls back to
+// the error only after the fetch actually fails or returns 404.
+function LazyDrugCard({ id }: { id: string }) {
+  const [drug, setDrug] = useState<DrugDetail | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/drug/${id}?country=AU`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((bundle) => {
+        if (cancelled) return;
+        if (bundle?.drug) setDrug(bundle.drug as DrugDetail);
+        else setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (drug) return <DrugCard drug={drug} />;
+  if (failed) {
+    return (
+      <div className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 my-2">
+        Missing drug data for <code>{id}</code>.
+      </div>
+    );
+  }
+  return (
+    <div className="my-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 animate-pulse">
+      <div className="h-4 w-32 bg-slate-200 rounded mb-2" />
+      <div className="h-3 w-48 bg-slate-200 rounded" />
+    </div>
+  );
+}
 
 export type KpiTile = { value: string; label: string };
 export type SourceChip = {
@@ -485,11 +527,9 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup, drugIdByName 
     if (p.kind === "drug") {
       const d = drugs[p.id];
       if (!d) {
-        out.push(
-          <div key={i} className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 my-2">
-            Missing drug data for <code>{p.id}</code>.
-          </div>
-        );
+        // Mid-stream or stale-localStorage case — fetch the drug on
+        // the client instead of showing the alarming red error.
+        out.push(<LazyDrugCard key={i} id={p.id} />);
       } else {
         // Full rich card (PharmacistCard / ProcurementCard / SupplierCard)
         // — clicking the drug name inside still opens the right preview pane

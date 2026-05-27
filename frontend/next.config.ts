@@ -66,8 +66,12 @@ export default withSentryConfig(nextConfig, {
   // Source-map upload is gated on SENTRY_AUTH_TOKEN; if unset, the wrapper
   // is purely runtime instrumentation.
   widenClientFileUpload: true,
-  // Hide source maps from public bundles in prod.
-  hideSourceMaps: true,
+  // Hide source maps from public bundles in prod. @sentry/nextjs v10 moved
+  // this under the sourcemaps namespace; `deleteSourcemapsAfterUpload` is
+  // the v10 equivalent of the old `hideSourceMaps: true`.
+  sourcemaps: {
+    deleteSourcemapsAfterUpload: true,
+  },
   // Don't fail the build if Sentry isn't reachable.
   errorHandler: (err) => {
     console.warn("[sentry build] non-fatal:", err.message);

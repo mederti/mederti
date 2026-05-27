@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
 import time
 from abc import ABC, abstractmethod
 from datetime import date, datetime, timezone
@@ -35,6 +37,48 @@ from supabase import Client
 from backend.utils.db import get_supabase_client
 from backend.utils.logger import get_logger
 from backend.utils.retry import with_exponential_backoff
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCRAPER_VERSION resolution — closes audit FINDING-D1-09.
+#
+# The base class default used to be a static "1.0.0" string that every
+# subclass inherited unless they manually overrode it. ~40 of 60 scrapers
+# never override → raw_scrapes.scraper_version was useless for those rows
+# ("which scraper logic produced this payload?" → answer: 1.0.0, always).
+#
+# New resolution chain (evaluated once at module import — fast):
+#   1. MEDERTI_SCRAPER_VERSION env var (lets Railway/cron jobs pin to a
+#      specific version string without touching code)
+#   2. `git:<short SHA>` of the current HEAD (gives every run a stable
+#      identifier per-commit — exactly what the audit asked for)
+#   3. "1.0.0" fallback (preserves prior behaviour in environments where
+#      git isn't available, e.g. a stripped-down container build)
+#
+# Subclasses that explicitly set SCRAPER_VERSION (e.g. greece_eof = "2.0.0",
+# sfda = "1.1.0") continue to use their explicit value — this resolution
+# only replaces the BASE default. Manual semver discipline is preserved.
+# ─────────────────────────────────────────────────────────────────────────────
+def _resolve_default_scraper_version() -> str:
+    explicit = os.environ.get("MEDERTI_SCRAPER_VERSION", "").strip()
+    if explicit:
+        return explicit
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            text=True,
+            timeout=2.0,
+        ).strip()
+        if sha:
+            return f"git:{sha}"
+    except Exception:
+        pass
+    return "1.0.0"
+
+
+_DEFAULT_SCRAPER_VERSION = _resolve_default_scraper_version()
 
 
 class ScraperError(Exception):
@@ -68,7 +112,11 @@ class BaseScraper(ABC):
     # --- Subclass may override these ---
     RATE_LIMIT_DELAY: float = 1.5
     REQUEST_TIMEOUT: float = 30.0
-    SCRAPER_VERSION: str = "1.0.0"
+    # Default now resolves to `git:<short SHA>` at module import (or to
+    # MEDERTI_SCRAPER_VERSION env var if set). Subclasses that explicitly
+    # set a value still win. See _resolve_default_scraper_version() above
+    # for the resolution chain. Closes audit FINDING-D1-09.
+    SCRAPER_VERSION: str = _DEFAULT_SCRAPER_VERSION
 
     DEFAULT_HEADERS: dict[str, str] = {
         "User-Agent": (

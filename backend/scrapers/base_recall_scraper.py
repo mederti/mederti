@@ -25,6 +25,12 @@ from abc import ABC, abstractmethod
 from datetime import date, datetime, timezone
 from typing import Any
 
+# Reuse the SCRAPER_VERSION resolver from BaseScraper so shortage + recall
+# pipelines tag raw_scrapes rows with the same identifier. Closes audit
+# FINDING-D1-09 on the recall side. Single import means no duplicated
+# git-resolution logic; the helper runs once per process.
+from backend.scrapers.base_scraper import _DEFAULT_SCRAPER_VERSION
+
 # ── Drug-name plausibility guard ────────────────────────────────────────────
 # Recall feed titles often look like sentences ("Updated labelling for X",
 # "Important safety information about Y", "Health Canada recalls Z"). Before
@@ -113,7 +119,10 @@ class BaseRecallScraper(ABC):
 
     RATE_LIMIT_DELAY: float = 1.5
     REQUEST_TIMEOUT: float = 30.0
-    SCRAPER_VERSION: str = "1.0.0"
+    # Default now resolves to `git:<short SHA>` (via BaseScraper's resolver).
+    # Subclasses that explicitly set a value still win. Closes audit
+    # FINDING-D1-09 on the recall side.
+    SCRAPER_VERSION: str = _DEFAULT_SCRAPER_VERSION
 
     DEFAULT_HEADERS: dict[str, str] = {
         "User-Agent": (

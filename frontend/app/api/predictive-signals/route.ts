@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export const dynamic = "force-dynamic";
+// 10-min cache. The 30k-row aggregation is expensive (audit FINDING-P5-02)
+// and the underlying shortage_events table is updated by scrapers running
+// every 4h+. Per-?country variant caches separately. Closes part of
+// audit FINDING-P5-01.
+export const revalidate = 600;
 
 /**
  * GET /api/predictive-signals?country=GB

@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export const dynamic = "force-dynamic";
-
-/**
- * GET /api/regulatory-calendar?days=60&country=US,EU,GB,AU
- *
- * Returns upcoming regulatory events globally — used by /intelligence/calendar.
- */
+// 10-min cache. Events have future dates (next 60-365 days); they don't
+// change minute-to-minute. Different ?days= and ?country= variants cache
+// separately by URL. Closes part of audit FINDING-P5-01.
+export const revalidate = 600;
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const days = Math.min(Number(url.searchParams.get("days") ?? "90"), 365);

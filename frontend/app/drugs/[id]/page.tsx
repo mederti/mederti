@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 import { cookies } from "next/headers";
@@ -340,14 +341,10 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .single();
 
     if (!catEntry) {
-      return (
-        <div style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ textAlign: "center", color: "var(--app-text-3)" }}>
-            <p style={{ fontSize: 18, marginBottom: 8 }}>Drug not found</p>
-            <Link href="/search" style={{ color: "var(--teal)", fontSize: 14, textDecoration: "none" }}>{"\u2190"} Back to search</Link>
-          </div>
-        </div>
-      );
+      // Closes audit FINDING-UX-10: previously returned a 200 with HTML
+      // saying "Drug not found", which Google would index as a real page.
+      // notFound() throws past the layout and serves Next's actual 404.
+      notFound();
     }
 
     /* Render a minimal stable-supply page for catalogue-only drugs */

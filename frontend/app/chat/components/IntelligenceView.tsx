@@ -352,7 +352,16 @@ export function IntelligenceView({ onAsk }: { onAsk: (q: string) => void }) {
             {articles.map((a) => (
               <div
                 key={a.slug}
-                onClick={() => onAsk(`Tell me more about: ${a.title}`)}
+                onClick={() => {
+                  // Open in a fresh chat. Hard nav so Chat2Client remounts with
+                  // empty turns; the existing ?q=...&send=1 seed handler picks
+                  // up the prompt and auto-sends.
+                  const params = new URLSearchParams({
+                    q: `Tell me more about: ${a.title}`,
+                    send: "1",
+                  });
+                  window.location.assign(`/chat?${params.toString()}`);
+                }}
                 className="bg-white border border-slate-200 rounded-xl p-4 hover:border-teal-200 hover:shadow-md cursor-pointer transition-all group shadow-sm"
               >
                 <div className="flex items-center justify-between mb-2">

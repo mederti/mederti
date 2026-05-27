@@ -6,6 +6,15 @@
   "functions": {
     "app/api/chat/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/cron/generate-intelligence/route.ts": {
+      "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/generate-intelligence",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

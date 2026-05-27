@@ -1,0 +1,149 @@
+name: persona-coverage-eval
+
+# Runs Mederti's 150-question persona-coverage eval (see evals/README.md).
+# Closes audit FINDING-AI-01 — the eval harness exists and the CI YAML was
+# documented at evals/CI-WORKFLOW.md.template but never committed because
+# the GitHub PAT in use lacked the `workflow` scope. The gh CLI on Rob's
+# machine now has workflow scope (audited 2026-05-27), so this PR ships it.
+#
+# Two modes:
+#   • On every chat-touching PR: 30-question subset (6 per persona,
+#     weighted toward GREEN + HALLUCINATION RISK), deterministic graders
+#     only (no Claude-as-judge). Cost: ~free. Catches refusal-template
+#     regressions.
+#   • Nightly main: full 150 with judge, against production. Output is a
+#     long-running coverage trend.
+#
+# Cost ceiling: ~$15 per full run with judge (audit estimated $5-10). PR
+# runs are essentially free.
+#
+# REQUIRED secrets:
+#   ANTHROPIC_API_KEY — used by the judge. PR-only deterministic runs
+#                       still need it because the eval also calls the
+#                       chat surface which calls Anthropic upstream.
+#
+# REQUIRED variables:
+#   MEDERTI_PROD_CHAT_URL — defaults to https://mederti.vercel.app/api/chat
+#                           if unset.
+#
+# Vercel preview URL resolution for PR runs is a separate piece of plumbing
+# (the Vercel GitHub integration posts the URL as a deployment status). For
+# now PRs run against production; once preview-URL resolution is wired, flip
+# MEDERTI_CHAT_URL below.
+
+on:
+  pull_request:
+    paths:
+      - "frontend/lib/chat/**"
+      - "frontend/app/api/chat/**"
+      - "evals/**"
+      - ".github/workflows/eval-coverage.yml"
+  schedule:
+    # Daily at 06:30 UTC — after the scraper window (~00:00-06:00 UTC) so
+    # the eval grades against fresh data.
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Eval scope: full (150) or pr (30)"
+        required: true
+        default: "pr"
+        type: choice
+        options:
+          - pr
+          - full
+      use_judge:
+        description: "Run Claude-as-judge grader (costs ~$10-15)"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+concurrency:
+  group: eval-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: persona-coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Until Vercel preview URL resolution is wired, PRs grade against prod
+      # — same as the nightly job. Once a preview-URL step is added, swap
+      # this expression to use the preview URL on pull_request runs.
+      MEDERTI_CHAT_URL: ${{ vars.MEDERTI_PROD_CHAT_URL || 'https://mederti.vercel.app/api/chat' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install eval deps
+        run: |
+          pip install --upgrade pip
+          pip install pyyaml anthropic
+
+      - name: Determine eval scope
+        id: scope
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # Nightly: full set + judge
+            echo "args=--scope-label nightly --judge" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ARGS="--scope-label dispatched-${{ inputs.scope }}"
+            if [ "${{ inputs.use_judge }}" = "true" ]; then
+              ARGS="$ARGS --judge"
+            fi
+            if [ "${{ inputs.scope }}" = "pr" ]; then
+              ARGS="$ARGS --pr"
+            fi
+            echo "args=$ARGS" >> "$GITHUB_OUTPUT"
+          else
+            # pull_request: deterministic-only 30-question subset
+            echo "args=--pr --no-judge" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run eval
+        run: python3 evals/runner/run_eval.py ${{ steps.scope.outputs.args }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-${{ github.run_id }}
+          path: evals/reports/*.md
+          retention-days: 90
+
+      - name: Post PR comment with summary
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const dir = 'evals/reports';
+            if (!fs.existsSync(dir)) return;
+            const files = fs.readdirSync(dir)
+              .filter(f => f.endsWith('.md'))
+              .sort();
+            if (!files.length) return;
+            const latest = path.join(dir, files[files.length - 1]);
+            const body = fs.readFileSync(latest, 'utf8')
+              .split('\n')
+              .slice(0, 40)
+              .join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '### Mederti persona-coverage eval (PR mode — 30 questions, no judge)\n\n' +
+                    body +
+                    '\n\n_Full report: download the `eval-report-' + context.runId + '` artifact._',
+            });

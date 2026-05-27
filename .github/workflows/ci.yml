@@ -1,0 +1,88 @@
+name: ci
+
+# Closes audit FINDING-O10-02: deploys to Vercel happen on push but there's
+# no PR-gate for lint or build. The recent commit
+#   712aa22 fix(chat): import missing levelFromScore to unblock Vercel builds
+# proved builds can break on main with no safety net.
+#
+# This workflow gates merges on:
+#   • Build (REQUIRED) — `next build` must succeed end-to-end. Typechecks
+#     and bundles. The cheapest, highest-leverage CI gate.
+#   • Lint (INFORMATIONAL for now) — runs `eslint` but doesn't block.
+#     There are 3 pre-existing errors + 3 warnings (audit FINDING-F4-06);
+#     blocking on lint today would noise every PR. Cleanup is its own track;
+#     flip `continue-on-error: false` once the baseline is green.
+#
+# Scoped to the frontend only — the Python scrapers have no lint/test config
+# (audit FINDING-Q6-01), so the backend gate is a separate Sprint 6 item.
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  # Cancel an in-flight run when a new commit lands on the same PR/branch.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (next build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      # Public env vars are safe in CI. Service-role / Anthropic keys are NOT
+      # needed for `next build` — the build doesn't execute route handlers,
+      # so the runtime keys can stay in Vercel only.
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        # --legacy-peer-deps matches vercel.json — audit flagged this as
+        # masking peer-dep conflicts (FINDING-Q6-???); keep CI honest about
+        # the same install command the platform uses.
+        run: npm ci --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+
+  lint:
+    name: lint (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true # informational only — see top-of-file note
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint
+        run: npm run lint

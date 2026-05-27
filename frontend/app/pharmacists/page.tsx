@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import PersonaPage, { PersonaContent } from "../components/persona-page";
 import { getLivePreviewRows } from "@/lib/persona-preview";
 
@@ -73,10 +74,13 @@ const content: PersonaContent = {
 };
 
 export default async function PharmacistsPage() {
-  // Closes audit FINDING-UX-09 — replace the hardcoded preview rows with
-  // 5 real active shortages. Falls back to the static rows defined in
-  // `content` above if Supabase is unreachable.
-  const liveRows = await getLivePreviewRows();
+  // Closes audit FINDING-UX-09 — replace hardcoded preview rows with 5
+  // real active shortages, filtered to the user's selected country
+  // (mederti-country cookie set by landing-nav / HomeNavClient). Falls
+  // back to global rows if no cookie; falls back to hardcoded if
+  // Supabase is unreachable.
+  const country = (await cookies()).get("mederti-country")?.value;
+  const liveRows = await getLivePreviewRows({ countryCode: country });
   const resolved: PersonaContent = liveRows
     ? { ...content, previewRows: liveRows }
     : content;

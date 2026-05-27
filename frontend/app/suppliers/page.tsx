@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import PersonaPage, { PersonaContent } from "../components/persona-page";
 import { getLivePreviewRows } from "@/lib/persona-preview";
 
@@ -60,7 +61,8 @@ const content: PersonaContent = {
 };
 
 export default async function SuppliersPage() {
-  const liveRows = await getLivePreviewRows();
+  const country = (await cookies()).get("mederti-country")?.value;
+  const liveRows = await getLivePreviewRows({ countryCode: country });
   const resolved: PersonaContent = liveRows ? { ...content, previewRows: liveRows } : content;
   return <PersonaPage content={resolved} />;
 }

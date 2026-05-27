@@ -9,6 +9,57 @@
 
 ---
 
+## 0. Remediation status (updated 2026-05-27 evening)
+
+Findings below remain the audit snapshot at the top of 2026-05-27. This addendum tracks what shipped in the same-day remediation sprint (commits 28ee680 through 9e1b028 plus follow-ups; see §6 for the original quickest-wins list).
+
+### 0.1 Shipped in code (awaits Rob env / migration apply)
+
+| Finding | Status | Commit | Rob action to make live |
+|---|---|---|---|
+| **D2-02** Railway runners log "0 records" | ✅ Code fixed | `28ee680` | Verify next Railway log shows non-zero records |
+| **D1-05 / Q6-02** Uncommitted migrations 035 + 037 + ema_epar_importer | ✅ Committed | `28ee680` | `SELECT indexname FROM pg_indexes WHERE tablename='drugs' AND indexname LIKE '%cas%'` against prod to verify |
+| **Q6-10** Unused npm deps (4 of 6 removed cleanly) | ✅ Done | `28ee680`, `b8e02a9` | None; `country-flag-icons` (19 MB) + 3 others gone, `tw-animate-css` + `shadcn` restored after CSS-import check |
+| **AI-02** No AI cost/latency observability | ✅ Substrate live | `9d65c3d` | Apply migration 042 (`supabase db push`); wire `/admin/ai-spend` page (next sprint) |
+| **O10-02** No CI workflows | ✅ Workflows committed | `e7963a4` | Set repo secret `ANTHROPIC_API_KEY`; first PR will smoke-test |
+| **AI-01** Eval CI documented but not committed | ✅ Workflow committed | `e7963a4` | Same secret as above |
+| **O10-01** No error tracking | ✅ Scaffold complete | `b8e02a9` | Create Sentry projects, set DSN per [`docs/sentry-setup.md`](sentry-setup.md) — 10 min |
+| **O10-03** No uptime monitor | ✅ Docs ready | `b8e02a9` | Set up 5 Better Stack monitors per [`docs/uptime-monitors.md`](uptime-monitors.md) — 15 min |
+| **D2-06** Eligibility scrapers never scheduled | ✅ Runner exists | `6777ee9` | Add `cron/run_eligibility_scrapers.py` to Railway (cron: `0 8 * * *`) |
+| **D2-07** Recall_linker only in Mac cron | ✅ Now in Railway too | `6777ee9` | None — idempotent; Mac call stays unchanged |
+| **D1-01** Non-shortage scrapers bypass heartbeat | ✅ Fixed (3 not 8) | `3778e79` | None — audit overstated; only `clinicaltrials`, `fda_inspections`, `drugs_at_fda` actually skipped. The other 5 override `upsert()` only and inherit base heartbeat |
+| **D1-14** audit_logs immutability trigger | ✅ Migration 043 | `c6c0c2a` | Apply migration 043 |
+| **D1-07** recalls.data_source_id alias | ✅ Migration 043 | `c6c0c2a` | Apply migration 043 |
+| **D1-11** Drop orphan drug_universe views | ✅ Migration 043 | `c6c0c2a` | Apply migration 043 |
+| **P5-06** Composite indexes on shortage_events | ✅ Migration 044 | `9e1b028` | Apply migration 044 |
+| **P5-01 (partial)** Cache 2 expensive routes | ✅ regulatory-calendar + predictive-signals | `9e1b028` | None |
+
+### 0.2 Still open — Rob-only actions
+
+| Finding | Action |
+|---|---|
+| **🔴 S7-01** Live GitHub PAT in `.git/config` | Revoke at github.com/settings/tokens; `git remote set-url origin https://github.com/mederti/mederti.git` (your `gh` CLI has `workflow` scope so it takes over auth) |
+| **Open decision #1** Railway runtime | Pick one runtime (recommend Railway-only); unblocks D2-01 cleanup |
+| **Open decision #2** Tailwind commit or rip out | Unblocks the UI/UX track (Pillar 8 → ?) |
+| **Open decision #3** Drug-entity canonicalisation | Pick canonical of `drugs` / `drug_catalogue` / `drug_products`; unblocks dedupe pipeline |
+| **🔴 AWS IP clause** | Documented or written waiver covering Mederti work |
+
+### 0.3 Net pillar-score delta expected once migrations + env vars are live
+
+| Pillar | Before | After Rob's action items | Why |
+|---|---|---|---|
+| 1 Data Architecture | 3.5 | **4.0** | D1-01 heartbeat + D1-14 immutability + D1-07 alias + D1-11 orphans all closed |
+| 2 Ingestion | 3.5 | **3.75** | D2-02 fix + D2-06 eligibility + D2-07 recall_linker on Railway closed |
+| 5 Performance | 3.5 | **3.75** | P5-06 indexes + P5-01 partial cache closed (3 of 49 routes) |
+| 6 Code Quality | 2.5 | **2.75** | Q6-02 uncommitted migrations + Q6-10 unused deps closed (Q6-01 tests still open) |
+| 9 AI | 4.5 | **4.75** | AI-01 eval CI + AI-02 usage log substrate closed |
+| 10 Observability | 3.0 | **4.0** | O10-01 Sentry + O10-02 CI + O10-03 uptime closed |
+| **Weighted avg** | **3.05** | **~3.40** | "solid; minor gaps" once Rob's 4 action items land |
+
+The Pillar 4 (Frontend 2.0) and Pillar 8 (UI/UX 1.0) scores remain unchanged — those need the Tailwind decision (open #2) to move.
+
+---
+
 ## 1. Executive Summary
 
 ### 1.1 Maturity heatmap
@@ -93,11 +144,12 @@ These are decisions only Rob can make — they shape the remediation plan in §5
 
 **Findings.**
 
-#### 🔴 FINDING-D1-01 — 8 non-shortage scrapers silently bypass the `last_scraped_at` heartbeat
-- **Artifact:** `backend/scrapers/clinicaltrials_scraper.py:204` (`def run`); same pattern in `fda_inspections_scraper.py:232`, `drugs_at_fda_scraper.py:167`; plus 5 more that override `upsert` only.
-- **Issue:** The `data_sources.last_scraped_at` update lives only in `BaseScraper.run()` (`base_scraper.py:613`) and `BaseRecallScraper.run()` (`base_recall_scraper.py:546`). The 8 scrapers that override `run()` never call `data_sources.update`. Their freshness signal stays at whatever `scripts/backfill_last_scraped_at.py` last derived from event timestamps.
-- **Risk:** The public freshness dashboard (`/freshness`) marks any source >168h stale. These 8 scrapers will *look broken* on a public credibility tile even when they ran successfully an hour ago.
-- **Remediation:** **S.** Extract `_touch_data_source(self, finished_at)` mixin; call from every overriding `run()`. Run `backfill_last_scraped_at.py --apply` once.
+#### 🔴 FINDING-D1-01 — 3 non-shortage scrapers silently bypass the `last_scraped_at` heartbeat ✅ FIXED 3778e79
+- **CORRECTION (2026-05-27 evening):** Audit originally said "8 scrapers"; closer inspection during remediation shows only **3** actually skip the heartbeat (`clinicaltrials_scraper.py:204`, `fda_inspections_scraper.py:232`, `drugs_at_fda_scraper.py:167`). The other 5 (`edqm_cep`, `ema_chmp`, `eudragmdp`, `fda_adcomm`, `nhs_drug_tariff`) only override `upsert()` and inherit the base heartbeat — they were never broken.
+- **Artifact:** 3 files listed above; all override `run()` to bypass `raw_scrapes` logging for large payloads, and skipped the heartbeat in the same path.
+- **Issue:** The `data_sources.last_scraped_at` update lives in `BaseScraper.run()` `finally` block. The 3 overriding `run()` skipped it. Their freshness signal stayed at whatever `scripts/backfill_last_scraped_at.py` last derived from event timestamps.
+- **Risk:** The public freshness dashboard (`/freshness`) marks any source >168h stale. These 3 scrapers would *look broken* on a public credibility tile even when they ran successfully an hour ago.
+- **Fix shipped (3778e79):** Extracted `BaseScraper._touch_data_source(finished_at)` helper; called from each of the 3 overriding `run()` methods at the success path. Base flow identical (pure refactor; verified by import test).
 
 #### 🔴 FINDING-D1-02 — `drug_catalogue` was production-only for ~10 weeks; schema-drift surface
 - **Artifact:** `supabase/migrations/036_schema_legibility.sql:34-64`; commit `f57ec90`.

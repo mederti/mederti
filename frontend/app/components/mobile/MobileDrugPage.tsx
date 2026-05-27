@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { MobileSupplierPage } from "./MobileSupplierPage";
 import { BottomNav } from "./BottomNav";
-import { V4BellButton } from "@/app/drugs/[id]/v4/bell-button";
+import { V4BellButton } from "@/app/drugs/[id]/bell-button";
 import type { SupplierPartner } from "@/lib/suppliers";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { truncateDrugName } from "@/lib/utils";

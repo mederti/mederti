@@ -97,6 +97,10 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
         <div style={{ position: "relative" }}>
           <button
             onClick={() => { setShowCountry(v => !v); setShowUser(false); }}
+            // Closes more of UX-05 — same a11y pattern as landing-nav country picker.
+            aria-label={`Country: ${country}. Click to change.`}
+            aria-haspopup="menu"
+            aria-expanded={showCountry}
             style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "6px 10px", borderRadius: 6,
@@ -107,9 +111,9 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
               fontFamily: "var(--font-inter), sans-serif",
             }}
           >
-            <Globe {...ICON_STYLE} color="var(--app-text-4)" />
+            <Globe {...ICON_STYLE} color="var(--app-text-4)" aria-hidden="true" />
             {country}
-            <ChevronDown {...ICON_STYLE} color="var(--app-text-4)" />
+            <ChevronDown {...ICON_STYLE} color="var(--app-text-4)" aria-hidden="true" />
           </button>
           {showCountry && (
             <div style={{
@@ -142,6 +146,13 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
         <div style={{ position: "relative" }}>
           <button
             onClick={() => { setShowUser(v => !v); setShowCountry(false); }}
+            // Closes more of UX-05 — this button is genuinely icon-only;
+            // without an aria-label screen readers hear "button" with no
+            // context. The label flips based on auth state because the
+            // menu contents differ.
+            aria-label={email ? "Account menu" : "Sign in"}
+            aria-haspopup="menu"
+            aria-expanded={showUser}
             style={{
               width: 30, height: 30, borderRadius: "50%",
               background: "#e2e8f0", border: "2px solid var(--app-border)",
@@ -150,11 +161,11 @@ export default function HomeNavClient({ defaultCountry = "AU" }: { defaultCountr
             }}
           >
             {email ? (
-              <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+              <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
                 <circle cx="15" cy="11" r="5" fill="#94a3b8"/>
                 <ellipse cx="15" cy="28" rx="10" ry="8" fill="#94a3b8"/>
               </svg>
-            ) : <User {...ICON_STYLE} />}
+            ) : <User {...ICON_STYLE} aria-hidden="true" />}
           </button>
           {showUser && (
             <div style={{

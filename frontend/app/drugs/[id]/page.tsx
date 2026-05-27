@@ -45,6 +45,11 @@ type Persona = "pharmacist" | "procurement" | "supplier";
 function personaFromRole(role: string | null | undefined): Persona | null {
   if (!role) return null;
   if (role === "pharmacist") return "pharmacist";
+  // Closes audit FINDING-UX-04: doctors previously fell through to the
+  // supplier (F bento) view despite /doctors marketing promising
+  // "shortage alerts before you prescribe". Pharmacist view is the
+  // closest fit for clinical decision-makers.
+  if (role === "doctor") return "pharmacist";
   if (role === "hospital" || role === "government") return "procurement";
   if (role === "supplier") return "supplier";
   return null; // 'default' or unknown
@@ -55,8 +60,11 @@ function resolvePersona(as: string | undefined, sessionRole: string | null): Per
   if (as === "procurement") return "procurement";
   if (as === "supplier") return "supplier";
   if (as === "pharmacist") return "pharmacist";
-  // Default: the F bento layout (Supplier view) — modular tiles, market-scan emphasis.
-  return personaFromRole(sessionRole) ?? "supplier";
+  // Closes audit FINDING-UX-04: previously defaulted to "supplier" (F bento
+  // layout) when role was missing or unknown. Pharmacist view is the
+  // CLAUDE.md-stated "radical simplification — answer + actions" default;
+  // safer fallback than dropping unknown users into a market-scan UI.
+  return personaFromRole(sessionRole) ?? "pharmacist";
 }
 
 /* ── SEO: dynamic metadata ── */

@@ -142,10 +142,17 @@
   --txt:          #f0f4f8;
   --txt-2:        #a8b8cc;
   --txt-3:        #637385;
-  --teal:         #0F172A;
-  --teal-l:       #1e293b;
-  --teal-bg:      #f1f5f9;
-  --teal-b:       #e2e8f0;
+  /* Closes audit FINDING-UX-03 partially. --teal token was set to slate-900
+     (#0F172A) despite the variable name, making the live drug page render
+     monochrome slate while the reference mockup (mockups/mederti-pharmacist-
+     view_7.html) specifies actual teal (#0d9488). Aligning the token here
+     cascades to every `var(--teal)` consumer — primarily the AskMedertiCta,
+     action accents on PharmacistAnswerCard, and link hovers across persona
+     pages. Visible change; intentional. */
+  --teal:         #0d9488;  /* teal-600 — Tailwind palette */
+  --teal-l:       #0f766e;  /* teal-700 — for hover/active */
+  --teal-bg:      #f0fdfa;  /* teal-50  — light accent background */
+  --teal-b:       #99f6e4;  /* teal-200 — accent border */
   --crit:         #dc2626;
   --crit-bg:      #fef2f2;
   --crit-b:       #fecaca;

@@ -402,6 +402,11 @@ export default function SiteNav() {
           <div ref={countryRef} style={{ position: "relative" }}>
             <button
               onClick={() => { setShowCountry(v => !v); setShowUser(false); }}
+              // Closes part of UX-05: SR users hear "{flag-emoji} AU button"
+              // without context; explicit label makes the function clear.
+              aria-label={`Country: ${country.code}. Click to change.`}
+              aria-haspopup="menu"
+              aria-expanded={showCountry}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
                 padding: "6px 11px", borderRadius: 20,
@@ -413,9 +418,9 @@ export default function SiteNav() {
                 transition: "border-color 0.15s, background 0.15s",
               }}
             >
-              <span style={{ fontSize: 14, lineHeight: 1 }}>{country.flag}</span>
+              <span style={{ fontSize: 14, lineHeight: 1 }} aria-hidden="true">{country.flag}</span>
               {country.code}
-              <ChevronDown style={{ width: 12, height: 12, color: txtDim }} />
+              <ChevronDown style={{ width: 12, height: 12, color: txtDim }} aria-hidden="true" />
             </button>
 
             {showCountry && (
@@ -452,6 +457,9 @@ export default function SiteNav() {
             <div ref={userRef} style={{ position: "relative" }}>
               <button
                 onClick={() => { setShowUser(v => !v); setShowCountry(false); }}
+                aria-label="Account menu"
+                aria-haspopup="menu"
+                aria-expanded={showUser}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   padding: "4px 12px 4px 4px",

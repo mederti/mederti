@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
 import PersonaPage, { PersonaContent } from "../components/persona-page";
+import { getLivePreviewRows } from "@/lib/persona-preview";
+
+// 10-minute ISR cache. Real shortage data only changes on scraper runs
+// (every 4 h+); 10 min staleness is invisible to landing-page visitors
+// and the preview-fetch cost (~50 ms) amortises across many cold visits.
+export const revalidate = 600;
 
 export const metadata: Metadata = {
   title: "Mederti for Pharmacists — Drug shortage answers at the dispensary counter",
@@ -66,6 +72,13 @@ const content: PersonaContent = {
   ctaHref: "/signup",
 };
 
-export default function PharmacistsPage() {
-  return <PersonaPage content={content} />;
+export default async function PharmacistsPage() {
+  // Closes audit FINDING-UX-09 — replace the hardcoded preview rows with
+  // 5 real active shortages. Falls back to the static rows defined in
+  // `content` above if Supabase is unreachable.
+  const liveRows = await getLivePreviewRows();
+  const resolved: PersonaContent = liveRows
+    ? { ...content, previewRows: liveRows }
+    : content;
+  return <PersonaPage content={resolved} />;
 }

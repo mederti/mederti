@@ -1,6 +1,34 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
+// Closes audit FINDING-S7-04. CSP is deliberately NOT included here yet —
+// it needs a per-route allowlist audit (Anthropic SDK, Supabase, Vercel
+// Analytics, Sentry, fonts) and should start in Content-Security-Policy-
+// Report-Only mode. Tracked as a separate Sprint 6 item.
+const SECURITY_HEADERS = [
+  // Force HTTPS for 2 years; opt in to HSTS preload.
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=63072000; includeSubDomains; preload",
+  },
+  // Block all framing — clickjacking defence for /account, /supplier-
+  // dashboard, /admin/*. Mederti has no current iframing use case.
+  { key: "X-Frame-Options", value: "DENY" },
+  // Disable MIME sniffing.
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  // Send origin only on cross-origin requests; full URL within same origin.
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  // Deny the powerful APIs we don't use; future routes that need them can
+  // re-enable via a route-specific Permissions-Policy header.
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  },
+  // Limit cross-origin embedders. Strict-but-not-isolated; tighten to
+  // require-corp once we audit every <img>/<script> origin.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+];
+
 const nextConfig: NextConfig = {
   async redirects() {
     return [
@@ -12,6 +40,15 @@ const nextConfig: NextConfig = {
       // Standalone pages consolidated into /account
       { source: "/alerts",    destination: "/account", permanent: true },
       { source: "/watchlist", destination: "/account", permanent: true },
+    ];
+  },
+  async headers() {
+    return [
+      {
+        // Apply to every route. API routes get them too — defence in depth.
+        source: "/:path*",
+        headers: SECURITY_HEADERS,
+      },
     ];
   },
 };

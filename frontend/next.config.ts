@@ -1,10 +1,49 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
-// Closes audit FINDING-S7-04. CSP is deliberately NOT included here yet —
-// it needs a per-route allowlist audit (Anthropic SDK, Supabase, Vercel
-// Analytics, Sentry, fonts) and should start in Content-Security-Policy-
-// Report-Only mode. Tracked as a separate Sprint 6 item.
+// Closes audit FINDING-S7-04. CSP added as REPORT-ONLY below — never blocks,
+// just emits violation reports the browser console (and later Sentry, when
+// the `report-uri` is wired). The allowlist mirrors the actual third-party
+// surface so the eventual flip to enforcing is mechanical: read violations,
+// add allowed sources, re-deploy, flip header name to `Content-Security-
+// Policy` once a week passes with zero reports.
+//
+// Allowlist rationale (every external host this app talks to):
+//   • https://*.supabase.co        — REST + Auth (admin client + ssr client)
+//   • wss://*.supabase.co          — Realtime websocket (subscriptions)
+//   • https://api.anthropic.com    — chat surface streams from here
+//   • https://va.vercel-scripts.com + https://vercel.live — Vercel Analytics + Speed Insights
+//   • https://*.ingest.sentry.io + https://*.sentry.io — Sentry beacon (when DSN is set)
+//   • https://fonts.googleapis.com + https://fonts.gstatic.com — next/font Google
+//
+// 'unsafe-inline' on script-src + style-src is required for now because:
+//   • Next.js hydration scripts are inlined without nonces (Next 16 default)
+//   • The codebase has 3,172 inline style={{...}} attributes (audit UX-07)
+// A nonce-based migration is the proper fix; report-only lets us measure
+// the gap without breaking the site in the meantime.
+const CSP_REPORT_ONLY = [
+  "default-src 'self'",
+  // 'unsafe-inline' for Next.js hydration. No 'unsafe-eval' — prod Next
+  // shouldn't need eval; report-only will tell us if anything does.
+  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://vercel.live",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  // https: for any HTTPS image source (regulator favicons, drug images,
+  // generated OG images via /api/og); data: + blob: for next/image internals
+  // and inline previews from bulk-upload.
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://*.ingest.sentry.io https://*.sentry.io https://va.vercel-scripts.com https://vercel.live",
+  // No iframes allowed in either direction. frame-src 'self' permits same-
+  // origin iframes (we don't use any today). frame-ancestors 'none' is the
+  // CSP equivalent of X-Frame-Options: DENY (which we already send too).
+  "frame-src 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "upgrade-insecure-requests",
+].join("; ");
+
 const SECURITY_HEADERS = [
   // Force HTTPS for 2 years; opt in to HSTS preload.
   {
@@ -27,6 +66,12 @@ const SECURITY_HEADERS = [
   // Limit cross-origin embedders. Strict-but-not-isolated; tighten to
   // require-corp once we audit every <img>/<script> origin.
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // CSP in report-only mode — never blocks, logs violations. Flip the
+  // header name to `Content-Security-Policy` (no -Report-Only suffix)
+  // once a week of prod traffic produces zero unexpected violations.
+  // When the Sentry project is provisioned, add `report-uri` directive
+  // pointing at Sentry's CSP endpoint to aggregate reports.
+  { key: "Content-Security-Policy-Report-Only", value: CSP_REPORT_ONLY },
 ];
 
 const nextConfig: NextConfig = {

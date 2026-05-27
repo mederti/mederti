@@ -60,7 +60,7 @@ def run_scraper(name: str) -> bool:
         summary = scraper.run()
         elapsed = time.monotonic() - t0
         status = summary.get("status", "unknown")
-        records = summary.get("records_upserted", 0)
+        records = summary.get("records_processed", 0)
         log.info(f"{name:25s}  {status:12s}  {records:5d} records  {elapsed:.1f}s")
         return status in ("success", "duplicate")
     except Exception as exc:

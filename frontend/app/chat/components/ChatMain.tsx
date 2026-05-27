@@ -211,7 +211,7 @@ export function ChatMain({
       {activeView === "chat" && !bulkFile ? (
         <>
         <div ref={scrollerRef} className="flex-1 overflow-y-auto pt-6 pb-8">
-        <div className="max-w-[760px] mx-auto px-8">
+        <div className="max-w-[900px] mx-auto px-8">
           {isEmpty ? (
             <div className="text-center pt-14 pb-6">
               <h1 className="text-[28px] font-semibold tracking-tight text-slate-900 mb-2.5">
@@ -296,7 +296,7 @@ export function ChatMain({
       </div>
 
       <div className="shrink-0 px-8 pt-3 pb-4 bg-white">
-        <div className="max-w-[760px] mx-auto">
+        <div className="max-w-[900px] mx-auto">
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm focus-within:border-slate-300 focus-within:shadow-md transition-all overflow-hidden">
             {attachedFiles.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 px-3 pt-2.5 pb-1 border-b border-slate-100">

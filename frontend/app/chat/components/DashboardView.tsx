@@ -145,19 +145,92 @@ const RISKS = [
   { rank: 6, name: "Methotrexate", score: 61, signal: "Manufacturing shutdown at primary EU supplier", countries: ["DE", "FR", "PL"] },
 ];
 
-const ALERTS = [
-  { drug: "Morphine (injectable)", sev: "Critical" as Sev, flag: "🇦🇺", src: "TGA", ago: "2h", reason: "Manufacturing disruption" },
-  { drug: "Amoxicillin/Clavulanate", sev: "High" as Sev, flag: "🇬🇧", src: "MHRA", ago: "5h", reason: "Demand surge" },
-  { drug: "Piperacillin-Tazobactam", sev: "High" as Sev, flag: "🇨🇦", src: "HC", ago: "7h", reason: "API shortage" },
-  { drug: "Insulin Glargine", sev: "Critical" as Sev, flag: "🇩🇪", src: "BfArM", ago: "9h", reason: "Manufacturing issue" },
-  { drug: "Cisplatin", sev: "Critical" as Sev, flag: "🇺🇸", src: "FDA", ago: "12h", reason: "Quality recall" },
-  { drug: "Atorvastatin", sev: "Moderate" as Sev, flag: "🇳🇿", src: "Medsafe", ago: "19h", reason: "Import delay" },
+// agoHours is the canonical age; `ago` is the display string. Adding entries
+// across each period bucket so the toggle actually shows movement.
+const ALERTS: Array<{
+  drug: string;
+  sev: Sev;
+  flag: string;
+  src: string;
+  ago: string;
+  agoHours: number;
+  reason: string;
+}> = [
+  // Within 24h
+  { drug: "Morphine (injectable)", sev: "Critical", flag: "🇦🇺", src: "TGA", ago: "2h", agoHours: 2, reason: "Manufacturing disruption" },
+  { drug: "Amoxicillin/Clavulanate", sev: "High", flag: "🇬🇧", src: "MHRA", ago: "5h", agoHours: 5, reason: "Demand surge" },
+  { drug: "Piperacillin-Tazobactam", sev: "High", flag: "🇨🇦", src: "HC", ago: "7h", agoHours: 7, reason: "API shortage" },
+  { drug: "Insulin Glargine", sev: "Critical", flag: "🇩🇪", src: "BfArM", ago: "9h", agoHours: 9, reason: "Manufacturing issue" },
+  { drug: "Cisplatin", sev: "Critical", flag: "🇺🇸", src: "FDA", ago: "12h", agoHours: 12, reason: "Quality recall" },
+  { drug: "Atorvastatin", sev: "Moderate", flag: "🇳🇿", src: "Medsafe", ago: "19h", agoHours: 19, reason: "Import delay" },
+  // 24h–7d
+  { drug: "Methotrexate", sev: "Critical", flag: "🇩🇪", src: "BfArM", ago: "1d", agoHours: 30, reason: "Primary EU supplier shutdown" },
+  { drug: "Salbutamol inhaler", sev: "Moderate", flag: "🇦🇺", src: "TGA", ago: "2d", agoHours: 52, reason: "Container delay" },
+  { drug: "Levothyroxine", sev: "High", flag: "🇫🇷", src: "ANSM", ago: "3d", agoHours: 78, reason: "Bioequivalence batch fail" },
+  { drug: "Furosemide (inj.)", sev: "Moderate", flag: "🇬🇧", src: "MHRA", ago: "5d", agoHours: 122, reason: "Manufacturing variance" },
+  // 7d–30d
+  { drug: "Diltiazem ER", sev: "Moderate", flag: "🇺🇸", src: "FDA", ago: "12d", agoHours: 290, reason: "Voluntary recall — labelling" },
+  { drug: "Hydrochlorothiazide", sev: "Low", flag: "🇮🇪", src: "HPRA", ago: "18d", agoHours: 432, reason: "Reformulation delay" },
+  { drug: "Insulin Aspart", sev: "Critical", flag: "🇩🇪", src: "BfArM", ago: "22d", agoHours: 528, reason: "Cold-chain freight disruption" },
+  // 30d–90d
+  { drug: "Pip/Taz", sev: "Critical", flag: "🇦🇺", src: "TGA", ago: "38d", agoHours: 912, reason: "API plant audit findings" },
+  { drug: "Vancomycin", sev: "High", flag: "🇯🇵", src: "PMDA", ago: "55d", agoHours: 1320, reason: "API contamination" },
+  { drug: "Tamoxifen", sev: "Moderate", flag: "🇳🇱", src: "CBG-MEB", ago: "72d", agoHours: 1728, reason: "Demand spike + supplier exit" },
+  // >90d (in "All" only)
+  { drug: "Carboplatin", sev: "High", flag: "🇺🇸", src: "FDA", ago: "118d", agoHours: 2832, reason: "Quality remediation programme" },
+  { drug: "Adalimumab (orig.)", sev: "Low", flag: "🇨🇭", src: "Swissmedic", ago: "164d", agoHours: 3936, reason: "Biosimilar transition" },
 ];
+
+// Period → cutoff in hours. "All" means no cap.
+const PERIOD_HOURS: Record<Period, number | null> = {
+  "24h": 24,
+  "7d": 24 * 7,
+  "30d": 24 * 30,
+  "90d": 24 * 90,
+  All: null,
+};
+
+// Period-specific window for the time-bucketed KPI cards.
+const NEW_BY_PERIOD: Record<Period, { value: string; delta: string; up: boolean }> = {
+  "24h": { value: "6", delta: "+2 vs prior 24h", up: true },
+  "7d": { value: "38", delta: "−5 vs prior week", up: false },
+  "30d": { value: "142", delta: "+18 vs prior 30d", up: true },
+  "90d": { value: "487", delta: "+62 vs prior 90d", up: true },
+  All: { value: "2,847", delta: "lifetime new reports", up: true },
+};
+const RESOLVED_BY_PERIOD: Record<Period, { value: string; sub: string }> = {
+  "24h": { value: "4", sub: "closed shortages" },
+  "7d": { value: "24", sub: "closed shortages" },
+  "30d": { value: "89", sub: "closed shortages" },
+  "90d": { value: "312", sub: "closed shortages" },
+  All: { value: "2,104", sub: "lifetime resolutions" },
+};
+const NEW_LABEL: Record<Period, string> = {
+  "24h": "New (24h)",
+  "7d": "New (7 days)",
+  "30d": "New (30d)",
+  "90d": "New (90d)",
+  All: "New (all-time)",
+};
+const RESOLVED_LABEL: Record<Period, string> = {
+  "24h": "Resolved (24h)",
+  "7d": "Resolved (7d)",
+  "30d": "Resolved (30d)",
+  "90d": "Resolved (90d)",
+  All: "Resolved (all-time)",
+};
+const ALERTS_WINDOW_LABEL: Record<Period, string> = {
+  "24h": "Last 24 hours",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  "90d": "Last 90 days",
+  All: "All open alerts",
+};
 
 export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection>({ kind: "world" });
-  const [period, setPeriod] = useState<Period>("All");
+  const [period, setPeriod] = useState<Period>("7d");
   const [severity, setSeverity] = useState<SevFilter>("All");
   const [regionOpen, setRegionOpen] = useState(false);
   const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({ apac: true });
@@ -248,24 +321,39 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
     if (query) {
       return `Filtering on "${query}" — ${filteredRisks.length} risk rows match; ask the AI for a deeper read.`;
     }
+    if (period === "24h") {
+      return "Last 24h: 6 new alerts; Morphine (inj.) AU is the freshest critical — 2h ago, TGA manufacturing disruption.";
+    }
+    if (period === "30d") {
+      return "Past 30d adds Diltiazem ER recall and a BfArM Insulin Aspart cold-chain freight event — supply-side and demand-side risk both up.";
+    }
+    if (period === "90d") {
+      return "90-day view exposes the Pip/Taz API-plant audit and Vancomycin contamination — both still open, both supply-side.";
+    }
+    if (period === "All") {
+      return "All-time view: 2,847 cumulative shortages; long-tail signals (Carboplatin quality, Adalimumab biosimilar transition) still relevant for procurement planning.";
+    }
     return "Injectable oncology drugs dominate this week — 3 of the top 6 risks are hospital-only with no easy substitute.";
-  }, [severity, selection, active.id, active.label, query, filteredRisks.length]);
+  }, [severity, selection, active.id, active.label, query, filteredRisks.length, period]);
 
   const filteredAlerts = useMemo(() => {
     const flagToCountry: Record<string, string> = {
       "🇦🇺": "AU", "🇬🇧": "GB", "🇨🇦": "CA", "🇩🇪": "DE",
       "🇺🇸": "US", "🇳🇿": "NZ", "🇫🇷": "FR", "🇯🇵": "JP",
+      "🇮🇪": "IE", "🇨🇭": "CH", "🇳🇱": "NL",
     };
+    const cutoff = PERIOD_HOURS[period];
     return ALERTS.filter((a) => {
       if (query && !a.drug.toLowerCase().includes(query.toLowerCase())) return false;
       if (severity !== "All" && a.sev !== severity) return false;
+      if (cutoff !== null && a.agoHours > cutoff) return false;
       if (active.countries.length > 0) {
         const country = flagToCountry[a.flag];
         if (!country || !active.countries.includes(country)) return false;
       }
       return true;
     });
-  }, [query, severity, active.id, active.countries]);
+  }, [query, severity, period, active.id, active.countries]);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -486,9 +574,26 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
           })}
         </div>
 
-        {/* KPI cards */}
+        {/* KPI cards — NEW and RESOLVED swap their copy as the Period toggle changes */}
         <div className="grid grid-cols-4 gap-3 mb-3">
-          {STATS.map((s) => (
+          {[
+            STATS[0],
+            STATS[1],
+            {
+              label: NEW_LABEL[period],
+              value: NEW_BY_PERIOD[period].value,
+              sub: "newly reported",
+              delta: NEW_BY_PERIOD[period].delta,
+              up: NEW_BY_PERIOD[period].up,
+            },
+            {
+              label: RESOLVED_LABEL[period],
+              value: RESOLVED_BY_PERIOD[period].value,
+              sub: RESOLVED_BY_PERIOD[period].sub,
+              delta: null,
+              up: null as boolean | null,
+            },
+          ].map((s) => (
             <div
               key={s.label}
               className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
@@ -646,13 +751,13 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
             <div>
               <h2 className="text-[14px] font-semibold text-slate-900">Recent Alerts</h2>
               <p className="text-[12px] text-slate-400 mt-0.5">
-                Last 24 hours · click to ask the AI
+                {ALERTS_WINDOW_LABEL[period]} · click to ask the AI
               </p>
             </div>
             <span className="text-[12px] text-slate-400">
               {filteredAlerts.length === ALERTS.length
-                ? "6 of 38 alerts"
-                : `${filteredAlerts.length} of 38 (filtered)`}
+                ? `${filteredAlerts.length} alerts in window`
+                : `${filteredAlerts.length} of ${ALERTS.length} (filtered)`}
             </span>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm divide-y divide-slate-100">

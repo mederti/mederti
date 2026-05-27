@@ -4,6 +4,7 @@ import { SYSTEM_PROMPT } from "@/lib/chat/system-prompt";
 import { TOOL_DEFINITIONS, executeTool, hydrateReferencedIds, newContext } from "@/lib/chat/tools";
 import { checkRateLimit, getClientIp } from "@/lib/chat/rate-limit";
 import { recordDemandSignal } from "@/lib/demand-signal";
+import { recordAiUsage } from "@/lib/ai/usage-log";
 import { createServerClient } from "@/lib/supabase/server";
 import type { ChatMessage } from "@/lib/chat/types";
 
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
   let truncated = false;
   let toolCalls = 0;
   let lastResponse: Anthropic.Message | null = null;
+  const t0 = Date.now();
 
   try {
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
@@ -184,6 +186,15 @@ export async function POST(req: NextRequest) {
       console.log(
         `[chat] ip=${ip} model=${MODEL} tool_calls=${toolCalls} in=${usage?.input_tokens ?? "?"} out=${usage?.output_tokens ?? "?"} truncated=${truncated}`
       );
+      recordAiUsage({
+        route: "/api/chat",
+        model: MODEL,
+        response: lastResponse,
+        latency_ms: Date.now() - t0,
+        tool_calls: toolCalls,
+        truncated,
+        user_id: userId,
+      });
     }
 
     // Demand-signal instrumentation — chip_click signal per drug surfaced

@@ -1,5 +1,9 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { recordAiUsage } from "@/lib/ai/usage-log";
+
+const ROUTE = "/api/chip-answer";
+const MODEL = "claude-sonnet-4-20250514";
 
 /* ── Types ── */
 
@@ -88,9 +92,11 @@ export async function POST(req: NextRequest) {
         controller.close();
       };
 
+      const t0 = Date.now();
       try {
         if (!apiKey) {
           // Fallback: generate a static answer without the API
+          recordAiUsage({ route: ROUTE, model: MODEL, status: "no_key" });
           const fallback = generateFallback(question, drugContext);
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", content: fallback })}\n\n`));
           finish();
@@ -101,7 +107,7 @@ export async function POST(req: NextRequest) {
         const systemPrompt = buildSystemPrompt(drugContext);
 
         const response = anthropic.messages.stream({
-          model: "claude-sonnet-4-20250514",
+          model: MODEL,
           max_tokens: 300,
           system: systemPrompt,
           messages: [{ role: "user", content: question }],
@@ -119,8 +125,35 @@ export async function POST(req: NextRequest) {
             );
           }
         }
+
+        // Stream consumed — pull the assembled final message for usage stats.
+        try {
+          const finalMsg = await response.finalMessage();
+          recordAiUsage({
+            route: ROUTE,
+            model: MODEL,
+            response: finalMsg,
+            latency_ms: Date.now() - t0,
+          });
+        } catch {
+          // Stream succeeded but finalMessage() unavailable — log success
+          // without token counts rather than failing.
+          recordAiUsage({
+            route: ROUTE,
+            model: MODEL,
+            latency_ms: Date.now() - t0,
+            notes: "stream_no_final_message",
+          });
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
+        recordAiUsage({
+          route: ROUTE,
+          model: MODEL,
+          latency_ms: Date.now() - t0,
+          status: "error",
+          notes: msg,
+        });
         controller.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({ type: "text", content: `Sorry, I encountered an error: ${msg}` })}\n\n`

@@ -8,6 +8,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { recordAiUsage } from "@/lib/ai/usage-log";
 
 const client = new Anthropic();
 
@@ -125,7 +126,11 @@ export async function generateJson<T>(opts: {
   system: string;
   user: string;
   maxTokens?: number;
+  /** Optional caller label so /admin/ai-spend can attribute by route. */
+  route?: string;
 }): Promise<T> {
+  const route = opts.route ?? "lib/ai/supplier-insights:generateJson";
+  const t0 = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: opts.maxTokens ?? 1500,
@@ -146,8 +151,18 @@ export async function generateJson<T>(opts: {
     .trim();
 
   try {
-    return JSON.parse(cleaned) as T;
-  } catch (e) {
+    const parsed = JSON.parse(cleaned) as T;
+    recordAiUsage({ route, model: MODEL, response, latency_ms: Date.now() - t0 });
+    return parsed;
+  } catch {
+    recordAiUsage({
+      route,
+      model: MODEL,
+      response,
+      latency_ms: Date.now() - t0,
+      status: "error",
+      notes: "invalid_json",
+    });
     console.error("[ai/supplier-insights] JSON parse failed:", text.slice(0, 200));
     throw new Error("AI returned invalid JSON");
   }

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
+import { recordAiUsage } from "@/lib/ai/usage-log";
 
 export const dynamic = "force-dynamic";
 
 const client = new Anthropic();
+const ROUTE = "/api/intelligence/briefing";
 const MODEL = "claude-sonnet-4-20250514";
 const TTL_MS = 6 * 60 * 60 * 1000; // 6h cache for public briefing
 
@@ -264,6 +266,7 @@ POSITIVE EXAMPLES — produce text like these:
 
 Length discipline. Each "body" is between 50 and 100 words. Cut anything that does not pay its way.`;
 
+  const t0 = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 1800,
@@ -284,9 +287,23 @@ Length discipline. Each "body" is between 50 and 100 words. Cut anything that do
   try {
     briefing = JSON.parse(text) as PublicBriefing;
   } catch {
+    recordAiUsage({
+      route: ROUTE,
+      model: MODEL,
+      response,
+      latency_ms: Date.now() - t0,
+      status: "error",
+      notes: "invalid_json",
+    });
     return NextResponse.json({ error: "AI returned invalid JSON" }, { status: 500 });
   }
 
+  recordAiUsage({
+    route: ROUTE,
+    model: MODEL,
+    response,
+    latency_ms: Date.now() - t0,
+  });
   cache = { briefing, generated: Date.now() };
   return NextResponse.json({ ...briefing, cached: false, generated_at: new Date().toISOString() });
 }

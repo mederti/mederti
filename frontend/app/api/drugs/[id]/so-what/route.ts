@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
+import { recordAiUsage } from "@/lib/ai/usage-log";
 
 export const dynamic = "force-dynamic";
 
+const ROUTE = "/api/drugs/[id]/so-what";
 const MODEL = "claude-sonnet-4-20250514";
 const TTL_MS = 12 * 60 * 60 * 1000; // 12h cache
 
@@ -39,6 +41,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
+    recordAiUsage({ route: ROUTE, model: MODEL, status: "no_key" });
     return NextResponse.json(
       { error: "AI insights unavailable: ANTHROPIC_API_KEY not configured.", reason: "missing_api_key" },
       { status: 503 },
@@ -183,6 +186,7 @@ PRODUCE text like:
 - "Cisplatin is short in nine countries, including Italy, France and Germany. The cause in most is reported as manufacturing failure, not demand. The European wholesale book will tighten further in the next 60 days."
 - "Amoxicillin supply is stable across the 22 markets Mederti monitors. The last European shortage cleared in February. Buyers face no obvious near-term risk on this molecule."`;
 
+  const t0 = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 600,
@@ -203,9 +207,23 @@ PRODUCE text like:
   try {
     payload = JSON.parse(text) as SoWhatPayload;
   } catch {
+    recordAiUsage({
+      route: ROUTE,
+      model: MODEL,
+      response,
+      latency_ms: Date.now() - t0,
+      status: "error",
+      notes: "invalid_json",
+    });
     return NextResponse.json({ error: "AI returned invalid JSON" }, { status: 500 });
   }
 
+  recordAiUsage({
+    route: ROUTE,
+    model: MODEL,
+    response,
+    latency_ms: Date.now() - t0,
+  });
   cache.set(drugId, { payload, generated: Date.now() });
   return NextResponse.json({ ...payload, cached: false, generated_at: new Date().toISOString() });
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdminTyped } from "@/lib/supabase/admin";
 
 // Closes audit FINDING-B3-05 (full fix). Restores the data flow to
 // /home + /shortages — previously these called api.getShortages() which
@@ -57,7 +57,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const sb = getSupabaseAdmin();
+  // Typed client — types from frontend/types/db.ts (see docs/supabase-types.md).
+  // Status / severity / country_code columns flow through as typed strings.
+  const sb = getSupabaseAdminTyped();
   const offset = (page - 1) * pageSize;
 
   // Sort handling: `sort=severity` is a synthetic order we apply in JS after

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:types": "supabase gen types typescript --project-id mleblwjozjvpbuztggxp --schema public > types/db.ts && echo 'Regenerated types/db.ts — review the diff before committing'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

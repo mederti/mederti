@@ -1,4 +1,9 @@
 import PersonaPage, { PersonaContent } from "../components/persona-page";
+import { getLivePreviewRows } from "@/lib/persona-preview";
+
+// 10-min ISR cache; preview rows refresh on the same cadence as the
+// scraper window. Closes more of UX-09.
+export const revalidate = 600;
 
 const content: PersonaContent = {
   heroHeadline: "Prescribe with confidence.",
@@ -54,6 +59,8 @@ const content: PersonaContent = {
   ctaHref: "/signup",
 };
 
-export default function DoctorsPage() {
-  return <PersonaPage content={content} />;
+export default async function DoctorsPage() {
+  const liveRows = await getLivePreviewRows();
+  const resolved: PersonaContent = liveRows ? { ...content, previewRows: liveRows } : content;
+  return <PersonaPage content={resolved} />;
 }

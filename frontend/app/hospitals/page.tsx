@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import PersonaPage, { PersonaContent } from "../components/persona-page";
+import { getLivePreviewRows } from "@/lib/persona-preview";
+
+// 10-min ISR cache; preview rows refresh on the same cadence as the
+// scraper window. Closes more of UX-09.
+export const revalidate = 600;
 
 export const metadata: Metadata = {
   title: "Mederti for Hospitals — Proactive shortage intelligence for procurement teams",
@@ -66,6 +71,8 @@ const content: PersonaContent = {
   ctaHref: "/contact",
 };
 
-export default function HospitalsPage() {
-  return <PersonaPage content={content} />;
+export default async function HospitalsPage() {
+  const liveRows = await getLivePreviewRows();
+  const resolved: PersonaContent = liveRows ? { ...content, previewRows: liveRows } : content;
+  return <PersonaPage content={resolved} />;
 }

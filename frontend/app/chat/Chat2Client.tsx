@@ -420,10 +420,17 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
                     );
                     setTurns(turnsWithAssistant);
                   } else if (evt.type === "tool_done") {
-                    const steps = (assistantTurn.tool_steps ?? []).map((s) =>
-                      s.id === evt.id
-                        ? { ...s, done: true, result_count: evt.result_count, error: evt.error }
-                        : s
+                    const doneEvt = evt;
+                    const steps: ToolStep[] = (assistantTurn.tool_steps ?? []).map(
+                      (s): ToolStep =>
+                        s.id === doneEvt.id
+                          ? {
+                              ...s,
+                              done: true,
+                              result_count: doneEvt.result_count,
+                              error: doneEvt.error,
+                            }
+                          : s
                     );
                     assistantTurn = { ...assistantTurn, tool_steps: steps };
                     turnsWithAssistant = turnsWithAssistant.map((t) =>

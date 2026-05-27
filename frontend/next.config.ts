@@ -30,6 +30,15 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  // Closes audit FINDING-P5-05. lucide-react is imported in 51 files; the
+  // default Next bundler pulls in the full barrel re-export tree on the
+  // first import, then tree-shakes — slow at dev-server compile time and
+  // wasteful in the shared chunk. `optimizePackageImports` flips lucide-
+  // react (and similar tree-shake-friendly libs) to per-icon resolution
+  // up-front. Documented as a recommended Next 16 perf knob.
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
   async redirects() {
     return [
       // Drug page sub-version stubs → canonical drug page

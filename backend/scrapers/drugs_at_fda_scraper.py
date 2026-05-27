@@ -171,6 +171,8 @@ class DrugsAtFDAScraper(BaseScraper):
             raw = self.fetch()
             events = self.normalize(raw)
             counts = self.upsert(events)
+            finished_at = datetime.now(timezone.utc)
+            self._touch_data_source(finished_at)  # FINDING-D1-01
             return {
                 "source": self.SOURCE_NAME,
                 "started_at": started,
@@ -178,7 +180,7 @@ class DrugsAtFDAScraper(BaseScraper):
                 "records_found": len(events),
                 "records_processed": counts.get("upserted", 0),
                 "errors": counts.get("errors", 0),
-                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "finished_at": finished_at.isoformat(),
             }
         except Exception as exc:
             self.log.error("Drugs@FDA run failed", extra={"error": str(exc)})

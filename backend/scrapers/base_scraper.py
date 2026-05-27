@@ -609,16 +609,28 @@ class BaseScraper(ABC):
             )
             self.log.info("Scrape finished", extra=summary)
 
-            # Update last_scraped_at on the data source (even for duplicates)
+            # Update last_scraped_at on the data source (even for duplicates).
+            # Skipped on failure so a transient outage doesn't mask a long
+            # stale gap in the public freshness dashboard.
             if summary["status"] != "failed":
-                try:
-                    self.db.table("data_sources").update({
-                        "last_scraped_at": finished_at.isoformat(),
-                    }).eq("id", self.SOURCE_ID).execute()
-                except Exception as ts_exc:
-                    self.log.warning(
-                        "Could not update last_scraped_at",
-                        extra={"error": str(ts_exc), "source": self.SOURCE_NAME},
-                    )
+                self._touch_data_source(finished_at)
 
         return summary
+
+    # ── Heartbeat helper ────────────────────────────────────────────────────
+    # Extracted so subclasses that override run() (currently clinicaltrials,
+    # fda_inspections, drugs_at_fda — these bypass raw_scrapes for large
+    # payloads) can still write the public freshness signal. Closes audit
+    # FINDING-D1-01 — without this, /freshness shows those sources as stale
+    # even when they ran an hour ago.
+    def _touch_data_source(self, finished_at: datetime) -> None:
+        """Update data_sources.last_scraped_at. Best-effort; never raises."""
+        try:
+            self.db.table("data_sources").update({
+                "last_scraped_at": finished_at.isoformat(),
+            }).eq("id", self.SOURCE_ID).execute()
+        except Exception as ts_exc:
+            self.log.warning(
+                "Could not update last_scraped_at",
+                extra={"error": str(ts_exc), "source": self.SOURCE_NAME},
+            )

@@ -1,5 +1,42 @@
-// Routes are now served by Next.js API Route Handlers under /api/*
+// ============================================================================
+// Mederti typed API client
+// ============================================================================
+// Routes are served by Next.js API Route Handlers under /api/*.
 // No external backend dependency required.
+//
+// AUDIT NOTE — FINDING-B3-05 (partial fix):
+// ─────────────────────────────────────────
+// The typed client has historically been a 1:1 mirror of the legacy FastAPI
+// surface that lived in api/routers/*. When the frontend moved to Next.js
+// Route Handlers, some endpoints were ported and others were not. The
+// October 2026 typed-client audit (commit TBD) found:
+//
+//   ✅ search                — backing route exists (revalidate=60 since
+//                              bd13b60)
+//   ✅ getDrug               — backing route exists, but no callers
+//                              (kept available for future use)
+//   ❌ getShortages          — NO backing /api/shortages handler. /home and
+//                              /shortages pages call this; both wrap in
+//                              try/catch and degrade gracefully to empty
+//                              states. **Silent breakage** — users see no
+//                              data on these pages.
+//   ❌ getSummary            — NO backing /api/shortages/summary handler.
+//                              Called from /home (same silent-degradation
+//                              path as getShortages).
+//   ❌ getRecalls            — NO backing /api/recalls handler. Called from
+//                              /recalls page. Same silent-degradation.
+//
+// The 5 dead methods (getDrug excluded — it IS backed, just unused) with
+// zero callers were deleted in this pass: getDrugShortages,
+// getDrugAlternatives, getDrugRecalls, getRecallsSummary. They wrapped
+// routes that don't exist AND weren't called from anywhere.
+//
+// The 3 broken methods above are kept in place for now — removing them
+// would force a build-time refactor of /home, /shortages, /recalls.
+// Next sprint: either (a) implement the 3 missing route handlers OR
+// (b) refactor the calling pages to read Supabase directly.
+// ============================================================================
+
 // Server Components need an absolute URL; client-side can use relative.
 function getBase() {
   if (typeof window !== "undefined") return "/api"; // browser
@@ -41,6 +78,8 @@ export interface DrugDetail {
   is_controlled_substance: boolean | null;
 }
 
+// Per-event shortage row (used by /search/page.tsx and any future detail view).
+// Kept distinct from ShortageRow which carries drug-context columns for list views.
 export interface ShortageEvent {
   shortage_id: string;
   country: string;
@@ -55,17 +94,6 @@ export interface ShortageEvent {
   source_name: string | null;
   source_url: string | null;
   last_verified_at: string | null;
-}
-
-export interface Alternative {
-  alternative_drug_id: string;
-  alternative_generic_name: string;
-  alternative_brand_names: string[];
-  relationship_type: string;
-  clinical_evidence_level: string | null;
-  similarity_score: number | null;
-  dose_conversion_notes: string | null;
-  availability_note: string | null;
 }
 
 export interface ShortageRow {
@@ -119,35 +147,6 @@ export interface RecallListResponse {
   results: RecallRow[];
 }
 
-export interface RecallSummary {
-  id: string;
-  recall_id: string;
-  country_code: string;
-  recall_class: string | null;
-  generic_name: string;
-  brand_name: string | null;
-  manufacturer: string | null;
-  announced_date: string;
-  status: string;
-  reason_category: string | null;
-  press_release_url: string | null;
-  linked_shortages: number;
-}
-
-export interface DrugRecallsResponse {
-  drug_id: string;
-  resilience_score: number;
-  recalls: RecallSummary[];
-}
-
-export interface RecallSummaryResponse {
-  total_active: number;
-  class_i_count: number;
-  new_this_month: number;
-  by_country: Array<{ country_code: string; count: number }>;
-  by_class: Record<string, number>;
-}
-
 export interface SummaryResponse {
   by_severity: Record<string, number>;
   by_category: Array<{ category: string; count: number; max_severity: string }>;
@@ -165,20 +164,18 @@ async function apiFetch<T>(path: string): Promise<T> {
 }
 
 export const api = {
+  // ── ✅ Backed by a real route handler ────────────────────────────────
   search: (q: string, limit = 10) =>
     apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
 
   getDrug: (id: string) =>
     apiFetch<DrugDetail>(`/drugs/${id}`),
 
-  getDrugShortages: (id: string, status?: string) =>
-    apiFetch<ShortageEvent[]>(
-      `/drugs/${id}/shortages${status ? `?status=${status}` : ""}`
-    ),
-
-  getDrugAlternatives: (id: string) =>
-    apiFetch<Alternative[]>(`/drugs/${id}/alternatives`),
-
+  // ── ❌ Broken: NO backing route handler (FINDING-B3-05) ──────────────
+  // These wrappers stay in place so /home, /shortages, /recalls compile;
+  // those pages already wrap in try/catch + degrade to empty states.
+  // Removing them would break the build; implementing the routes is the
+  // right next move (see file header).
   getShortages: (params: Record<string, string | number>) => {
     const qs = new URLSearchParams(
       Object.entries(params).reduce((acc, [k, v]) => {
@@ -192,9 +189,6 @@ export const api = {
   getSummary: () =>
     apiFetch<SummaryResponse>("/shortages/summary"),
 
-  getDrugRecalls: (id: string) =>
-    apiFetch<DrugRecallsResponse>(`/drugs/${id}/recalls`),
-
   getRecalls: (params: Record<string, string | number>) => {
     const qs = new URLSearchParams(
       Object.entries(params).reduce((acc, [k, v]) => {
@@ -204,7 +198,4 @@ export const api = {
     ).toString();
     return apiFetch<RecallListResponse>(`/recalls?${qs}`);
   },
-
-  getRecallsSummary: () =>
-    apiFetch<RecallSummaryResponse>("/recalls/summary"),
 };

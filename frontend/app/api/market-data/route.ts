@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export const dynamic = "force-dynamic";
+// 5-min edge cache. The route's own in-memory cache (CACHE_TTL below) only
+// protects within a single Vercel instance; this lifts that protection to
+// the edge so cold starts + region spread don't bypass it. Closes part of
+// audit FINDING-P5-01.
+export const revalidate = 300;
 
 /* ── Types ── */
 interface StockQuote {

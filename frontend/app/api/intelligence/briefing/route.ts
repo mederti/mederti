@@ -3,7 +3,13 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
 import { recordAiUsage } from "@/lib/ai/usage-log";
 
-export const dynamic = "force-dynamic";
+// 6h edge cache, matching the existing in-memory TTL_MS. Without this, a
+// cold start hits Claude Sonnet + a fresh DB aggregation on every region/
+// instance. With this, the response is held at the edge so any user
+// anywhere within the 6h window gets the cached payload essentially free.
+// Closes part of audit FINDING-P5-01. The in-memory `cache` variable
+// below becomes belt-and-braces.
+export const revalidate = 21600;
 
 const client = new Anthropic();
 const ROUTE = "/api/intelligence/briefing";

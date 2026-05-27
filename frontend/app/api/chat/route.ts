@@ -25,10 +25,15 @@ type IncomingBody = {
 // ── Wire protocol ─────────────────────────────────────────────────────────
 // NDJSON: one JSON object per line. Event shapes:
 //   { type: "text_delta", delta: string }
-//   { type: "tool_start", name: string, id: string }
-//   { type: "tool_done",  name: string, id: string, ms: number }
+//   { type: "tool_start", name: string, id: string, input: object }
+//   { type: "tool_done",  name: string, id: string, ms: number, result_count?: number, error?: boolean }
 //   { type: "done", content, drugs, subs, classes, tool_calls, truncated }
 //   { type: "error", message: string }
+//
+// `input` on tool_start lets the UI render the actual query the model
+// asked for ("Searching: lipitor EU shortage"). `result_count` on
+// tool_done is a best-effort hit count derived from array-shaped results
+// — used to show "7 results" next to the step row.
 //
 // The non-streaming JSON contract (content/drugs/subs/classes/tool_calls/
 // truncated) is preserved verbatim inside the terminal "done" event, so the
@@ -37,8 +42,15 @@ type IncomingBody = {
 
 type StreamEvent =
   | { type: "text_delta"; delta: string }
-  | { type: "tool_start"; name: string; id: string }
-  | { type: "tool_done"; name: string; id: string; ms: number }
+  | { type: "tool_start"; name: string; id: string; input: Record<string, unknown> }
+  | {
+      type: "tool_done";
+      name: string;
+      id: string;
+      ms: number;
+      result_count?: number;
+      error?: boolean;
+    }
   | {
       type: "done";
       content: string;
@@ -49,6 +61,20 @@ type StreamEvent =
       truncated: boolean;
     }
   | { type: "error"; message: string };
+
+// Best-effort: if a tool returned an array, that length is "results".
+// If it returned an object with an obvious list field, count that.
+// Used purely for the UI step-row count — never load-bearing.
+function countResults(result: unknown): number | undefined {
+  if (Array.isArray(result)) return result.length;
+  if (result && typeof result === "object") {
+    for (const key of ["results", "items", "rows", "hits"]) {
+      const v = (result as Record<string, unknown>)[key];
+      if (Array.isArray(v)) return v.length;
+    }
+  }
+  return undefined;
+}
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
@@ -173,7 +199,12 @@ export async function POST(req: NextRequest) {
           toolUses.map(async (tu) => {
             toolCalls += 1;
             const startedAt = Date.now();
-            await write({ type: "tool_start", name: tu.name, id: tu.id });
+            await write({
+              type: "tool_start",
+              name: tu.name,
+              id: tu.id,
+              input: (tu.input ?? {}) as Record<string, unknown>,
+            });
             try {
               const result = await executeTool(tu.name, tu.input as Record<string, any>, ctx);
               await write({
@@ -181,6 +212,7 @@ export async function POST(req: NextRequest) {
                 name: tu.name,
                 id: tu.id,
                 ms: Date.now() - startedAt,
+                result_count: countResults(result),
               });
               return {
                 type: "tool_result" as const,
@@ -195,6 +227,7 @@ export async function POST(req: NextRequest) {
                 name: tu.name,
                 id: tu.id,
                 ms: Date.now() - startedAt,
+                error: true,
               });
               return {
                 type: "tool_result" as const,

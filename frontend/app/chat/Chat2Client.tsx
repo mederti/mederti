@@ -8,6 +8,7 @@ import {
   isSpreadsheet,
   type ActiveView,
   type AttachedFile,
+  type ToolStep,
   type Turn,
 } from "./components/ChatMain";
 import { collectDrugCandidates } from "./components/parser2";
@@ -36,6 +37,35 @@ import { DesktopOnly } from "@/app/components/DesktopOnly";
 
 // /chat2 is intentionally public during layout iteration — no auth gate. The
 // chat backend handles its own rate limiting; flip back on when promoting.
+
+// Distill the most useful single string out of an arbitrary tool input
+// object — preferring `query`, then a few common identifier-ish keys,
+// then the first short string value as a last resort. Skips UUID-looking
+// values so we don't render visual noise like an opaque drug id.
+function pickToolQuery(input: Record<string, unknown>): string {
+  const candidates = [
+    "query",
+    "search_query",
+    "q",
+    "generic_name",
+    "drug_name",
+    "name",
+    "class",
+    "atc",
+    "country",
+  ];
+  for (const k of candidates) {
+    const v = input[k];
+    if (typeof v === "string" && v.length > 0 && v.length <= 120) return v;
+  }
+  for (const v of Object.values(input)) {
+    if (typeof v === "string" && v.length > 0 && v.length <= 60) {
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v)) continue;
+      return v;
+    }
+  }
+  return "";
+}
 
 export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const router = useRouter();
@@ -295,7 +325,12 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         // This is what makes tokens appear immediately instead of after a
         // 30–40s wait.
         const assistantTurnId = ++idRef.current;
-        let assistantTurn: Turn = { id: assistantTurnId, role: "assistant", text: "" };
+        let assistantTurn: Turn = {
+          id: assistantTurnId,
+          role: "assistant",
+          text: "",
+          tool_steps: [],
+        };
         let turnsWithAssistant = [...nextTurns, assistantTurn];
         setTurns(turnsWithAssistant);
 
@@ -329,8 +364,20 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
                 try {
                   const evt = JSON.parse(line) as
                     | { type: "text_delta"; delta: string }
-                    | { type: "tool_start"; name: string; id: string }
-                    | { type: "tool_done"; name: string; id: string; ms: number }
+                    | {
+                        type: "tool_start";
+                        name: string;
+                        id: string;
+                        input?: Record<string, unknown>;
+                      }
+                    | {
+                        type: "tool_done";
+                        name: string;
+                        id: string;
+                        ms: number;
+                        result_count?: number;
+                        error?: boolean;
+                      }
                     | {
                         type: "done";
                         content: string;
@@ -357,6 +404,32 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
                       t.id === assistantTurnId ? assistantTurn : t
                     );
                     setTurns(turnsWithAssistant);
+                  } else if (evt.type === "tool_start") {
+                    const newStep: ToolStep = {
+                      id: evt.id,
+                      name: evt.name,
+                      query: pickToolQuery(evt.input ?? {}),
+                      done: false,
+                    };
+                    assistantTurn = {
+                      ...assistantTurn,
+                      tool_steps: [...(assistantTurn.tool_steps ?? []), newStep],
+                    };
+                    turnsWithAssistant = turnsWithAssistant.map((t) =>
+                      t.id === assistantTurnId ? assistantTurn : t
+                    );
+                    setTurns(turnsWithAssistant);
+                  } else if (evt.type === "tool_done") {
+                    const steps = (assistantTurn.tool_steps ?? []).map((s) =>
+                      s.id === evt.id
+                        ? { ...s, done: true, result_count: evt.result_count, error: evt.error }
+                        : s
+                    );
+                    assistantTurn = { ...assistantTurn, tool_steps: steps };
+                    turnsWithAssistant = turnsWithAssistant.map((t) =>
+                      t.id === assistantTurnId ? assistantTurn : t
+                    );
+                    setTurns(turnsWithAssistant);
                   } else if (evt.type === "done") {
                     doneData = {
                       content: evt.content,
@@ -366,9 +439,6 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
                   } else if (evt.type === "error") {
                     streamError = evt.message;
                   }
-                  // tool_start / tool_done events are accepted but not
-                  // yet surfaced in the UI — they're useful for a future
-                  // "Searching shortage events…" indicator.
                 } catch {
                   // Malformed NDJSON line — skip it rather than crash.
                 }
@@ -416,6 +486,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
           id: assistantTurnId,
           role: "assistant",
           text: doneData.content || assistantTurn.text,
+          tool_steps: assistantTurn.tool_steps,
         };
 
         // Seed the drug-name map with the canonical name → id pairs the

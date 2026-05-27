@@ -3,8 +3,8 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import {
-  BarChart, Bell, ChatBubble, Close, FileChip, Grid, ImageChip,
-  Paperclip, ScanBarcode, Send, SheetChip,
+  BarChart, Bell, ChatBubble, Check, Close, FileChip, Grid, ImageChip,
+  Paperclip, ScanBarcode, Search, Send, SheetChip,
 } from "./icons";
 import { parseAgentResponse, RenderedResponse } from "./parser2";
 import { DashboardView } from "./DashboardView";
@@ -13,9 +13,29 @@ import BulkUpload from "@/app/components/bulk-upload";
 
 export type ActiveView = "chat" | "dashboard" | "intelligence";
 
+// A single tool step the model worked through to answer the turn.
+// `query` is a short, user-friendly label distilled from the tool input
+// (e.g. "lipitor EU shortage" for web_search, "amoxicillin" for
+// search_drugs). `done` flips true when the tool_done event arrives;
+// `result_count` is shown next to the row as "N results" when present.
+export type ToolStep = {
+  id: string;
+  name: string;
+  query: string;
+  done: boolean;
+  result_count?: number;
+  error?: boolean;
+};
+
 export type Turn =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "assistant"; text: string; error?: string };
+  | {
+      id: number;
+      role: "assistant";
+      text: string;
+      error?: string;
+      tool_steps?: ToolStep[];
+    };
 
 export interface AttachedFile {
   id: string;
@@ -45,6 +65,101 @@ const WELCOME_SUGGESTIONS = [
   "Show me critical antibiotic shortages globally",
   "What's substitutable for hydrochlorothiazide?",
 ];
+
+// User-facing label for each tool the chat backend can call. Keep these
+// short — they appear next to a spinner/check in the assistant turn.
+// Unknown tools fall through to a generic "Looking up …" with the tool
+// name in title-case.
+const TOOL_LABELS: Record<string, string> = {
+  web_search: "Searching the web",
+  query_intelligence_sources: "Searching macro signals",
+  query_shortage_events: "Searching shortage events",
+  search_drugs: "Looking up drugs",
+  get_drug_details: "Fetching drug details",
+  find_substitutes: "Finding substitutes",
+  search_recalls: "Searching recalls",
+  get_shortage_history: "Reading shortage history",
+  list_active_shortages: "Listing active shortages",
+  get_class_summary: "Summarising drug class",
+  get_resolution_time_stats: "Computing resolution times",
+  get_predictive_signals: "Reading predictive signals",
+  get_class_concentration_risk: "Assessing concentration risk",
+  get_recurring_shortages: "Checking recurrence",
+  compare_shortage_burden: "Comparing burden across markets",
+  get_available_brands: "Looking up brands",
+  get_recent_deregistrations: "Checking recent deregistrations",
+  get_trade_prices: "Fetching trade prices",
+  get_dose_conversion: "Computing dose conversion",
+  get_therapeutic_equivalents: "Finding therapeutic equivalents",
+  summarize_shortage_landscape: "Summarising landscape",
+  get_sole_source_essentials: "Checking sole-source essentials",
+  get_recall_links: "Linking recalls to shortages",
+};
+
+function toolLabel(name: string): string {
+  if (TOOL_LABELS[name]) return TOOL_LABELS[name];
+  // Fallback: snake_case → "Snake case"
+  const pretty = name.replace(/_/g, " ");
+  return pretty.charAt(0).toUpperCase() + pretty.slice(1);
+}
+
+// Spinner + label rows that appear above the streamed answer. Matches the
+// Claude.ai pattern the user requested: a tight, low-contrast list of the
+// tool calls the model is working through, with spinners that flip to
+// checks as each completes. Result count shows on the right when known.
+export function ToolSteps({ steps, hasText }: { steps: ToolStep[]; hasText: boolean }) {
+  // Once text has started streaming we collapse the panel into a single
+  // muted summary row — keeps the answer the focal point but lets the
+  // user still see what the model searched for.
+  const allDone = steps.every((s) => s.done);
+
+  if (hasText && allDone) {
+    return (
+      <div className="mb-3 text-[12px] text-slate-400 leading-relaxed">
+        Searched {steps.length} source{steps.length === 1 ? "" : "s"} · {steps.map((s) => toolLabel(s.name)).join(" · ")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-[13px]">
+      <div className="text-slate-500 text-[11px] uppercase tracking-wide mb-1.5">
+        {allDone ? "Done" : "Thinking"}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {steps.map((s) => {
+          const label = toolLabel(s.name);
+          const query = s.query;
+          return (
+            <div key={s.id} className="flex items-center gap-2 text-slate-700">
+              <span className="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
+                {s.done ? (
+                  s.error ? (
+                    <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
+                  ) : (
+                    <Check size={12} className="text-emerald-600" />
+                  )
+                ) : (
+                  <span className="w-2.5 h-2.5 rounded-full border border-slate-300 border-t-slate-500 animate-spin" />
+                )}
+              </span>
+              <Search size={12} className="text-slate-400 shrink-0" />
+              <span className="truncate">
+                {label}
+                {query ? <span className="text-slate-500">: {query}</span> : null}
+              </span>
+              {typeof s.result_count === "number" && s.done ? (
+                <span className="ml-auto text-slate-400 text-[12px] shrink-0">
+                  {s.result_count} {s.result_count === 1 ? "result" : "results"}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function Chat2TopBar({
   activeView,
@@ -260,6 +375,9 @@ export function ChatMain({
                         style={{ width: 20, height: 20, display: "block" }}
                       />
                     </div>
+                    {t.tool_steps && t.tool_steps.length > 0 ? (
+                      <ToolSteps steps={t.tool_steps} hasText={t.text.length > 0} />
+                    ) : null}
                     {t.error ? (
                       <div className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
                         {t.error}

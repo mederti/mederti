@@ -4,37 +4,24 @@
 // Routes are served by Next.js API Route Handlers under /api/*.
 // No external backend dependency required.
 //
-// AUDIT NOTE — FINDING-B3-05 (partial fix):
-// ─────────────────────────────────────────
-// The typed client has historically been a 1:1 mirror of the legacy FastAPI
-// surface that lived in api/routers/*. When the frontend moved to Next.js
-// Route Handlers, some endpoints were ported and others were not. The
-// October 2026 typed-client audit (commit TBD) found:
+// AUDIT NOTE — FINDING-B3-05 (FULLY CLOSED):
+// ──────────────────────────────────────────
+// The typed client mirrors the legacy FastAPI surface. The Oct 2026 audit
+// found 7 of 9 methods wrapped routes that didn't exist as Next handlers.
+// Cleanup landed in two passes:
 //
-//   ✅ search                — backing route exists (revalidate=60 since
-//                              bd13b60)
-//   ✅ getDrug               — backing route exists, but no callers
-//                              (kept available for future use)
-//   ❌ getShortages          — NO backing /api/shortages handler. /home and
-//                              /shortages pages call this; both wrap in
-//                              try/catch and degrade gracefully to empty
-//                              states. **Silent breakage** — users see no
-//                              data on these pages.
-//   ❌ getSummary            — NO backing /api/shortages/summary handler.
-//                              Called from /home (same silent-degradation
-//                              path as getShortages).
-//   ❌ getRecalls            — NO backing /api/recalls handler. Called from
-//                              /recalls page. Same silent-degradation.
+//   ✅ search                — backing route exists (revalidate=60, bd13b60)
+//   ✅ getDrug               — backing route exists, no callers
+//   ✅ getShortages          — /api/shortages SHIPPED, revalidate=60
+//   ✅ getSummary            — /api/shortages/summary SHIPPED, revalidate=300
+//   ✅ getRecalls            — /api/recalls SHIPPED, revalidate=120
 //
-// The 5 dead methods (getDrug excluded — it IS backed, just unused) with
-// zero callers were deleted in this pass: getDrugShortages,
-// getDrugAlternatives, getDrugRecalls, getRecallsSummary. They wrapped
-// routes that don't exist AND weren't called from anywhere.
+// The 4 dead methods with zero callers were deleted in 34acfd6:
+// getDrugShortages, getDrugAlternatives, getDrugRecalls, getRecallsSummary.
 //
-// The 3 broken methods above are kept in place for now — removing them
-// would force a build-time refactor of /home, /shortages, /recalls.
-// Next sprint: either (a) implement the 3 missing route handlers OR
-// (b) refactor the calling pages to read Supabase directly.
+// All remaining methods are backed by real handlers; /home, /shortages,
+// /recalls now render with their actual data instead of degrading silently
+// to empty-state cards.
 // ============================================================================
 
 // Server Components need an absolute URL; client-side can use relative.

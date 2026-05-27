@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/chat/system-prompt";
 import { TOOL_DEFINITIONS, executeTool, hydrateReferencedIds, newContext } from "@/lib/chat/tools";
 import { checkRateLimit, getClientIp } from "@/lib/chat/rate-limit";
+import { recordDemandSignal } from "@/lib/demand-signal";
 import type { ChatMessage } from "@/lib/chat/types";
 
 export const runtime = "nodejs";
@@ -169,6 +170,18 @@ export async function POST(req: NextRequest) {
       console.log(
         `[chat] ip=${ip} model=${MODEL} tool_calls=${toolCalls} in=${usage?.input_tokens ?? "?"} out=${usage?.output_tokens ?? "?"} truncated=${truncated}`
       );
+    }
+
+    // Demand-signal instrumentation — chip_click signal per drug surfaced
+    // in the answer. ctx.drugs is keyed by UUID and populated by tool
+    // hydration as the model emits <drug_card /> tags. One signal per
+    // distinct drug per chat turn — buyer-side demand picture.
+    for (const drugId of Object.keys(ctx.drugs)) {
+      recordDemandSignal({
+        signal_type: "chip_click",
+        drug_id: drugId,
+        identifier: ip,
+      });
     }
 
     return Response.json({

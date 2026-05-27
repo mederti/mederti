@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ServerTimer } from "@/lib/server-timing";
+import { recordDemandSignal } from "@/lib/demand-signal";
+import { getClientIp } from "@/lib/chat/rate-limit";
 
 // Pin to Mumbai to sit next to the Supabase project (ap-south-1).
 // On Hobby plan this is ignored — set the project default in Vercel
@@ -182,6 +184,19 @@ export async function GET(req: NextRequest) {
   }
 
   const results = [...drugResults, ...catResults];
+
+  // Demand-signal instrumentation (Sprint 3 PR 2 substrate, Sprint 4 PR 1
+  // wiring). Fire-and-forget; never blocks the response. The first drug
+  // result is attributed to the search signal so SUP demand queries can
+  // pivot to a specific drug; raw_query carries the unresolved text when
+  // there's no top hit.
+  recordDemandSignal({
+    signal_type: "search",
+    drug_id: results[0]?.drug_id ?? null,
+    raw_query: q,
+    identifier: getClientIp(req),
+  });
+
   return NextResponse.json(
     { query: q, results, total: results.length },
     { headers: timer.headers() }

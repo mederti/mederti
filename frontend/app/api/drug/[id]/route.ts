@@ -11,6 +11,8 @@ import {
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { computeTradePrice } from "@/lib/trade-price";
 import type { DrugDetailBundle } from "@/lib/chat/types";
+import { recordDemandSignal } from "@/lib/demand-signal";
+import { getClientIp } from "@/lib/chat/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +69,14 @@ export async function GET(
       ...s,
       suppliers: supplierMap.get(s.drug_id) ?? [],
     }));
+
+    // Demand-signal instrumentation — drug_view signal (Sprint 4 PR 1).
+    recordDemandSignal({
+      signal_type: "drug_view",
+      drug_id: id,
+      country_code: homeCountry,
+      identifier: getClientIp(req),
+    });
 
     return Response.json(
       {

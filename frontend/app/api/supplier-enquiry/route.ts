@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { getPartnerForCountry } from "@/lib/suppliers";
+import { recordDemandSignal } from "@/lib/demand-signal";
+import { getClientIp } from "@/lib/chat/rate-limit";
 
 const resend =
   process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== "re_placeholder"
@@ -32,6 +34,17 @@ export async function POST(req: NextRequest) {
   if (!drugName || !urgency || !country) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+
+  // Demand-signal instrumentation — enquiry signal (Sprint 4 PR 1).
+  // Recorded BEFORE the rest of the workflow so a downstream Resend / RLS
+  // failure doesn't suppress the buyer-side signal.
+  recordDemandSignal({
+    signal_type: "enquiry",
+    drug_id: drugId ?? null,
+    raw_query: drugName,
+    country_code: country,
+    identifier: getClientIp(req),
+  });
 
   // Resolve the calling user from the auth session. Null for anonymous
   // enquiries — those are still allowed (no signin required), but their

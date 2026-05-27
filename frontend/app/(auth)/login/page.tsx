@@ -4,8 +4,8 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import OAuthButtons from "../OAuthButtons";
+import AuthShell from "../AuthShell";
 
 type Tab = "password" | "magic";
 
@@ -18,9 +18,10 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(searchParams.get("error"));
   const [magicSent, setMagicSent] = useState(false);
 
+  const role = searchParams.get("role");
   const supabase = createBrowserClient();
 
   async function handlePasswordLogin(e: React.FormEvent) {
@@ -69,16 +70,11 @@ function LoginForm() {
   }
 
   return (
-    <div style={{
-      minHeight: "100vh", background: "var(--app-bg)",
-      display: "flex", flexDirection: "column",
-    }}>
-      <SiteNav />
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <AuthShell>
       <div style={{
-        width: "100%", maxWidth: 420,
         background: "#fff", border: "1px solid var(--app-border)",
         borderRadius: 14, padding: "36px 40px",
+        boxShadow: "0 20px 60px rgba(15,23,42,0.10)",
       }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -89,6 +85,9 @@ function LoginForm() {
             Access your watchlist, alerts, and personalised feed
           </p>
         </div>
+
+        {/* OAuth */}
+        <OAuthButtons next={next} role={role} mode="signin" />
 
         {/* Tabs */}
         <div style={{
@@ -254,9 +253,7 @@ function LoginForm() {
           </Link>
         </div>
       </div>
-      </div>
-      <SiteFooter />
-    </div>
+    </AuthShell>
   );
 }
 

@@ -4,8 +4,8 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import OAuthButtons from "../OAuthButtons";
+import AuthShell from "../AuthShell";
 
 function SignupForm() {
   const router = useRouter();
@@ -69,16 +69,11 @@ function SignupForm() {
 
   if (done) {
     return (
-      <div style={{
-        minHeight: "100vh", background: "var(--app-bg)",
-        display: "flex", flexDirection: "column",
-      }}>
-        <SiteNav />
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <AuthShell>
         <div style={{
-          width: "100%", maxWidth: 420,
           background: "#fff", border: "1px solid var(--app-border)",
           borderRadius: 14, padding: "36px 40px", textAlign: "center",
+          boxShadow: "0 20px 60px rgba(15,23,42,0.10)",
         }}>
           <div style={{ fontSize: 36, marginBottom: 14 }}>✓</div>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--app-text)", marginBottom: 8 }}>
@@ -90,23 +85,16 @@ function SignupForm() {
             <Link href="/login" style={{ color: "var(--teal)" }}>sign in</Link>.
           </p>
         </div>
-        </div>
-        <SiteFooter />
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div style={{
-      minHeight: "100vh", background: "var(--app-bg)",
-      display: "flex", flexDirection: "column",
-    }}>
-      <SiteNav />
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <AuthShell>
       <div style={{
-        width: "100%", maxWidth: 420,
         background: "#fff", border: "1px solid var(--app-border)",
         borderRadius: 14, padding: "36px 40px",
+        boxShadow: "0 20px 60px rgba(15,23,42,0.10)",
       }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -119,6 +107,9 @@ function SignupForm() {
               : "Free for individual pharmacists and clinicians"}
           </p>
         </div>
+
+        {/* OAuth */}
+        <OAuthButtons next={next} role={role} mode="signup" />
 
         {/* Error */}
         {error && (
@@ -209,9 +200,7 @@ function SignupForm() {
           </Link>
         </div>
       </div>
-      </div>
-      <SiteFooter />
-    </div>
+    </AuthShell>
   );
 }
 

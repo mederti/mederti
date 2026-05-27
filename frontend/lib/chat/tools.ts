@@ -458,6 +458,40 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
       required: ["drug_id"],
     },
   },
+  // Sprint 4 PR 2 — auth-required portfolio tools (audit §4.8)
+  {
+    name: "get_my_portfolio_status",
+    description:
+      "AUTH REQUIRED. For the signed-in user, returns shortage status of every drug in their watchlist + supplier portfolio. Surfaces which portfolio drugs are currently in shortage, worst severity, countries affected, and WHO-essential overlap. Use for SUP-03 ('shortages overlapping my catalogue'), RET-16 ('drugs in my regular order at risk'), HCL-01 ('shortages affecting drugs we dispense' — uses watchlist as a stand-in for formulary). Returns a sign-in envelope when called without auth.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_watchlist_demand",
+    description:
+      "AUTH REQUIRED (supplier-side). Overlays anonymised buyer-demand counts (v_demand_signal_summary, k-anon ≥ 5) against the signed-in user's supplier_portfolios drug_ids. Returns drugs in portfolio that buyers are actively searching for + how often. Use for SUP-26 ('buyers actively searching for products I supply'), SUP-28 ('watchlist subscribers for my drugs'). Returns a sign-in or no-portfolio envelope when not applicable.",
+    input_schema: {
+      type: "object",
+      properties: {
+        country: { type: "string", description: "Optional ISO-2 country to narrow scope." },
+        weeks: { type: "number", description: "Lookback in weeks (default 8, max 52)." },
+      },
+    },
+  },
+  {
+    name: "set_portfolio_alert",
+    description:
+      "AUTH REQUIRED. WRITE OP. Enables / disables / updates a watchlist alert for the signed-in user on a specific drug. Use for SUP-29, HCL-28, RET-28/29. Returns a sign-in envelope when called without auth.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID. Required." },
+        threshold: { type: "string", description: "any | active_only | critical_only (default 'any')." },
+        channel: { type: "string", description: "email | sms | webhook (default email)." },
+        enabled: { type: "boolean", description: "Set false to disable an existing alert; default true." },
+      },
+      required: ["drug_id"],
+    },
+  },
 ];
 
 export type ToolContext = {
@@ -466,10 +500,15 @@ export type ToolContext = {
   /** Hydrated class summaries keyed by ATC code (uppercase). Populated by
    *  get_class_summary; consumed by the frontend when it sees <class_card />.*/
   classes: Record<string, ClassSummary>;
+  /** Optional authenticated user_id (Supabase Auth uid). Populated by the
+   *  /api/chat route from createServerClient().auth.getUser(). Auth-required
+   *  tools (get_my_portfolio_status, get_watchlist_demand, set_portfolio_alert)
+   *  refuse cleanly when null with a 'sign in' hint. */
+  user_id?: string | null;
 };
 
-export function newContext(): ToolContext {
-  return { drugs: {}, subs: {}, classes: {} };
+export function newContext(overrides?: { user_id?: string | null }): ToolContext {
+  return { drugs: {}, subs: {}, classes: {}, user_id: overrides?.user_id ?? null };
 }
 
 const SEV_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
@@ -3261,6 +3300,165 @@ async function getDemandSignalSummary(args: { drug_id: string; country?: string;
   };
 }
 
+// ─── Sprint 4 PR 2 — Auth-required portfolio tools (audit §4.8) ──────────────
+function authRequired(ctx: ToolContext): { status: "unanswerable"; reason: string; hint: string } | null {
+  if (!ctx.user_id) {
+    return {
+      status: "unanswerable",
+      reason: "auth_required",
+      hint: "This tool needs a signed-in user. Sign in at mederti.vercel.app/login to set up a watchlist or supplier portfolio, then re-ask.",
+    };
+  }
+  return null;
+}
+
+async function getMyPortfolioStatus(_args: object, ctx: ToolContext) {
+  const refuse = authRequired(ctx);
+  if (refuse) return refuse;
+  const userId = ctx.user_id!;
+  const sb = getSupabase();
+  const [{ data: watchRows }, { data: portRows }] = await Promise.all([
+    sb.from("user_watchlists").select("drug_id,countries,is_active,alert_threshold").eq("user_id", userId).eq("is_active", true).limit(500),
+    sb.from("supplier_portfolios").select("drug_id,notes,added_at").eq("user_id", userId).limit(500),
+  ]);
+  const watchDrugIds = new Set<string>((watchRows ?? []).map((r: any) => r.drug_id).filter(Boolean));
+  const portDrugIds = new Set<string>((portRows ?? []).map((r: any) => r.drug_id).filter(Boolean));
+  const allIds = [...new Set([...watchDrugIds, ...portDrugIds])];
+  if (allIds.length === 0) {
+    return {
+      user_id: userId, total_watched: 0, total_portfolio: 0, items: [],
+      confidence: { level: "low", score: 0, basis: "Signed-in user has no watchlist entries or supplier portfolio yet." } satisfies Confidence,
+    };
+  }
+  const { data: drugs } = await sb.from("drugs").select("id,generic_name,atc_code,who_essential_medicine").in("id", allIds);
+  const drugMap = new Map<string, any>();
+  for (const d of drugs ?? []) drugMap.set((d as any).id, d);
+  const { data: shorts } = await sb.from("shortage_events").select("drug_id,country_code,status,severity,start_date").eq("status", "active").in("drug_id", allIds);
+  const shortagesByDrug = new Map<string, any[]>();
+  for (const s of shorts ?? []) {
+    const arr = shortagesByDrug.get((s as any).drug_id) ?? [];
+    arr.push(s);
+    shortagesByDrug.set((s as any).drug_id, arr);
+  }
+  const items = allIds.map((id) => {
+    const d = drugMap.get(id);
+    const shortageRows = shortagesByDrug.get(id) ?? [];
+    const watchRow = (watchRows ?? []).find((w: any) => w.drug_id === id);
+    const portRow = (portRows ?? []).find((p: any) => p.drug_id === id);
+    return {
+      drug_id: id, name: d?.generic_name ?? "Unknown", atc_code: d?.atc_code ?? null,
+      who_essential: !!d?.who_essential_medicine,
+      on_watchlist: watchDrugIds.has(id), in_portfolio: portDrugIds.has(id),
+      portfolio_added_at: portRow?.added_at ?? null,
+      watchlist_threshold: watchRow?.alert_threshold ?? null,
+      active_shortage_count: shortageRows.length,
+      worst_severity: shortageRows.reduce((w: string | null, s: any) => {
+        const order = { critical: 4, high: 3, medium: 2, low: 1 } as Record<string, number>;
+        return (order[s.severity || ""] || 0) > (order[w || ""] || 0) ? s.severity : w;
+      }, null as string | null),
+      countries_short: [...new Set(shortageRows.map((s: any) => s.country_code).filter(Boolean))],
+    };
+  }).sort((a, b) => (b.active_shortage_count - a.active_shortage_count) || (Number(b.who_essential) - Number(a.who_essential)));
+  await Promise.all(items.slice(0, 8).map((i) => getDrugDetails({ drug_id: i.drug_id }, ctx).catch(() => null)));
+  const inShortageCount = items.filter((i) => i.active_shortage_count > 0).length;
+  const confidence = computeConfidence({ sourceReliability: 0.95, signalCount: items.length, freshnessDays: 1 });
+  return {
+    user_id: userId, total_watched: watchDrugIds.size, total_portfolio: portDrugIds.size,
+    in_shortage_count: inShortageCount, items,
+    confidence: { ...confidence, basis: `${items.length} drugs in your watchlist + portfolio; ${inShortageCount} currently in active shortage somewhere.` },
+  };
+}
+
+async function getWatchlistDemand(args: { country?: string; weeks?: number }, ctx: ToolContext) {
+  const refuse = authRequired(ctx);
+  if (refuse) return refuse;
+  const userId = ctx.user_id!;
+  const sb = getSupabase();
+  const { data: portRows } = await sb.from("supplier_portfolios").select("drug_id").eq("user_id", userId);
+  const drugIds = (portRows ?? []).map((r: any) => r.drug_id).filter(Boolean);
+  if (drugIds.length === 0) {
+    return {
+      user_id: userId, total_portfolio_drugs: 0, items: [],
+      confidence: { level: "low", score: 0, basis: "No supplier portfolio on file for this user." } satisfies Confidence,
+    };
+  }
+  const weeks = Math.min(Math.max(args.weeks ?? 8, 1), 52);
+  const since = new Date(Date.now() - weeks * 7 * 86400_000).toISOString().slice(0, 10);
+  let q = sb.from("v_demand_signal_summary").select("drug_id,country_code,signal_type,week_starting,unique_signals,total_signals").in("drug_id", drugIds).gte("week_starting", since);
+  if (args.country) q = q.eq("country_code", args.country.toUpperCase());
+  let rows: any[] = [];
+  try {
+    const { data, error } = await q;
+    if (error) throw error;
+    rows = (data ?? []) as any[];
+  } catch { rows = []; }
+  if (rows.length === 0) {
+    return {
+      user_id: userId, total_portfolio_drugs: drugIds.length, country: args.country?.toUpperCase() ?? null,
+      weeks, items: [],
+      confidence: { level: "low", score: 0, basis: `${drugIds.length} drugs in your portfolio; no demand-signal buckets above the k-anonymity floor (5) for them in the last ${weeks} weeks.` } satisfies Confidence,
+    };
+  }
+  const byDrug = new Map<string, { total_unique: number; total_signals: number; signal_types: Set<string> }>();
+  for (const r of rows) {
+    let b = byDrug.get(r.drug_id);
+    if (!b) { b = { total_unique: 0, total_signals: 0, signal_types: new Set() }; byDrug.set(r.drug_id, b); }
+    b.total_unique += r.unique_signals;
+    b.total_signals += r.total_signals;
+    b.signal_types.add(r.signal_type);
+  }
+  const ids = [...byDrug.keys()];
+  const { data: drugs } = ids.length ? await sb.from("drugs").select("id,generic_name,atc_code").in("id", ids) : { data: [] };
+  const drugMap = new Map<string, any>();
+  for (const d of (drugs ?? [])) drugMap.set((d as any).id, d);
+  const items = ids.map((id) => {
+    const b = byDrug.get(id)!;
+    return {
+      drug_id: id, name: drugMap.get(id)?.generic_name ?? "Unknown",
+      atc_code: drugMap.get(id)?.atc_code ?? null,
+      total_unique_sessions: b.total_unique, total_signals: b.total_signals,
+      signal_types: [...b.signal_types],
+    };
+  }).sort((a, b) => b.total_unique_sessions - a.total_unique_sessions);
+  const confidence = computeConfidence({ sourceReliability: 0.85, signalCount: items.length, freshnessDays: 1 });
+  return {
+    user_id: userId, total_portfolio_drugs: drugIds.length, country: args.country?.toUpperCase() ?? null,
+    weeks,
+    privacy: { k_anonymity_floor: 5, note: "Buckets below 5 distinct sessions suppressed." },
+    items,
+    confidence: { ...confidence, basis: `${items.length} of your ${drugIds.length} portfolio drugs have demand signals above the k-anon floor in the last ${weeks} weeks.` },
+  };
+}
+
+async function setPortfolioAlert(args: { drug_id: string; threshold?: "any" | "active_only" | "critical_only"; channel?: "email" | "sms" | "webhook"; enabled?: boolean }, ctx: ToolContext) {
+  const refuse = authRequired(ctx);
+  if (refuse) return refuse;
+  if (!args.drug_id) return { status: "unanswerable", reason: "missing_drug_id", hint: "Pass a drug UUID." };
+  const userId = ctx.user_id!;
+  const sb = getSupabase();
+  const enabled = args.enabled !== false;
+  const threshold = args.threshold ?? "any";
+  const { error } = await sb.from("user_watchlists").upsert(
+    {
+      user_id: userId, drug_id: args.drug_id,
+      alert_threshold: threshold, is_active: enabled,
+      ...(args.channel ? { notification_channels: { [args.channel]: true } } : {}),
+    },
+    { onConflict: "user_id,drug_id" }
+  );
+  if (error) {
+    return {
+      status: "error", reason: "upsert_failed",
+      hint: `Could not save the alert: ${error.message}`,
+      confidence: { level: "low", score: 0, basis: "Write failed; no change persisted." } satisfies Confidence,
+    };
+  }
+  return {
+    user_id: userId, drug_id: args.drug_id, alert_threshold: threshold, enabled,
+    confidence: { level: "high", score: 0.9, basis: `Watchlist alert ${enabled ? "enabled" : "disabled"} for the requested drug at threshold '${threshold}'.` } satisfies Confidence,
+  };
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, any>,
@@ -3340,6 +3538,13 @@ export async function executeTool(
     // Sprint 3 PR 2 — demand signals
     case "get_demand_signal_summary":
       return await getDemandSignalSummary(input as any);
+    // Sprint 4 PR 2 — auth-required portfolio tools
+    case "get_my_portfolio_status":
+      return await getMyPortfolioStatus(input as any, ctx);
+    case "get_watchlist_demand":
+      return await getWatchlistDemand(input as any, ctx);
+    case "set_portfolio_alert":
+      return await setPortfolioAlert(input as any, ctx);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

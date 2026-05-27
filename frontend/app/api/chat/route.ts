@@ -4,6 +4,7 @@ import { SYSTEM_PROMPT } from "@/lib/chat/system-prompt";
 import { TOOL_DEFINITIONS, executeTool, hydrateReferencedIds, newContext } from "@/lib/chat/tools";
 import { checkRateLimit, getClientIp } from "@/lib/chat/rate-limit";
 import { recordDemandSignal } from "@/lib/demand-signal";
+import { createServerClient } from "@/lib/supabase/server";
 import type { ChatMessage } from "@/lib/chat/types";
 
 export const runtime = "nodejs";
@@ -60,8 +61,21 @@ export async function POST(req: NextRequest) {
     content: m.text,
   }));
 
+  // Resolve the authenticated user_id, if any. Auth-required tools
+  // (get_my_portfolio_status, get_watchlist_demand, set_portfolio_alert)
+  // check ctx.user_id and refuse cleanly when null. Anonymous chat continues
+  // to work for every other tool.
+  let userId: string | null = null;
+  try {
+    const sbSession = await createServerClient();
+    const { data: { user } } = await sbSession.auth.getUser();
+    userId = user?.id ?? null;
+  } catch {
+    // Auth lookup failure → anonymous. Never blocks the chat.
+  }
+
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const ctx = newContext();
+  const ctx = newContext({ user_id: userId });
 
   let truncated = false;
   let toolCalls = 0;

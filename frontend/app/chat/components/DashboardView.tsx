@@ -11,16 +11,106 @@ type Sev = "Critical" | "High" | "Moderate" | "Low";
 type Period = "24h" | "7d" | "30d" | "90d" | "All";
 type SevFilter = Sev | "All";
 
-// Region groupings — used by the country dropdown so users can pick a whole
-// continent or drill down to a single market.
-const REGIONS: Array<{ id: string; label: string; countries: string[] }> = [
-  { id: "world", label: "World (All Countries)", countries: [] },
-  { id: "na", label: "North America", countries: ["US", "CA", "MX"] },
-  { id: "eu", label: "Europe", countries: ["GB", "DE", "FR", "IT", "ES", "NL", "BE", "SE", "DK", "FI", "NO", "CH", "AT", "IE", "PL", "PT", "CZ", "HU", "GR"] },
-  { id: "apac", label: "Asia-Pacific", countries: ["AU", "NZ", "JP", "KR", "SG", "HK", "MY", "IN", "CN", "TH"] },
-  { id: "latam", label: "Latin America", countries: ["BR", "AR", "MX", "CL", "CO"] },
-  { id: "mea", label: "Middle East & Africa", countries: ["AE", "SA", "IL", "ZA", "NG", "EG"] },
+// Region tree — used by the country dropdown. Each region exposes its full
+// country list so the user can pick the whole continent, or expand to drill
+// down to a single market.
+type Country = { code: string; name: string };
+type Region = { id: string; label: string; countries: Country[] };
+
+const REGIONS: Region[] = [
+  {
+    id: "apac",
+    label: "Asia-Pacific",
+    countries: [
+      { code: "AU", name: "Australia" },
+      { code: "NZ", name: "New Zealand" },
+      { code: "JP", name: "Japan" },
+      { code: "KR", name: "South Korea" },
+      { code: "SG", name: "Singapore" },
+      { code: "HK", name: "Hong Kong" },
+      { code: "MY", name: "Malaysia" },
+      { code: "IN", name: "India" },
+      { code: "CN", name: "China" },
+      { code: "TH", name: "Thailand" },
+    ],
+  },
+  {
+    id: "na",
+    label: "North America",
+    countries: [
+      { code: "US", name: "United States" },
+      { code: "CA", name: "Canada" },
+      { code: "MX", name: "Mexico" },
+    ],
+  },
+  {
+    id: "eu",
+    label: "Europe",
+    countries: [
+      { code: "GB", name: "United Kingdom" },
+      { code: "DE", name: "Germany" },
+      { code: "FR", name: "France" },
+      { code: "IT", name: "Italy" },
+      { code: "ES", name: "Spain" },
+      { code: "NL", name: "Netherlands" },
+      { code: "BE", name: "Belgium" },
+      { code: "SE", name: "Sweden" },
+      { code: "DK", name: "Denmark" },
+      { code: "FI", name: "Finland" },
+      { code: "NO", name: "Norway" },
+      { code: "CH", name: "Switzerland" },
+      { code: "AT", name: "Austria" },
+      { code: "IE", name: "Ireland" },
+      { code: "PL", name: "Poland" },
+      { code: "PT", name: "Portugal" },
+      { code: "CZ", name: "Czech Republic" },
+      { code: "HU", name: "Hungary" },
+      { code: "GR", name: "Greece" },
+    ],
+  },
+  {
+    id: "latam",
+    label: "Latin America",
+    countries: [
+      { code: "BR", name: "Brazil" },
+      { code: "AR", name: "Argentina" },
+      { code: "MX", name: "Mexico" },
+      { code: "CL", name: "Chile" },
+      { code: "CO", name: "Colombia" },
+    ],
+  },
+  {
+    id: "mea",
+    label: "Middle East & Africa",
+    countries: [
+      { code: "AE", name: "United Arab Emirates" },
+      { code: "SA", name: "Saudi Arabia" },
+      { code: "IL", name: "Israel" },
+      { code: "ZA", name: "South Africa" },
+      { code: "NG", name: "Nigeria" },
+      { code: "EG", name: "Egypt" },
+    ],
+  },
 ];
+
+// User's home country — pinned at the top of the dropdown. The header already
+// shows AU; if/when we honour user_profiles.country_code, replace this.
+const HOME_COUNTRY: Country = { code: "AU", name: "Australia" };
+
+// ISO-3166 alpha-2 → flag emoji via the regional-indicator codepoints.
+function flagOf(code: string): string {
+  if (code.length !== 2) return "🌐";
+  const A = 0x1f1e6;
+  const a = "A".charCodeAt(0);
+  return String.fromCodePoint(A + code.charCodeAt(0) - a, A + code.charCodeAt(1) - a);
+}
+
+// Selection model: world | region | country. A flat tagged union keeps the
+// filter pipeline simple — derive `countries` once and consume it everywhere.
+type Selection =
+  | { kind: "world" }
+  | { kind: "region"; regionId: string }
+  | { kind: "country"; code: string };
 
 const PERIODS: Period[] = ["24h", "7d", "30d", "90d", "All"];
 const SEV_FILTERS: SevFilter[] = ["All", "Critical", "High", "Moderate", "Low"];
@@ -66,10 +156,11 @@ const ALERTS = [
 
 export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
   const [query, setQuery] = useState("");
-  const [regionId, setRegionId] = useState("world");
+  const [selection, setSelection] = useState<Selection>({ kind: "world" });
   const [period, setPeriod] = useState<Period>("All");
   const [severity, setSeverity] = useState<SevFilter>("All");
   const [regionOpen, setRegionOpen] = useState(false);
+  const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({ apac: true });
   const regionRef = useRef<HTMLDivElement>(null);
 
   // Close the region dropdown on outside click.
@@ -84,41 +175,81 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [regionOpen]);
 
-  const activeRegion = REGIONS.find((r) => r.id === regionId) ?? REGIONS[0];
+  // Derive the active filter (label for the trigger button + the country set
+  // used by the row/alert filters below).
+  const active = useMemo(() => {
+    if (selection.kind === "world") {
+      return { label: "World (All Countries)", emoji: "🌐", countries: [] as string[], id: "world" };
+    }
+    if (selection.kind === "region") {
+      const r = REGIONS.find((x) => x.id === selection.regionId);
+      if (!r) return { label: "World (All Countries)", emoji: "🌐", countries: [], id: "world" };
+      return { label: r.label, emoji: "🌐", countries: r.countries.map((c) => c.code), id: r.id };
+    }
+    // single country
+    const allCountries = REGIONS.flatMap((r) => r.countries);
+    const c = allCountries.find((x) => x.code === selection.code);
+    return {
+      label: c?.name ?? selection.code,
+      emoji: flagOf(selection.code),
+      countries: [selection.code],
+      id: `country:${selection.code}`,
+    };
+  }, [selection]);
 
   const filteredRisks = useMemo(() => {
     return RISKS.filter((r) => {
       if (query && !r.name.toLowerCase().includes(query.toLowerCase())) return false;
-      if (activeRegion.countries.length > 0) {
-        const overlap = r.countries.some((c) => activeRegion.countries.includes(c));
+      if (active.countries.length > 0) {
+        const overlap = r.countries.some((c) => active.countries.includes(c));
         if (!overlap) return false;
       }
       return true;
     });
-  }, [query, activeRegion]);
+  }, [query, active.id, active.countries]);
 
   const insight = useMemo(() => {
     // One-line takeaway, adapts to the active filters.
-    if (severity === "Critical" && activeRegion.id === "apac") {
+    const isCountry = selection.kind === "country";
+    const cc = isCountry ? selection.code : null;
+
+    if (cc === "AU") {
+      return severity === "Critical"
+        ? "AU critical signals are dominated by Morphine (inj.) — TGA-confirmed manufacturing disruption, no like-for-like substitute on-market."
+        : "AU exposure is broad — injectable oncology (Cisplatin, Pip/Taz) and Morphine are the standout TGA shortages this week.";
+    }
+    if (cc === "US") {
+      return "US is anchored by Cisplatin's FDA enforcement action — 2 sole-source manufacturers; oncology contingency plans now active.";
+    }
+    if (cc === "GB") {
+      return "UK lead signal is Amoxicillin/Clavulanate demand surge (MHRA) on top of post-winter EU stock drawdown.";
+    }
+    if (cc === "DE") {
+      return "Germany sees the Methotrexate primary-supplier shutdown plus Insulin Glargine BfArM-flagged manufacturing issues — both EU-wide knock-on risk.";
+    }
+    if (cc) {
+      return `Filtering to ${active.label} — ${filteredRisks.length} risk row(s) match. Click below to ask the AI for a country-level read.`;
+    }
+    if (severity === "Critical" && active.id === "apac") {
       return "AU dominates APAC critical risk — Morphine (inj.) manufacturing disruption is the highest-impact open signal; no domestic substitute.";
     }
     if (severity === "Critical") {
       return "Manufacturing disruption is driving 3 of the last 24h critical alerts; injectable oncology and analgesia are most exposed.";
     }
-    if (activeRegion.id === "apac") {
+    if (active.id === "apac") {
       return "Pip/Taz API concentration in a single Indian plant is the standout APAC choke point — AU appears in 4 of 5 filtered risks.";
     }
-    if (activeRegion.id === "eu") {
+    if (active.id === "eu") {
       return "Methotrexate's primary-EU supplier shutdown is the lead signal; post-winter demand pressure on Amoxicillin is the secondary one.";
     }
-    if (activeRegion.id === "na") {
+    if (active.id === "na") {
       return "Cisplatin's FDA enforcement action is the dominant NA signal — 2 sole-source manufacturers, no near-term substitute.";
     }
     if (query) {
       return `Filtering on "${query}" — ${filteredRisks.length} risk rows match; ask the AI for a deeper read.`;
     }
     return "Injectable oncology drugs dominate this week — 3 of the top 6 risks are hospital-only with no easy substitute.";
-  }, [severity, activeRegion, query, filteredRisks.length]);
+  }, [severity, selection, active.id, active.label, query, filteredRisks.length]);
 
   const filteredAlerts = useMemo(() => {
     const flagToCountry: Record<string, string> = {
@@ -128,13 +259,13 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
     return ALERTS.filter((a) => {
       if (query && !a.drug.toLowerCase().includes(query.toLowerCase())) return false;
       if (severity !== "All" && a.sev !== severity) return false;
-      if (activeRegion.countries.length > 0) {
+      if (active.countries.length > 0) {
         const country = flagToCountry[a.flag];
-        if (!country || !activeRegion.countries.includes(country)) return false;
+        if (!country || !active.countries.includes(country)) return false;
       }
       return true;
     });
-  }, [query, severity, activeRegion]);
+  }, [query, severity, active.id, active.countries]);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -183,27 +314,117 @@ export function DashboardView({ onAsk }: { onAsk: (q: string) => void }) {
                 onClick={() => setRegionOpen((v) => !v)}
                 className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-[13px] text-slate-700 hover:bg-slate-50 transition-colors"
               >
-                <span className="text-slate-400">🌐</span>
-                <span className="font-medium">{activeRegion.label}</span>
+                <span className={selection.kind === "country" ? "" : "text-slate-400"}>
+                  {active.emoji}
+                </span>
+                <span className="font-medium">{active.label}</span>
                 <ChevronDown size={11} className="text-slate-400" />
               </button>
               {regionOpen ? (
-                <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1">
-                  {REGIONS.map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => {
-                        setRegionId(r.id);
-                        setRegionOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-slate-50 ${
-                        r.id === regionId ? "text-teal-700 font-medium" : "text-slate-700"
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
+                <div className="absolute right-0 mt-1.5 w-72 max-h-[420px] overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1">
+                  {/* World */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelection({ kind: "world" });
+                      setRegionOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-[13px] flex items-center gap-2 hover:bg-slate-50 ${
+                      selection.kind === "world" ? "text-teal-700 font-medium" : "text-slate-700"
+                    }`}
+                  >
+                    <span className="text-slate-400">🌐</span>
+                    World (All Countries)
+                  </button>
+
+                  {/* Your country — pinned shortcut */}
+                  <div className="px-3 pt-2 pb-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-slate-400">
+                    Your country
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelection({ kind: "country", code: HOME_COUNTRY.code });
+                      setRegionOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-[13px] flex items-center gap-2 hover:bg-slate-50 ${
+                      selection.kind === "country" && selection.code === HOME_COUNTRY.code
+                        ? "text-teal-700 font-medium"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    <span>{flagOf(HOME_COUNTRY.code)}</span>
+                    {HOME_COUNTRY.name}
+                  </button>
+
+                  {/* Continents, each expandable to its country list */}
+                  <div className="border-t border-slate-100 mt-1 pt-1">
+                    {REGIONS.map((r) => {
+                      const expanded = !!expandedRegions[r.id];
+                      const regionActive =
+                        selection.kind === "region" && selection.regionId === r.id;
+                      return (
+                        <div key={r.id}>
+                          <div className="flex items-center">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedRegions((m) => ({ ...m, [r.id]: !m[r.id] }))
+                              }
+                              className="px-2 py-1.5 text-slate-400 hover:text-slate-600"
+                              aria-label={expanded ? "Collapse" : "Expand"}
+                            >
+                              <ChevronDown
+                                size={11}
+                                className={`transition-transform ${expanded ? "" : "-rotate-90"}`}
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelection({ kind: "region", regionId: r.id });
+                                setRegionOpen(false);
+                              }}
+                              className={`flex-1 text-left py-1.5 pr-3 text-[13px] hover:bg-slate-50 ${
+                                regionActive ? "text-teal-700 font-medium" : "text-slate-700"
+                              }`}
+                            >
+                              {r.label}
+                              <span className="text-slate-400 text-[11px] ml-1.5">
+                                · {r.countries.length}
+                              </span>
+                            </button>
+                          </div>
+                          {expanded ? (
+                            <div className="pb-1">
+                              {r.countries.map((c) => {
+                                const countryActive =
+                                  selection.kind === "country" && selection.code === c.code;
+                                return (
+                                  <button
+                                    key={c.code}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelection({ kind: "country", code: c.code });
+                                      setRegionOpen(false);
+                                    }}
+                                    className={`w-full text-left pl-9 pr-3 py-1 text-[12.5px] flex items-center gap-2 hover:bg-slate-50 ${
+                                      countryActive
+                                        ? "text-teal-700 font-medium"
+                                        : "text-slate-600"
+                                    }`}
+                                  >
+                                    <span className="text-[12px]">{flagOf(c.code)}</span>
+                                    {c.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : null}
             </div>

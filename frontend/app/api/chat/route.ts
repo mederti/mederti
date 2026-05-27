@@ -76,6 +76,218 @@ function countResults(result: unknown): number | undefined {
   return undefined;
 }
 
+// ── Tier 1 ───────────────────────────────────────────────────────────────
+// Instant DB-grounded opener for single-drug questions. Bypasses Claude
+// entirely for the headline + drug card so the user sees a useful answer
+// within ~1–2s instead of ~10s. See call-site in POST for the full flow.
+
+type Tier1Call = {
+  name: string;
+  id: string;
+  input: Record<string, unknown>;
+  result: unknown;
+};
+
+type Tier1Result = {
+  drugId: string;
+  headline: string;
+  calls: Tier1Call[];
+};
+
+// Emit a tool_start, run the tool, emit a tool_done. Returns the result
+// so the caller can keep working with it. Mirrors what the Tier 2 loop
+// does for Claude's tool_use blocks, but without an LLM round-trip.
+async function tier1RunTool(
+  name: string,
+  input: Record<string, unknown>,
+  ctx: ReturnType<typeof newContext>,
+  write: (event: any) => Promise<void>
+): Promise<{ id: string; result: unknown }> {
+  // Synthetic ID. Anthropic tool_use_ids look like `toolu_...`; matching
+  // that shape keeps the synthetic history believable when we feed it
+  // back to Claude in Tier 2.
+  const id = `toolu_t1_${Math.random().toString(36).slice(2, 14)}`;
+  await write({ type: "tool_start", name, id, input });
+  const t0 = Date.now();
+  let result: unknown = null;
+  let errored = false;
+  try {
+    result = await executeTool(name, input, ctx);
+  } catch (err) {
+    errored = true;
+    console.error(`[tier1 ${name}] error:`, err);
+  }
+  await write({
+    type: "tool_done",
+    name,
+    id,
+    ms: Date.now() - t0,
+    result_count: countResults(result),
+    error: errored || undefined,
+  });
+  return { id, result };
+}
+
+// Stopwords + question-shape words that shouldn't be sent to FTS. The
+// drug-name FTS path AND-matches every token, so a phrase like "Is X in
+// shortage in Australia?" silently returns zero rows because the drugs
+// table's search_vector contains the drug name, not domain words like
+// "shortage" or country names. We strip these before searching.
+const TIER1_STOPWORDS = new Set([
+  "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+  "in", "on", "at", "of", "for", "with", "by", "to", "from", "about",
+  "do", "does", "did", "can", "could", "will", "would", "should",
+  "has", "have", "had", "any", "some", "and", "or", "but",
+  "what", "where", "when", "why", "how", "which", "who",
+  "me", "my", "we", "our", "us", "you", "your", "i",
+  "shortage", "shortages", "supply", "stock", "stockout", "available",
+  "country", "countries", "currently", "now", "today",
+  "drug", "medicine", "medication", "tell", "show", "give",
+]);
+
+// Country/region words that frequently appear in chat questions but
+// would AND-out the drug name match. Stripped from the FTS query and
+// re-injected as the `country` bias parameter when recognised.
+const COUNTRY_HINTS: Record<string, string> = {
+  australia: "AU", au: "AU", "aus": "AU",
+  uk: "GB", britain: "GB", england: "GB", "united kingdom": "GB",
+  us: "US", usa: "US", america: "US", "united states": "US",
+  canada: "CA", germany: "DE", france: "FR", spain: "ES", italy: "IT",
+  netherlands: "NL", belgium: "BE", ireland: "IE", "new zealand": "NZ",
+  nz: "NZ", singapore: "SG", japan: "JP", korea: "KR",
+};
+
+function extractTier1Query(question: string): { query: string; country?: string } | null {
+  const lower = question.toLowerCase();
+
+  // Detect a country hint (longest match first so "new zealand" beats "zealand")
+  let country: string | undefined;
+  for (const phrase of Object.keys(COUNTRY_HINTS).sort((a, b) => b.length - a.length)) {
+    if (lower.includes(phrase)) {
+      country = COUNTRY_HINTS[phrase];
+      break;
+    }
+  }
+
+  // Tokenise on punctuation + whitespace, drop stopwords + countries +
+  // short tokens. What's left should be drug-name-shaped.
+  const tokens = lower
+    .split(/[\s,.?!;:()/\-]+/)
+    .map((t) => t.replace(/[^a-z0-9'-]/g, ""))
+    .filter((t) => t.length >= 3 && !TIER1_STOPWORDS.has(t) && !COUNTRY_HINTS[t]);
+
+  if (tokens.length === 0) return null;
+
+  // Cap at the first 3 surviving tokens — covers single-word drugs and
+  // 2-token names like "insulin glargine" or "amoxicillin clavulanate".
+  return { query: tokens.slice(0, 3).join(" "), country };
+}
+
+async function runTier1({
+  question,
+  ctx,
+  write,
+}: {
+  question: string;
+  ctx: ReturnType<typeof newContext>;
+  write: (event: any) => Promise<void>;
+}): Promise<Tier1Result | null> {
+  const q = question.trim();
+  if (!q || q.length > 240) return null;
+
+  // Question-shape filter: skip Tier 1 for landscape / class / macro
+  // questions, which the templated headline can't sensibly answer. These
+  // patterns mean "many drugs" or "structural cause" — both wrong for
+  // a single-drug card.
+  if (/\b(landscape|critical|globally|what['']s driving|geopolitic|macro|class|antibiotic[s]?|hormuz|recall[s]?|compare|comparison|substitut)/i.test(q)) {
+    return null;
+  }
+
+  const extracted = extractTier1Query(q);
+  if (!extracted) return null;
+
+  try {
+    // 1) Resolve the drug. We strip stopwords first because the drugs
+    //    search vector contains drug names, not domain words like
+    //    "shortage" or country names — sending the raw question would
+    //    AND-out the actual drug name.
+    const searchInput = {
+      query: extracted.query,
+      limit: 5,
+      ...(extracted.country ? { country: extracted.country } : {}),
+    };
+    const search = await tier1RunTool("search_drugs", searchInput, ctx, write);
+    const hits = Array.isArray(search.result) ? search.result : [];
+    if (hits.length === 0) return null;
+
+    // Disambiguation: prefer the hit whose generic_name is an EXACT
+    // match for one of the query tokens (ignoring case). Without this
+    // step `search_drugs("amoxicillin", country: "AU")` can return
+    // `Amoxicillin/Clavulanate` first because of country-bias activity,
+    // even though the user clearly meant plain Amoxicillin. Falling
+    // back to hits[0] only when no exact match exists.
+    const queryTokens = new Set(extracted.query.toLowerCase().split(/\s+/));
+    type Hit = { drug_id?: string; id?: string; generic_name?: string };
+    const isExact = (h: Hit) => {
+      const gn = (h.generic_name || "").toLowerCase().trim();
+      return queryTokens.has(gn);
+    };
+    const top = (hits as Hit[]).find(isExact) ?? (hits[0] as Hit);
+    const drugId = top.drug_id || top.id;
+    const genericName = (top.generic_name || "").trim();
+    if (!drugId || !genericName) return null;
+
+    // Confidence: the drug's name (first salient word) must appear in
+    // the user's question. Filters out cases where search_drugs returned
+    // a low-quality fallback match for a macro question.
+    const firstWord = genericName.toLowerCase().split(/[\s/;,()]/)[0];
+    const questionLower = q.toLowerCase();
+    if (firstWord.length < 4 || !questionLower.includes(firstWord)) return null;
+
+    // 2) Fetch details + substitutes in parallel — these are independent
+    //    and together populate everything we need for the card +
+    //    Tier 2's substitutes table.
+    const detailsInput = { drug_id: drugId };
+    const subsInput = { drug_id: drugId };
+    const [details, subs] = await Promise.all([
+      tier1RunTool("get_drug_details", detailsInput, ctx, write),
+      tier1RunTool("find_substitutes", subsInput, ctx, write),
+    ]);
+
+    // 3) Compose the templated headline from ctx.drugs (populated by
+    //    get_drug_details). No LLM involved.
+    const detail = ctx.drugs[drugId] as
+      | { generic_name?: string; active_shortage_count?: number; countries_affected?: string[] }
+      | undefined;
+    const drugName = detail?.generic_name || genericName;
+    const active = detail?.active_shortage_count ?? 0;
+    const countries = detail?.countries_affected ?? [];
+    const countryStr =
+      countries.length > 0
+        ? ` across ${countries.length} ${countries.length === 1 ? "country" : "countries"} (${countries.slice(0, 4).join(", ")}${countries.length > 4 ? "…" : ""})`
+        : "";
+    const headline =
+      active > 0
+        ? `**Yes — ${drugName}** has ${active} active shortage${active === 1 ? "" : "s"}${countryStr}.\n\n<drug_card id="${drugId}" />\n\n`
+        : `**No active shortages** on record for **${drugName}**.\n\n<drug_card id="${drugId}" />\n\n`;
+
+    await write({ type: "text_delta", delta: headline });
+
+    return {
+      drugId,
+      headline,
+      calls: [
+        { name: "search_drugs", id: search.id, input: searchInput, result: search.result },
+        { name: "get_drug_details", id: details.id, input: detailsInput, result: details.result },
+        { name: "find_substitutes", id: subs.id, input: subsInput, result: subs.result },
+      ],
+    };
+  } catch (err) {
+    console.error("[tier1] uncaught:", err);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
   const rl = checkRateLimit(ip);
@@ -145,20 +357,67 @@ export async function POST(req: NextRequest) {
   const ctx = newContext({ user_id: userId });
   const t0 = Date.now();
 
+  const lastUserText =
+    [...incoming].reverse().find((m) => m.role === "user")?.text ?? "";
+
   return ndjsonResponse(async (write) => {
     let truncated = false;
     let toolCalls = 0;
     let lastResponse: Anthropic.Message | null = null;
     let assembledText = "";
 
+    // ── Tier 1: instant DB-grounded headline + drug card ─────────────────
+    // For single-drug questions, the route does search_drugs +
+    // get_drug_details + find_substitutes itself, in parallel, before
+    // Claude is involved at all. Templated headline + <drug_card /> hit
+    // the stream within ~1–2s. Claude then takes over (Tier 2) to write
+    // the substitutes table + synthesis + sources, with the Tier 1 tool
+    // results pre-seeded as synthetic tool_use / tool_result blocks so
+    // it doesn't repeat the calls.
+    //
+    // Skipped when the question doesn't look single-drug (macro,
+    // landscape, recall, comparison) — those fall straight through to
+    // Tier 2. The confidence check is the top search_drugs hit's
+    // generic-name first word appearing in the user's question.
+    const tier1 = await runTier1({ question: lastUserText, ctx, write });
+    if (tier1) {
+      toolCalls += tier1.calls.length;
+      assembledText += tier1.headline;
+      // Seed the conversation with synthetic tool history so Claude
+      // sees the Tier 1 results as if it had made the calls itself.
+      // The post-seed user message instructs Claude to continue from
+      // the substitutes section (don't repeat the opener).
+      messages.push({
+        role: "assistant",
+        content: tier1.calls.map((c) => ({
+          type: "tool_use" as const,
+          id: c.id,
+          name: c.name,
+          input: c.input,
+        })),
+      });
+      messages.push({
+        role: "user",
+        content: tier1.calls.map((c) => ({
+          type: "tool_result" as const,
+          tool_use_id: c.id,
+          content: JSON.stringify(c.result ?? null),
+        })),
+      });
+      messages.push({
+        role: "user",
+        content: `[Continuation instruction — not from end user] You've already opened the answer with a 1-sentence headline and <drug_card id="${tier1.drugId}" />. Do NOT repeat them. Continue from the substitutes section onwards: substitutes table (use find_substitutes data above), operational context paragraph, <sources>, <followups>.`,
+      });
+    }
+
     try {
       for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
         const stream = anthropic.messages.stream({
           model: MODEL,
           max_tokens: MAX_OUTPUT_TOKENS,
-          thinking: {
-            type: "adaptive",
-          },
+          // adaptive thinking removed for latency — model still reasons
+          // about tool use and synthesis, just without the explicit
+          // extended-thinking budget that was adding 5–15s per round.
           output_config: {
             effort: "medium",
           },
@@ -255,9 +514,9 @@ export async function POST(req: NextRequest) {
         const finalStream = anthropic.messages.stream({
           model: MODEL,
           max_tokens: MAX_OUTPUT_TOKENS,
-          thinking: {
-            type: "adaptive",
-          },
+          // adaptive thinking removed for latency — model still reasons
+          // about tool use and synthesis, just without the explicit
+          // extended-thinking budget that was adding 5–15s per round.
           output_config: {
             effort: "medium",
           },
@@ -283,7 +542,16 @@ export async function POST(req: NextRequest) {
       // Prefer the structured extract from the final Message (handles split
       // text blocks from web search citations). Fall back to the
       // concatenated stream text only if extract returns empty.
-      const finalText = extractText(lastResponse) || assembledText;
+      //
+      // Tier 1's templated headline (with the only <drug_card /> tag) is
+      // prepended to assembledText but NOT in Claude's final message —
+      // extractText would silently drop it, and the frontend would render
+      // the answer with no card. Re-prepend the Tier 1 headline when
+      // extractText is the source of truth.
+      const claudeText = extractText(lastResponse);
+      const finalText = claudeText
+        ? (tier1 ? tier1.headline + claudeText : claudeText)
+        : assembledText;
 
       try {
         await hydrateReferencedIds(finalText, ctx);

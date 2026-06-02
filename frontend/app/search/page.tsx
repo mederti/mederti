@@ -100,7 +100,10 @@ export default function SearchPage() {
     <div className="v1home">
       <style>{CSS}</style>
       <nav className="home-nav">
-        <Link href="/" className="brand"><Mark /> mederti</Link>
+        <Link href="/" className="brand" aria-label="Mederti home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-black.png" alt="mederti" className="logo-img" />
+        </Link>
         <div className="nav-actions">
           <Link href="/signup" className="btn btn-primary">Get started free</Link>
           <Link href="/login" className="btn">Log in</Link>
@@ -115,15 +118,6 @@ export default function SearchPage() {
   );
 }
 
-function Mark() {
-  return (
-    <svg className="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7L12 2.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <circle cx="12" cy="12" r="3.2" fill="currentColor" />
-    </svg>
-  );
-}
-
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 .v1home{--ink:#0a0f1a;--green:#10b981;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;
@@ -133,7 +127,7 @@ const CSS = `
   background:var(--bg-2);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
-.v1home .mark{width:22px;height:22px;color:var(--green-d)}
+.v1home .logo-img{height:26px;width:auto;display:block}
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;transition:.15s}
 .v1home .btn:hover{border-color:var(--border-2);background:var(--bg-2)}
 .v1home .btn-primary{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 8px 20px -8px rgba(16,185,129,.55)}

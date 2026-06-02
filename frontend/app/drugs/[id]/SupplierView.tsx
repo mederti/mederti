@@ -10,7 +10,7 @@ interface AdjacentMarket {
 
 interface Alternative {
   name: string;
-  matchPercent: number;
+  matchPercent: number | null;
   isAvailable: boolean;
 }
 
@@ -43,7 +43,7 @@ interface Props {
   topAlternative?: {
     name: string;
     form: string;
-    matchPercent: number;
+    matchPercent: number | null;
     isAvailable: boolean;
     priceAud?: number;
   } | null;
@@ -238,7 +238,7 @@ export default function SupplierView({
         <div className="sv-tile sv-w2" style={tileBase}>
           <div style={tileLabelStyle}>Expected return</div>
           <div style={tileExtraStyle}>
-            {expectedReturn ? `${expectedReturn.confidence}% conf` : "no forecast"}
+            {expectedReturn ? "sponsor estimate" : "no forecast"}
           </div>
           <div
             style={{
@@ -259,7 +259,7 @@ export default function SupplierView({
                 fontFamily: "var(--font-dm-mono), monospace",
               }}
             >
-              {expectedReturn ? expectedReturn.label : "—"}
+              {expectedReturn ? expectedReturn.range : "—"}
             </div>
             <div
               style={{
@@ -269,10 +269,10 @@ export default function SupplierView({
                 marginTop: 6,
               }}
             >
-              {expectedReturn ? `Range: ${expectedReturn.range}` : "Forecast pending"}
+              {expectedReturn ? "via regulator notice" : "No estimate provided"}
             </div>
           </div>
-          {expectedReturn && (
+          {expectedReturn && expectedReturn.confidence > 0 && (
             <div
               style={{
                 height: 4,
@@ -298,7 +298,7 @@ export default function SupplierView({
           <div className="sv-tile sv-w2" style={tileBase}>
             <div style={tileLabelStyle}>Top substitute</div>
             <div style={tileExtraStyle}>
-              {topAlternative.matchPercent}% match
+              {topAlternative.matchPercent != null ? `${topAlternative.matchPercent}% match` : "alternative"}
             </div>
             <div
               style={{
@@ -717,7 +717,7 @@ export default function SupplierView({
                         color: "var(--app-text-4)",
                       }}
                     >
-                      {a.matchPercent}%
+                      {a.matchPercent != null ? `${a.matchPercent}%` : "—"}
                     </span>
                     <span
                       style={{

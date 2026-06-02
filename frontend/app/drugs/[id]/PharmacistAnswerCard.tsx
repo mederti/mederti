@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import {
   Sparkles,
   Baby,
@@ -16,7 +17,7 @@ interface TopAlternative {
   name: string;
   form: string;
   isAvailable: boolean;
-  matchPercent: number;
+  matchPercent: number | null;
   isPbsListed?: boolean;
   priceAud?: number;
   clinicalReasoning: string;
@@ -243,9 +244,11 @@ export default function PharmacistAnswerCard({
                 {topAlternative.isAvailable && (
                   <Pill tone="positive">Available in AU</Pill>
                 )}
-                <Pill tone="neutral">
-                  {topAlternative.matchPercent}% clinical match
-                </Pill>
+                {topAlternative.matchPercent != null && (
+                  <Pill tone="neutral">
+                    {topAlternative.matchPercent}% clinical match
+                  </Pill>
+                )}
                 {topAlternative.isPbsListed && (
                   <Pill tone="neutral">PBS listed</Pill>
                 )}
@@ -490,43 +493,50 @@ export default function PharmacistAnswerCard({
               >
                 {expectedReturn.range}
               </div>
-              <div
-                style={{
-                  marginTop: 10,
-                  height: 4,
-                  background: "var(--app-bg)",
-                  borderRadius: 2,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${Math.min(
-                      Math.max(expectedReturn.confidence, 0),
-                      100
-                    )}%`,
-                    height: "100%",
-                    background:
-                      "linear-gradient(90deg, var(--teal) 0%, #14b8a6 100%)",
-                  }}
-                />
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  fontSize: 11,
-                  color: "var(--app-text-4)",
-                  marginTop: 6,
-                  fontFamily: "var(--font-dm-mono), monospace",
-                }}
-              >
-                <span>AI confidence</span>
-                <strong style={{ color: "var(--teal)", fontWeight: 600 }}>
-                  {expectedReturn.confidence} / 100
-                </strong>
-              </div>
+              {/* Confidence meter shown ONLY if a real confidence value is
+                  supplied (>0). The previous fabricated 74/61/0 heuristic is
+                  gone, so this stays hidden until a genuine metric exists. */}
+              {expectedReturn.confidence > 0 && (
+                <>
+                  <div
+                    style={{
+                      marginTop: 10,
+                      height: 4,
+                      background: "var(--app-bg)",
+                      borderRadius: 2,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(
+                          Math.max(expectedReturn.confidence, 0),
+                          100
+                        )}%`,
+                        height: "100%",
+                        background:
+                          "linear-gradient(90deg, var(--teal) 0%, #14b8a6 100%)",
+                      }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: 11,
+                      color: "var(--app-text-4)",
+                      marginTop: 6,
+                      fontFamily: "var(--font-dm-mono), monospace",
+                    }}
+                  >
+                    <span>AI confidence</span>
+                    <strong style={{ color: "var(--teal)", fontWeight: 600 }}>
+                      {expectedReturn.confidence} / 100
+                    </strong>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -711,6 +721,10 @@ export default function PharmacistAnswerCard({
             </div>
           </div>
         </div>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <ClinicalDisclaimer compact />
       </div>
 
       <style>{`

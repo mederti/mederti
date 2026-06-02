@@ -91,7 +91,9 @@ export function buildAiInsightText({
   if (confirmed.length > 0) {
     const confirmedCountries = new Set(confirmed.map((s) => s.country_code));
     text += `This drug is currently under active shortage in ${confirmedCountries.size} countr${confirmedCountries.size !== 1 ? "ies" : "y"}. `;
-    text += `Supply disruptions of this type typically persist for 3\u20139 months based on historical patterns. `;
+    // NOTE: removed a hardcoded "typically persist for 3\u20139 months based on
+    // historical patterns" claim \u2014 it was a fixed string with no GROUP BY behind
+    // it. Reinstate only when computed from resolved shortage_events.
     text += `Consider therapeutic alternatives where clinically appropriate.`;
   } else {
     text += `No active shortages are currently reported for ${drugName}. Monitor regularly as supply conditions can change rapidly.`;

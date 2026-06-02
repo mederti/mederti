@@ -106,6 +106,33 @@ export async function GET(req: NextRequest) {
   }
   if (fallbackJobs.length > 0) await Promise.all(fallbackJobs);
 
+  // ── Promote catalogue hits to their canonical drug ──────────────────
+  // A catalogue product linked to a canonical drug (drug_id, populated by
+  // backend/importers/catalogue_inn_backfill) should roll up to that INN —
+  // with its real shortage count — instead of surfacing as a raw "0 active
+  // shortages" product row. e.g. searching the AU brand "LORSTAT" (only in
+  // the ARTG catalogue) now resolves to Atorvastatin and its live shortages.
+  const drugIdSet = new Set(drugRows.map((r) => r.id as string));
+  const promoteIds = [
+    ...new Set(
+      catRows
+        .map((r) => r.drug_id as string | null)
+        .filter((id): id is string => !!id && !drugIdSet.has(id))
+    ),
+  ];
+  if (promoteIds.length > 0) {
+    const promoted = await timer.track("db_promote_canonical", () =>
+      sb.from("drugs")
+        .select(DRUG_COLS)
+        .in("id", promoteIds)
+        .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+    );
+    for (const row of promoted.data ?? []) {
+      drugRows.push(row);
+      drugIdSet.add(row.id as string);
+    }
+  }
+
   const drugIds = drugRows.map((r) => r.id as string);
 
   // ── Round 3: shortage + alternatives counts in parallel ─────────────

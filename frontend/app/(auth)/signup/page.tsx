@@ -4,7 +4,6 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
-import OAuthButtons from "../OAuthButtons";
 import AuthShell from "../AuthShell";
 
 function SignupForm() {
@@ -107,9 +106,6 @@ function SignupForm() {
               : "Free for individual pharmacists and clinicians"}
           </p>
         </div>
-
-        {/* OAuth */}
-        <OAuthButtons next={next} role={role} mode="signup" />
 
         {/* Error */}
         {error && (

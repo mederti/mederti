@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
+import V1Chat from "@/app/components/v1/V1Chat";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -313,21 +314,7 @@ export default function V1DrugView({
 
         {/* ── Chat column ── */}
         <aside className="chat-col">
-          <div className="chat-panel">
-            <div className="chat-head">
-              <div className="chat-h-l"><span className="chat-ic">✦</span><div><div className="chat-title">Ask about this medicine</div><div className="chat-sub">Grounded in live regulator data</div></div></div>
-              <span className="chat-free-tag">FREE</span>
-            </div>
-            <div className="chat-stream">
-              <div className="chat-msg ai"><div className="chat-bubble">Ask me anything about this shortage — substitutes, who&apos;s affected, how long it may last.</div></div>
-            </div>
-            <div className="chat-suggest">
-              {[`What can I substitute for ${drug.generic_name}?`, "Which countries are affected?", "How long did past shortages last?"].map((q) => (
-                <Link key={q} href={`/chat?q=${encodeURIComponent(q)}`} className="chat-q">{q}</Link>
-              ))}
-            </div>
-            <Link href="/chat" className="chat-input"><input readOnly placeholder="Ask a question…" /><span className="chat-send">↑</span></Link>
-          </div>
+          <V1Chat drugName={drug.generic_name} />
         </aside>
           </div>
         </div>
@@ -449,8 +436,10 @@ const CSS = `
 .chat-q{text-align:left;font-size:12px;color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:9px 12px;text-decoration:none;transition:.12s}
 .chat-q:hover{border-color:var(--violet);color:var(--violet)}
 .chat-input{display:flex;align-items:center;gap:8px;margin:0 16px 16px;padding:9px 9px 9px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg);text-decoration:none}
-.chat-input input{flex:1;border:none;background:transparent;outline:none;font-size:13px;font-family:inherit;color:var(--text-4);pointer-events:none}
-.chat-send{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px}
+.chat-input input{flex:1;border:none;background:transparent;outline:none;font-size:13px;font-family:inherit;color:var(--text)}
+.chat-input input::placeholder{color:var(--text-4)}
+.chat-send{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.chat-send:disabled{opacity:.5;cursor:default}
 @media(max-width:1080px){.chat-col{display:none}.dg-main{margin:0 auto}}
 @media(max-width:820px){.sb{display:none}}
 @media(max-width:620px){.sw-cards{grid-template-columns:repeat(2,1fr)}.d-name{font-size:24px}}

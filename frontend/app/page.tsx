@@ -58,6 +58,11 @@ export default async function Home() {
         <h1>Find medicines <span className="em">in short supply</span></h1>
         <p className="sub">Search any drug to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>
         <V1Search />
+        <div className="hero-stats">
+          <div className="stat"><div className="stat-n">{medicines}</div><div className="stat-l">Medicines tracked globally</div></div>
+          <div className="stat"><div className="stat-n">{activeShortages}</div><div className="stat-l">Active shortages right now</div></div>
+          <div className="stat"><div className="stat-n">{countries}</div><div className="stat-l">Countries &amp; official regulators</div></div>
+        </div>
         <div className="trust">
           <div className="trust-label">Sourced directly from drug regulators</div>
           <div className="trust-regs">
@@ -112,13 +117,6 @@ export default async function Home() {
         <div className="prop"><div className="pi"><ClockIcon /></div><h3>Check the status</h3><p>See whether a drug is in a declared shortage right now — and in which countries — with the regulator and timestamp behind every status.</p></div>
         <div className="prop"><div className="pi"><SwapIcon /></div><h3>Find &amp; source</h3><p>See same-class alternatives with their own shortage status — and connect with registered suppliers who can supply, including under shortage provisions.</p></div>
         <div className="prop"><div className="pi"><BellIcon /></div><h3>Get alerted</h3><p>Save a medicine and we&apos;ll email you the moment its shortage status changes or it&apos;s reported back in supply.</p></div>
-      </div>
-
-      {/* ── Stats (live from Supabase) ── */}
-      <div className="stats">
-        <div className="stat"><div className="stat-n">{medicines}</div><div className="stat-l">Medicines tracked globally</div></div>
-        <div className="stat"><div className="stat-n">{activeShortages}</div><div className="stat-l">Active shortages right now</div></div>
-        <div className="stat"><div className="stat-n">{countries}</div><div className="stat-l">Countries &amp; official regulators</div></div>
       </div>
 
       {/* ── CTA band ── */}
@@ -245,6 +243,9 @@ const CSS = `
 .stats{max-width:900px;margin:clamp(64px,8vw,96px) auto 0;padding:0 clamp(20px,4vw,40px);display:grid;grid-template-columns:repeat(3,1fr);gap:28px;text-align:center}
 .stat-n{font-size:clamp(36px,4.6vw,54px);font-weight:800;letter-spacing:-.035em;color:var(--ink);line-height:1;font-variant-numeric:tabular-nums}
 .stat-l{font-size:13px;color:var(--text-3);margin-top:8px}
+.hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:560px;margin:36px auto 0;text-align:center}
+.hero-stats .stat-n{font-size:clamp(26px,3.4vw,38px)}
+.hero-stats .stat-l{font-size:12.5px;margin-top:6px}
 .cta-band{position:relative;max-width:1040px;margin:56px auto 0;padding:56px 24px;border-radius:26px;text-align:center;color:#fff;overflow:hidden;background:var(--ink)}
 .cta-band:before{content:"";position:absolute;inset:0;background:radial-gradient(60% 120% at 8% 0%,rgba(52,211,153,.5),transparent 60%),radial-gradient(70% 130% at 100% 100%,rgba(16,185,129,.42),transparent 55%),radial-gradient(40% 90% at 60% 10%,rgba(99,102,241,.28),transparent 60%)}
 .cta-band>*{position:relative}
@@ -255,5 +256,5 @@ const CSS = `
 .home-foot{max-width:1040px;margin:64px auto 0;padding:30px 24px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-4)}
 .home-foot a{color:inherit;text-decoration:none}
 .home-foot a:hover{color:var(--green-d)}
-@media(max-width:760px){.hero h1{font-size:36px}.props{grid-template-columns:1fr}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}}
+@media(max-width:760px){.hero h1{font-size:36px}.props{grid-template-columns:1fr}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}.hero-stats{gap:10px}.hero-stats .stat-n{font-size:21px}.hero-stats .stat-l{font-size:11px}}
 `;

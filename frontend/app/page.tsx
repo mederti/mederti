@@ -2,7 +2,6 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import V1Search from "@/app/components/v1/V1Search";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
-import V1PillBottle3D from "@/app/components/v1/V1PillBottle3D";
 
 // Live stats are the single source of truth. Honest "—" if a fetch fails —
 // never a stale hardcoded figure on a clinician-facing page.
@@ -60,7 +59,6 @@ export default async function Home() {
       {/* ── Hero ── */}
       <div className="hero">
         <div className="hero-bg" />
-        <V1PillBottle3D />
         <span className="hero-kicker"><span className="pulse" /> Free for pharmacists &amp; clinicians</span>
         <h1>Live shortage status<br />for <span className="em">any medicine</span></h1>
         <p className="sub">Search any drug to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>

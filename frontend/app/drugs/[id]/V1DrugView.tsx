@@ -123,19 +123,35 @@ export default function V1DrugView({
   return (
     <div className="v1home v1drug">
       <style>{CSS}</style>
-      <nav className="home-nav">
-        <Link href="/" className="brand" aria-label="Mederti home">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-black.png" alt="mederti" className="logo-img" />
-        </Link>
-        <div className="nav-actions">
-          <Link href="/login" className="btn">Log in</Link>
-        </div>
-      </nav>
+      <div className="shell">
+        {/* ── Left sidebar (app nav) ── */}
+        <aside className="sb">
+          <div className="sb-top">
+            <Link href="/" className="brand" aria-label="Mederti home">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-black.png" alt="mederti" className="logo-img" />
+            </Link>
+          </div>
+          <Link href="/search" className="sb-new">＋ New search</Link>
+          <div className="sb-scroll">
+            <div className="sb-group">
+              <div className="sb-glabel">My medicines</div>
+              <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
+            </div>
+            <div className="sb-group">
+              <div className="sb-glabel">Browse</div>
+              <Link href="/search" className="sb-item"><span className="sb-dot green" />Search</Link>
+              <Link href="/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
+            </div>
+          </div>
+          <Link href="/login" className="sb-profile">Log in →</Link>
+        </aside>
 
-      <div className="drug-grid">
-        {/* ── Main ── */}
-        <div className="dg-main">
+        {/* ── Center + right ── */}
+        <div className="shell-main">
+          <div className="drug-grid">
+            {/* ── Main ── */}
+            <div className="dg-main">
           <Link href="/search" className="back-row">← Search results</Link>
 
           <div className="d-identity">
@@ -306,6 +322,8 @@ export default function V1DrugView({
             <Link href="/chat" className="chat-input"><input readOnly placeholder="Ask a question…" /><span className="chat-send">↑</span></Link>
           </div>
         </aside>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -323,8 +341,24 @@ const CSS = `
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none}
 .home-nav{position:sticky;top:0;z-index:50;height:58px;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
 .nav-actions{display:flex;gap:10px;align-items:center}
+.shell{display:flex;align-items:flex-start;min-height:100vh}
+.sb{width:262px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.sb-top{padding:18px 18px 14px}
+.sb-new{margin:0 14px 10px;display:flex;align-items:center;gap:8px;justify-content:center;padding:11px;border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text-2);background:var(--bg);text-decoration:none}
+.sb-new:hover{border-color:var(--green);color:var(--green-d);background:var(--green-bg)}
+.sb-scroll{flex:1;overflow-y:auto;padding:8px 14px}
+.sb-group{margin-top:14px}
+.sb-glabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-4);padding:6px 8px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px;border-radius:10px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none}
+.sb-item:hover{background:var(--bg-2)}
+.sb-empty{color:var(--text-4);font-style:italic}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb-dot.green{background:var(--ok)}
+.sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
+.sb-profile:hover{color:var(--green-d)}
+.shell-main{flex:1;min-width:0}
 .drug-grid{display:flex;align-items:flex-start}
-.dg-main{flex:1;min-width:0;max-width:720px;margin:0 auto;padding:0 28px 80px;width:100%}
+.dg-main{flex:1;min-width:0;max-width:720px;margin:0 auto;padding:18px 28px 80px;width:100%}
 .back-row{display:flex;align-items:center;gap:6px;padding:18px 0 0;font-size:13px;font-weight:500;color:var(--text-3);text-decoration:none}
 .back-row:hover{color:var(--green-d)}
 .d-identity{padding:16px 0 0}
@@ -394,7 +428,7 @@ const CSS = `
 .sp-crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
 .sp-part{color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
 .sp-ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-b)}
-.chat-col{width:380px;flex-shrink:0;border-left:1px solid var(--border);background:var(--bg);position:sticky;top:58px;height:calc(100vh - 58px)}
+.chat-col{width:380px;flex-shrink:0;border-left:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh}
 .chat-panel{display:flex;flex-direction:column;height:100%}
 .chat-head{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border)}
 .chat-h-l{display:flex;align-items:center;gap:10px}
@@ -411,5 +445,6 @@ const CSS = `
 .chat-input input{flex:1;border:none;background:transparent;outline:none;font-size:13px;font-family:inherit;color:var(--text-4);pointer-events:none}
 .chat-send{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px}
 @media(max-width:1080px){.chat-col{display:none}.dg-main{margin:0 auto}}
+@media(max-width:820px){.sb{display:none}}
 @media(max-width:620px){.sw-cards{grid-template-columns:repeat(2,1fr)}.d-name{font-size:24px}}
 `;

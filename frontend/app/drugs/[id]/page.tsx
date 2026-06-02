@@ -21,6 +21,7 @@ import AvailableSuppliers from "./AvailableSuppliers";
 import SoWhatInsight from "./SoWhatInsight";
 import PersonaSwitcher from "./PersonaSwitcher";
 import PharmacistAnswerCard from "./PharmacistAnswerCard";
+import V1DrugView from "./V1DrugView";
 import ProcurementView from "./ProcurementView";
 import SupplierView from "./SupplierView";
 
@@ -485,6 +486,21 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const latestUpdate = shortages[0]?.updated_at ?? shortages[0]?.last_verified_at;
   const cookieStore = await cookies();
   const userCountry = cookieStore.get("mederti-country")?.value ?? "AU";
+
+  // Pharmacist-only launch: render the V1 design, fed by the already-fetched
+  // (and safety-hardened) data. Bypasses the legacy persona render entirely.
+  if (PHARMACIST_ONLY) {
+    return (
+      <V1DrugView
+        id={id}
+        drug={drug}
+        shortages={shortages}
+        statusLog={statusLog}
+        alternatives={alternatives}
+        userCountry={userCountry}
+      />
+    );
+  }
 
   /* ── Risk Score ── */
   const now = Date.now();

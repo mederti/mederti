@@ -121,7 +121,8 @@ export default function SearchPage() {
 }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+.v1home .res-l .rn{font-family:'Google Sans Flex','Inter',sans-serif;font-weight:500}
 .v1home{--ink:#0a0f1a;--green:#10b981;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;
   --bg:#fff;--bg-2:#f7f9fb;--bg-3:#eef2f6;--border:#e6eaf0;--border-2:#d3dae3;
   --text:#0a0f1a;--text-2:#3a4452;--text-3:#697586;--text-4:#9aa4b2;

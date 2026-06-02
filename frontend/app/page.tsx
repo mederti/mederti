@@ -55,7 +55,7 @@ export default async function Home() {
       <div className="hero">
         <div className="hero-bg" />
         <span className="hero-kicker"><span className="pulse" /> Free for pharmacists &amp; clinicians</span>
-        <h1>Live shortage status for <span className="em">any medicine</span></h1>
+        <h1>Live shortage status<br />for <span className="em">any medicine</span></h1>
         <p className="sub">Search any drug to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>
         <V1Search />
         <div className="hero-stats">

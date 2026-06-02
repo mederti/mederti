@@ -126,8 +126,16 @@ export async function middleware(req: NextRequest) {
   // When NEXT_PUBLIC_SOFT_LAUNCH=true, redirect anything off the
   // 5-page allowlist to /coming-soon. Auth + onboarding still work.
   if (SOFT_LAUNCH && !softLaunchAllowed(pathname)) {
-    const url = new URL("/coming-soon", req.url);
-    url.searchParams.set("from", pathname);
+    // Hidden *logged-in* landing routes (the post-login default is /home)
+    // must send users to their working home — /search — not the marketing
+    // coming-soon page. Catches email, magic-link AND OAuth in one place,
+    // regardless of how each flow computes its `next`.
+    const LOGGED_IN_HOMES = ["/home", "/dashboard", "/watchlist", "/alerts"];
+    const isLoggedInHome = LOGGED_IN_HOMES.some(
+      (p) => pathname === p || pathname.startsWith(p + "/")
+    );
+    const url = new URL(isLoggedInHome ? "/search" : "/coming-soon", req.url);
+    if (!isLoggedInHome) url.searchParams.set("from", pathname);
     return NextResponse.redirect(url, 308);
   }
 

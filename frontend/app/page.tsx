@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import V1Search from "@/app/components/v1/V1Search";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
+import V1PillBottle3D from "@/app/components/v1/V1PillBottle3D";
 
 // Live stats are the single source of truth. Honest "—" if a fetch fails —
 // never a stale hardcoded figure on a clinician-facing page.
@@ -21,16 +22,19 @@ export default async function Home() {
     const [catRes, activeRes, ctyRes] = await Promise.all([
       admin.from("drug_catalogue").select("id", { count: "exact", head: true }),
       admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
-      admin
-        .from("shortage_events")
-        .select("country_code")
-        .gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString()),
+      // Countries & official regulators we monitor (the data_sources we scrape),
+      // not just countries with active shortages this month. Exact count, no "+".
+      admin.from("data_sources").select("country_code"),
     ]);
     if (catRes.count) medicines = k(catRes.count);
     if (activeRes.count) activeShortages = activeRes.count.toLocaleString();
     if (ctyRes.data) {
-      const n = new Set(ctyRes.data.map((r: { country_code: string }) => r.country_code).filter(Boolean)).size;
-      if (n) countries = `${n}+`;
+      const n = new Set(
+        ctyRes.data
+          .map((r: { country_code: string }) => (r.country_code || "").toUpperCase())
+          .filter((c: string) => c && c !== "ZZ")
+      ).size;
+      if (n) countries = `${n}`;
     }
   } catch {
     /* honest "—" fallbacks */
@@ -56,6 +60,7 @@ export default async function Home() {
       {/* ── Hero ── */}
       <div className="hero">
         <div className="hero-bg" />
+        <V1PillBottle3D />
         <span className="hero-kicker"><span className="pulse" /> Free for pharmacists &amp; clinicians</span>
         <h1>Live shortage status<br />for <span className="em">any medicine</span></h1>
         <p className="sub">Search any drug to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>

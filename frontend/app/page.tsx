@@ -149,7 +149,8 @@ function SwapIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="curre
 function BellIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>); }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+.v1home .hero h1,.v1home .pp-title,.v1home .prop h3,.v1home .cta-band h2,.v1home .d-name,.v1home .sc-title{font-family:'Google Sans Flex','Inter',sans-serif;font-weight:500}
 .v1home{
   --ink:#0a0f1a;--green:#10b981;--green-l:#34d399;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;
   --violet:#6366f1;--violet-bg:#eef2ff;--violet-b:#c7d2fe;

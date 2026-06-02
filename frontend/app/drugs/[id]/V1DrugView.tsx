@@ -324,7 +324,8 @@ export default function V1DrugView({
 }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+.v1home .d-name,.v1home .sc-title,.v1home .sec-title,.v1home .chat-title{font-family:'Google Sans Flex','Inter',sans-serif;font-weight:500}
 .v1home{--ink:#0a0f1a;--green:#10b981;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;--grad-soft:linear-gradient(135deg,#34d399,#10b981 45%,#0a0f1a 120%);--grad-brand:linear-gradient(135deg,#0a0f1a,#0c3a30 48%,#34d399);
   --violet:#6366f1;--violet-b:#c7d2fe;--bg:#fff;--bg-2:#f7f9fb;--bg-3:#eef2f6;--border:#e6eaf0;--border-2:#d3dae3;
   --text:#0a0f1a;--text-2:#3a4452;--text-3:#697586;--text-4:#9aa4b2;--crit:#e11d48;--crit-b:#fecdd3;--med:#d97706;--med-b:#fde68a;--ok:#10b981;--ok-bg:#ecfdf5;--ok-b:#a7f3d0;--crit-bg:#fff1f3;--med-bg:#fffbeb;

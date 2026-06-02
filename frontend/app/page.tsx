@@ -163,7 +163,7 @@ const CSS = `
 .v1home *{box-sizing:border-box}
 .v1home .mono{font-family:'DM Mono',monospace}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink)}
-.v1home .logo-img{height:26px;width:auto;display:block}
+.v1home .logo-img{height:31px;width:auto;display:block}
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;text-decoration:none}
 .v1home .btn:hover{border-color:var(--border-2);background:var(--bg-2)}
 .v1home .btn-primary{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 8px 20px -8px rgba(16,185,129,.55)}

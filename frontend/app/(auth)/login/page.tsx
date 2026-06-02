@@ -4,7 +4,6 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
-import OAuthButtons from "../OAuthButtons";
 import AuthShell from "../AuthShell";
 
 type Tab = "password" | "magic";
@@ -21,7 +20,6 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(searchParams.get("error"));
   const [magicSent, setMagicSent] = useState(false);
 
-  const role = searchParams.get("role");
   const supabase = createBrowserClient();
 
   async function handlePasswordLogin(e: React.FormEvent) {
@@ -85,9 +83,6 @@ function LoginForm() {
             Access your watchlist, alerts, and personalised feed
           </p>
         </div>
-
-        {/* OAuth */}
-        <OAuthButtons next={next} role={role} mode="signin" />
 
         {/* Tabs */}
         <div style={{

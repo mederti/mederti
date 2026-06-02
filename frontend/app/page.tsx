@@ -72,7 +72,7 @@ export default async function Home() {
       {/* ── Product preview ── */}
       <div className="product-preview">
         <div className="pp-head">
-          <h2 className="pp-title">See a medicine&apos;s full picture — at a glance.</h2>
+          <h2 className="pp-title">See a medicine&apos;s full picture at a glance.</h2>
           <p className="pp-sub">Live status by regulator, substitutes, sourcing, a verified event timeline and AI insight — every claim sourced and timestamped.</p>
         </div>
         <div className="pp-stage">

@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, type DrugHit } from "@/lib/api";
+import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import { truncateDrugName } from "@/lib/utils";
 
 function statusOf(d: DrugHit): { cls: string; label: string } {
@@ -105,6 +106,7 @@ export default function SearchPage() {
           <img src="/logo-black.png" alt="mederti" className="logo-img" />
         </Link>
         <div className="nav-actions">
+          <V1CountryPicker />
           <Link href="/signup" className="btn btn-primary">Get started free</Link>
           <Link href="/login" className="btn">Log in</Link>
         </div>

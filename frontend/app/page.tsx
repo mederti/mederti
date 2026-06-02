@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import V1Search from "@/app/components/v1/V1Search";
+import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 
 // Live stats are the single source of truth. Honest "—" if a fetch fails —
 // never a stale hardcoded figure on a clinician-facing page.
@@ -46,6 +47,7 @@ export default async function Home() {
           <img src="/logo-black.png" alt="mederti" className="logo-img" />
         </Link>
         <div className="nav-actions">
+          <V1CountryPicker />
           <Link href="/signup" className="btn btn-primary">Get started free</Link>
           <Link href="/login" className="btn">Log in</Link>
         </div>

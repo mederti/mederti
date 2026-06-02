@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
+import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -56,9 +57,14 @@ export default function V1DrugView({
   userCountry: string;
 }) {
   const active = shortages.filter((s) => ["active", "anticipated"].includes((s.status || "").toLowerCase()));
-  const worst = active.reduce<any>((w, s) => ((SEV[(s.severity || "").toLowerCase()] ?? 0) > (SEV[(w?.severity || "").toLowerCase()] ?? -1) ? s : w), null);
-  const mine = active.find((s) => (s.country_code || "").toUpperCase() === userCountry) || worst;
-  const inShortage = active.length > 0;
+  // Country-FIRST status: a shortage far away but fine in your market is NOT a
+  // shortage for you. The headline reflects YOUR country only; shortages
+  // elsewhere are surfaced as secondary context + the regulator breakdown.
+  const cName = COUNTRY[userCountry] ?? userCountry;
+  const mine = active.find((s) => (s.country_code || "").toUpperCase() === userCountry) || null;
+  const elsewhere = active.filter((s) => (s.country_code || "").toUpperCase() !== userCountry);
+  const elsewhereCount = new Set(elsewhere.map((s) => (s.country_code || "").toUpperCase())).size;
+  const localShortage = !!mine;
   const sev = (mine?.severity || "").toLowerCase();
   const isCrit = sev === "critical" || sev === "high";
   const anticipated = (mine?.status || "").toLowerCase() === "anticipated";
@@ -118,7 +124,6 @@ export default function V1DrugView({
     .slice(0, 6);
 
   const klass = drug.drug_class || drug.atc_description || null;
-  const statusLabel = !inShortage ? "In supply" : anticipated ? "Anticipated shortage" : isCrit ? "Critical shortage" : "Limited supply";
 
   return (
     <div className="v1home v1drug">
@@ -133,6 +138,7 @@ export default function V1DrugView({
             </Link>
           </div>
           <Link href="/search" className="sb-new">＋ New search</Link>
+          <div style={{ padding: "0 14px 6px" }}><V1CountryPicker /></div>
           <div className="sb-scroll">
             <div className="sb-group">
               <div className="sb-glabel">My medicines</div>
@@ -165,12 +171,13 @@ export default function V1DrugView({
           </div>
 
           {/* Status card */}
-          <div className={`status-card ${inShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
-            <div className="sc-label"><span className="d" />{inShortage ? (anticipated ? "Anticipated" : "In declared shortage") : "In supply"}</div>
-            <div className="sc-title">{statusLabel}</div>
-            {inShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
-            {!inShortage && <div className="sc-sub">No active shortage reported in your market.</div>}
-            <div className="sc-asof">{inShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
+          <div className={`status-card ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
+            <div className="sc-label"><span className="d" />{localShortage ? (anticipated ? `Anticipated · ${cName}` : `In declared shortage · ${cName}`) : `In supply · ${cName}`}</div>
+            <div className="sc-title">{localShortage ? (anticipated ? "Anticipated shortage" : isCrit ? "Critical shortage" : "Limited supply") : `In supply in ${cName}`}</div>
+            {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
+            {!localShortage && elsewhereCount > 0 && <div className="sc-sub">⚠ In shortage in {elsewhereCount} other market{elsewhereCount !== 1 ? "s" : ""} — see regulator status below.</div>}
+            {!localShortage && elsewhereCount === 0 && <div className="sc-sub">No active shortage reported.</div>}
+            <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
           </div>
 
           {/* So-what tiles */}

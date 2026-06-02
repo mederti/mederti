@@ -6,6 +6,7 @@ import { V4BellButton } from "@/app/drugs/[id]/bell-button";
 import type { SupplierPartner } from "@/lib/suppliers";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { truncateDrugName } from "@/lib/utils";
+import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 
 const SEV_ORDER = ["critical", "high", "medium", "low"] as const;
 
@@ -151,10 +152,10 @@ export function MobileDrugPage({
                   color: mySev === "critical" ? "var(--crit)" : mySev === "high" ? "var(--high)" : "var(--med)",
                   marginBottom: 2,
                 }}>
-                  Predicted return
+                  Expected return
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)" }}>
-                  {predictedReturnDate ?? "Unknown"}
+                  {predictedReturnDate ?? "No estimate provided"}
                 </div>
               </div>
               {confidence > 0 && (
@@ -285,9 +286,12 @@ export function MobileDrugPage({
           </div>
           <div style={{ fontSize: 12, color: "var(--app-text-2)", lineHeight: 1.6 }}>
             {drug.ai_insight ??
-              "Supply disruptions of this type typically persist 3\u20139 months based on historical patterns. Consider therapeutic alternatives where clinically appropriate."}
+              "Consider therapeutic alternatives where clinically appropriate, and confirm current supply against the regulator source before acting."}
           </div>
         </div>
+      </div>
+      <div style={{ padding: "0 14px 16px" }}>
+        <ClinicalDisclaimer compact />
       </div>
       <BottomNav />
     </div>

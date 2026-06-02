@@ -73,6 +73,10 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/auth",                // any auth callback paths
   "/forgot-password",
   "/reset-password",
+  // Drug search + detail are public for SEO and first-time visitors.
+  // (Login is required only for chat history, watchlist, and alerts.)
+  "/search",              // drug shortage search
+  "/drugs",               // /drugs/[id] detail pages
   // Persona / marketing pages
   "/pharmacists",
   "/hospitals",

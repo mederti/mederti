@@ -46,10 +46,13 @@ export default async function Home() {
     return <MobileHome />;
   }
 
-  // Fetch live stats from Supabase (same source as dashboard)
-  let totalActive = "15,132";
-  let countryCount = "22";
-  let sourceCount = "47";
+  // Live stats from Supabase are the SINGLE source of truth (same source as the
+  // dashboard). These fallbacks only render if the fetch below throws — kept as
+  // a neutral "—" rather than a stale specific number so a Supabase hiccup never
+  // shows a confidently-wrong figure on a clinician-facing homepage.
+  let totalActive = "—";
+  let countryCount = "—";
+  let sourceCount = "—";
   let platformStats = {
     totalCatalogue: 216509,
     totalShortages: 21550,

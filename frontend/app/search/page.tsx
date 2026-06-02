@@ -10,8 +10,6 @@ import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
 import { truncateDrugName } from "@/lib/utils";
 import AutocompleteDropdown from "@/app/components/autocomplete-dropdown";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
 // Extended drug hit with shortage breakdown
 interface DrugResult extends DrugHit {
   shortages?: ShortageEvent[];

@@ -281,7 +281,15 @@ export default async function DrugPage({ params, searchParams }: Props) {
       sessionRole = (profile as { role?: string } | null)?.role ?? null;
     }
   } catch { /* anonymous — default persona */ }
-  const persona: Persona = resolvePersona(sp.as, sessionRole);
+  // Pharmacist-only launch: when soft-launch is on, the isolated site serves a
+  // single audience — lock to the pharmacist view and ignore ?as=/role so the
+  // procurement/supplier surfaces never appear. Full platform (flag off)
+  // keeps the persona system intact.
+  const PHARMACIST_ONLY =
+    (process.env.NEXT_PUBLIC_SOFT_LAUNCH ?? "").toLowerCase() === "true";
+  const persona: Persona = PHARMACIST_ONLY
+    ? "pharmacist"
+    : resolvePersona(sp.as, sessionRole);
 
   const supabase = getSupabaseAdmin();
 
@@ -569,9 +577,10 @@ export default async function DrugPage({ params, searchParams }: Props) {
     : "No shortage reported";
 
   // Predicted return for My Country card
-  const hasResDate = !!myShortage?.estimated_resolution_date;
-  const hasMultipleSources = sourceSet.size >= 2;
-  const confidence = hasResDate ? (hasMultipleSources ? 74 : 61) : 0;
+  // No genuine confidence metric exists yet — the prior 74/61 heuristic was a
+  // fabricated score. Pinned to 0 so every "AI confidence" UI (each guarded on
+  // confidence > 0) stays hidden until a real metric is wired.
+  const confidence = 0;
   let predictedReturnDate: string | null = null;
   if (myShortage && myStatus !== "anticipated" && myShortage.estimated_resolution_date) {
     predictedReturnDate = new Date(myShortage.estimated_resolution_date).toLocaleDateString("en-AU", { month: "short", year: "numeric" });
@@ -712,7 +721,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
     const altsArr = (alternatives as any[]).slice(0, 4).map((a: any) => ({
       name: a.drugs?.generic_name ?? "Alternative",
       form: a.relationship_type ? String(a.relationship_type).replace(/_/g, " ") : "therapeutic alternative",
-      matchPercent: Math.round((a.similarity_score ?? 0.7) * 100),
+      // Real ATC-similarity from drug_alternatives, or null when unscored —
+      // never a fabricated default (a made-up "70% match" is a safety claim).
+      matchPercent: a.similarity_score != null ? Math.round(a.similarity_score * 100) : null,
       isAvailable: true,
     }));
 
@@ -813,14 +824,12 @@ export default async function DrugPage({ params, searchParams }: Props) {
         }
       } catch { /* migration 033 not yet applied — silently skip */ }
     }
-    // If we have an AI forecast use it. Otherwise heuristic: critical/high shortages
-    // typically resolve 3-6 months after first reported; show a softer estimate.
+    // Expected return is shown ONLY from a sponsor-declared resolution date
+    // carried on the regulator notice. We never compute/predict a date from
+    // severity — an invented "back in 3–6 months" is a clinical-safety error.
+    // confidence:0 hides the (previously fabricated) confidence meter.
     const expectedReturn = predictedReturnDate
-      ? { label: predictedReturnDate, range: "± 2 months", confidence: confidence || 60 }
-      : sev === "critical" || sev === "high"
-      ? { label: "3–6 months", range: "based on prior incidents", confidence: 45 }
-      : sev === "medium"
-      ? { label: "1–3 months", range: "based on prior incidents", confidence: 55 }
+      ? { label: "Expected return · sponsor estimate", range: predictedReturnDate, confidence: 0 }
       : null;
 
     return (
@@ -836,7 +845,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         `}</style>
 
         <SiteNav />
-        <PersonaSwitcher current={persona} drugId={id} />
+        {!PHARMACIST_ONLY && <PersonaSwitcher current={persona} drugId={id} />}
 
         <div className="v3-cols" style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
 
@@ -914,7 +923,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
             ? `${drug.generic_name} is currently in ${worstSeverity} shortage in ${affectedCountryNames.join(", ")}. `
             : `${drug.generic_name} is in normal supply with no active shortages reported. `}
           {activeShortages.length > 0 && `${activeShortages.length} shortage events are currently active across ${affectedCountries.size} countries. `}
-          {estimatedReturn && `Expected return to normal supply: ${estimatedReturn}. `}
+          {estimatedReturn && `Expected return to normal supply (sponsor estimate via regulator notice): ${estimatedReturn}. `}
           {sourceNames.length > 0 && `Data sourced from official regulatory authorities including ${sourceNames.join(", ")}. `}
           Last verified: {lastVerified}. Source: Mederti ({canonicalUrl(`/drugs/${id}`)}).
         </p>
@@ -942,7 +951,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       <SiteNav />
 
       {/* ═══ PERSONA SWITCHER ═══ */}
-      <PersonaSwitcher current={persona} drugId={id} />
+      {!PHARMACIST_ONLY && <PersonaSwitcher current={persona} drugId={id} />}
 
       {/* ═══ NAV BAR ═══ */}
       <div style={{
@@ -992,14 +1001,14 @@ export default async function DrugPage({ params, searchParams }: Props) {
                     name: altName,
                     form: alt.relationship_type ? alt.relationship_type.replace(/_/g, " ") : "therapeutic alternative",
                     isAvailable: true,
-                    matchPercent: Math.round((alt.similarity_score ?? 0.7) * 100),
-                    clinicalReasoning: alt.dose_conversion_notes ?? alt.availability_note ?? `Therapeutic alternative for ${drug.generic_name} based on shared mechanism of action. Confirm dosing and clinical fit before substituting.`,
+                    matchPercent: alt.similarity_score != null ? Math.round(alt.similarity_score * 100) : null,
+                    clinicalReasoning: alt.dose_conversion_notes ?? alt.availability_note ?? `Listed therapeutic alternative for ${drug.generic_name}. Confirm dosing and clinical fit with the prescriber before substituting.`,
                   };
                 })()}
                 expectedReturn={predictedReturnDate ? {
-                  label: predictedReturnDate,
-                  range: "± 2 months",
-                  confidence: confidence || 60,
+                  label: "Expected return · sponsor estimate",
+                  range: predictedReturnDate,
+                  confidence: 0,
                 } : null}
                 tradePrice={null}
                 paediatricAlternative={null}
@@ -1158,10 +1167,10 @@ export default async function DrugPage({ params, searchParams }: Props) {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--app-text-4)", marginBottom: 4 }}>
-                      Predicted return
+                      Expected return
                     </div>
                     <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)" }}>
-                      {predictedReturnDate ?? "Unknown"}
+                      {predictedReturnDate ?? "No estimate provided"}
                     </div>
                   </div>
                   {confidence > 0 && (

@@ -19,7 +19,7 @@ interface AdjacentMarket {
 interface Alternative {
   name: string;
   form: string;
-  matchPercent: number;
+  matchPercent: number | null;
   priceAud?: number;
   isAvailable: boolean;
 }
@@ -38,7 +38,7 @@ interface ExpectedReturn {
 
 interface TopAlternativeSummary {
   name: string;
-  matchPercent: number;
+  matchPercent: number | null;
   isAvailable: boolean;
 }
 
@@ -340,9 +340,7 @@ export default function ProcurementView({
               color: "var(--app-text-3)",
             }}
           >
-            {expectedReturn
-              ? `${expectedReturn.confidence}% conf · ${expectedReturn.label}`
-              : "no forecast"}
+            {expectedReturn ? expectedReturn.label : "no forecast"}
           </div>
         </div>
 
@@ -398,7 +396,7 @@ export default function ProcurementView({
             }}
           >
             {topAlternative
-              ? `${topAlternative.matchPercent}% match · ${
+              ? `${topAlternative.matchPercent != null ? `${topAlternative.matchPercent}% match · ` : ""}${
                   topAlternative.isAvailable ? "available" : "limited"
                 }`
               : "none found"}
@@ -633,7 +631,7 @@ export default function ProcurementView({
                           fontWeight: 500,
                         }}
                       >
-                        {alt.matchPercent}% match
+                        {alt.matchPercent != null ? `${alt.matchPercent}% match` : "listed alternative"}
                       </div>
                       <div
                         style={{
@@ -664,8 +662,9 @@ export default function ProcurementView({
 
         {/* ---------- Right sidebar ---------- */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* Confidence module */}
-          {expectedReturn && (
+          {/* Confidence module — hidden until a real confidence metric exists
+              (the fabricated AI-forecast score was removed). */}
+          {expectedReturn && expectedReturn.confidence > 0 && (
             <div style={{ ...moduleBase, padding: "16px 18px" }}>
               <div style={moduleHead}>
                 <div style={moduleTitle}>Confidence</div>

@@ -73,3 +73,6 @@ htmlcov/
 supabase/.temp/
 .vercel
 evals/reports/
+
+# one-time DB-backfill revert manifest (transient, not source)
+catalogue_inn_backfill_manifest.json

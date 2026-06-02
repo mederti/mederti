@@ -133,7 +133,7 @@ export default async function Home() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-black.png" alt="mederti" className="logo-img" style={{ height: 20 }} />
         <div style={{ display: "flex", gap: 18 }}>
-          <Link href="/pricing">Pricing</Link><Link href="/about">About</Link><Link href="/privacy">Privacy</Link><Link href="/contact">Contact</Link>
+          <Link href="/about">About</Link><Link href="/privacy">Privacy</Link><Link href="/contact">Contact</Link>
         </div>
         <span>© 2026 Mederti Pty Ltd · Melbourne, Australia</span>
       </div>

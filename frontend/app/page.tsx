@@ -27,7 +27,7 @@ export default async function Home() {
         .gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString()),
     ]);
     if (catRes.count) medicines = k(catRes.count);
-    if (activeRes.count) activeShortages = activeRes.count.toLocaleString() + "+";
+    if (activeRes.count) activeShortages = activeRes.count.toLocaleString();
     if (ctyRes.data) {
       const n = new Set(ctyRes.data.map((r: { country_code: string }) => r.country_code).filter(Boolean)).size;
       if (n) countries = `${n}+`;

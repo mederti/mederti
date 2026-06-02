@@ -171,7 +171,7 @@ const CSS = `
 .home-nav{position:sticky;top:0;z-index:50;height:64px;background:rgba(255,255,255,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px}
 .nav-actions{display:flex;gap:10px;align-items:center}
 .hero{position:relative;max-width:820px;margin:0 auto;padding:84px 24px 44px;text-align:center}
-.hero-bg{position:absolute;inset:-120px 0 auto;height:560px;z-index:0;pointer-events:none;background:radial-gradient(50% 45% at 50% 8%,rgba(52,211,153,.20),transparent 70%),radial-gradient(38% 40% at 82% 18%,rgba(99,102,241,.12),transparent 70%),radial-gradient(40% 40% at 16% 26%,rgba(16,185,129,.10),transparent 70%)}
+.hero-bg{position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:100vw;height:620px;z-index:0;pointer-events:none;background:radial-gradient(40% 70% at 50% 0%,rgba(52,211,153,.22),transparent 70%),radial-gradient(32% 60% at 85% 6%,rgba(99,102,241,.14),transparent 70%),radial-gradient(32% 60% at 14% 10%,rgba(16,185,129,.12),transparent 70%)}
 .hero>:not(.hero-bg){position:relative;z-index:1}
 .hero-kicker{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:6px 13px;border-radius:99px;margin-bottom:26px}
 .hero-kicker .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:v1blink 1.6s infinite}

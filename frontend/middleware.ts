@@ -42,6 +42,8 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/admin",             // separately gated by requireAdmin
   "/privacy",
   "/terms",
+  "/about",             // footer
+  "/contact",           // footer
 ];
 
 function softLaunchAllowed(pathname: string): boolean {

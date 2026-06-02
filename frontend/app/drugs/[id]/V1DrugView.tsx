@@ -2,6 +2,7 @@ import Link from "next/link";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import V1Chat from "@/app/components/v1/V1Chat";
+import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -138,8 +139,7 @@ export default function V1DrugView({
               <img src="/logo-black.png" alt="mederti" className="logo-img" />
             </Link>
           </div>
-          <Link href="/search" className="sb-new">＋ New search</Link>
-          <div style={{ padding: "0 14px 6px" }}><V1CountryPicker /></div>
+          <div style={{ padding: "14px 14px 8px" }}><V1CountryPicker /></div>
           <div className="sb-scroll">
             <div className="sb-group">
               <div className="sb-glabel">My medicines</div>
@@ -159,7 +159,7 @@ export default function V1DrugView({
           <div className="drug-grid">
             {/* ── Main ── */}
             <div className="dg-main">
-          <Link href="/search" className="back-row">← Search results</Link>
+          <V1DrugSearch initial={drug.generic_name} />
 
           <div className="d-identity">
             <div className="d-name">{drug.generic_name}</div>
@@ -353,8 +353,13 @@ const CSS = `
 .shell-main{flex:1;min-width:0}
 .drug-grid{display:flex;align-items:flex-start}
 .dg-main{flex:1;min-width:0;max-width:720px;margin:0 auto;padding:18px 28px 80px;width:100%}
-.back-row{display:flex;align-items:center;gap:6px;padding:18px 0 0;font-size:13px;font-weight:500;color:var(--text-3);text-decoration:none}
-.back-row:hover{color:var(--green-d)}
+.dsearch{display:flex;align-items:center;gap:8px;margin:18px 0 0;background:var(--bg);border:1.5px solid var(--border-2);border-radius:12px;padding:5px 6px 5px 14px;transition:.15s;max-width:560px}
+.dsearch:focus-within{border-color:var(--green);box-shadow:0 8px 24px -16px rgba(16,185,129,.4)}
+.dsearch-ic{color:var(--text-4);font-size:16px}
+.dsearch input{flex:1;border:none;outline:none;background:transparent;font-size:15px;font-family:inherit;color:var(--text);padding:9px 0}
+.dsearch input::placeholder{color:var(--text-4)}
+.dsearch button{background:var(--green);color:#fff;border:none;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+.dsearch button:hover{background:var(--green-d)}
 .d-identity{padding:16px 0 0}
 .d-name{font-size:30px;font-weight:700;letter-spacing:-.032em;line-height:1.1}
 .d-generic{font-size:13px;color:var(--text-3);margin-top:5px;font-family:'DM Mono',monospace}

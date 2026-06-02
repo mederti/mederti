@@ -353,8 +353,8 @@ const CSS = `
 .sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
 .drug-grid{display:flex;align-items:flex-start}
-.dg-main{flex:1;min-width:0;max-width:720px;margin:0 auto;padding:18px 28px 80px;width:100%}
-.dsearch{display:flex;align-items:center;gap:8px;margin:18px 0 0;background:var(--bg);border:1.5px solid var(--border-2);border-radius:12px;padding:5px 6px 5px 14px;transition:.15s;max-width:560px}
+.dg-main{flex:1;min-width:0;max-width:1180px;padding:18px 40px 80px;width:100%}
+.dsearch{display:flex;align-items:center;gap:8px;margin:18px 0 0;background:var(--bg);border:1.5px solid var(--border-2);border-radius:12px;padding:5px 6px 5px 14px;transition:.15s}
 .dsearch:focus-within{border-color:var(--green);box-shadow:0 8px 24px -16px rgba(16,185,129,.4)}
 .dsearch-ic{color:var(--text-4);font-size:16px}
 .dsearch input{flex:1;border:none;outline:none;background:transparent;font-size:15px;font-family:inherit;color:var(--text);padding:9px 0}

@@ -69,7 +69,7 @@ export default async function Home() {
       {/* ── Product preview ── */}
       <div className="product-preview">
         <div className="pp-head">
-          <h2 className="pp-title">Everything about a medicine — in one page.</h2>
+          <h2 className="pp-title">See a medicine&apos;s full picture — at a glance.</h2>
           <p className="pp-sub">Live status by regulator, substitutes, sourcing, a verified event timeline and AI insight — every claim sourced and timestamped.</p>
         </div>
         <div className="pp-stage">
@@ -172,7 +172,7 @@ const CSS = `
 .nav-actions{display:flex;gap:10px;align-items:center}
 .hero{position:relative;max-width:820px;margin:0 auto;padding:84px 24px 44px;text-align:center}
 .hero-bg{position:absolute;inset:-120px 0 auto;height:560px;z-index:0;pointer-events:none;background:radial-gradient(50% 45% at 50% 8%,rgba(52,211,153,.20),transparent 70%),radial-gradient(38% 40% at 82% 18%,rgba(99,102,241,.12),transparent 70%),radial-gradient(40% 40% at 16% 26%,rgba(16,185,129,.10),transparent 70%)}
-.hero>*{position:relative;z-index:1}
+.hero>:not(.hero-bg){position:relative;z-index:1}
 .hero-kicker{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:6px 13px;border-radius:99px;margin-bottom:26px}
 .hero-kicker .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:v1blink 1.6s infinite}
 @keyframes v1blink{0%,100%{opacity:1}50%{opacity:.25}}

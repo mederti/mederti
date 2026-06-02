@@ -41,7 +41,10 @@ export default async function Home() {
 
       {/* ── Nav ── */}
       <nav className="home-nav">
-        <Link href="/" className="brand"><Mark /> mederti</Link>
+        <Link href="/" className="brand" aria-label="Mederti home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-black.png" alt="mederti" className="logo-img" />
+        </Link>
         <div className="nav-actions">
           <Link href="/signup" className="btn btn-primary">Get started free</Link>
           <Link href="/login" className="btn">Log in</Link>
@@ -127,7 +130,8 @@ export default async function Home() {
 
       {/* ── Footer ── */}
       <div className="home-foot">
-        <span className="brand" style={{ fontSize: 15 }}><Mark /> mederti</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-black.png" alt="mederti" className="logo-img" style={{ height: 20 }} />
         <div style={{ display: "flex", gap: 18 }}>
           <Link href="/pricing">Pricing</Link><Link href="/about">About</Link><Link href="/privacy">Privacy</Link><Link href="/contact">Contact</Link>
         </div>
@@ -137,14 +141,6 @@ export default async function Home() {
   );
 }
 
-function Mark() {
-  return (
-    <svg className="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7L12 2.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <circle cx="12" cy="12" r="3.2" fill="currentColor" />
-    </svg>
-  );
-}
 function ClockIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 1.8" /></svg>); }
 function SwapIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9h12" /><path d="M13.5 5.5 17 9l-3.5 3.5" /><path d="M20 15H8" /><path d="M10.5 11.5 7 15l3.5 3.5" /></svg>); }
 function BellIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>); }
@@ -163,7 +159,7 @@ const CSS = `
 .v1home *{box-sizing:border-box}
 .v1home .mono{font-family:'DM Mono',monospace}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink)}
-.v1home .mark{width:22px;height:22px;color:var(--green-d)}
+.v1home .logo-img{height:26px;width:auto;display:block}
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;text-decoration:none}
 .v1home .btn:hover{border-color:var(--border-2);background:var(--bg-2)}
 .v1home .btn-primary{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 8px 20px -8px rgba(16,185,129,.55)}

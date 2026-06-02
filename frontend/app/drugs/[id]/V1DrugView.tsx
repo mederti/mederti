@@ -124,7 +124,10 @@ export default function V1DrugView({
     <div className="v1home v1drug">
       <style>{CSS}</style>
       <nav className="home-nav">
-        <Link href="/" className="brand"><Mark /> mederti</Link>
+        <Link href="/" className="brand" aria-label="Mederti home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-black.png" alt="mederti" className="logo-img" />
+        </Link>
         <div className="nav-actions">
           <Link href="/login" className="btn">Log in</Link>
         </div>
@@ -308,10 +311,6 @@ export default function V1DrugView({
   );
 }
 
-function Mark() {
-  return (<svg className="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7L12 2.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><circle cx="12" cy="12" r="3.2" fill="currentColor" /></svg>);
-}
-
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 .v1home{--ink:#0a0f1a;--green:#10b981;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;--grad-soft:linear-gradient(135deg,#34d399,#10b981 45%,#0a0f1a 120%);--grad-brand:linear-gradient(135deg,#0a0f1a,#0c3a30 48%,#34d399);
@@ -320,7 +319,7 @@ const CSS = `
   background:var(--bg-2);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
-.v1home .mark{width:22px;height:22px;color:var(--green-d)}
+.v1home .logo-img{height:24px;width:auto;display:block}
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none}
 .home-nav{position:sticky;top:0;z-index:50;height:58px;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
 .nav-actions{display:flex;gap:10px;align-items:center}

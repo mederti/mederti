@@ -119,12 +119,12 @@ export default function SearchPage() {
 }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 .v1home{--ink:#0a0f1a;--green:#10b981;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;
   --bg:#fff;--bg-2:#f7f9fb;--bg-3:#eef2f6;--border:#e6eaf0;--border-2:#d3dae3;
   --text:#0a0f1a;--text-2:#3a4452;--text-3:#697586;--text-4:#9aa4b2;
   --crit:#e11d48;--crit-bg:#fff1f3;--crit-b:#fecdd3;--med:#d97706;--med-bg:#fffbeb;--med-b:#fde68a;--ok:#10b981;--ok-bg:#ecfdf5;--ok-b:#a7f3d0;
-  background:var(--bg-2);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh}
+  background:var(--bg-2);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
 .v1home .logo-img{height:26px;width:auto;display:block}
@@ -132,7 +132,7 @@ const CSS = `
 .v1home .btn:hover{border-color:var(--border-2);background:var(--bg-2)}
 .v1home .btn-primary{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 8px 20px -8px rgba(16,185,129,.55)}
 .v1home .btn-primary:hover{background:var(--green-d)}
-.home-nav{position:sticky;top:0;z-index:50;height:64px;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px}
+.home-nav{position:sticky;top:0;z-index:50;height:64px;background:transparent;display:flex;align-items:center;justify-content:space-between;padding:0 28px}
 .nav-actions{display:flex;gap:10px;align-items:center}
 .wrap-narrow{max-width:680px;margin:0 auto;padding:32px 24px 80px}
 .searchbox.v1sb{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:14px;padding:6px 8px 6px 18px;box-shadow:0 12px 36px -22px rgba(10,15,26,.28);transition:.15s}

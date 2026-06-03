@@ -60,7 +60,7 @@ export default async function Home() {
       <div className="hero">
         <div className="hero-bg" />
         <span className="hero-kicker"><span className="pulse" /> Free for pharmacists &amp; clinicians</span>
-        <h1>Live shortage status<br />for <span className="em">any medicine</span></h1>
+        <h1>Live shortage status<br />for <span className="em">any medicine</span>.</h1>
         <p className="sub">Search any drug to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>
         <V1Search />
         <div className="hero-stats">
@@ -114,6 +114,8 @@ export default async function Home() {
           </div>
           <div className="pp-float pp-f1"><div className="ppf-ic">🔔</div><div><div className="ppf-n">Alert set</div><div className="ppf-s">We&apos;ll email when it&apos;s back</div></div></div>
           <div className="pp-float pp-f2"><div><div className="ppf-n" style={{ color: "var(--green-d)" }}>● Back in supply</div><div className="ppf-s">Metformin 500mg · 🇬🇧 UK</div></div></div>
+          <div className="pp-float pp-f3"><div className="ppf-ic">📈</div><div><div className="ppf-n">Risk rising</div><div className="ppf-s">Cisplatin · API concentration</div></div></div>
+          <div className="pp-float pp-f4"><div className="ppf-ic">✓</div><div><div className="ppf-n">Supplier responded</div><div className="ppf-s">Quote ready · 🇮🇳 IN</div></div></div>
         </div>
       </div>
 
@@ -240,6 +242,8 @@ const CSS = `
 .pp-float{position:absolute;z-index:3;background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:11px 14px;box-shadow:0 24px 50px -24px rgba(10,15,26,.35);display:flex;align-items:center;gap:10px}
 .pp-f1{top:96px;right:-14px}
 .pp-f2{bottom:96px;left:-14px}
+.pp-f3{top:210px;left:-22px}
+.pp-f4{bottom:210px;right:-22px}
 .ppf-ic{font-size:18px}
 .ppf-n{font-size:12.5px;font-weight:700;color:var(--ink)}
 .ppf-s{font-size:11px;color:var(--text-3);margin-top:2px}

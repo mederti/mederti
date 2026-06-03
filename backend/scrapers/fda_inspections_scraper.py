@@ -129,31 +129,15 @@ class FDAInspectionsScraper(BaseScraper):
             except Exception as exc:
                 self.log.warning("Failed to parse inspections CSV", extra={"error": str(exc)})
 
-        # Parse warning letters from Federal Register
-        wl = raw.get("warning_letters_json") or {}
-        for doc in wl.get("results", []) or []:
-            title = (doc.get("title") or "").strip()
-            abstract = (doc.get("abstract") or "")[:300]
-            url = doc.get("html_url")
-            pub = self._parse_date(doc.get("publication_date"))
-
-            # Try to extract company name from title (often: "Warning Letter to X Inc.")
-            import re
-            m = re.search(r"(?:to|for|against)\s+([A-Z][\w\s&,.'-]+?(?:Inc|LLC|Ltd|GmbH|AG|SA|plc|Co\.))", title)
-            company = m.group(1).strip() if m else (title.split(";")[0] if ";" in title else title[:100])
-
-            events.append({
-                "fei_number": None,
-                "facility_name": company[:200],
-                "company_name": company[:200],
-                "country": "US",
-                "warning_letter_count_5y": 1,
-                "last_inspection_date": pub,
-                "last_inspection_classification": "OAI",
-                "source": "federal_register_warning_letter",
-                "source_url": url,
-                "raw_data": {"title": title, "abstract": abstract},
-            })
+        # NOTE: the Federal Register "warning letter" fallback was REMOVED.
+        # It regex-extracted a "company" from arbitrary FR document titles and
+        # hard-classified every one as OAI, producing false non-compliance
+        # claims against named entities (e.g. debarment-order individuals and
+        # program names mislabelled as facilities under Official Action). A GMP
+        # classification must come from a genuine inspection record, not a title
+        # string. Until a reliable inspections source is wired (the FDA Data
+        # Dashboard API needs a registered key), this scraper only emits rows
+        # from the real inspections CSV — emitting nothing rather than garbage.
 
         self.log.info("Normalised facility events", extra={"count": len(events)})
         return events

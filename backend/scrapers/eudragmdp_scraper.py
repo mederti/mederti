@@ -210,7 +210,7 @@ class EudraGMDPScraper(BaseScraper):
                     "city": ev.get("city"),
                     "facility_type": ev.get("facility_type"),
                     "last_inspection_date": ev.get("last_inspection_date"),
-                    "last_inspection_classification": ev.get("last_inspection_classification", "OAI"),
+                    "last_inspection_classification": ev.get("last_inspection_classification") or "unknown",
                     "gmp_certified": ev.get("gmp_certified", False),
                     "gmp_authority": ev.get("gmp_authority", "EU"),
                     "source": ev.get("source", "eudragmdp_ncs"),
@@ -218,16 +218,21 @@ class EudraGMDPScraper(BaseScraper):
                     "raw_data": ev.get("raw_data"),
                 }
 
+                # Only count a facility as OAI when it is genuinely classified
+                # OAI — NAI (compliant) rows must NOT be flagged. (Previously this
+                # hard-set oai_count_5y=1 for every row, falsely flagging
+                # compliant sites.)
+                add_oai = 1 if ev.get("last_inspection_classification") == "OAI" else 0
+                add_wl = ev.get("warning_letter_count_5y", 0) or 0
+
                 if existing:
-                    payload["warning_letter_count_5y"] = (
-                        existing.get("warning_letter_count_5y", 0) or 0
-                    ) + (ev.get("warning_letter_count_5y", 0) or 0)
-                    payload["oai_count_5y"] = (existing.get("oai_count_5y", 0) or 0) + 1
+                    payload["warning_letter_count_5y"] = (existing.get("warning_letter_count_5y", 0) or 0) + add_wl
+                    payload["oai_count_5y"] = (existing.get("oai_count_5y", 0) or 0) + add_oai
                     self.db.table("manufacturing_facilities").update(payload).eq("id", existing["id"]).execute()
                     counts["status_changes"] += 1
                 else:
-                    payload["warning_letter_count_5y"] = ev.get("warning_letter_count_5y", 1)
-                    payload["oai_count_5y"] = 1
+                    payload["warning_letter_count_5y"] = add_wl
+                    payload["oai_count_5y"] = add_oai
                     self.db.table("manufacturing_facilities").insert(payload).execute()
                     counts["upserted"] += 1
             except Exception as exc:

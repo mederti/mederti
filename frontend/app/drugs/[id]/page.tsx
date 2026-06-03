@@ -490,6 +490,43 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // Pharmacist-only launch: render the V1 design, fed by the already-fetched
   // (and safety-hardened) data. Bypasses the legacy persona render entirely.
   if (PHARMACIST_ONLY) {
+    // API supply-base concentration from FDA Drug Master Files (active Type II
+    // DMFs = manufacturers cleared to supply this API into the US market). This
+    // is the primary-source manufacturing-concentration signal — the headline
+    // feature of the Johns Hopkins supply-chain dashboard, sourced directly.
+    const inn = (drug.generic_name ?? "").toLowerCase();
+    const { data: apiSupplierRows } = await supabase
+      .from("api_suppliers")
+      .select("manufacturer_name, country, source")
+      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+      .limit(300);
+    const makerSet = new Map<string, string | null>();
+    for (const r of (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null }[]) {
+      const name = (r.manufacturer_name ?? "").trim();
+      if (name && !makerSet.has(name.toLowerCase())) makerSet.set(name.toLowerCase(), name);
+    }
+    const makerNames = [...makerSet.values()];
+    const makerCount = makerNames.length;
+    const apiCountries = [
+      ...new Set(
+        ((apiSupplierRows ?? []) as { country: string | null }[])
+          .map((r) => (r.country ?? "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    const apiConcentration =
+      makerCount > 0
+        ? {
+            count: makerCount,
+            band:
+              makerCount === 1 ? "very_high" :
+              makerCount <= 3 ? "high" :
+              makerCount <= 6 ? "medium" : "low",
+            makers: makerNames.slice(0, 6),
+            countries: apiCountries,
+          }
+        : null;
+
     return (
       <V1DrugView
         id={id}
@@ -498,6 +535,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         statusLog={statusLog}
         alternatives={alternatives}
         userCountry={userCountry}
+        apiConcentration={apiConcentration}
       />
     );
   }

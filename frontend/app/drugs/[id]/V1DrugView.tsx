@@ -49,7 +49,7 @@ function monthYear(iso?: string | null) {
 }
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration,
 }: {
   id: string;
   drug: any;
@@ -57,7 +57,19 @@ export default function V1DrugView({
   statusLog: any[];
   alternatives: any[];
   userCountry: string;
+  apiConcentration?: {
+    count: number;
+    band: "very_high" | "high" | "medium" | "low";
+    makers: string[];
+    countries: string[];
+  } | null;
 }) {
+  const CONC_LABEL: Record<string, string> = {
+    very_high: "Very high", high: "High", medium: "Moderate", low: "Low",
+  };
+  const CONC_CLS: Record<string, string> = {
+    very_high: "sp-crit", high: "sp-crit", medium: "sp-part", low: "sp-ok",
+  };
   const active = shortages.filter((s) => ["active", "anticipated"].includes((s.status || "").toLowerCase()));
   // Country-FIRST status: a shortage far away but fine in your market is NOT a
   // shortage for you. The headline reflects YOUR country only; shortages
@@ -231,6 +243,36 @@ export default function V1DrugView({
                 <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
                 <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
               </div></div></div></div>
+            </div>
+          )}
+
+          {/* API supply-base concentration (FDA Drug Master Files) */}
+          {apiConcentration && (
+            <div className="sec">
+              <div className="sec-title">Global API supply base <span className="help">🇺🇸 FDA Drug Master Files · active Type II</span></div>
+              <div className="conc">
+                <div className="conc-head">
+                  <div>
+                    <div className="conc-n">{apiConcentration.count} API manufacturer{apiConcentration.count !== 1 ? "s" : ""}</div>
+                    <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
+                  </div>
+                  <span className={`status-pill ${CONC_CLS[apiConcentration.band]}`}><span className="d" />{CONC_LABEL[apiConcentration.band]} concentration risk</span>
+                </div>
+                {apiConcentration.makers.length > 0 && (
+                  <div className="conc-makers">
+                    {apiConcentration.makers.map((m) => <span key={m} className="d-tag">{m}</span>)}
+                    {apiConcentration.count > apiConcentration.makers.length && (
+                      <span className="d-tag">+{apiConcentration.count - apiConcentration.makers.length} more</span>
+                    )}
+                  </div>
+                )}
+                <div className="conc-foot">
+                  {apiConcentration.countries.length > 0
+                    ? `Manufacturing countries: ${apiConcentration.countries.join(", ")} · `
+                    : "Country of manufacture not yet mapped · "}
+                  Source: FDA List of Drug Master Files
+                </div>
+              </div>
             </div>
           )}
 
@@ -423,6 +465,12 @@ const CSS = `
 .src-l{display:flex;align-items:center;gap:9px}
 .src-n{font-size:12px;font-weight:600}
 .src-link{font-size:11px;color:var(--green-d);font-family:'DM Mono',monospace;font-weight:500;text-decoration:none}
+.conc{border:1px solid var(--border);border-radius:14px;background:var(--bg);padding:16px}
+.conc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.conc-n{font-size:18px;font-weight:700;letter-spacing:-.02em;color:var(--ink)}
+.conc-d{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:4px;max-width:520px}
+.conc-makers{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
+.conc-foot{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:13px;border-top:1px solid var(--border);padding-top:11px}
 .status-pill{font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
 .status-pill .d{width:6px;height:6px;border-radius:50%;background:currentColor}
 .sp-crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}

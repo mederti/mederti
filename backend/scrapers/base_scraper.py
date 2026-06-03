@@ -174,6 +174,11 @@ class BaseScraper(ABC):
             reason                      str
             reason_category             str
             estimated_resolution_date   str | None
+            anticipated_start_date      str | None  ISO date — anticipated ONSET,
+                                                    set only when the source publishes
+                                                    it separately from start_date (e.g.
+                                                    Health Canada). Pairs with
+                                                    status='anticipated'.
             end_date                    str | None
             source_url                  str
             notes                       str
@@ -482,6 +487,20 @@ class BaseScraper(ABC):
                     record["available_alternatives"] = ev["available_alternatives"]
                 if ev.get("source_confidence_score") is not None:
                     record["source_confidence_score"] = ev["source_confidence_score"]
+
+                # ── Tier 3 clinical-priority flag (migration 048) ─────
+                # Only sources that emit it (Health Canada) set this; every
+                # other feed leaves it absent → column stays NULL.
+                if ev.get("tier_3") is not None:
+                    record["tier_3"] = ev["tier_3"]
+
+                # ── Anticipated onset date (migration 049) ────────────
+                # Set only by sources that publish a distinct anticipated
+                # start date separate from the actual start (Health Canada
+                # carries both; suppliers must report >= 6 months ahead).
+                # Every other feed leaves it absent → column stays NULL.
+                if ev.get("anticipated_start_date") is not None:
+                    record["anticipated_start_date"] = ev["anticipated_start_date"]
 
                 (
                     self.db.table("shortage_events")

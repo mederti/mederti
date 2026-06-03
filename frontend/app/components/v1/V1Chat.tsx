@@ -133,13 +133,17 @@ export default function V1Chat({ drugName }: { drugName: string }) {
 
       <div className="chat-stream" ref={streamRef}>
         <div className="chat-msg ai"><div className="chat-bubble">Ask me anything about this shortage — substitutes, who&apos;s affected, how long it may last.</div></div>
-        {msgs.map((m, i) => (
-          <div key={i} className={`chat-msg ${m.role === "user" ? "user" : "ai"}`}>
-            <div className="chat-bubble" style={{ whiteSpace: "pre-wrap" }}>
-              {m.role === "assistant" ? (clean(m.text) || (status ?? "…")) : m.text}
+        {msgs.map((m, i) => {
+          const body = m.role === "assistant" ? clean(m.text) : m.text;
+          // Skip the empty trailing assistant placeholder — the status line below
+          // shows progress, so rendering it here too would duplicate the message.
+          if (!body) return null;
+          return (
+            <div key={i} className={`chat-msg ${m.role === "user" ? "user" : "ai"}`}>
+              <div className="chat-bubble" style={{ whiteSpace: "pre-wrap" }}>{body}</div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {busy && status && <div className="chat-msg ai"><div className="chat-bubble" style={{ color: "var(--text-4)", fontStyle: "italic" }}>{status}</div></div>}
       </div>
 

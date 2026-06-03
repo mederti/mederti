@@ -4,9 +4,40 @@ import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import V1Chat from "@/app/components/v1/V1Chat";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
+import V1DrugImage from "./V1DrugImage";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
+import { affinity } from "@/lib/alternatives";
+import { cleanBrandNames } from "@/lib/brand";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+// Structured regulatory-eligibility entry from the regulatory_eligibility table
+// (migration 040), populated by backend/scrapers/eligibility/*. The authoritative
+// substitution-pathway signal — carries a regulator-published approval reference
+// and a verifiable source URL.
+export type EligibilityEntry = {
+  scheme: string;
+  status: string;
+  scheme_reference: string | null;
+  description: string | null;
+  brand_name: string | null;
+  listed_at: string | null;
+  expires_at: string | null;
+  source_url: string | null;
+  source_name: string | null;
+  country_code: string | null;
+};
+
+// Human labels for the substitution schemes. Drives the pathways block so a new
+// scraper (MHRA SSP etc.) renders correctly with no further UI change.
+const SCHEME_LABEL: Record<string, string> = {
+  tga_s19a: "Section 19A approval in force",
+  mhra_ssp: "Serious Shortage Protocol active",
+  dhsc_msn: "Medicine Supply Notification issued",
+  fda_503b: "503B outsourcing eligibility",
+  fda_shortage: "On FDA Drug Shortage list",
+  eu_art_5_2: "Article 5(2) exemption available",
+};
 
 const FLAG: Record<string, string> = {
   AU: "🇦🇺", NZ: "🇳🇿", GB: "🇬🇧", UK: "🇬🇧", US: "🇺🇸", CA: "🇨🇦", SG: "🇸🇬",
@@ -50,7 +81,7 @@ function monthYear(iso?: string | null) {
 }
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility,
 }: {
   id: string;
   drug: any;
@@ -72,6 +103,7 @@ export default function V1DrugView({
     brands: number;
     latest: string | null;
   } | null;
+  eligibility?: EligibilityEntry[] | null;
 }) {
   const CONC_LABEL: Record<string, string> = {
     very_high: "Very high", high: "High", medium: "Moderate", low: "Low",
@@ -96,12 +128,36 @@ export default function V1DrugView({
   const expected = monthYear(mine?.estimated_resolution_date);
   const expSource = abbr(mine?.data_sources?.name, mine?.data_sources?.abbreviation) || "regulator";
 
-  // Substitution — only assert "yes" when the regulator notice carries S19A language.
+  // Substitution pathways — prefer the STRUCTURED regulatory_eligibility feed
+  // (real approval references, expiry dates, verifiable source URLs). Filter to
+  // the user's market so we only assert a pathway that applies where they
+  // dispense. Fall back to string-matching the regulator notice for S19A only
+  // when no structured entry is on file (e.g. before migration 040 is applied
+  // or before the eligibility scraper has backfilled this drug).
+  const eligActive = (eligibility ?? []).filter(
+    (e) => (e.status || "").toLowerCase() === "active",
+  );
+  const eligMine = eligActive.filter(
+    (e) => !e.country_code || e.country_code.toUpperCase() === userCountry,
+  );
+  const s19aStructured = eligMine.find((e) => e.scheme === "tga_s19a") ?? null;
+
+  // Notes fallback (legacy path) — only consulted when no structured entry.
   const s19aEvt = active.find((s) => detectS19A(s.notes));
-  const s19aText = s19aEvt ? getS19AText(s19aEvt.notes) : null;
+  const s19aNotesText = s19aEvt ? getS19AText(s19aEvt.notes) : null;
+
+  // Short detail line for the "Can I substitute?" tile.
+  const s19aTileDetail = s19aStructured
+    ? s19aStructured.scheme_reference
+      ? `TGA s19A · ${s19aStructured.scheme_reference}`
+      : "TGA-approved overseas product"
+    : s19aNotesText
+      ? "TGA-approved overseas product"
+      : null;
 
   // Alternatives — real similarity only; null hides the %.
   const alts = (alternatives || []).slice(0, 5).map((a) => ({
+    id: a.alternative_drug_id ?? a.drugs?.id ?? null,
     name: a.drugs?.generic_name ?? "Therapeutic alternative",
     rel: a.relationship_type ? String(a.relationship_type).replace(/_/g, " ") : "same class",
     pct: a.similarity_score != null ? Math.round(a.similarity_score * 100) : null,
@@ -188,14 +244,26 @@ export default function V1DrugView({
             <div className="dg-main">
           <V1DrugSearch initial={drug.generic_name} />
 
-          <div className="d-identity">
-            <div className="d-name">{drug.generic_name}</div>
-            <div className="d-generic">
-              {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
+          <div className="d-head-row">
+            <V1DrugImage genericName={drug.generic_name} brandNames={drug.brand_names ?? []} />
+            <div className="d-identity">
+              <div className="d-name">{drug.generic_name}</div>
+              <div className="d-generic">
+                {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
+              </div>
+              {(() => {
+                const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
+                if (brands.length === 0) return null;
+                const shown = brands.slice(0, 5);
+                const rest = brands.length - shown.length;
+                return (
+                  <div className="d-tags">
+                    {shown.map((b) => <span key={b} className="d-tag">{b}</span>)}
+                    {rest > 0 && <span className="d-tag" title={brands.slice(5).join(", ")}>+{rest} more</span>}
+                  </div>
+                );
+              })()}
             </div>
-            {drug.brand_names?.length > 0 && (
-              <div className="d-tags">{drug.brand_names.slice(0, 4).map((b: string) => <span key={b} className="d-tag">{b}</span>)}</div>
-            )}
           </div>
 
           {/* Status card */}
@@ -215,24 +283,19 @@ export default function V1DrugView({
           <div className="sw-cards">
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic ok">✓</span> Can I substitute?</div>
-              <div className="sw-v">{s19aText ? "Yes — under S19A" : "Per normal rules"}</div>
-              <div className="sw-d">{s19aText ? "TGA-approved overseas product" : "Confirm with prescriber"}</div>
+              <div className="sw-v">{s19aTileDetail ? "Yes — under S19A" : "Per normal rules"}</div>
+              <div className="sw-d">{s19aTileDetail ?? "Confirm with prescriber"}</div>
             </div>
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
               <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
-              <div className="sw-d">{topAlt ? `${topAlt.pct != null ? `${topAlt.pct}% match · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
+              <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
             </div>
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
               <div className="sw-v">{expected ?? "No estimate"}</div>
               <div className="sw-d">{expected ? `Sponsor est. via ${expSource}` : "No estimate provided"}</div>
             </div>
-            <Link href="/login" className="sw-card emph">
-              <div className="sw-h"><span className="sw-ic grad">↯</span> Source it now</div>
-              <div className="sw-v">Request via Mederti</div>
-              <div className="sw-d">Connect with suppliers</div>
-            </Link>
           </div>
 
           {/* Substitution pathways (AU only) */}
@@ -240,15 +303,46 @@ export default function V1DrugView({
             <div className="sec">
               <div className="sec-title">Substitution pathways <span className="help">🇦🇺 Australia · TGA</span></div>
               <div className="subpath">
-                <div className="subpath-row">
-                  <div className="subpath-l">
-                    <span className={`subpath-ic ${s19aText ? "ok" : "neutral"}`}>{s19aText ? "✓" : "—"}</span>
-                    <div>
-                      <div className="subpath-n">{s19aText ? "Section 19A approval in force" : "No substitution instrument in force"}</div>
-                      <div className="subpath-d">{s19aText || "Dispense per normal rules, or refer to the prescriber. No active SSSI/S19A instrument detected for this medicine."}</div>
+                {eligMine.length > 0 ? (
+                  eligMine.map((e, i) => {
+                    const exp = monthYear(e.expires_at);
+                    return (
+                      <div className="subpath-row" key={e.scheme_reference ?? `${e.scheme}-${i}`}>
+                        <div className="subpath-l">
+                          <span className="subpath-ic ok">✓</span>
+                          <div>
+                            <div className="subpath-n">
+                              {SCHEME_LABEL[e.scheme] ?? "Substitution instrument in force"}
+                              {e.scheme_reference ? ` · ${e.scheme_reference}` : ""}
+                            </div>
+                            <div className="subpath-d">
+                              {e.description || "TGA-approved overseas-registered product may be supplied during this shortage."}
+                              {exp ? ` Expires ${exp}.` : ""}
+                              {e.source_url ? (
+                                <>
+                                  {" "}
+                                  <a href={e.source_url} target="_blank" rel="noopener noreferrer">
+                                    Verify on {e.source_name || "TGA"} ↗
+                                  </a>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="subpath-row">
+                    <div className="subpath-l">
+                      <span className={`subpath-ic ${s19aNotesText ? "ok" : "neutral"}`}>{s19aNotesText ? "✓" : "—"}</span>
+                      <div>
+                        <div className="subpath-n">{s19aNotesText ? "Section 19A approval in force" : "No substitution instrument in force"}</div>
+                        <div className="subpath-d">{s19aNotesText || "Dispense per normal rules, or refer to the prescriber. No active SSSI/S19A instrument detected for this medicine."}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -332,21 +426,30 @@ export default function V1DrugView({
             <div className="sec">
               <div className="sec-title">Related alternatives <span className="help">same class</span></div>
               <div className="alt-list">
-                {alts.map((a, i) => (
-                  <div key={i} className="alt-card alt-rich">
-                    <div className="alt-main">
-                      <div className="alt-n">{a.name}</div>
-                      <div className="alt-f">{a.rel}</div>
-                      {a.note && <div className="alt-note">{a.note}</div>}
-                    </div>
-                    {a.pct != null && (
-                      <div className="alt-match">
-                        <div className="alt-bar"><span style={{ width: `${a.pct}%` }} /></div>
-                        <div className="alt-pct">{a.pct}% match</div>
+                {alts.map((a, i) => {
+                  const inner = (
+                    <>
+                      <div className="alt-main">
+                        <div className="alt-n">{a.name}</div>
+                        <div className="alt-f">{a.rel}</div>
+                        {a.note && <div className="alt-note">{a.note}</div>}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {affinity(a.pct) && (
+                        <div className="alt-match">
+                          <div className="alt-bar"><span style={{ width: `${a.pct}%` }} /></div>
+                          <div className="alt-pct">{affinity(a.pct)}</div>
+                        </div>
+                      )}
+                    </>
+                  );
+                  return a.id != null ? (
+                    <Link key={i} href={`/drugs/${a.id}`} className="alt-card alt-rich alt-link">
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={i} className="alt-card alt-rich">{inner}</div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -455,13 +558,13 @@ const CSS = `
   background:var(--bg-2);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
-.v1home .logo-img{height:24px;width:auto;display:block}
+.v1home .logo-img{height:31px;width:auto;display:block}
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none}
 .home-nav{position:sticky;top:0;z-index:50;height:58px;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
 .nav-actions{display:flex;gap:10px;align-items:center}
 .shell{display:flex;align-items:flex-start;min-height:100vh}
 .sb{width:262px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.sb-top{padding:18px 18px 14px}
+.sb-top{height:64px;padding:0 28px;display:flex;align-items:center}
 .sb-new{margin:0 14px 10px;display:flex;align-items:center;gap:8px;justify-content:center;padding:11px;border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text-2);background:var(--bg);text-decoration:none}
 .sb-new:hover{border-color:var(--green);color:var(--green-d);background:var(--green-bg)}
 .sb-scroll{flex:1;overflow-y:auto;padding:8px 14px}
@@ -484,7 +587,15 @@ const CSS = `
 .dsearch input::placeholder{color:var(--text-4)}
 .dsearch button{background:var(--green);color:#fff;border:none;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
 .dsearch button:hover{background:var(--green-d)}
-.d-identity{padding:16px 0 0}
+.d-head-row{display:flex;align-items:flex-start;gap:20px;padding:16px 0 0}
+.d-identity{flex:1;min-width:0}
+.d-img{position:relative;flex-shrink:0;width:128px;height:128px;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:#fff;padding:0;cursor:zoom-in;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px -10px rgba(15,23,32,.25);transition:.15s}
+.d-img:hover{border-color:var(--green);box-shadow:0 10px 28px -14px rgba(16,185,129,.4)}
+.d-img img{width:100%;height:100%;object-fit:contain;display:block;transition:opacity .3s}
+.d-img-src{position:absolute;bottom:0;left:0;right:0;font-size:8px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-4);background:rgba(255,255,255,.86);backdrop-filter:blur(2px);padding:3px 0;text-align:center;border-top:1px solid var(--border)}
+.d-img-skeleton{cursor:default;background:linear-gradient(100deg,var(--bg-3) 30%,var(--bg) 50%,var(--bg-3) 70%);background-size:200% 100%;animation:d-img-shimmer 1.3s ease-in-out infinite}
+@keyframes d-img-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(max-width:640px){.d-img{width:96px;height:96px;border-radius:13px}}
 .d-name{font-size:30px;font-weight:700;letter-spacing:-.032em;line-height:1.1}
 .d-generic{font-size:13px;color:var(--text-3);margin-top:5px;font-family:'DM Mono',monospace}
 .d-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
@@ -499,16 +610,16 @@ const CSS = `
 .sc-title{font-size:24px;font-weight:700;letter-spacing:-.028em;margin-bottom:5px}
 .sc-sub{font-size:13px;color:var(--text-3)}
 .sc-asof{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:12px}
-.sw-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
-.sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:13px 13px;text-decoration:none;color:inherit;display:block}
+.sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}
-.sw-h{display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-4)}
+.sw-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-4)}
 .sw-ic{width:16px;height:16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
 .sw-ic.ok{background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b)}
 .sw-ic.neutral{background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
 .sw-ic.grad{background:var(--grad-brand);color:#fff}
-.sw-v{font-size:13.5px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:8px;line-height:1.2}
-.sw-d{font-size:10px;color:var(--text-3);margin-top:4px}
+.sw-v{font-size:17px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:9px;line-height:1.2}
+.sw-d{font-size:11.5px;color:var(--text-3);margin-top:5px}
 .sec{margin-top:30px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
 .ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -535,6 +646,8 @@ const CSS = `
 .subpath-d{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:3px}
 .alt-list{display:flex;flex-direction:column;gap:9px}
 .alt-card{background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.alt-link{text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+.alt-link:hover{border-color:var(--green);box-shadow:0 1px 8px rgba(0,0,0,.06)}
 .alt-main{min-width:0}
 .alt-n{font-size:14px;font-weight:600;margin-bottom:3px}
 .alt-f{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace}

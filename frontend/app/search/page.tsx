@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, type DrugHit } from "@/lib/api";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import { truncateDrugName } from "@/lib/utils";
+import { cleanBrandNames } from "@/lib/brand";
 
 function statusOf(d: DrugHit): { cls: string; label: string } {
   if (d.source === "catalogue") return { cls: "sp-ok", label: "Registered product" };
@@ -73,7 +74,7 @@ function Results() {
             <div className="res-card">
               <div className="res-l">
                 <div className="rn">{truncateDrugName(d.generic_name)}</div>
-                {d.brand_names?.length > 0 && <div className="rg">{d.brand_names.slice(0, 3).join(" · ")}</div>}
+                {(() => { const bn = cleanBrandNames(d.brand_names, d.generic_name); return bn.length > 0 ? <div className="rg">{bn.slice(0, 3).join(" · ")}</div> : null; })()}
                 <div className="rmeta">
                   {d.atc_code ? `ATC ${d.atc_code}` : "—"}
                   {d.alternatives_count ? ` · ${d.alternatives_count} alternative${d.alternatives_count > 1 ? "s" : ""}` : ""}

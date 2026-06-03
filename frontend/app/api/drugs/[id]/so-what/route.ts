@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
 import { recordAiUsage } from "@/lib/ai/usage-log";
+import { cleanBrandNames } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +97,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 DRUG
 ====
 Name: ${drug.generic_name}
-Brands: ${(drug.brand_names ?? []).slice(0, 3).join(", ") || "none on file"}
+Brands: ${cleanBrandNames(drug.brand_names, drug.generic_name).slice(0, 3).join(", ") || "none on file"}
 Class: ${drug.drug_class ?? "n/a"}
 ATC: ${drug.atc_code_full ?? "n/a"}
 WHO Essential Medicine: ${drug.who_essential_medicine ? "yes" : "no"}

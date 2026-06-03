@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Bell, Package } from "lucide-react";
+import { affinity } from "@/lib/alternatives";
 
 interface AdjacentMarket {
   country: string;
@@ -298,7 +299,7 @@ export default function SupplierView({
           <div className="sv-tile sv-w2" style={tileBase}>
             <div style={tileLabelStyle}>Top substitute</div>
             <div style={tileExtraStyle}>
-              {topAlternative.matchPercent != null ? `${topAlternative.matchPercent}% match` : "alternative"}
+              {affinity(topAlternative.matchPercent) ?? "alternative"}
             </div>
             <div
               style={{
@@ -717,7 +718,7 @@ export default function SupplierView({
                         color: "var(--app-text-4)",
                       }}
                     >
-                      {a.matchPercent != null ? `${a.matchPercent}%` : "—"}
+                      {affinity(a.matchPercent) ?? "—"}
                     </span>
                     <span
                       style={{

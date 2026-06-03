@@ -20,16 +20,10 @@ interface Payload {
   error?: string;
 }
 
-const SIGNAL: Record<Payload["signal"], { label: string; cls: string }> = {
-  worsening: { label: "Worsening", cls: "crit" },
-  elevated: { label: "Elevated", cls: "med" },
-  improving: { label: "Improving", cls: "ok" },
-  stable: { label: "Stable", cls: "neutral" },
-};
-
-export default function V1AiSummary({ id }: { id: string }) {
+export default function V1AiSummary({ id, embedded = false }: { id: string; embedded?: boolean }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
+  const wrapCls = embedded ? "ai-sum embedded" : "ai-sum";
 
   useEffect(() => {
     let alive = true;
@@ -50,10 +44,7 @@ export default function V1AiSummary({ id }: { id: string }) {
 
   if (loading) {
     return (
-      <div className="ai-sum">
-        <div className="ai-sum-head">
-          <span className="ai-sum-spark">✦</span>
-        </div>
+      <div className={wrapCls}>
         <div className="ai-sum-skel">Reading today&rsquo;s signals…</div>
       </div>
     );
@@ -61,14 +52,8 @@ export default function V1AiSummary({ id }: { id: string }) {
 
   if (!data) return null;
 
-  const sig = SIGNAL[data.signal] ?? SIGNAL.stable;
-
   return (
-    <div className="ai-sum">
-      <div className="ai-sum-head">
-        <span className="ai-sum-spark">✦</span>
-        <span className={`ai-sum-sig ${sig.cls}`}>{sig.label}</span>
-      </div>
+    <div className={wrapCls}>
       {data.headline && <div className="ai-sum-hl">{data.headline}</div>}
       <div className="ai-sum-body">{data.body}</div>
       <div className="ai-sum-foot">

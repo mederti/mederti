@@ -222,7 +222,7 @@ export default function V1DrugView({
               <img src="/logo-black.png" alt="mederti" className="logo-img" />
             </Link>
           </div>
-          <div style={{ padding: "14px 14px 8px" }}><V1CountryPicker /></div>
+          <div style={{ padding: "14px 14px 8px 16px" }}><V1CountryPicker /></div>
           <div className="sb-scroll">
             <div className="sb-group">
               <div className="sb-glabel">My medicines</div>
@@ -273,11 +273,12 @@ export default function V1DrugView({
             {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
             {!localShortage && elsewhereCount > 0 && <div className="sc-sub">⚠ In shortage in {elsewhereCount} other market{elsewhereCount !== 1 ? "s" : ""} — see regulator status below.</div>}
             {!localShortage && elsewhereCount === 0 && <div className="sc-sub">No active shortage reported.</div>}
+
+            {/* AI commentary — embedded under the heading, above the as-of line */}
+            <V1AiSummary id={id} embedded />
+
             <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
           </div>
-
-          {/* AI commentary on the current supply situation */}
-          <V1AiSummary id={id} />
 
           {/* So-what tiles */}
           <div className="sw-cards">
@@ -567,9 +568,9 @@ const CSS = `
 .sb-top{height:64px;padding:0 28px;display:flex;align-items:center}
 .sb-new{margin:0 14px 10px;display:flex;align-items:center;gap:8px;justify-content:center;padding:11px;border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text-2);background:var(--bg);text-decoration:none}
 .sb-new:hover{border-color:var(--green);color:var(--green-d);background:var(--green-bg)}
-.sb-scroll{flex:1;overflow-y:auto;padding:8px 14px}
+.sb-scroll{flex:1;overflow-y:auto;padding:8px 14px 8px 19px}
 .sb-group{margin-top:14px}
-.sb-glabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-4);padding:6px 8px}
+.sb-glabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-4);padding:6px 9px}
 .sb-item{display:flex;align-items:center;gap:10px;padding:9px;border-radius:10px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none}
 .sb-item:hover{background:var(--bg-2)}
 .sb-empty{color:var(--text-4);font-style:italic}
@@ -622,6 +623,7 @@ const CSS = `
 .sw-d{font-size:11.5px;color:var(--text-3);margin-top:5px}
 .sec{margin-top:30px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
+.ai-sum.embedded{margin:14px 0 0;border:0;border-top:1px solid var(--border);border-radius:0;background:none;padding:14px 0 0}
 .ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .ai-sum-spark{width:18px;height:18px;border-radius:6px;background:var(--grad-brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
 .ai-sum-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}

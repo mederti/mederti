@@ -83,9 +83,10 @@ function Results() {
               <span className={`status-pill ${st.cls}`}><span className="d" />{st.label}</span>
             </div>
           );
-          return d.source === "catalogue"
-            ? <div key={d.drug_id}>{inner}</div>
-            : <Link key={d.drug_id} href={`/drugs/${d.drug_id}`} style={{ textDecoration: "none", color: "inherit" }}>{inner}</Link>;
+          // Both drug and catalogue hits link to /drugs/[id]: the drug page has a
+          // catalogue fallback (drugs/[id]/page.tsx) that renders a registration /
+          // "in supply" page when the id resolves to a drug_catalogue row.
+          return <Link key={d.drug_id} href={`/drugs/${d.drug_id}`} style={{ textDecoration: "none", color: "inherit" }}>{inner}</Link>;
         })}
       </div>
 

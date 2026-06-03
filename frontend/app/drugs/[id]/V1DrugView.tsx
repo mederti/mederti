@@ -49,7 +49,7 @@ function monthYear(iso?: string | null) {
 }
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint,
 }: {
   id: string;
   drug: any;
@@ -62,6 +62,13 @@ export default function V1DrugView({
     band: "very_high" | "high" | "medium" | "low";
     makers: string[];
     countries: string[];
+  } | null;
+  recalls?: any[];
+  approvalFootprint?: {
+    total: number;
+    generics: number;
+    brands: number;
+    latest: string | null;
   } | null;
 }) {
   const CONC_LABEL: Record<string, string> = {
@@ -138,6 +145,37 @@ export default function V1DrugView({
     .slice(0, 6);
 
   const klass = drug.drug_class || drug.atc_description || null;
+
+  // Why supply is disrupted — distribution of regulator-coded reasons across
+  // this drug's shortage events. Real coded data; "unknown" folded into Other.
+  const REASON_LABEL: Record<string, string> = {
+    regulatory_action: "Regulatory action",
+    supply_chain: "Supply chain",
+    manufacturing_issue: "Manufacturing",
+    discontinuation: "Discontinuation",
+    demand_surge: "Demand surge",
+    raw_material: "Raw material",
+    distribution: "Distribution",
+    unknown: "Other / unspecified",
+  };
+  const reasonTally = new Map<string, number>();
+  for (const s of shortages) {
+    const key = (s.reason_category || "unknown").toLowerCase();
+    reasonTally.set(key, (reasonTally.get(key) || 0) + 1);
+  }
+  const reasonTotal = [...reasonTally.values()].reduce((a, b) => a + b, 0);
+  const reasons = [...reasonTally.entries()]
+    .map(([k, n]) => ({ label: REASON_LABEL[k] ?? k.replace(/_/g, " "), n, pct: Math.round((n / reasonTotal) * 100), other: k === "unknown" }))
+    // Real coded reasons first; "Other / unspecified" always sinks to the end.
+    .sort((a, b) => (a.other === b.other ? b.n - a.n : a.other ? 1 : -1))
+    .slice(0, 5);
+  const showReasons = reasonTotal >= 2 && reasons.some((r) => r.label !== "Other / unspecified");
+
+  // Recalls — most recent first; active Class I are the highest-signal.
+  const recallList = (recalls || [])
+    .slice()
+    .sort((a, b) => new Date(b.announced_date || 0).getTime() - new Date(a.announced_date || 0).getTime())
+    .slice(0, 6);
 
   return (
     <div className="v1home v1drug">
@@ -246,6 +284,21 @@ export default function V1DrugView({
             </div>
           )}
 
+          {/* Why supply is disrupted — reason breakdown */}
+          {showReasons && (
+            <div className="sec">
+              <div className="sec-title">Why supply is disrupted <span className="help">across {reasonTotal} recorded event{reasonTotal !== 1 ? "s" : ""}</span></div>
+              <div className="reasons">
+                {reasons.map((r) => (
+                  <div key={r.label} className="reason-row">
+                    <div className="reason-l"><span className="reason-n">{r.label}</span><span className="reason-c">{r.n}</span></div>
+                    <div className="reason-bar"><span style={{ width: `${r.pct}%` }} /></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* API supply-base concentration (FDA Drug Master Files) */}
           {apiConcentration && (
             <div className="sec">
@@ -273,6 +326,34 @@ export default function V1DrugView({
                   Source: FDA List of Drug Master Files
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* FDA approval footprint — market depth (generic competition) */}
+          {approvalFootprint && (
+            <div className="sec">
+              <div className="sec-title">FDA-approved products <span className="help">🇺🇸 Drugs@FDA</span></div>
+              <div className="stat-row">
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.total}</div>
+                  <div className="stat-l">Approved applications</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.generics}</div>
+                  <div className="stat-l">Generic (ANDA)</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.brands}</div>
+                  <div className="stat-l">Brand (NDA/BLA)</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{monthYear(approvalFootprint.latest) ?? "—"}</div>
+                  <div className="stat-l">Latest approval</div>
+                </div>
+              </div>
+              {approvalFootprint.generics > 0 && (
+                <div className="stat-foot">{approvalFootprint.generics} approved generic{approvalFootprint.generics !== 1 ? "s" : ""} — more competitors generally means a more resilient supply.</div>
+              )}
             </div>
           )}
 
@@ -314,6 +395,36 @@ export default function V1DrugView({
                     <div key={i} className="country-row">
                       <div className="cl"><span className="flag">{flag(cc)}</span><div><div className="cn">{COUNTRY[cc] ?? cc}</div><div className="alt-f">{abbr(s.data_sources?.name, s.data_sources?.abbreviation)} · {timeAgo(s.last_verified_at ?? s.updated_at)}</div></div></div>
                       <span className={`status-pill ${cls}`}><span className="d" />{lbl}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Recalls */}
+          {recallList.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Recalls <span className="help">official enforcement reports</span></div>
+              <div className="country-list">
+                {recallList.map((r, i) => {
+                  const cc = (r.country_code || "").toUpperCase();
+                  const isClassI = (r.recall_class || "").toString().replace(/class\s*/i, "").trim() === "I";
+                  const active = (r.status || "").toLowerCase() !== "terminated" && (r.status || "").toLowerCase() !== "completed";
+                  const cls = isClassI && active ? "sp-crit" : "sp-part";
+                  return (
+                    <div key={i} className="country-row">
+                      <div className="cl">
+                        <span className="flag">{flag(cc)}</span>
+                        <div>
+                          <div className="cn">{r.brand_name || r.generic_name || "Recall"}</div>
+                          <div className="alt-f">{[r.manufacturer, monthYear(r.announced_date)].filter(Boolean).join(" · ") || "—"}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className={`status-pill ${cls}`}><span className="d" />Class {(r.recall_class || "?").toString().replace(/class\s*/i, "").trim() || "?"}</span>
+                        {r.press_release_url && <a className="src-link" href={r.press_release_url} target="_blank" rel="noopener noreferrer">details ↗</a>}
+                      </div>
                     </div>
                   );
                 })}
@@ -471,6 +582,19 @@ const CSS = `
 .conc-d{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:4px;max-width:520px}
 .conc-makers{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .conc-foot{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:13px;border-top:1px solid var(--border);padding-top:11px}
+.reasons{display:flex;flex-direction:column;gap:11px;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px}
+.reason-row{display:flex;flex-direction:column;gap:6px}
+.reason-l{display:flex;align-items:center;justify-content:space-between}
+.reason-n{font-size:13px;font-weight:600;color:var(--ink)}
+.reason-c{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace}
+.reason-bar{height:6px;border-radius:99px;background:var(--bg-3);overflow:hidden}
+.reason-bar span{display:block;height:100%;border-radius:99px;background:var(--grad-soft)}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat-cell{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 13px}
+.stat-v{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--ink);line-height:1.1}
+.stat-l{font-size:10.5px;color:var(--text-3);margin-top:5px;text-transform:uppercase;letter-spacing:.04em}
+.stat-foot{font-size:11.5px;color:var(--text-3);margin-top:11px;line-height:1.5}
+@media(max-width:620px){.stat-row{grid-template-columns:repeat(2,1fr)}}
 .status-pill{font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
 .status-pill .d{width:6px;height:6px;border-radius:50%;background:currentColor}
 .sp-crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}

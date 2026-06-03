@@ -527,6 +527,25 @@ export default async function DrugPage({ params, searchParams }: Props) {
           }
         : null;
 
+    // FDA approval footprint — NDA (brand/innovator) vs ANDA (generic) is a
+    // market-depth signal: more approved generics = a more resilient supply.
+    const { data: approvalRows } = await supabase
+      .from("drug_approvals")
+      .select("authority, application_type, approval_date, brand_name")
+      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+      .order("approval_date", { ascending: false })
+      .limit(200);
+    const approvals = (approvalRows ?? []) as { application_type: string | null; approval_date: string | null; brand_name: string | null }[];
+    const approvalFootprint =
+      approvals.length > 0
+        ? {
+            total: approvals.length,
+            generics: approvals.filter((a) => (a.application_type ?? "").toUpperCase() === "ANDA").length,
+            brands: approvals.filter((a) => ["NDA", "BLA"].includes((a.application_type ?? "").toUpperCase())).length,
+            latest: approvals.map((a) => a.approval_date).filter(Boolean)[0] ?? null,
+          }
+        : null;
+
     return (
       <V1DrugView
         id={id}
@@ -536,6 +555,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
         alternatives={alternatives}
         userCountry={userCountry}
         apiConcentration={apiConcentration}
+        recalls={recalls}
+        approvalFootprint={approvalFootprint}
       />
     );
   }

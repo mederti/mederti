@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 // 10-minute edge cache. Resilience scoring does 5 parallel Supabase
 // queries + JS cross-referencing of supplier-companies-to-facility-names
@@ -21,7 +22,10 @@ export const revalidate = 600;
  *
  * Used by the Supply Chain Resilience widget on /drugs/[id].
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ drug_id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ drug_id: string }> }) {
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
   const { drug_id: drugId } = await ctx.params;
   if (!drugId) return NextResponse.json({});
 

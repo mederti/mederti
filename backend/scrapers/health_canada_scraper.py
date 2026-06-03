@@ -347,11 +347,23 @@ class HealthCanadaScraper(BaseScraper):
             # Shortage event fields
             "status":                    status,
             "severity":                  severity,
+            # HC's own clinical-priority designation, as a first-class signal
+            # (migration 048). Also feeds severity above, but persisted here
+            # as the authoritative, queryable flag.
+            "tier_3":                    tier3,
             "reason":                    reason,
             "reason_category":           reason_category,
             "start_date":                start_date,
             "end_date":                  end_date,
             "estimated_resolution_date": estimated_resolution_date,
+            # Anticipated onset, persisted as a first-class queryable signal
+            # (migration 049). HC carries BOTH an actual and an anticipated
+            # start; start_date above prefers the actual, so without this the
+            # >= 6-month early-warning runway lived only inside raw_data.
+            # Only meaningful for anticipated rows whose onset is still ahead.
+            "anticipated_start_date":    (
+                anticipated_start if status == "anticipated" else None
+            ),
             "source_url":                source_url,
             "notes":                     notes,
             # Original record stored verbatim

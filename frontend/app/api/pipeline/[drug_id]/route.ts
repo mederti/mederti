@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,10 @@ export const dynamic = "force-dynamic";
  * Returns regulatory events + Phase III/IV trials for a single drug.
  * Used by the Pipeline & Regulatory widget on drug pages.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ drug_id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ drug_id: string }> }) {
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
   const { drug_id: drugId } = await ctx.params;
   if (!drugId) return NextResponse.json({ events: [], trials: [] });
 

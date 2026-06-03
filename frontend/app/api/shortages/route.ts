@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminTyped } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 // Closes audit FINDING-B3-05 (full fix). Restores the data flow to
 // /home + /shortages — previously these called api.getShortages() which
@@ -33,7 +34,15 @@ type RawRow = {
   data_sources: SourceSidecar | null;
 };
 
+// Cap how deep anyone can paginate. The UI filters down to a handful of
+// pages; allowing offset into the tens-of-thousands just turns pagination
+// into a full-table dump. 50 pages × 100 = 5,000 rows reachable per filter.
+const MAX_REACHABLE_PAGE = 50;
+
 export async function GET(req: NextRequest) {
+  const limited = await enforceRateLimit(req, "browse");
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const country = url.searchParams.get("country");
   const status = url.searchParams.get("status");
@@ -41,7 +50,10 @@ export async function GET(req: NextRequest) {
   const sourceId = url.searchParams.get("source_id");
   const sort = url.searchParams.get("sort") ?? "start_date";
 
-  const page = Math.max(1, Number(url.searchParams.get("page") ?? "1") || 1);
+  const page = Math.min(
+    MAX_REACHABLE_PAGE,
+    Math.max(1, Number(url.searchParams.get("page") ?? "1") || 1),
+  );
   const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("page_size") ?? "50") || 50));
 
   if (status && !VALID_STATUSES.has(status)) {

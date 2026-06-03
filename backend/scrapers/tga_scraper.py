@@ -27,7 +27,7 @@ Confirmed response format (probed 2026-02-22):
         sorting_date        str
         dose_form           str
         other_ingredients   list
-        status              str   "C" | "R" | "D"
+        status              str   "C" | "R" | "D" | "A"
         availability        str   e.g. "Unavailable"
         shortage_impact     str   severity level: "High" | "Medium" | "Low" | "Critical"
                                   OR free-text (handle both)
@@ -36,10 +36,12 @@ Confirmed response format (probed 2026-02-22):
         patient_impact      str   (may be absent in some records)
         Sponsor_Name        str | null
 
-Status codes:
-    C  → active      (Current shortage)
-    R  → resolved    (Resolved shortage)
-    D  → resolved    (Discontinued — reason_category=discontinuation)
+Status codes (verified 2026-06-03 against the live MSI feed):
+    C  → active       (Current shortage — availability Unavailable/Limited, past start)
+    R  → resolved     (Resolved shortage — now Available)
+    D  → active       (Discontinued — reason_category=discontinuation; deleted_date set)
+    A  → anticipated  (Anticipated shortage — FUTURE shortage_start, still Available now;
+                       shortage_start is the anticipated onset → anticipated_start_date)
 
 Date formats used by TGA:
     All dates appear as "DD MMM YYYY" e.g. "01 Jan 2013", "31 Dec 2026"
@@ -77,8 +79,13 @@ class TGAScraper(BaseScraper):
     _STATUS_MAP: dict[str, str] = {
         "C": "active",
         "R": "resolved",
-        "D": "active",     # Discontinued — product withdrawn; still an active supply disruption
-        "A": "resolved",   # Archived — old record, no longer relevant
+        "D": "active",        # Discontinued — product withdrawn; still an active supply disruption
+        "A": "anticipated",   # Anticipated — future-onset shortage, currently still available.
+                              # Verified 2026-06-03 against the live MSI feed: 86/88 'A'
+                              # records have a FUTURE shortage_start, availability='Available',
+                              # no deleted_date (e.g. DAPSONE, start 15 Jul 2026). This is the
+                              # forward early-warning signal — previously mis-mapped to
+                              # 'resolved' as "Archived", which buried it entirely.
     }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -264,10 +271,17 @@ class TGAScraper(BaseScraper):
         if not start_date:
             start_date = datetime.now(timezone.utc).date().isoformat()
 
-        # For current shortages, shortage_end is the *estimated* resolution date.
-        # For resolved ones, it is the *actual* end date.
+        # For current/anticipated shortages, shortage_end is the *estimated*
+        # resolution date. For resolved ones, it is the *actual* end date.
+        # For anticipated records shortage_start is in the future and IS the
+        # anticipated onset — surface it as a first-class signal (migration 049).
         end_date:                  str | None = shortage_end if status == "resolved" else None
-        estimated_resolution_date: str | None = shortage_end if status == "active"   else None
+        estimated_resolution_date: str | None = (
+            shortage_end if status in ("active", "anticipated") else None
+        )
+        anticipated_start_date: str | None = (
+            start_date if status == "anticipated" else None
+        )
 
         # ── Text fields ───────────────────────────────────────────────────────
         # shortage_impact: may be a severity label ("High") OR free-text reason
@@ -345,6 +359,7 @@ class TGAScraper(BaseScraper):
             "start_date":                 start_date,
             "end_date":                   end_date,
             "estimated_resolution_date":  estimated_resolution_date,
+            "anticipated_start_date":     anticipated_start_date,
             "source_url":                 source_url,
             "notes":                      notes,
             # Original record stored in raw_data

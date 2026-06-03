@@ -490,6 +490,67 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // Pharmacist-only launch: render the V1 design, fed by the already-fetched
   // (and safety-hardened) data. Bypasses the legacy persona render entirely.
   if (PHARMACIST_ONLY) {
+    // API supply-base concentration from FDA Drug Master Files (active Type II
+    // DMFs = manufacturers cleared to supply this API into the US market). This
+    // is the primary-source manufacturing-concentration signal — the headline
+    // feature of the Johns Hopkins supply-chain dashboard, sourced directly.
+    const inn = (drug.generic_name ?? "").toLowerCase();
+    const { data: apiSupplierRows } = await supabase
+      .from("api_suppliers")
+      .select("manufacturer_name, country, source, who_pq")
+      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+      .limit(300);
+    const supplierRows = (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null; who_pq: boolean | null }[];
+    const makerSet = new Map<string, string>();
+    const whoPqMakers = new Set<string>();
+    for (const r of supplierRows) {
+      const name = (r.manufacturer_name ?? "").trim();
+      if (name && !makerSet.has(name.toLowerCase())) makerSet.set(name.toLowerCase(), name);
+      if (name && r.who_pq) whoPqMakers.add(name.toLowerCase());
+    }
+    const makerNames = [...makerSet.values()];
+    const makerCount = makerNames.length;
+    const apiCountries = [
+      ...new Set(
+        ((apiSupplierRows ?? []) as { country: string | null }[])
+          .map((r) => (r.country ?? "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    const apiConcentration =
+      makerCount > 0
+        ? {
+            count: makerCount,
+            band: (
+              makerCount === 1 ? "very_high" :
+              makerCount <= 3 ? "high" :
+              makerCount <= 6 ? "medium" : "low"
+            ) as "very_high" | "high" | "medium" | "low",
+            makers: makerNames.slice(0, 6),
+            countries: apiCountries,
+            whoPqCount: whoPqMakers.size,
+          }
+        : null;
+
+    // FDA approval footprint — NDA (brand/innovator) vs ANDA (generic) is a
+    // market-depth signal: more approved generics = a more resilient supply.
+    const { data: approvalRows } = await supabase
+      .from("drug_approvals")
+      .select("authority, application_type, approval_date, brand_name")
+      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+      .order("approval_date", { ascending: false })
+      .limit(200);
+    const approvals = (approvalRows ?? []) as { application_type: string | null; approval_date: string | null; brand_name: string | null }[];
+    const approvalFootprint =
+      approvals.length > 0
+        ? {
+            total: approvals.length,
+            generics: approvals.filter((a) => (a.application_type ?? "").toUpperCase() === "ANDA").length,
+            brands: approvals.filter((a) => ["NDA", "BLA"].includes((a.application_type ?? "").toUpperCase())).length,
+            latest: approvals.map((a) => a.approval_date).filter(Boolean)[0] ?? null,
+          }
+        : null;
+
     return (
       <V1DrugView
         id={id}
@@ -498,6 +559,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
         statusLog={statusLog}
         alternatives={alternatives}
         userCountry={userCountry}
+        apiConcentration={apiConcentration}
+        recalls={recalls}
+        approvalFootprint={approvalFootprint}
       />
     );
   }

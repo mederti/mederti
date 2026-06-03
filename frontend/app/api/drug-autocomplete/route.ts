@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ServerTimer } from "@/lib/server-timing";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 // Match Supabase project region (ap-south-1, Mumbai). Ignored on Hobby plan —
 // configure the default region in Vercel dashboard instead.
@@ -47,6 +48,10 @@ function sortScore(name: string, q: string, hasShortage: boolean): number {
 }
 
 export async function GET(req: NextRequest) {
+  // Runs on cache miss only — novel prefixes, i.e. enumeration attempts.
+  const limited = await enforceRateLimit(req, "search");
+  if (limited) return limited;
+
   const q = req.nextUrl.searchParams.get("q")?.trim();
   const limit = Math.min(
     Math.max(Number(req.nextUrl.searchParams.get("limit") ?? 8), 1),

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 // 5-min edge cache. The route's own in-memory cache (CACHE_TTL below) only
 // protects within a single Vercel instance; this lifts that protection to
@@ -163,7 +164,10 @@ async function getShortageManufacturerCount(): Promise<number> {
 }
 
 /* ── Main handler ── */
-export async function GET() {
+export async function GET(req: Request) {
+  const limited = await enforceRateLimit(req, "browse");
+  if (limited) return limited;
+
   // Return cache if fresh
   if (cache && Date.now() - cacheTs < CACHE_TTL) {
     return NextResponse.json(cache, {

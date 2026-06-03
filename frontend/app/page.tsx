@@ -140,6 +140,9 @@ export default async function Home() {
         </div>
         <span>© 2026 Mederti Pty Ltd · Melbourne, Australia</span>
       </div>
+
+      {/* mirror of the hero wash, rising from the bottom edge */}
+      <div className="foot-bg" />
     </div>
   );
 }
@@ -159,7 +162,7 @@ const CSS = `
   --text:#0a0f1a;--text-2:#3a4452;--text-3:#697586;--text-4:#9aa4b2;
   --crit:#e11d48;--crit-b:#fecdd3;--med:#d97706;--med-b:#fde68a;--ok:#10b981;--ok-bg:#ecfdf5;--ok-b:#a7f3d0;
   --grad-brand:linear-gradient(135deg,#0a0f1a 0%,#0c3a30 48%,#34d399 100%);
-  background:var(--bg-2);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh;padding-bottom:64px;overflow:hidden;
+  position:relative;isolation:isolate;background:var(--bg-2);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh;padding-bottom:64px;overflow:hidden;
 }
 .v1home *{box-sizing:border-box}
 .v1home .mono{font-family:'DM Mono',monospace}
@@ -173,11 +176,12 @@ const CSS = `
 .nav-actions{display:flex;gap:10px;align-items:center}
 .hero{position:relative;max-width:820px;margin:0 auto;padding:84px 24px 44px;text-align:center}
 .hero-bg{position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:100vw;height:620px;z-index:0;pointer-events:none;background:radial-gradient(40% 70% at 50% 0%,rgba(52,211,153,.22),transparent 70%),radial-gradient(32% 60% at 85% 6%,rgba(99,102,241,.14),transparent 70%),radial-gradient(32% 60% at 14% 10%,rgba(16,185,129,.12),transparent 70%)}
+.foot-bg{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100vw;height:620px;z-index:-1;pointer-events:none;background:radial-gradient(40% 70% at 50% 100%,rgba(52,211,153,.22),transparent 70%),radial-gradient(32% 60% at 85% 94%,rgba(99,102,241,.14),transparent 70%),radial-gradient(32% 60% at 14% 90%,rgba(16,185,129,.12),transparent 70%)}
 .hero>:not(.hero-bg){position:relative;z-index:1}
 .hero-kicker{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:6px 13px;border-radius:99px;margin-bottom:26px}
 .hero-kicker .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:v1blink 1.6s infinite}
 @keyframes v1blink{0%,100%{opacity:1}50%{opacity:.25}}
-.hero h1{font-size:54px;line-height:1.04;letter-spacing:-.04em;font-weight:800;margin-bottom:18px}
+.hero h1{font-size:64px;line-height:1.04;letter-spacing:-.04em;font-weight:800;margin-bottom:18px}
 .hero h1 .em{background:linear-gradient(110deg,#10b981,#0a0f1a 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero p.sub{font-size:18px;color:var(--text-3);max-width:580px;margin:0 auto 34px;font-weight:400;letter-spacing:-.01em}
 .searchbox{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:16px;padding:9px 9px 9px 20px;box-shadow:0 18px 50px -22px rgba(10,15,26,.28);max-width:580px;margin:0 auto;transition:.15s}
@@ -263,5 +267,5 @@ const CSS = `
 .home-foot{max-width:1040px;margin:64px auto 0;padding:30px 24px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-4)}
 .home-foot a{color:inherit;text-decoration:none}
 .home-foot a:hover{color:var(--green-d)}
-@media(max-width:760px){.hero h1{font-size:36px}.props{grid-template-columns:1fr}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}.hero-stats{gap:10px}.hero-stats .stat-n{font-size:21px}.hero-stats .stat-l{font-size:11px}}
+@media(max-width:760px){.hero h1{font-size:42px}.props{grid-template-columns:1fr}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}.hero-stats{gap:10px}.hero-stats .stat-n{font-size:21px}.hero-stats .stat-l{font-size:11px}}
 `;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 // Sit next to Supabase (ap-south-1). Hobby plan ignores this — Vercel
 // dashboard sets the project default.
@@ -18,6 +19,9 @@ export const preferredRegion = "bom1";
 const MAX_NAMES = 50;
 
 export async function POST(req: NextRequest) {
+  const limited = await enforceRateLimit(req, "bulk");
+  if (limited) return limited;
+
   let body: { names?: unknown };
   try {
     body = (await req.json()) as { names?: unknown };

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,9 @@ export const dynamic = "force-dynamic";
  * Returns inventory count + verified status. Used by /suppliers/directory.
  */
 export async function GET(req: Request) {
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const country = url.searchParams.get("country");
   const search = url.searchParams.get("q");

@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ServerTimer } from "@/lib/server-timing";
 import { recordDemandSignal } from "@/lib/demand-signal";
 import { getClientIp } from "@/lib/chat/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 // Pin to Mumbai to sit next to the Supabase project (ap-south-1).
 // On Hobby plan this is ignored — set the project default in Vercel
@@ -38,6 +39,11 @@ const DRUG_COLS = "id, generic_name, brand_names, atc_code";
 const CAT_COLS  = "id, drug_id, generic_name, brand_name, atc_code, source_country, source_name, registration_number";
 
 export async function GET(req: NextRequest) {
+  // Only runs on edge-cache MISS — i.e. novel ?q= values, which is exactly
+  // the enumeration pattern we want to throttle. Cached repeats never reach here.
+  const limited = await enforceRateLimit(req, "search");
+  if (limited) return limited;
+
   const q = req.nextUrl.searchParams.get("q")?.trim();
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit") ?? 10), 50);
 

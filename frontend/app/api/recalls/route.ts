@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 // Closes audit FINDING-B3-05 (full fix). Restores /recalls page data —
 // previously called api.getRecalls() which hit a non-existent route.
@@ -37,6 +38,9 @@ type RawRecall = {
 };
 
 export async function GET(req: NextRequest) {
+  const limited = await enforceRateLimit(req, "browse");
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const countryCode = url.searchParams.get("country_code");
   const recallClass = url.searchParams.get("recall_class");

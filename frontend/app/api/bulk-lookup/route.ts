@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 /* ── Known Australian pharmaceutical brand/manufacturer prefixes ──
  * These appear at the start of EDI descriptions and should be stripped
@@ -140,7 +141,19 @@ interface MatchResult {
   confidence: "exact" | "fuzzy" | "none";
 }
 
+// Hard ceiling on names per request. This endpoint is the cheapest
+// clone-the-catalogue vector (one call → drug IDs + generics + brands +
+// shortage counts), so the cap is deliberately modest. Combined with the
+// `bulk` rate-limit tier below, sustained extraction is throttled to a
+// trickle while a genuine pharmacy EDI upload (paginated client-side) still
+// works. Was 2000 — see migration 047 / data-protection pass.
+const MAX_NAMES_PER_REQUEST = 200;
+
 export async function POST(req: NextRequest) {
+  // Throttle before doing any work — this is the most expensive public route.
+  const limited = await enforceRateLimit(req, "bulk");
+  if (limited) return limited;
+
   let body: { drugNames?: string[] };
   try {
     body = await req.json();
@@ -152,8 +165,11 @@ export async function POST(req: NextRequest) {
   if (!drugNames || !Array.isArray(drugNames) || drugNames.length === 0) {
     return NextResponse.json({ error: "drugNames array required" }, { status: 400 });
   }
-  if (drugNames.length > 2000) {
-    return NextResponse.json({ error: "Maximum 2000 drugs per lookup" }, { status: 400 });
+  if (drugNames.length > MAX_NAMES_PER_REQUEST) {
+    return NextResponse.json(
+      { error: `Maximum ${MAX_NAMES_PER_REQUEST} drugs per lookup` },
+      { status: 400 },
+    );
   }
 
   const supabase = getSupabaseAdmin();

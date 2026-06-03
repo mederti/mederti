@@ -137,6 +137,7 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "edqm_cep":              ("backend.scrapers.edqm_cep_scraper",              "EDQMCEPScraper"),
     "fda_dmf":               ("backend.scrapers.fda_dmf_scraper",               "FDADMFScraper"),
     "fda_decrs":             ("backend.scrapers.fda_decrs_scraper",             "FDADECRSScraper"),
+    "who_pq":                ("backend.scrapers.who_pq_api_scraper",            "WHOPQAPIScraper"),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

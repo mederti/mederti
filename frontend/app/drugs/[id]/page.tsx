@@ -497,13 +497,16 @@ export default async function DrugPage({ params, searchParams }: Props) {
     const inn = (drug.generic_name ?? "").toLowerCase();
     const { data: apiSupplierRows } = await supabase
       .from("api_suppliers")
-      .select("manufacturer_name, country, source")
+      .select("manufacturer_name, country, source, who_pq")
       .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
       .limit(300);
+    const supplierRows = (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null; who_pq: boolean | null }[];
     const makerSet = new Map<string, string | null>();
-    for (const r of (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null }[]) {
+    const whoPqMakers = new Set<string>();
+    for (const r of supplierRows) {
       const name = (r.manufacturer_name ?? "").trim();
       if (name && !makerSet.has(name.toLowerCase())) makerSet.set(name.toLowerCase(), name);
+      if (name && r.who_pq) whoPqMakers.add(name.toLowerCase());
     }
     const makerNames = [...makerSet.values()];
     const makerCount = makerNames.length;
@@ -524,6 +527,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
               makerCount <= 6 ? "medium" : "low",
             makers: makerNames.slice(0, 6),
             countries: apiCountries,
+            whoPqCount: whoPqMakers.size,
           }
         : null;
 

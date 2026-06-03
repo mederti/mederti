@@ -96,10 +96,12 @@ SHELL=/bin/bash
 # ─── Supply-intelligence layer (quarterly: 1st of Jan/Apr/Jul/Oct, 09:00 UTC) ───
 # Source datasets refresh ~quarterly, so daily runs add no signal. Order matters:
 # fda_dmf populates api_suppliers (FDA Drug Master File Type II = API-manufacturer
-# concentration, the core JHU supply-chain signal); fda_decrs then enriches those
-# rows with country-of-manufacture (DECRS establishment registry) and refreshes
+# concentration, the core JHU supply-chain signal); who_pq adds WHO-prequalified
+# (global/non-US) API makers; fda_decrs then enriches all those rows with
+# country-of-manufacture (DECRS establishment registry) and refreshes
 # manufacturing_facilities; fda_inspections layers OAI / warning-letter exposure.
 # All idempotent.
 0   9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_dmf         >> logs/cron.log 2>&1
+10  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py who_pq        >> logs/cron.log 2>&1
 15  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_decrs      >> logs/cron.log 2>&1
 30  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_inspections >> logs/cron.log 2>&1

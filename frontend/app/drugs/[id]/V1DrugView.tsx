@@ -62,6 +62,7 @@ export default function V1DrugView({
     band: "very_high" | "high" | "medium" | "low";
     makers: string[];
     countries: string[];
+    whoPqCount?: number;
   } | null;
   recalls?: any[];
   approvalFootprint?: {
@@ -309,7 +310,12 @@ export default function V1DrugView({
                     <div className="conc-n">{apiConcentration.count} API manufacturer{apiConcentration.count !== 1 ? "s" : ""}</div>
                     <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
                   </div>
-                  <span className={`status-pill ${CONC_CLS[apiConcentration.band]}`}><span className="d" />{CONC_LABEL[apiConcentration.band]} concentration risk</span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                    <span className={`status-pill ${CONC_CLS[apiConcentration.band]}`}><span className="d" />{CONC_LABEL[apiConcentration.band]} concentration risk</span>
+                    {(apiConcentration.whoPqCount ?? 0) > 0 && (
+                      <span className="who-pq-badge">✓ {apiConcentration.whoPqCount} WHO-prequalified</span>
+                    )}
+                  </div>
                 </div>
                 {apiConcentration.makers.length > 0 && (
                   <div className="conc-makers">
@@ -580,6 +586,7 @@ const CSS = `
 .conc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
 .conc-n{font-size:18px;font-weight:700;letter-spacing:-.02em;color:var(--ink)}
 .conc-d{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:4px;max-width:520px}
+.who-pq-badge{font-size:10.5px;font-weight:600;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:3px 9px;border-radius:99px;white-space:nowrap}
 .conc-makers{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .conc-foot{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:13px;border-top:1px solid var(--border);padding-top:11px}
 .reasons{display:flex;flex-direction:column;gap:11px;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px}

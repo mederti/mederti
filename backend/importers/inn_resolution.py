@@ -46,7 +46,8 @@ DRUG_COLS = (
 
 # ── Target selection ─────────────────────────────────────────────────────────
 
-def fetch_targets(db, like: str | None, only_missing: bool, limit: int | None) -> list[dict]:
+def fetch_targets(db, like: str | None, only_missing: bool, limit: int | None,
+                  unresolved: bool = False) -> list[dict]:
     rows, offset, page = [], 0, 1000
     while True:
         q = db.table("drugs").select(DRUG_COLS).order("generic_name")
@@ -54,6 +55,10 @@ def fetch_targets(db, like: str | None, only_missing: bool, limit: int | None) -
             q = q.ilike("generic_name_normalised", like)
         if only_missing:
             q = q.is_("unii", "null")
+        if unresolved:
+            # Resumability: skip rows already resolved by a prior run. Makes the
+            # backfill restart-safe (laptop sleep, kill) — re-run continues the rest.
+            q = q.is_("resolved_inn", "null")
         q = q.range(offset, offset + page - 1)
         batch = q.execute().data or []
         rows.extend(batch)
@@ -259,12 +264,15 @@ def main() -> int:
     ap.add_argument("--with-shortages", action="store_true",
                     help="only drugs referenced by >=1 shortage_event (the product-relevant set; "
                          "skips the supplement/junk tail that mostly misses RxNav and falls to GSRS)")
+    ap.add_argument("--unresolved", action="store_true",
+                    help="only rows with resolved_inn IS NULL — resumable: re-run continues where "
+                         "a prior run was interrupted")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--execute", action="store_true", help="write changes (default: dry-run)")
     args = ap.parse_args()
 
     db = get_supabase_client()
-    targets = fetch_targets(db, args.like, args.missing_unii, args.limit)
+    targets = fetch_targets(db, args.like, args.missing_unii, args.limit, args.unresolved)
     if args.with_shortages:
         shortage_ids = fetch_shortage_drug_ids(db)
         before = len(targets)

@@ -3,6 +3,7 @@ import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import V1Chat from "@/app/components/v1/V1Chat";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
+import V1AiSummary from "./V1AiSummary";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -147,31 +148,6 @@ export default function V1DrugView({
 
   const klass = drug.drug_class || drug.atc_description || null;
 
-  // Why supply is disrupted — distribution of regulator-coded reasons across
-  // this drug's shortage events. Real coded data; "unknown" folded into Other.
-  const REASON_LABEL: Record<string, string> = {
-    regulatory_action: "Regulatory action",
-    supply_chain: "Supply chain",
-    manufacturing_issue: "Manufacturing",
-    discontinuation: "Discontinuation",
-    demand_surge: "Demand surge",
-    raw_material: "Raw material",
-    distribution: "Distribution",
-    unknown: "Other / unspecified",
-  };
-  const reasonTally = new Map<string, number>();
-  for (const s of shortages) {
-    const key = (s.reason_category || "unknown").toLowerCase();
-    reasonTally.set(key, (reasonTally.get(key) || 0) + 1);
-  }
-  const reasonTotal = [...reasonTally.values()].reduce((a, b) => a + b, 0);
-  const reasons = [...reasonTally.entries()]
-    .map(([k, n]) => ({ label: REASON_LABEL[k] ?? k.replace(/_/g, " "), n, pct: Math.round((n / reasonTotal) * 100), other: k === "unknown" }))
-    // Real coded reasons first; "Other / unspecified" always sinks to the end.
-    .sort((a, b) => (a.other === b.other ? b.n - a.n : a.other ? 1 : -1))
-    .slice(0, 5);
-  const showReasons = reasonTotal >= 2 && reasons.some((r) => r.label !== "Other / unspecified");
-
   // Recalls — most recent first; active Class I are the highest-signal.
   const recallList = (recalls || [])
     .slice()
@@ -232,6 +208,9 @@ export default function V1DrugView({
             <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
           </div>
 
+          {/* AI commentary on the current supply situation */}
+          <V1AiSummary id={id} />
+
           {/* So-what tiles */}
           <div className="sw-cards">
             <div className="sw-card">
@@ -274,32 +253,14 @@ export default function V1DrugView({
             </div>
           )}
 
-          {/* History + reason breakdown — two columns */}
-          {(history || showReasons) && (
-            <div className="sec sec-2col">
-              {history && (
-                <div>
-                  <div className="sec-title">How long have past shortages lasted? <span className="help">from {history.n} resolved event{history.n > 1 ? "s" : ""}</span></div>
-                  <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
-                    <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
-                    <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
-                  </div></div></div></div>
-                </div>
-              )}
-
-              {showReasons && (
-                <div>
-                  <div className="sec-title">Why supply is disrupted <span className="help">across {reasonTotal} recorded event{reasonTotal !== 1 ? "s" : ""}</span></div>
-                  <div className="reasons">
-                    {reasons.map((r) => (
-                      <div key={r.label} className="reason-row">
-                        <div className="reason-l"><span className="reason-n">{r.label}</span><span className="reason-c">{r.n}</span></div>
-                        <div className="reason-bar"><span style={{ width: `${r.pct}%` }} /></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {/* History */}
+          {history && (
+            <div className="sec">
+              <div className="sec-title">How long have past shortages lasted? <span className="help">from {history.n} resolved event{history.n > 1 ? "s" : ""}</span></div>
+              <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
+                <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
+                <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
+              </div></div></div></div>
             </div>
           )}
 
@@ -549,8 +510,19 @@ const CSS = `
 .sw-v{font-size:13.5px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:8px;line-height:1.2}
 .sw-d{font-size:10px;color:var(--text-3);margin-top:4px}
 .sec{margin-top:30px}
-.sec-2col{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
-@media(max-width:760px){.sec-2col{grid-template-columns:1fr;gap:30px}}
+.ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
+.ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ai-sum-spark{width:18px;height:18px;border-radius:6px;background:var(--grad-brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.ai-sum-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}
+.ai-sum-sig{margin-left:auto;font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;letter-spacing:.02em}
+.ai-sum-sig.crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
+.ai-sum-sig.med{color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
+.ai-sum-sig.ok{color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b)}
+.ai-sum-sig.neutral{color:var(--text-3);background:var(--bg-3);border:1px solid var(--border)}
+.ai-sum-hl{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-bottom:6px;line-height:1.3}
+.ai-sum-body{font-size:13px;color:var(--text-2);line-height:1.62}
+.ai-sum-foot{font-size:10.5px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:12px}
+.ai-sum-skel{font-size:12.5px;color:var(--text-4);font-style:italic}
 .sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.078em;color:var(--text-4);margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sec-title .help{color:var(--text-4);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px}
 .subpath{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg)}
@@ -594,13 +566,6 @@ const CSS = `
 .who-pq-badge{font-size:10.5px;font-weight:600;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:3px 9px;border-radius:99px;white-space:nowrap}
 .conc-makers{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .conc-foot{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:13px;border-top:1px solid var(--border);padding-top:11px}
-.reasons{display:flex;flex-direction:column;gap:11px;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px}
-.reason-row{display:flex;flex-direction:column;gap:6px}
-.reason-l{display:flex;align-items:center;justify-content:space-between}
-.reason-n{font-size:13px;font-weight:600;color:var(--ink)}
-.reason-c{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace}
-.reason-bar{height:6px;border-radius:99px;background:var(--bg-3);overflow:hidden}
-.reason-bar span{display:block;height:100%;border-radius:99px;background:var(--grad-soft)}
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .stat-cell{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 13px}
 .stat-v{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--ink);line-height:1.1}

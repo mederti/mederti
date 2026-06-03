@@ -4,6 +4,7 @@ import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import V1Chat from "@/app/components/v1/V1Chat";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
+import V1DrugImage from "./V1DrugImage";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -188,14 +189,17 @@ export default function V1DrugView({
             <div className="dg-main">
           <V1DrugSearch initial={drug.generic_name} />
 
-          <div className="d-identity">
-            <div className="d-name">{drug.generic_name}</div>
-            <div className="d-generic">
-              {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
+          <div className="d-head-row">
+            <V1DrugImage genericName={drug.generic_name} brandNames={drug.brand_names ?? []} />
+            <div className="d-identity">
+              <div className="d-name">{drug.generic_name}</div>
+              <div className="d-generic">
+                {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
+              </div>
+              {drug.brand_names?.length > 0 && (
+                <div className="d-tags">{drug.brand_names.slice(0, 4).map((b: string) => <span key={b} className="d-tag">{b}</span>)}</div>
+              )}
             </div>
-            {drug.brand_names?.length > 0 && (
-              <div className="d-tags">{drug.brand_names.slice(0, 4).map((b: string) => <span key={b} className="d-tag">{b}</span>)}</div>
-            )}
           </div>
 
           {/* Status card */}
@@ -484,7 +488,15 @@ const CSS = `
 .dsearch input::placeholder{color:var(--text-4)}
 .dsearch button{background:var(--green);color:#fff;border:none;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
 .dsearch button:hover{background:var(--green-d)}
-.d-identity{padding:16px 0 0}
+.d-head-row{display:flex;align-items:flex-start;gap:20px;padding:16px 0 0}
+.d-identity{flex:1;min-width:0}
+.d-img{position:relative;flex-shrink:0;width:128px;height:128px;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:#fff;padding:0;cursor:zoom-in;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px -10px rgba(15,23,32,.25);transition:.15s}
+.d-img:hover{border-color:var(--green);box-shadow:0 10px 28px -14px rgba(16,185,129,.4)}
+.d-img img{width:100%;height:100%;object-fit:contain;display:block;transition:opacity .3s}
+.d-img-src{position:absolute;bottom:0;left:0;right:0;font-size:8px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-4);background:rgba(255,255,255,.86);backdrop-filter:blur(2px);padding:3px 0;text-align:center;border-top:1px solid var(--border)}
+.d-img-skeleton{cursor:default;background:linear-gradient(100deg,var(--bg-3) 30%,var(--bg) 50%,var(--bg-3) 70%);background-size:200% 100%;animation:d-img-shimmer 1.3s ease-in-out infinite}
+@keyframes d-img-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(max-width:640px){.d-img{width:96px;height:96px;border-radius:13px}}
 .d-name{font-size:30px;font-weight:700;letter-spacing:-.032em;line-height:1.1}
 .d-generic{font-size:13px;color:var(--text-3);margin-top:5px;font-family:'DM Mono',monospace}
 .d-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}

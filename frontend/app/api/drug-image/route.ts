@@ -1,15 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * GET /api/drug-image?name=amoxicillin
+ * GET /api/drug-image?name=amoxicillin&brands=Amoxil,Moxatag
  *
  * Looks up a product label/package image from DailyMed (NIH).
  * Returns { imageUrl, title } or { imageUrl: null } if not found.
+ *
+ * DailyMed is a US/NIH database, so it indexes drugs under their US
+ * generic names and US brand names. To match drugs labelled with the
+ * rest-of-world INN (e.g. "Paracetamol" → "Acetaminophen", "Salbutamol"
+ * → "Albuterol") we try a list of candidate names: the generic, any
+ * INN aliases, then the supplied brand names — first hit wins.
+ *
  * Cached in-memory for 24 hours to avoid hammering DailyMed.
  */
 
 const cache = new Map<string, { imageUrl: string | null; title: string | null; ts: number }>();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+// Rest-of-world INN → US generic name (and a few common spelling variants).
+// DailyMed only indexes the US name, so we translate before searching.
+const INN_ALIASES: Record<string, string> = {
+  paracetamol: "acetaminophen",
+  salbutamol: "albuterol",
+  adrenaline: "epinephrine",
+  noradrenaline: "norepinephrine",
+  lignocaine: "lidocaine",
+  lidocaine: "lidocaine",
+  frusemide: "furosemide",
+  rifampicin: "rifampin",
+  ciclosporin: "cyclosporine",
+  amoxycillin: "amoxicillin",
+  cefalexin: "cephalexin",
+  isoprenaline: "isoproterenol",
+  pethidine: "meperidine",
+  trimethoprim: "trimethoprim",
+  "glyceryl trinitrate": "nitroglycerin",
+  "methylthioninium chloride": "methylene blue",
+  hyoscine: "scopolamine",
+  furosemide: "furosemide",
+};
+
+async function findImage(name: string): Promise<{ imageUrl: string; title: string | null } | null> {
+  const searchUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?drug_name=${encodeURIComponent(name)}&pagesize=5`;
+  const searchResp = await fetch(searchUrl, { signal: AbortSignal.timeout(8000) });
+  if (!searchResp.ok) return null;
+
+  const searchData = await searchResp.json();
+  const spls = searchData?.data ?? [];
+  if (spls.length === 0) return null;
+
+  // Try each SPL until we find one with a real product image
+  for (const spl of spls) {
+    const mediaUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${spl.setid}/media.json`;
+    const mediaResp = await fetch(mediaUrl, { signal: AbortSignal.timeout(5000) });
+    if (!mediaResp.ok) continue;
+
+    const mediaData = await mediaResp.json();
+    const images = mediaData?.data?.media ?? [];
+
+    // Find a product image (skip structural-formula / chemistry diagrams)
+    const productImage = images.find(
+      (img: { mime_type: string; name: string; url: string }) =>
+        img.mime_type.startsWith("image/") &&
+        !img.name.toLowerCase().includes("-str") &&
+        !img.name.toLowerCase().includes("structure") &&
+        !img.name.toLowerCase().includes("formula")
+    );
+
+    if (productImage) {
+      return { imageUrl: productImage.url, title: spl.title ?? null };
+    }
+  }
+  return null;
+}
 
 export async function GET(req: NextRequest) {
   const name = req.nextUrl.searchParams.get("name")?.trim();
@@ -17,59 +81,45 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ imageUrl: null }, { status: 400 });
   }
 
-  const key = name.toLowerCase();
+  const brands = (req.nextUrl.searchParams.get("brands") ?? "")
+    .split(",")
+    .map((b) => b.trim())
+    .filter(Boolean);
 
-  // Check cache
+  // Build the ordered candidate list: generic → INN alias → brand names.
+  const lower = name.toLowerCase();
+  const candidates: string[] = [name];
+  if (INN_ALIASES[lower] && INN_ALIASES[lower] !== lower) {
+    candidates.push(INN_ALIASES[lower]);
+  }
+  candidates.push(...brands);
+
+  // De-dupe (case-insensitive) while preserving order
+  const seen = new Set<string>();
+  const ordered = candidates.filter((c) => {
+    const k = c.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  const key = ordered.map((c) => c.toLowerCase()).join("|");
+
   const cached = cache.get(key);
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return NextResponse.json({ imageUrl: cached.imageUrl, title: cached.title, cached: true });
   }
 
   try {
-    // Step 1: Search DailyMed for the drug name
-    const searchUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?drug_name=${encodeURIComponent(name)}&pagesize=5`;
-    const searchResp = await fetch(searchUrl, { signal: AbortSignal.timeout(8000) });
-
-    if (!searchResp.ok) {
-      cache.set(key, { imageUrl: null, title: null, ts: Date.now() });
-      return NextResponse.json({ imageUrl: null });
-    }
-
-    const searchData = await searchResp.json();
-    const spls = searchData?.data ?? [];
-
-    if (spls.length === 0) {
-      cache.set(key, { imageUrl: null, title: null, ts: Date.now() });
-      return NextResponse.json({ imageUrl: null });
-    }
-
-    // Step 2: Try each SPL until we find one with a product image
-    for (const spl of spls) {
-      const mediaUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${spl.setid}/media.json`;
-      const mediaResp = await fetch(mediaUrl, { signal: AbortSignal.timeout(5000) });
-
-      if (!mediaResp.ok) continue;
-
-      const mediaData = await mediaResp.json();
-      const images = mediaData?.data?.media ?? [];
-
-      // Find a product image (skip structural formula images)
-      const productImage = images.find(
-        (img: { mime_type: string; name: string; url: string }) =>
-          img.mime_type.startsWith("image/") &&
-          !img.name.toLowerCase().includes("-str") &&
-          !img.name.toLowerCase().includes("structure") &&
-          !img.name.toLowerCase().includes("formula")
-      );
-
-      if (productImage) {
-        const result = { imageUrl: productImage.url, title: spl.title };
-        cache.set(key, { ...result, ts: Date.now() });
-        return NextResponse.json(result);
+    for (const candidate of ordered) {
+      const hit = await findImage(candidate);
+      if (hit) {
+        cache.set(key, { ...hit, ts: Date.now() });
+        return NextResponse.json({ ...hit, matched: candidate });
       }
     }
 
-    // No images found in any SPL
+    // Nothing found across any candidate
     cache.set(key, { imageUrl: null, title: null, ts: Date.now() });
     return NextResponse.json({ imageUrl: null });
   } catch (err) {

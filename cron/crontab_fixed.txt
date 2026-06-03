@@ -57,6 +57,15 @@ SHELL=/bin/bash
 0   5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nafdac        >> logs/cron.log 2>&1
 15  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py sfda          >> logs/cron.log 2>&1
 
+# ─── Revived "dark" scrapers (reconciled from live crontab 2026-06-03) ───
+# These were running in the live Mac crontab but had drifted out of this file.
+# Added back so this file is a faithful source of truth (a wholesale
+# `crontab cron/crontab_fixed.txt` reinstall must not silently drop them).
+35  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py slovakia_sukl  >> logs/cron.log 2>&1
+35  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py turkey_titck   >> logs/cron.log 2>&1
+45  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py china_nmpa     >> logs/cron.log 2>&1
+55  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py hk_drugoffice  >> logs/cron.log 2>&1
+
 # ─── Phase 10: New country shortage scrapers (staggered 15 min from 04:45 UTC) ───
 # Scraper            UTC time
 # belgium_famhp      04:45   (629 records — BE)

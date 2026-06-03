@@ -273,11 +273,12 @@ export default function V1DrugView({
             {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
             {!localShortage && elsewhereCount > 0 && <div className="sc-sub">⚠ In shortage in {elsewhereCount} other market{elsewhereCount !== 1 ? "s" : ""} — see regulator status below.</div>}
             {!localShortage && elsewhereCount === 0 && <div className="sc-sub">No active shortage reported.</div>}
+
+            {/* AI commentary on the current supply situation — embedded under the heading */}
+            <V1AiSummary id={id} embedded />
+
             <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
           </div>
-
-          {/* AI commentary on the current supply situation */}
-          <V1AiSummary id={id} />
 
           {/* So-what tiles */}
           <div className="sw-cards">
@@ -622,6 +623,7 @@ const CSS = `
 .sw-d{font-size:11.5px;color:var(--text-3);margin-top:5px}
 .sec{margin-top:30px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
+.ai-sum.embedded{margin:14px 0 0;border:0;border-top:1px solid var(--border);border-radius:0;background:none;padding:14px 0 0}
 .ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .ai-sum-spark{width:18px;height:18px;border-radius:6px;background:var(--grad-brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
 .ai-sum-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}

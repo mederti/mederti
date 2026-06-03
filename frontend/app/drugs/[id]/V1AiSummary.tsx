@@ -27,9 +27,10 @@ const SIGNAL: Record<Payload["signal"], { label: string; cls: string }> = {
   stable: { label: "Stable", cls: "neutral" },
 };
 
-export default function V1AiSummary({ id }: { id: string }) {
+export default function V1AiSummary({ id, embedded = false }: { id: string; embedded?: boolean }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
+  const wrapCls = embedded ? "ai-sum embedded" : "ai-sum";
 
   useEffect(() => {
     let alive = true;
@@ -50,7 +51,7 @@ export default function V1AiSummary({ id }: { id: string }) {
 
   if (loading) {
     return (
-      <div className="ai-sum">
+      <div className={wrapCls}>
         <div className="ai-sum-head">
           <span className="ai-sum-spark">✦</span>
           <span className="ai-sum-label">Mederti AI summary</span>
@@ -65,7 +66,7 @@ export default function V1AiSummary({ id }: { id: string }) {
   const sig = SIGNAL[data.signal] ?? SIGNAL.stable;
 
   return (
-    <div className="ai-sum">
+    <div className={wrapCls}>
       <div className="ai-sum-head">
         <span className="ai-sum-spark">✦</span>
         <span className="ai-sum-label">Mederti AI summary</span>

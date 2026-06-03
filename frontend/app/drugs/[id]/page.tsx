@@ -501,7 +501,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
       .limit(300);
     const supplierRows = (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null; who_pq: boolean | null }[];
-    const makerSet = new Map<string, string | null>();
+    const makerSet = new Map<string, string>();
     const whoPqMakers = new Set<string>();
     for (const r of supplierRows) {
       const name = (r.manufacturer_name ?? "").trim();
@@ -521,10 +521,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
       makerCount > 0
         ? {
             count: makerCount,
-            band:
+            band: (
               makerCount === 1 ? "very_high" :
               makerCount <= 3 ? "high" :
-              makerCount <= 6 ? "medium" : "low",
+              makerCount <= 6 ? "medium" : "low"
+            ) as "very_high" | "high" | "medium" | "low",
             makers: makerNames.slice(0, 6),
             countries: apiCountries,
             whoPqCount: whoPqMakers.size,

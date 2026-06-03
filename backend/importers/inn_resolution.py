@@ -63,6 +63,24 @@ def fetch_targets(db, like: str | None, only_missing: bool, limit: int | None) -
     return rows[:limit] if limit else rows
 
 
+def fetch_shortage_drug_ids(db) -> set[str]:
+    """Distinct drug_ids referenced by at least one shortage_event."""
+    ids, offset, page = set(), 0, 1000
+    while True:
+        batch = (
+            db.table("shortage_events")
+            .select("drug_id")
+            .not_.is_("drug_id", "null")
+            .range(offset, offset + page - 1)
+            .execute()
+        ).data or []
+        ids.update(x["drug_id"] for x in batch)
+        if len(batch) < page:
+            break
+        offset += page
+    return ids
+
+
 # ── Canonical head management ────────────────────────────────────────────────
 
 class HeadCache:
@@ -238,12 +256,21 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Resolve drugs to molecule identities (INN/RxCUI/UNII/ATC).")
     ap.add_argument("--like", help="ilike pattern on generic_name_normalised, e.g. 'atorvastatin*'")
     ap.add_argument("--missing-unii", action="store_true", help="only rows with NULL unii")
+    ap.add_argument("--with-shortages", action="store_true",
+                    help="only drugs referenced by >=1 shortage_event (the product-relevant set; "
+                         "skips the supplement/junk tail that mostly misses RxNav and falls to GSRS)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--execute", action="store_true", help="write changes (default: dry-run)")
     args = ap.parse_args()
 
     db = get_supabase_client()
     targets = fetch_targets(db, args.like, args.missing_unii, args.limit)
+    if args.with_shortages:
+        shortage_ids = fetch_shortage_drug_ids(db)
+        before = len(targets)
+        targets = [d for d in targets if d["id"] in shortage_ids]
+        print(f"[inn_resolution] --with-shortages: {before} → {len(targets)} rows "
+              f"({len(shortage_ids)} drugs have shortage events)", flush=True)
     print(f"[inn_resolution] {len(targets)} target rows  execute={args.execute}", flush=True)
 
     heads = HeadCache(db, args.execute)

@@ -317,29 +317,51 @@ class BaseScraper(ABC):
         self,
         generic_name: str,
         brand_names: list[str] | None = None,
+        *,
+        unii: str | None = None,
+        rxcui: str | None = None,
+        substance_name: str | None = None,
     ) -> str | None:
         """
         Resolve a drug UUID from the drugs table using a tiered lookup strategy:
+          0. UNII molecule crosswalk — if the scraper supplied a UNII (FDA's
+             openfda block does), match the canonical molecule directly. This
+             rolls salt/brand/spelling variants up to one row regardless of how
+             the generic_name is phrased.
           1. Exact match on generic_name_normalised (fast, most common)
           2. First-word prefix match (handles "amoxicillin trihydrate" → "amoxicillin")
           3. Create a minimal drug record so no shortage event is orphaned
 
-        Returns the drug UUID, or None if generic_name is blank.
+        A supplied UNII/RxCUI is backfilled onto the resolved row when missing
+        (so later UNII crosswalks hit) and stored on any newly created row.
+        Returns the drug UUID, or None if no usable name is given.
         """
         normalised = generic_name.strip().lower()
+        if not normalised and substance_name:
+            # openfda.substance_name is a cleaner fallback when generic_name is blank.
+            generic_name = substance_name
+            normalised = substance_name.strip().lower()
         if not normalised:
             return None
+
+        # 0. UNII molecule crosswalk
+        if unii:
+            res = self.db.table("drugs").select("id").eq("unii", unii).limit(1).execute()
+            if res.data:
+                return res.data[0]["id"]
 
         # 1. Exact normalised match
         result = (
             self.db.table("drugs")
-            .select("id")
+            .select("id, unii, rxcui")
             .eq("generic_name_normalised", normalised)
             .limit(1)
             .execute()
         )
         if result.data:
-            return result.data[0]["id"]
+            row = result.data[0]
+            self._backfill_identifiers(row, unii, rxcui)
+            return row["id"]
 
         # 2. Prefix / first-word match
         #    Handles multi-salt names like "amoxicillin trihydrate" or
@@ -348,13 +370,14 @@ class BaseScraper(ABC):
         if len(first_word) >= 4:  # avoid noise matches on very short tokens
             result = (
                 self.db.table("drugs")
-                .select("id, generic_name")
+                .select("id, generic_name, unii, rxcui")
                 .ilike("generic_name_normalised", f"{first_word}%")
                 .limit(5)
                 .execute()
             )
             if result.data:
                 matched = result.data[0]
+                self._backfill_identifiers(matched, unii, rxcui)
                 self.log.debug(
                     "Drug matched by prefix",
                     extra={
@@ -373,21 +396,45 @@ class BaseScraper(ABC):
                 "source":       self.SOURCE_NAME,
             },
         )
+        new_record: dict[str, Any] = {
+            "generic_name":        generic_name.strip().title(),
+            "brand_names":         brand_names or [],
+            "therapeutic_category": f"Auto-created by {self.SOURCE_NAME} scraper",
+        }
+        if unii:
+            new_record["unii"] = unii
+        if rxcui:
+            new_record["rxcui"] = rxcui
         insert_result = (
-            self.db.table("drugs")
-            .insert({
-                "generic_name":        generic_name.strip().title(),
-                "brand_names":         brand_names or [],
-                "therapeutic_category": f"Auto-created by {self.SOURCE_NAME} scraper",
-            })
-            .execute()
+            self.db.table("drugs").insert(new_record).execute()
         )
         new_id: str = insert_result.data[0]["id"]
         self.log.info(
             "Auto-created drug record",
-            extra={"drug_id": new_id, "generic_name": generic_name},
+            extra={"drug_id": new_id, "generic_name": generic_name, "unii": unii},
         )
         return new_id
+
+    def _backfill_identifiers(
+        self, row: dict, unii: str | None, rxcui: str | None
+    ) -> None:
+        """
+        Populate UNII / RxCUI on a resolved drug row when they're missing and the
+        scraper supplied them (openFDA does). Never overwrites an existing value;
+        no-ops when there's nothing to add, so it costs zero writes in the common
+        case. Best-effort — a backfill failure must not drop a shortage event.
+        """
+        patch: dict[str, Any] = {}
+        if unii and not row.get("unii"):
+            patch["unii"] = unii
+        if rxcui and not row.get("rxcui"):
+            patch["rxcui"] = rxcui
+        if not patch:
+            return
+        try:
+            self.db.table("drugs").update(patch).eq("id", row["id"]).execute()
+        except Exception as e:  # noqa: BLE001 — never fail a scrape over enrichment
+            self.log.debug("identifier backfill failed", extra={"drug_id": row.get("id"), "error": str(e)})
 
     # ─────────────────────────────────────────────────────────────────────────
     # Deterministic shortage_id
@@ -426,6 +473,9 @@ class BaseScraper(ABC):
                 drug_id = self._find_or_create_drug(
                     ev.get("generic_name", ""),
                     ev.get("brand_names"),
+                    unii=ev.get("unii"),
+                    rxcui=ev.get("rxcui"),
+                    substance_name=ev.get("substance_name"),
                 )
                 if not drug_id:
                     self.log.warning(

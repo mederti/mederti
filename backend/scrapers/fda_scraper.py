@@ -323,10 +323,31 @@ class FDAScraper(BaseScraper):
         # openFDA has no per-drug deep-link; point to the FDA search portal.
         source_url = "https://www.accessdata.fda.gov/scripts/drugshortages/"
 
+        # ── Standard substance identifiers (openFDA nested object) ────────────
+        # openFDA returns these as lists; take the first. substance_name is the
+        # cleaner active-ingredient string; rxcui + unii are the free
+        # authoritative identifiers used to crosswalk this record to the
+        # canonical molecule (see base_scraper._find_or_create_drug).
+        def _first(key: str) -> str | None:
+            vals = openfda.get(key) or []
+            return (vals[0].strip() if vals and isinstance(vals[0], str) else None)
+
+        # UNII is used to crosswalk the record to a single canonical molecule, so
+        # only trust it when openFDA lists exactly one substance — a multi-UNII
+        # record is a combination product that must NOT collapse to one ingredient.
+        unii_list = [u for u in (openfda.get("unii") or []) if isinstance(u, str)]
+        unii = unii_list[0].strip() if len(unii_list) == 1 else None
+        rxcui = _first("rxcui")
+        substance_name = _first("substance_name")
+
         return {
             # Drug resolution
             "generic_name":               generic_name,
             "brand_names":                brand_names,
+            # Substance identifiers for molecule crosswalk
+            "rxcui":                      rxcui,
+            "unii":                       unii,
+            "substance_name":             substance_name,
             # Shortage event fields
             "status":                     status,
             "severity":                   severity,
@@ -355,6 +376,7 @@ class FDAScraper(BaseScraper):
                 "substance_name":        openfda.get("substance_name"),
                 "route":                 openfda.get("route"),
                 "rxcui":                 openfda.get("rxcui"),
+                "unii":                  openfda.get("unii"),
             },
         }
 

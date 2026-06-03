@@ -65,10 +65,12 @@ SHELL=/bin/bash
 # argentina_anmat    05:30   (320 records — AR)
 # malaysia_npra      05:45   (148 records — MY safety alerts)
 # poland_mz          05:50   (286 records — PL, Excel attachment via index nav)
+# india_cdsco        05:35   (120 records — IN NSQ quality alerts, tier-3 upstream signal via publicNsqDrugTable JSON)
 45  4 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py belgium_famhp      >> logs/cron.log 2>&1
 0   5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py greece_eof         >> logs/cron.log 2>&1
 15  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py portugal_infarmed  >> logs/cron.log 2>&1
 30  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py argentina_anmat   >> logs/cron.log 2>&1
+35  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py india_cdsco        >> logs/cron.log 2>&1
 45  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py malaysia_npra     >> logs/cron.log 2>&1
 50  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py poland_mz         >> logs/cron.log 2>&1
 55  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py uae_mohap         >> logs/cron.log 2>&1
@@ -88,6 +90,14 @@ SHELL=/bin/bash
 # bfarm_recalls disabled 2026-05-26: live run fetched 50 records but DB upsert
 # returns 400 Bad Request on every row (schema/payload mismatch in
 # backend/scrapers/bfarm_recalls_scraper.py). Diagnose then re-enable.
+
+# ─── Upstream-signal monitors (daily) ───
+# Tier-3 leading indicators, not direct shortage feeds. china_nmpa watches the
+# NMPA English portal for API-manufacturer suspensions / GMP revocations /
+# recalls (China makes ~80% of global API). Low yield by nature — the English
+# portal lags and is policy-heavy; the timely, complete signal is on the
+# WAF-protected Chinese portal (needs a headless browser — see scraper docstring).
+45  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py china_nmpa      >> logs/cron.log 2>&1
 
 # ─── Daily data-health digest (08:00 UTC = 18:00 AEST + 1). Emails OPS_ALERT_EMAIL ───
 # only when something is actionable (use --force-email to override).

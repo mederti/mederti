@@ -21,7 +21,9 @@ class HSARecallsScraper(BaseRecallScraper):
 
     SOURCE_ID:    str = "10000000-0000-0000-0000-000000000035"
     SOURCE_NAME:  str = "HSA — Drug Recalls (Singapore)"
-    BASE_URL:     str = "https://www.hsa.gov.sg/announcements/safety-alerts-and-product-recalls"
+    # Old path (safety-alerts-and-product-recalls) now 404s — HSA moved recalls
+    # under the unified announcements listing, filtered by type.
+    BASE_URL:     str = "https://www.hsa.gov.sg/announcements/?type=Product%20Recall"
     COUNTRY:      str = "Singapore"
     COUNTRY_CODE: str = "SG"
 

@@ -107,7 +107,8 @@ ALTER TABLE drug_resolution_review ENABLE ROW LEVEL SECURITY;
 -- the molecule. The application layer reads this to render a drug page that
 -- shows the *whole* molecule's shortage picture rather than one fragment's.
 
-CREATE OR REPLACE VIEW molecule_rollup AS
+CREATE OR REPLACE VIEW molecule_rollup
+    WITH (security_invoker = true) AS
 SELECT
     d.id                                   AS drug_id,
     COALESCE(d.canonical_drug_id, d.id)    AS molecule_id,

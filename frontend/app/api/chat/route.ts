@@ -13,9 +13,9 @@ export const dynamic = "force-dynamic";
 
 const MAX_ITERATIONS = 12;
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-// Roomy budget — Claude-led synthesis means most answers are 2–5 paragraphs
-// of integrated prose alongside cards. With extended thinking enabled, the
-// budget also has to cover the model's reasoning tokens.
+// Headroom for tool-heavy turns + extended-thinking reasoning tokens. The
+// answer prose itself is kept brief by the system prompt (cards/tables carry
+// the facts); this ceiling is for thinking + multi-tool rounds, not long prose.
 const MAX_OUTPUT_TOKENS = 16384;
 
 type IncomingBody = {
@@ -406,7 +406,7 @@ export async function POST(req: NextRequest) {
       });
       messages.push({
         role: "user",
-        content: `[Continuation instruction — not from end user] You've already opened the answer with a 1-sentence headline and <drug_card id="${tier1.drugId}" />. Do NOT repeat them. Continue from the substitutes section onwards: substitutes table (use find_substitutes data above), operational context paragraph, <sources>, <followups>.`,
+        content: `[Continuation instruction — not from end user] You've already opened the answer with a 1-sentence headline and <drug_card id="${tier1.drugId}" />. Do NOT repeat them. Continue from the substitutes section onwards: substitutes table (use find_substitutes data above), at most 1–3 short sentences of context, <sources>, <followups>.`,
       });
     }
 

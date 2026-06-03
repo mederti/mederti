@@ -1,29 +1,51 @@
 """
-NMPA China API Manufacturer Suspension Notices Scraper (UPSTREAM SIGNAL)
-------------------------------------------------------------------------
+NMPA China — Drug Enforcement / API-Suspension Signal Scraper (UPSTREAM SIGNAL)
+-------------------------------------------------------------------------------
 Source:  NMPA — API Manufacturer Suspension Notices
 URL:     https://english.nmpa.gov.cn/
 
-The National Medical Products Administration (NMPA) of China publishes
-drug safety news and notices on their English-language portal. This scraper
-monitors for notices about API (Active Pharmaceutical Ingredient)
-manufacturing suspensions, facility shutdowns, or drug quality issues.
+The National Medical Products Administration (NMPA) of China is the regulator
+for a country that produces an estimated ~80% of the world's pharmaceutical
+APIs. A GMP-certificate revocation, flight-inspection failure, or production
+suspension at a Chinese API facility is a leading indicator of downstream
+shortages worldwide — often weeks to months ahead of the importing-country
+regulators (TGA/FDA/EMA) declaring an actual shortage. This makes NMPA a
+high-value UPSTREAM SIGNAL source for the prediction engine.
 
-China is the world's largest producer of pharmaceutical APIs. Suspension of
-a Chinese API manufacturing facility can cascade into shortages globally
-within weeks to months. This makes NMPA a critical upstream signal source.
+WHAT THIS SCRAPER MONITORS
+==========================
+The English portal (english.nmpa.gov.cn) is a static, plain-HTML site hosted on
+chinadaily.com.cn infrastructure. We crawl its live index pages (news + drug
+notices + homepage), follow each item into its article body, and keyword-scan
+title+body for *enforcement* signals (recalls, GMP revocations, production
+suspensions, substandard/counterfeit findings, contamination/impurities).
+Everything captured is tagged tier-3 / upstream so it never inflates genuine
+shortage counts.
 
-This is an UPSTREAM SIGNAL scraper: facility suspensions and quality
-findings at Chinese API manufacturers are leading indicators of future
-shortages in downstream markets worldwide.
+KNOWN LIMITATION — read before "fixing" low yield  (verified 2026-06-03)
+=======================================================================
+The *English* portal lags badly and is overwhelmingly policy/diplomacy news;
+it rarely publishes granular API-suspension notices. The real, timely,
+structured enforcement data lives on the *Chinese* portal (www.nmpa.gov.cn):
+  • 飞行检查  (flight / for-cause inspections)  /xxgk/fxjzh/index.html
+  • 公告通告  (announcements & notices)         /xxgk/ggtg/index.html
+  • 收回药品GMP证书 (GMP certificate revocations)
+…but www.nmpa.gov.cn sits behind a JavaScript anti-bot WAF (the `_$dp()` /
+`$_ts` challenge — the served <body> is empty until JS runs and sets a cookie).
+It is therefore NOT scrapable with this project's httpx + BeautifulSoup stack;
+capturing it would require a headless browser (Playwright/Selenium) plus
+Chinese-language keyword + drug-name handling. That is the recommended upgrade
+to turn this from a low-yield English monitor into a high-yield signal feed.
+Tracked as a follow-up — do not silently broaden keywords to "find something"
+on the English side, as that just captures policy noise.
 
 Data source UUID:  10000000-0000-0000-0000-000000000053
 Country:           China
 Country code:      CN
-Confidence:        65/100 (English portal may lag behind Chinese-language original)
+Confidence:        65/100 (English portal lags the Chinese original)
 Source tier:       3 (upstream signal, not a direct shortage declaration)
 
-Cron:  Every 24 hours
+Cron:  Daily (a news monitor; cheap and the source updates irregularly)
 """
 
 from __future__ import annotations
@@ -43,46 +65,97 @@ class ChinaNMPAScraper(BaseScraper):
     COUNTRY: str      = "China"
     COUNTRY_CODE: str = "CN"
 
-    RATE_LIMIT_DELAY: float = 3.0   # Be polite to Chinese gov servers
-    REQUEST_TIMEOUT: float  = 60.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    RATE_LIMIT_DELAY: float = 2.5   # Be polite to gov servers
+    REQUEST_TIMEOUT: float  = 45.0
+    SCRAPER_VERSION: str    = "2.0.0"
 
-    # NMPA English portal URLs for drug safety news
+    # Live English-portal index pages (verified 2026-06-03). Pagination is
+    # JS-driven (no static page URLs), so only the latest page of each index is
+    # reachable — acceptable for a daily monitor. The old build pointed at a
+    # dead 2019 article URL (c_386498.htm) which is why it returned 0 rows.
     NEWS_URLS: list[str] = [
-        "https://english.nmpa.gov.cn/2019-09/25/c_386498.htm",  # Drug safety news index
-        "https://english.nmpa.gov.cn/news.html",
-        "https://english.nmpa.gov.cn/",
+        "https://english.nmpa.gov.cn/news.html",    # general news index
+        "https://english.nmpa.gov.cn/drugs.html",   # drug notices & announcements
+        "https://english.nmpa.gov.cn/index.html",   # homepage (latest headlines)
     ]
 
-    # Keywords that indicate relevant notices for upstream signals
+    # Article links look like  2026-06/01/c_1187215.htm  (also .shtml/.html).
+    _ARTICLE_HREF_RE = re.compile(r"\d{4}-\d{2}/\d{2}/c_\d+\.s?html?", re.IGNORECASE)
+    # Pull the publication date straight out of the href — robust and exact.
+    _HREF_DATE_RE    = re.compile(r"(\d{4})-(\d{2})/(\d{2})/c_\d+")
+    # "Updated: 2026-01-28" appears in article bodies as a confirmation source.
+    _BODY_DATE_RE    = re.compile(r"Updated:\s*(\d{4})-(\d{2})-(\d{2})")
+
+    # Cap how many article bodies we follow per run (the English indexes carry
+    # only a handful of real items, so this is a safety bound, not a sampler).
+    MAX_ARTICLES: int = 40
+
+    # Perennial nav/about links that match the article href pattern but are not
+    # news — skip so we don't waste fetches on them.
+    _SKIP_TITLES: set[str] = {
+        "our responsibilities", "contact us", "leadership",
+        "about nmpa", "home",
+    }
+
+    # Enforcement-signal keywords (substring match over title + body, lowercased).
+    # Deliberately PRECISE: these are action verbs / findings that indicate a
+    # real supply-affecting event, not generic policy/PR. Do NOT add broad terms
+    # like "drug safety", "active pharmaceutical ingredient" or "inspection" on
+    # their own — the English portal is policy-heavy and they generate noise.
     _RELEVANCE_KEYWORDS: list[str] = [
-        "suspend",
-        "suspension",
+        "recall",
+        "recalled",
+        "suspend",            # suspended / suspension / suspend production
         "revoke",
         "revocation",
-        "recall",
-        "withdrawal",
-        "shutdown",
-        "shut down",
-        "cease production",
-        "halt production",
-        "stop production",
-        "gmp violation",
+        "withdrawn from the market",
+        "market withdrawal",
         "gmp certificate",
-        "quality issue",
-        "quality problem",
-        "not standard",
+        "gmp violation",
+        "halt production",
+        "cease production",
+        "stop production",
+        "production halt",
+        "production suspension",
+        "manufacturing suspension",
         "substandard",
+        "not up to standard",
         "counterfeit",
         "fake drug",
-        "api manufacturer",
-        "active pharmaceutical ingredient",
-        "drug safety",
-        "pharmaceutical production",
-        "manufacturing violation",
-        "facility inspection",
-        "warning letter",
-        "import alert",
+        "fake medicine",
+        "contaminat",         # contamination / contaminated
+        "impurit",            # impurity / impurities
+        "nitrosamine",
+        "quality defect",
+        "failed inspection",
+        "flight inspection",
+        "unannounced inspection",
+    ]
+
+    # Title markers that identify a POLICY/REGULATION document (not an enforcement
+    # event). The English portal publishes long policy announcements whose bodies
+    # describe the enforcement regime ("…may suspend production / revoke the GMP
+    # certificate / for substandard or counterfeit drugs…") — these match the
+    # enforcement keywords but are NOT events. We require the keyword to appear in
+    # the TITLE for such documents; a body-only match on a policy title is dropped.
+    # NB: "announcement"/"circular" are deliberately NOT here — they're weak and
+    # can prefix a genuine notice. The markers below are strong policy-document
+    # signals; a title containing any of them is treated as policy regardless of
+    # where the enforcement keyword matched.
+    _POLICY_TITLE_MARKERS: list[str] = [
+        "provisions",
+        "measures",
+        "regulation",
+        "guidance",
+        "guideline",
+        "procedure",
+        "interpretation",
+        "policy",
+        "supervision and administration",
+        "administrative",
+        "administration",
+        "must read",
+        "meets with",
     ]
 
     # Keyword -> severity mapping for facility-level events
@@ -97,9 +170,9 @@ class ChinaNMPAScraper(BaseScraper):
         "gmp violation":    "high",
         "counterfeit":      "high",
         "recall":           "medium",
-        "quality issue":    "medium",
-        "warning letter":   "medium",
+        "quality defect":   "medium",
         "substandard":      "medium",
+        "contaminat":       "medium",
         "inspection":       "low",
     }
 
@@ -109,13 +182,13 @@ class ChinaNMPAScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        Fetch NMPA drug safety news from the English portal.
+        Crawl the English NMPA index pages, follow each item into its article
+        body, and return only enforcement-relevant notices.
 
         Strategy:
-        1. GET the English news/safety pages.
-        2. Parse HTML for news items and notices.
-        3. Filter for drug safety / API manufacturing related notices.
-        4. Follow links to individual notices for detail extraction.
+        1. GET each index page; collect article-style links (deduped).
+        2. Follow each link into its body; extract text + publication date.
+        3. Keyword-scan title+body for enforcement signals; keep matches.
         """
         from bs4 import BeautifulSoup
 
@@ -124,161 +197,132 @@ class ChinaNMPAScraper(BaseScraper):
             "url": self.BASE_URL,
         })
 
-        all_records: list[dict] = []
-        seen_urls: set[str] = set()
-
-        for news_url in self.NEWS_URLS:
+        # ── 1. Discover candidate article links across all index pages ───────
+        candidates: dict[str, dict] = {}   # href -> {title, url, source_page}
+        for index_url in self.NEWS_URLS:
             try:
-                resp = self._get(news_url)
+                resp = self._get(index_url)
                 soup = BeautifulSoup(resp.text, "html.parser")
-                records = self._extract_news_items(soup, news_url, seen_urls)
-                all_records.extend(records)
+                for a in soup.find_all("a", href=self._ARTICLE_HREF_RE):
+                    title = a.get_text(strip=True)
+                    if not title or len(title) < 5:
+                        continue
+                    if title.strip().lower() in self._SKIP_TITLES:
+                        continue
+                    href = self._normalize_url(a.get("href", ""), index_url)
+                    if href in candidates:
+                        continue
+                    candidates[href] = {
+                        "title":       title,
+                        "url":         href,
+                        "source_page": index_url,
+                    }
                 self.log.info(
-                    "Extracted news items from page",
-                    extra={"url": news_url, "items": len(records)},
+                    "Index page scanned",
+                    extra={"url": index_url, "running_candidates": len(candidates)},
                 )
             except Exception as exc:
                 self.log.warning(
-                    "Failed to fetch NMPA news page",
-                    extra={"url": news_url, "error": str(exc)},
+                    "Failed to fetch NMPA index page",
+                    extra={"url": index_url, "error": str(exc)},
                 )
 
-        # Filter for relevant notices only
-        relevant = self._filter_relevant(all_records)
+        ordered = list(candidates.values())[: self.MAX_ARTICLES]
+
+        # ── 2. Follow each candidate into its article body ───────────────────
+        for rec in ordered:
+            body = self._fetch_article_body(rec["url"])
+            rec["summary"] = body[:600]
+            rec["body"]    = body
+            rec["date"]    = (
+                self._date_from_href(rec["url"])
+                or self._date_from_body(body)
+                or ""
+            )
+
+        # ── 3. Keyword-filter for enforcement relevance ──────────────────────
+        relevant = self._filter_relevant(ordered)
+
+        # Stash for the dry-run reporter / diagnostics.
+        self._discovered_count = len(ordered)
+        self._discovered_sample = [r["title"] for r in ordered[:10]]
 
         self.log.info(
             "NMPA fetch complete",
             extra={
-                "total_items": len(all_records),
-                "relevant_items": len(relevant),
+                "candidates_discovered": len(ordered),
+                "relevant_items":        len(relevant),
             },
         )
         return relevant
 
-    def _extract_news_items(
-        self, soup, page_url: str, seen_urls: set[str]
-    ) -> list[dict]:
-        """Extract news items from a parsed NMPA page."""
-        records: list[dict] = []
+    def _fetch_article_body(self, url: str) -> str:
+        """GET an article and return its main body text (best-effort, never raises)."""
+        from bs4 import BeautifulSoup
 
-        # NMPA English portal uses various list structures for news
-        # Try multiple selectors
-        containers = (
-            soup.select(".list_con li")           # Common NMPA list pattern
-            or soup.select(".news_list li")        # Alternative news list
-            or soup.select(".content_list li")     # Content listing
-            or soup.select("ul.list li")           # Generic list
-            or soup.select("article")              # Article elements
-            or soup.select(".main-content li")     # Main content area
-        )
-
-        for container in containers:
-            record = self._parse_news_item(container, page_url, seen_urls)
-            if record:
-                records.append(record)
-
-        # Also try direct link extraction if no structured containers found
-        if not records:
-            records = self._extract_from_all_links(soup, page_url, seen_urls)
-
-        return records
-
-    def _parse_news_item(
-        self, container, page_url: str, seen_urls: set[str]
-    ) -> dict | None:
-        """Parse a single news item container."""
-        # Find the link
-        link_el = container.select_one("a[href]")
-        if not link_el:
-            return None
-
-        title = link_el.get_text(strip=True)
-        if not title or len(title) < 5:
-            return None
-
-        href = link_el.get("href", "")
-        href = self._normalize_url(href, page_url)
-
-        if href in seen_urls:
-            return None
-        seen_urls.add(href)
-
-        # Extract date
-        date_el = (
-            container.select_one(".date")
-            or container.select_one("span.time")
-            or container.select_one("time")
-            or container.select_one(".news_date")
-        )
-        date_text = ""
-        if date_el:
-            date_text = date_el.get_text(strip=True)
-            if date_el.name == "time" and date_el.get("datetime"):
-                date_text = date_el["datetime"]
-
-        # If no separate date element, try to extract date from title
-        if not date_text:
-            date_match = re.search(r'(\d{4}[-/]\d{2}[-/]\d{2})', title)
-            if date_match:
-                date_text = date_match.group(1)
-
-        # Extract summary/description
-        summary_el = (
-            container.select_one("p")
-            or container.select_one(".desc")
-            or container.select_one(".summary")
-        )
-        summary = summary_el.get_text(strip=True) if summary_el else ""
-
-        return {
-            "title": title,
-            "url": href,
-            "date": date_text,
-            "summary": summary,
-            "source_page": page_url,
-        }
-
-    def _extract_from_all_links(
-        self, soup, page_url: str, seen_urls: set[str]
-    ) -> list[dict]:
-        """Fallback: extract relevant items from all page links."""
-        records: list[dict] = []
-
-        for link in soup.select("a[href]"):
-            title = link.get_text(strip=True)
-            if not title or len(title) < 10:
-                continue
-
-            href = link.get("href", "")
-            href = self._normalize_url(href, page_url)
-
-            if href in seen_urls:
-                continue
-
-            # Only include links that look like news/notice pages
-            if not any(ext in href for ext in (".htm", ".html", ".shtml")):
-                continue
-
-            seen_urls.add(href)
-
-            records.append({
-                "title": title,
-                "url": href,
-                "date": "",
-                "summary": "",
-                "source_page": page_url,
-            })
-
-        return records
+        try:
+            resp = self._get(url)
+            soup = BeautifulSoup(resp.text, "html.parser")
+            container = (
+                soup.select_one("div.art")
+                or soup.select_one("div.main")
+                or soup.select_one(".TRS_Editor")
+                or soup.select_one(".article")
+            )
+            if container:
+                return container.get_text(" ", strip=True)
+            # Fall back to the whole document text — still keyword-scannable.
+            return soup.get_text(" ", strip=True)
+        except Exception as exc:
+            self.log.warning(
+                "Failed to fetch NMPA article body",
+                extra={"url": url, "error": str(exc)},
+            )
+            return ""
 
     def _filter_relevant(self, records: list[dict]) -> list[dict]:
-        """Filter records to keep only those relevant to drug safety / API manufacturing."""
+        """
+        Keep records that look like genuine enforcement EVENTS.
+
+        Precision rule (the English portal is policy-heavy):
+          • policy/regulation documents (title carries a policy marker) are
+            ALWAYS dropped — their bodies describe the enforcement regime and
+            match keywords without being events; otherwise
+          • keep if an enforcement keyword appears in the title or the body.
+        """
         relevant: list[dict] = []
         for rec in records:
-            combined = f"{rec.get('title', '')} {rec.get('summary', '')}".lower()
-            if any(kw in combined for kw in self._RELEVANCE_KEYWORDS):
+            title_l = str(rec.get("title", "")).lower()
+            body_l  = str(rec.get("body", "")).lower()
+
+            # Policy/regulation documents are always dropped — their bodies
+            # describe the enforcement regime and match keywords without being
+            # an actual event (applies even if a keyword is in the title, e.g.
+            # "Provisions for Drug Recall Administration").
+            if any(m in title_l for m in self._POLICY_TITLE_MARKERS):
+                continue
+
+            title_hit = any(kw in title_l for kw in self._RELEVANCE_KEYWORDS)
+            body_hit  = any(kw in body_l for kw in self._RELEVANCE_KEYWORDS)
+            if title_hit or body_hit:
                 relevant.append(rec)
         return relevant
+
+    def _date_from_href(self, href: str) -> str:
+        """Derive ISO date from a NMPA article href (2026-06/01/c_… -> 2026-06-01)."""
+        m = self._HREF_DATE_RE.search(href)
+        if not m:
+            return ""
+        y, mo, d = m.groups()
+        return f"{y}-{mo}-{d}"
+
+    def _date_from_body(self, body: str) -> str:
+        """Derive ISO date from an 'Updated: YYYY-MM-DD' line in the article body."""
+        m = self._BODY_DATE_RE.search(body)
+        if not m:
+            return ""
+        y, mo, d = m.groups()
+        return f"{y}-{mo}-{d}"
 
     @staticmethod
     def _normalize_url(href: str, page_url: str) -> str:
@@ -289,7 +333,7 @@ class ChinaNMPAScraper(BaseScraper):
             return f"https:{href}"
         if href.startswith("/"):
             return f"https://english.nmpa.gov.cn{href}"
-        # Relative URL — resolve against the page URL
+        # Relative URL — resolve against the page URL's directory.
         base = page_url.rsplit("/", 1)[0]
         return f"{base}/{href}"
 
@@ -334,17 +378,25 @@ class ChinaNMPAScraper(BaseScraper):
         if not title:
             return None
 
-        # Extract drug or ingredient name from the notice title
+        # Extract drug or ingredient name from the notice title/body.
         generic_name = self._extract_drug_or_ingredient(title, rec.get("summary", ""))
         if not generic_name:
             # Use the cleaned title as a fallback
             generic_name = self._clean_title(title)
 
-        if not generic_name or len(generic_name) < 3:
+        # Sanity guard: only emit when we have a plausible drug/ingredient name.
+        # Better to drop a signal than to pollute the drugs table with a
+        # sentence-fragment "drug" like "Revokes Gmp Certificate Of A …". (Tier-3
+        # signal — missing one is cheaper than fabricating a junk drug record.)
+        if not self._looks_like_drug_name(generic_name):
+            self.log.info(
+                "Skipping NMPA notice — no clean drug/ingredient name extracted",
+                extra={"title": title[:140]},
+            )
             return None
 
-        # Classify the notice
-        combined_text = f"{title} {rec.get('summary', '')}".lower()
+        # Classify the notice (uses title + body for best signal).
+        combined_text = f"{title} {rec.get('body', '') or rec.get('summary', '')}".lower()
         reason, status, severity = self._classify_notice(combined_text)
         reason_category = self._map_reason(combined_text)
 
@@ -397,28 +449,68 @@ class ChinaNMPAScraper(BaseScraper):
 
         # Pattern: "suspend/recall/halt ... of [DRUG]"
         patterns = [
+            # "[DRUG] (API) production/manufacturing suspended/halted/…" — the
+            # drug leads the headline; tried first so we don't grab the location
+            # from a trailing "… at <place> plant".
+            r'\b([A-Z][a-zA-Z\-]{2,})\s+(?:api\s+)?(?:production|manufacturing)\s+(?:suspend|halt|stop|cease|was\s+suspend)',
             r'(?:suspend|revoke|recall|halt|stop|cease)\w*\s+(?:production|manufacturing|distribution)?\s*(?:of\s+)?([A-Z][a-zA-Z\s\-]+?)(?:\s+(?:by|at|from|due|following|after|in)\b)',
             r'(?:suspend|revoke|recall|halt|stop|cease)\w*\s+([A-Z][a-zA-Z\s\-]+?)(?:\s+(?:production|manufacturing|distribution|tablets?|capsules?|injection|api)\b)',
             r'([A-Z][a-zA-Z\s\-]+?)\s+(?:recalled|suspended|withdrawn|banned|halted)',
             r'(?:api|active\s+pharmaceutical\s+ingredient)\s+([A-Z][a-zA-Z\s\-]+)',
-            r'(?:substandard|counterfeit|fake)\s+([A-Z][a-zA-Z\s\-]+)',
+            r'(?:substandard|counterfeit|fake)\s+([a-zA-Z][a-zA-Z\-]+)',
+            # "… of a Shandong amoxicillin manufacturer/maker/facility/producer"
+            r'(?:of|at)\s+(?:a\s+|an\s+|the\s+)?(?:[A-Z][a-z]+\s+)?([a-zA-Z][a-zA-Z\-]+)\s+(?:manufacturer|maker|facility|plant|factory|producer|api\b)',
         ]
 
         for pattern in patterns:
             match = re.search(pattern, combined, re.IGNORECASE)
-            if match:
-                name = match.group(1).strip()
-                # Clean up: remove trailing common words
-                name = re.sub(
-                    r'\s+(?:and|the|a|an|in|at|by|from|for|to|with|has|have|was|were|is|are|being|been)$',
-                    '',
-                    name,
-                    flags=re.IGNORECASE,
-                ).strip()
-                if name and len(name) >= 3 and len(name) <= 100:
-                    return name
+            if not match:
+                continue
+            name = match.group(1).strip()
+            # Clean up: remove trailing common words
+            name = re.sub(
+                r'\s+(?:and|the|a|an|in|at|by|from|for|to|with|has|have|was|were|is|are|being|been)$',
+                '',
+                name,
+                flags=re.IGNORECASE,
+            ).strip()
+            # Validate each candidate and keep the first that looks like a drug —
+            # an earlier pattern can grab a sentence fragment ("GMP certificate
+            # of …") while a later, more specific pattern finds the real name.
+            if self._looks_like_drug_name(name):
+                return name
 
         return ""
+
+    # Tokens that mark a "name" as a sentence fragment / facility / admin phrase
+    # rather than a drug or API ingredient.
+    _NON_DRUG_TOKENS: frozenset[str] = frozenset({
+        "manufacturer", "maker", "facility", "plant", "factory", "producer",
+        "company", "certificate", "gmp", "revoke", "revokes", "revoked",
+        "suspend", "suspends", "suspension", "announcement", "provisions",
+        "administration", "supervision", "regulation", "update", "notice",
+        "agency", "ministry", "department", "national", "products", "medical",
+        "inspection", "violation", "training", "program", "meeting", "policy",
+        "production", "manufacturing", "distribution", "drug", "drugs",
+        "medicine", "medicines", "batch", "batches", "quality", "market",
+    })
+
+    def _looks_like_drug_name(self, name: str) -> bool:
+        """
+        Heuristic: is `name` a plausible drug/ingredient name (not a sentence
+        fragment or facility/admin phrase)? Keeps clean extractions like
+        "Valsartan" / "Amoxicillin" / "Heparin" and rejects junk like
+        "Revokes Gmp Certificate Of A Shandong Amoxicillin Manufacturer".
+        """
+        if not name or len(name) < 3:
+            return False
+        words = name.split()
+        if len(words) > 4:
+            return False
+        lowered = {w.strip(",.;:-").lower() for w in words}
+        if lowered & self._NON_DRUG_TOKENS:
+            return False
+        return True
 
     @staticmethod
     def _clean_title(title: str) -> str:
@@ -478,11 +570,12 @@ class ChinaNMPAScraper(BaseScraper):
 
         # Quality issues -> active
         if any(kw in text for kw in
-               ("quality issue", "quality problem", "substandard", "not standard")):
+               ("quality defect", "substandard", "not up to standard",
+                "contaminat", "impurit", "nitrosamine")):
             return ("Drug quality issue", "active", severity)
 
         # Counterfeit -> active
-        if any(kw in text for kw in ("counterfeit", "fake drug")):
+        if any(kw in text for kw in ("counterfeit", "fake drug", "fake medicine")):
             return ("Counterfeit drug alert", "active", "high")
 
         # Generic drug safety notice
@@ -503,7 +596,8 @@ class ChinaNMPAScraper(BaseScraper):
 
         # Quality issues
         if any(kw in lower for kw in
-               ("quality", "substandard", "not standard", "contamination")):
+               ("quality", "substandard", "not up to standard", "contaminat",
+                "impurit", "nitrosamine")):
             return "manufacturing_issue"
 
         # Regulatory
@@ -576,7 +670,23 @@ if __name__ == "__main__":
 
         print("\n-- Fetching from NMPA ...")
         raw = scraper.fetch()
-        print(f"-- Raw records received : {len(raw)}")
+        discovered = getattr(scraper, "_discovered_count", None)
+        if discovered is not None:
+            print(f"-- Candidate articles discovered : {discovered}")
+            for t in getattr(scraper, "_discovered_sample", []):
+                print(f"     • {t[:90]}")
+        print(f"-- Enforcement-relevant records  : {len(raw)}")
+
+        if not raw:
+            print(
+                "\n-- NOTE: 0 enforcement notices on the English portal right now.\n"
+                "   This is EXPECTED — the English portal is policy/diplomacy news\n"
+                "   and rarely carries granular API-suspension/GMP notices. The\n"
+                "   parser is wired correctly (see discovered count above) and will\n"
+                "   capture enforcement items when they appear. The timely, complete\n"
+                "   signal lives on the WAF-protected Chinese portal — see the module\n"
+                "   docstring for the headless-browser follow-up."
+            )
 
         print("-- Normalising records ...")
         events = scraper.normalize(raw)

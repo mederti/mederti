@@ -274,29 +274,32 @@ export default function V1DrugView({
             </div>
           )}
 
-          {/* History */}
-          {history && (
-            <div className="sec">
-              <div className="sec-title">How long have past shortages lasted? <span className="help">from {history.n} resolved event{history.n > 1 ? "s" : ""}</span></div>
-              <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
-                <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
-                <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
-              </div></div></div></div>
-            </div>
-          )}
+          {/* History + reason breakdown — two columns */}
+          {(history || showReasons) && (
+            <div className="sec sec-2col">
+              {history && (
+                <div>
+                  <div className="sec-title">How long have past shortages lasted? <span className="help">from {history.n} resolved event{history.n > 1 ? "s" : ""}</span></div>
+                  <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
+                    <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
+                    <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
+                  </div></div></div></div>
+                </div>
+              )}
 
-          {/* Why supply is disrupted — reason breakdown */}
-          {showReasons && (
-            <div className="sec">
-              <div className="sec-title">Why supply is disrupted <span className="help">across {reasonTotal} recorded event{reasonTotal !== 1 ? "s" : ""}</span></div>
-              <div className="reasons">
-                {reasons.map((r) => (
-                  <div key={r.label} className="reason-row">
-                    <div className="reason-l"><span className="reason-n">{r.label}</span><span className="reason-c">{r.n}</span></div>
-                    <div className="reason-bar"><span style={{ width: `${r.pct}%` }} /></div>
+              {showReasons && (
+                <div>
+                  <div className="sec-title">Why supply is disrupted <span className="help">across {reasonTotal} recorded event{reasonTotal !== 1 ? "s" : ""}</span></div>
+                  <div className="reasons">
+                    {reasons.map((r) => (
+                      <div key={r.label} className="reason-row">
+                        <div className="reason-l"><span className="reason-n">{r.label}</span><span className="reason-c">{r.n}</span></div>
+                        <div className="reason-bar"><span style={{ width: `${r.pct}%` }} /></div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -546,6 +549,8 @@ const CSS = `
 .sw-v{font-size:13.5px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:8px;line-height:1.2}
 .sw-d{font-size:10px;color:var(--text-3);margin-top:4px}
 .sec{margin-top:30px}
+.sec-2col{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+@media(max-width:760px){.sec-2col{grid-template-columns:1fr;gap:30px}}
 .sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.078em;color:var(--text-4);margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sec-title .help{color:var(--text-4);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px}
 .subpath{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg)}

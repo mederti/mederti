@@ -2,11 +2,14 @@
 CDSCO India Not-of-Standard-Quality Drug Alerts Scraper (UPSTREAM SIGNAL)
 --------------------------------------------------------------------------
 Source:  CDSCO — Not of Standard Quality Drug Alerts
-URL:     https://cdsco.gov.in/opencms/opencms/en/Notifications/nsq-drugs/
+URL:     https://cdscoonline.gov.in/CDSCO/viewPublicNSQDrug
 
-The Central Drugs Standard Control Organisation (CDSCO) publishes monthly
-reports listing drugs found to be "Not of Standard Quality" (NSQ). These
-reports are typically PDF files containing batch-level test results.
+The Central Drugs Standard Control Organisation (CDSCO) publishes drugs found
+to be "Not of Standard Quality" (NSQ) via its online portal. The legacy
+opencms notifications page is now a JavaScript shell; the live listing is
+served by a DataTables-backed JSON endpoint (publicNsqDrugTable) returning
+batch-level test results — product, batch, manufacturer, NSQ result and the
+reporting month. No authentication or session cookie is required.
 
 This is an UPSTREAM SIGNAL scraper: NSQ findings in India often precede
 formal shortage events in downstream markets because Indian manufacturers
@@ -20,7 +23,7 @@ Country code:      IN
 Confidence:        75/100 (official government lab results)
 Source tier:       3 (upstream signal, not a direct shortage declaration)
 
-Cron:  Every 24 hours (monthly PDF release, but we check daily)
+Cron:  Every 24 hours (portal refreshed monthly, but we check daily)
 """
 
 from __future__ import annotations
@@ -36,22 +39,16 @@ from backend.utils.reason_mapper import map_reason_category
 class IndiaCDSCOScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000052"
     SOURCE_NAME: str  = "CDSCO — Not of Standard Quality Drug Alerts"
-    BASE_URL: str     = "https://cdsco.gov.in/opencms/opencms/en/Notifications/nsq-drugs/"
+    # Public, citable landing page for the NSQ listing.
+    BASE_URL: str     = "https://cdscoonline.gov.in/CDSCO/viewPublicNSQDrug"
+    # JSON endpoint behind the public NSQ DataTable (no auth/cookie required).
+    DATA_URL: str     = "https://cdscoonline.gov.in/CDSCO/publicNsqDrugTable"
     COUNTRY: str      = "India"
     COUNTRY_CODE: str = "IN"
 
     RATE_LIMIT_DELAY: float = 3.0   # Be polite to Indian gov servers
-    REQUEST_TIMEOUT: float  = 90.0  # PDFs can be large and slow
-    SCRAPER_VERSION: str    = "1.0.0"
-
-    # Patterns for extracting drug information from PDF text
-    _DRUG_LINE_PATTERN = re.compile(
-        r'(\d+)\.\s+'          # Serial number
-        r'(.+?)\s+'            # Drug name
-        r'B\.?\s*No\.?\s*[:.]?\s*'  # Batch number prefix
-        r'([A-Z0-9\-/]+)',     # Batch number
-        re.IGNORECASE,
-    )
+    REQUEST_TIMEOUT: float  = 90.0
+    SCRAPER_VERSION: str    = "2.0.0"
 
     # -------------------------------------------------------------------------
     # fetch()
@@ -59,274 +56,70 @@ class IndiaCDSCOScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        Fetch CDSCO NSQ drug data.
+        Fetch CDSCO NSQ drug data from the public JSON endpoint.
 
-        Strategy:
-        1. GET the NSQ drugs notification page.
-        2. Parse HTML for links to monthly PDF reports.
-        3. Download the most recent PDF(s).
-        4. Extract text from PDFs using pdfplumber.
-        5. Return raw records extracted from PDF text.
+        Returns a list of raw record dicts keyed for `_normalise_record`.
         """
-        from bs4 import BeautifulSoup
-
         self.log.info("Scrape started", extra={
             "source": self.SOURCE_NAME,
-            "url": self.BASE_URL,
+            "url": self.DATA_URL,
         })
 
-        resp = self._get(self.BASE_URL)
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        # Find PDF links on the page
-        pdf_links = self._find_pdf_links(soup)
-        self.log.info(
-            "Found PDF links on page",
-            extra={"count": len(pdf_links)},
+        payload = self._get_json(
+            self.DATA_URL,
+            headers={
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "application/json, text/javascript, */*",
+                "Referer": self.BASE_URL,
+            },
         )
 
-        if not pdf_links:
-            self.log.warning("No PDF links found on CDSCO NSQ page")
-            return []
-
-        # Download and parse the most recent PDFs (limit to latest 3)
-        records: list[dict] = []
-        for pdf_info in pdf_links[:3]:
-            try:
-                pdf_records = self._fetch_and_parse_pdf(pdf_info)
-                records.extend(pdf_records)
-            except Exception as exc:
-                self.log.warning(
-                    "Failed to fetch/parse PDF",
-                    extra={
-                        "url": pdf_info.get("url", ""),
-                        "error": str(exc),
-                    },
-                )
-
-        self.log.info(
-            "CDSCO fetch complete",
-            extra={"records": len(records)},
-        )
-        return records
-
-    def _find_pdf_links(self, soup) -> list[dict]:
-        """Find links to monthly NSQ PDF reports on the page."""
-        pdf_links: list[dict] = []
-        seen_urls: set[str] = set()
-
-        for link in soup.select("a[href]"):
-            href = link.get("href", "")
-
-            # Look for PDF links
-            if not href.lower().endswith(".pdf"):
-                continue
-
-            # Normalise URL
-            if href.startswith("/"):
-                href = f"https://cdsco.gov.in{href}"
-            elif not href.startswith("http"):
-                href = f"https://cdsco.gov.in/opencms/opencms/en/Notifications/nsq-drugs/{href}"
-
-            if href in seen_urls:
-                continue
-            seen_urls.add(href)
-
-            title = link.get_text(strip=True)
-
-            # Try to extract month/year from the title or URL
-            month_year = self._extract_month_year(title) or self._extract_month_year(href)
-
-            pdf_links.append({
-                "url": href,
-                "title": title,
-                "month_year": month_year,
-            })
-
-        # Sort by most recent first if we can determine dates
-        pdf_links.sort(
-            key=lambda x: x.get("month_year") or "",
-            reverse=True,
-        )
-
-        return pdf_links
-
-    def _extract_month_year(self, text: str) -> str | None:
-        """Extract month/year reference from text like 'January 2026' or 'Jan-2026'."""
-        months = {
-            "january": "01", "february": "02", "march": "03", "april": "04",
-            "may": "05", "june": "06", "july": "07", "august": "08",
-            "september": "09", "october": "10", "november": "11", "december": "12",
-            "jan": "01", "feb": "02", "mar": "03", "apr": "04",
-            "jun": "06", "jul": "07", "aug": "08",
-            "sep": "09", "oct": "10", "nov": "11", "dec": "12",
-        }
-        text_lower = text.lower()
-        for month_name, month_num in months.items():
-            if month_name in text_lower:
-                # Find a 4-digit year near the month name
-                year_match = re.search(r'(20\d{2})', text)
-                if year_match:
-                    return f"{year_match.group(1)}-{month_num}"
-        return None
-
-    def _fetch_and_parse_pdf(self, pdf_info: dict) -> list[dict]:
-        """Download a PDF and extract drug records from it."""
-        try:
-            import pdfplumber
-        except ImportError:
-            self.log.error(
-                "pdfplumber not installed — required for CDSCO PDF parsing. "
-                "Install with: pip install pdfplumber"
+        rows = payload.get("aaData") if isinstance(payload, dict) else None
+        if not rows:
+            self.log.warning(
+                "CDSCO NSQ endpoint returned no rows",
+                extra={"keys": list(payload)[:10] if isinstance(payload, dict) else None},
             )
             return []
 
-        import io
-
-        url = pdf_info["url"]
-        self.log.info("Downloading PDF", extra={"url": url})
-
-        resp = self._get(url)
-
         records: list[dict] = []
-        with pdfplumber.open(io.BytesIO(resp.content)) as pdf:
-            self.log.info(
-                "PDF opened",
-                extra={"pages": len(pdf.pages), "url": url},
-            )
-
-            for page_num, page in enumerate(pdf.pages, start=1):
-                try:
-                    # Try table extraction first (CDSCO PDFs are often tabular)
-                    tables = page.extract_tables()
-                    if tables:
-                        for table in tables:
-                            page_records = self._parse_table(
-                                table, pdf_info, page_num
-                            )
-                            records.extend(page_records)
-                    else:
-                        # Fall back to text extraction
-                        text = page.extract_text()
-                        if text:
-                            page_records = self._parse_text(
-                                text, pdf_info, page_num
-                            )
-                            records.extend(page_records)
-                except Exception as exc:
-                    self.log.warning(
-                        "Failed to parse PDF page",
-                        extra={
-                            "url": url,
-                            "page": page_num,
-                            "error": str(exc),
-                        },
-                    )
-
-        self.log.info(
-            "PDF parsing complete",
-            extra={"url": url, "records": len(records)},
-        )
-        return records
-
-    def _parse_table(self, table: list[list], pdf_info: dict, page_num: int) -> list[dict]:
-        """Parse a table extracted from a PDF page."""
-        records: list[dict] = []
-
-        if not table or len(table) < 2:
-            return records
-
-        # First row is typically headers
-        headers = [str(cell or "").strip().lower() for cell in table[0]]
-
-        # Try to identify key columns
-        name_col = self._find_column(headers, ["name of drug", "drug name", "name", "product"])
-        batch_col = self._find_column(headers, ["batch no", "b.no", "batch", "lot"])
-        mfr_col = self._find_column(headers, ["manufacturer", "mfr", "firm", "company"])
-        reason_col = self._find_column(headers, ["reason", "nsq reason", "not of standard quality", "result"])
-
-        for row in table[1:]:
-            if not row or all(cell is None or str(cell).strip() == "" for cell in row):
+        for row in rows:
+            product = str(row.get("str_product_name") or "").strip()
+            if not product:
                 continue
-
-            drug_name = ""
-            if name_col is not None and name_col < len(row):
-                drug_name = str(row[name_col] or "").strip()
-
-            # If we can't find a name column, try the second column (common layout)
-            if not drug_name and len(row) > 1:
-                drug_name = str(row[1] or "").strip()
-
-            if not drug_name or len(drug_name) < 3:
-                continue
-
-            batch_no = ""
-            if batch_col is not None and batch_col < len(row):
-                batch_no = str(row[batch_col] or "").strip()
-
-            manufacturer = ""
-            if mfr_col is not None and mfr_col < len(row):
-                manufacturer = str(row[mfr_col] or "").strip()
-
-            reason = ""
-            if reason_col is not None and reason_col < len(row):
-                reason = str(row[reason_col] or "").strip()
-
+            month_year_raw = str(row.get("dt_reporting_month_year") or "").strip()
             records.append({
-                "drug_name": drug_name,
-                "batch_no": batch_no,
-                "manufacturer": manufacturer,
-                "reason": reason,
-                "pdf_url": pdf_info["url"],
-                "pdf_title": pdf_info.get("title", ""),
-                "month_year": pdf_info.get("month_year", ""),
-                "page_num": page_num,
-                "source": "table",
+                "drug_name":        product,
+                "batch_no":         str(row.get("str_batch_no") or "").strip(),
+                "manufacturer":     str(row.get("str_manufactured_by") or "").strip(),
+                "reason":           str(row.get("str_nsq_result") or "").strip()
+                                    or "Not of Standard Quality",
+                "month_year":       self._convert_month_year(month_year_raw),
+                "pdf_url":          self.BASE_URL,
+                "pdf_title":        f"NSQ alert {month_year_raw}".strip(),
+                "reporting_source": str(row.get("str_reporting_source") or "").strip(),
+                "reported_by":      str(row.get("str_reported_by_lab_or_state") or "").strip(),
+                "expiry_date":      str(row.get("dt_expiry_date") or "").strip(),
             })
 
+        self.log.info("CDSCO fetch complete", extra={"records": len(records)})
         return records
 
     @staticmethod
-    def _find_column(headers: list[str], candidates: list[str]) -> int | None:
-        """Find the index of a column matching any of the candidate strings."""
-        for idx, header in enumerate(headers):
-            for candidate in candidates:
-                if candidate in header:
-                    return idx
-        return None
-
-    def _parse_text(self, text: str, pdf_info: dict, page_num: int) -> list[dict]:
-        """Parse free text from a PDF page to extract drug records."""
-        records: list[dict] = []
-
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line or len(line) < 10:
-                continue
-
-            # Try structured pattern: serial number, drug name, batch number
-            match = self._DRUG_LINE_PATTERN.search(line)
-            if match:
-                drug_name = match.group(2).strip()
-                batch_no = match.group(3).strip()
-
-                # Clean up drug name (remove trailing batch info)
-                drug_name = re.sub(r'\s+B\.?\s*No\.?.*$', '', drug_name, flags=re.IGNORECASE).strip()
-
-                if drug_name and len(drug_name) >= 3:
-                    records.append({
-                        "drug_name": drug_name,
-                        "batch_no": batch_no,
-                        "manufacturer": "",
-                        "reason": "Not of Standard Quality",
-                        "pdf_url": pdf_info["url"],
-                        "pdf_title": pdf_info.get("title", ""),
-                        "month_year": pdf_info.get("month_year", ""),
-                        "page_num": page_num,
-                        "source": "text",
-                    })
-
-        return records
+    def _convert_month_year(raw: str) -> str | None:
+        """Convert CDSCO 'APR-2026' / 'Apr 2026' reporting month to 'YYYY-MM'."""
+        if not raw:
+            return None
+        months = {
+            "jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05",
+            "jun": "06", "jul": "07", "aug": "08", "sep": "09", "oct": "10",
+            "nov": "11", "dec": "12",
+        }
+        m = re.match(r"^([A-Za-z]{3})[A-Za-z]*[\s\-/]+(\d{4})$", raw.strip())
+        if not m:
+            return None
+        mon = months.get(m.group(1).lower())
+        return f"{m.group(2)}-{mon}" if mon else None
 
     # -------------------------------------------------------------------------
     # normalize()
@@ -392,6 +185,12 @@ class IndiaCDSCOScraper(BaseScraper):
         manufacturer = str(rec.get("manufacturer") or "").strip()
         if manufacturer:
             notes_parts.append(f"Manufacturer: {manufacturer}")
+        reporting_source = str(rec.get("reporting_source") or "").strip()
+        if reporting_source:
+            notes_parts.append(f"Reporting source: {reporting_source}")
+        reported_by = str(rec.get("reported_by") or "").strip()
+        if reported_by:
+            notes_parts.append(f"Tested by: {reported_by}")
         pdf_title = str(rec.get("pdf_title") or "").strip()
         if pdf_title:
             notes_parts.append(f"Report: {pdf_title}")
@@ -466,26 +265,6 @@ class IndiaCDSCOScraper(BaseScraper):
         match = re.match(r'^(\d{4})-(\d{2})$', month_year)
         if match:
             return f"{match.group(1)}-{match.group(2)}-01"
-        return None
-
-    @staticmethod
-    def _parse_date(raw: Any) -> str | None:
-        """Parse various date formats to ISO-8601 date string."""
-        if raw is None:
-            return None
-        if isinstance(raw, datetime):
-            return raw.date().isoformat()
-        if isinstance(raw, date):
-            return raw.isoformat()
-        raw_str = str(raw).strip()
-        if not raw_str or raw_str in ("-", "N/A", "null", "None"):
-            return None
-        try:
-            from dateutil import parser as dtparser
-            dt = dtparser.parse(raw_str)
-            return dt.date().isoformat()
-        except (ValueError, ImportError):
-            pass
         return None
 
 

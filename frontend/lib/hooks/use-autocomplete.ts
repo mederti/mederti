@@ -15,6 +15,9 @@ export interface UseAutocompleteOptions {
   onSelect: (item: AutocompleteItem) => void;
   onSubmit?: (query: string) => void;
   enabled?: boolean;
+  // Seed the input (e.g. the current medicine on a drug page) without firing a
+  // fetch or opening the dropdown on mount. The first user keystroke takes over.
+  initialQuery?: string;
 }
 
 export interface UseAutocompleteReturn {
@@ -52,9 +55,10 @@ export function useAutocomplete(
     onSelect,
     onSubmit,
     enabled = true,
+    initialQuery = "",
   } = opts;
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [items, setItems] = useState<AutocompleteItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -62,6 +66,9 @@ export function useAutocomplete(
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Skip the very first debounce run when seeded with an initialQuery, so a
+  // prefilled field doesn't fetch + pop the dropdown before the user types.
+  const skipNextFetchRef = useRef(initialQuery.length > 0);
   const listId = useId();
 
   // Stable refs for callbacks
@@ -104,6 +111,10 @@ export function useAutocomplete(
   /* ── Debounced query effect ── */
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (skipNextFetchRef.current) {
+      skipNextFetchRef.current = false;
+      return;
+    }
     if (!enabled || query.length < minChars) {
       setItems([]);
       setIsOpen(false);

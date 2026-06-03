@@ -67,6 +67,26 @@ def get_rxcui(name: str) -> Optional[str]:
         return None
 
 
+def get_rxcui_approx(name: str) -> Optional[dict]:
+    """
+    Approximate-match a name to a RxNorm concept. Bridges foreign brand spellings
+    that exact search misses — e.g. EU brand "Gazyvaro" → the US "Gazyva" concept
+    (RxNorm is US-centric). Returns the rank-1 candidate {"rxcui","name","score"}
+    or None. The caller should cross-confirm (e.g. against the UNII registry)
+    before treating an approximate hit as high-confidence.
+    """
+    try:
+        data = _get("/approximateTerm.json", {"term": name, "maxEntries": "3"})
+        cands = (data.get("approximateGroup") or {}).get("candidate") or []
+        for c in cands:
+            if c.get("rxcui") and c.get("rank") == "1":
+                return {"rxcui": c["rxcui"], "name": c.get("name"), "score": float(c.get("score") or 0)}
+        return None
+    except Exception as e:
+        log.debug(f"get_rxcui_approx({name!r}): {e}")
+        return None
+
+
 def get_atc_code(rxcui: str) -> Optional[str]:
     """
     Look up the ATC code for a given RxCUI via the property endpoint.
@@ -108,6 +128,64 @@ def get_class_members(atc_prefix: str) -> list[dict]:
         return results
     except Exception:
         return []
+
+
+def get_base_ingredient(rxcui: str) -> Optional[dict]:
+    """
+    Resolve a RxCUI (which may be a salt/branded/clinical-drug concept) to its
+    base ingredient concept — the INN. This is the salt→base step:
+
+        "atorvastatin calcium" (rxcui 83367) → {"rxcui": "83366", "name": "atorvastatin"}
+
+    Prefers a single-ingredient IN; for multi-ingredient products returns the MIN
+    (multi-ingredient) concept so callers can detect combinations. Returns
+    {"rxcui", "name", "tty"} or None.
+    """
+    try:
+        data = _get(f"/rxcui/{rxcui}/related.json", {"tty": "IN MIN"})
+        groups = (data.get("relatedGroup") or {}).get("conceptGroup") or []
+        ins: list[dict] = []
+        mins: list[dict] = []
+        for g in groups:
+            tty = g.get("tty")
+            for cp in g.get("conceptProperties") or []:
+                rec = {"rxcui": cp.get("rxcui"), "name": (cp.get("name") or "").strip(), "tty": tty}
+                if not rec["rxcui"] or not rec["name"]:
+                    continue
+                (ins if tty == "IN" else mins).append(rec)
+        # Single base ingredient is the clean case.
+        if len(ins) == 1:
+            return ins[0]
+        if len(ins) > 1:
+            # Multi-ingredient: surface the MIN if present, else flag ambiguity.
+            return mins[0] if mins else {"rxcui": None, "name": " / ".join(i["name"] for i in ins), "tty": "MULTI"}
+        if mins:
+            return mins[0]
+        return None
+    except Exception as e:
+        log.debug(f"get_base_ingredient({rxcui!r}): {e}")
+        return None
+
+
+def get_unii(rxcui: str) -> Optional[str]:
+    """
+    Look up the FDA UNII (substance identifier) for a RxCUI via the codes
+    property endpoint. RxNorm carries it as the 'UNII_CODE' attribute.
+
+        atorvastatin (rxcui 83366) → '48A5M73Z4Q'
+
+    Returns the UNII string or None.
+    """
+    try:
+        data = _get(f"/rxcui/{rxcui}/allProperties.json", {"prop": "codes"})
+        props = (data.get("propConceptGroup") or {}).get("propConcept") or []
+        for p in props:
+            if p.get("propName") in ("UNII_CODE", "UNII") and p.get("propValue"):
+                return p["propValue"].strip()
+        return None
+    except Exception as e:
+        log.debug(f"get_unii({rxcui!r}): {e}")
+        return None
 
 
 def get_related_ingredients(rxcui: str) -> list[str]:

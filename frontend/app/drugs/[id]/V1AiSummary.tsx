@@ -53,7 +53,6 @@ export default function V1AiSummary({ id }: { id: string }) {
       <div className="ai-sum">
         <div className="ai-sum-head">
           <span className="ai-sum-spark">✦</span>
-          <span className="ai-sum-label">Mederti AI summary</span>
         </div>
         <div className="ai-sum-skel">Reading today&rsquo;s signals…</div>
       </div>
@@ -68,7 +67,6 @@ export default function V1AiSummary({ id }: { id: string }) {
     <div className="ai-sum">
       <div className="ai-sum-head">
         <span className="ai-sum-spark">✦</span>
-        <span className="ai-sum-label">Mederti AI summary</span>
         <span className={`ai-sum-sig ${sig.cls}`}>{sig.label}</span>
       </div>
       {data.headline && <div className="ai-sum-hl">{data.headline}</div>}

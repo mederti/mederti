@@ -6,6 +6,8 @@ import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
 import V1DrugImage from "./V1DrugImage";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
+import { affinity } from "@/lib/alternatives";
+import { cleanBrandNames } from "@/lib/brand";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -51,7 +53,7 @@ function monthYear(iso?: string | null) {
 }
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility,
 }: {
   id: string;
   drug: any;
@@ -73,6 +75,7 @@ export default function V1DrugView({
     brands: number;
     latest: string | null;
   } | null;
+  eligibility?: EligibilityEntry[] | null;
 }) {
   const CONC_LABEL: Record<string, string> = {
     very_high: "Very high", high: "High", medium: "Moderate", low: "Low",
@@ -103,6 +106,7 @@ export default function V1DrugView({
 
   // Alternatives — real similarity only; null hides the %.
   const alts = (alternatives || []).slice(0, 5).map((a) => ({
+    id: a.alternative_drug_id ?? a.drugs?.id ?? null,
     name: a.drugs?.generic_name ?? "Therapeutic alternative",
     rel: a.relationship_type ? String(a.relationship_type).replace(/_/g, " ") : "same class",
     pct: a.similarity_score != null ? Math.round(a.similarity_score * 100) : null,
@@ -196,9 +200,18 @@ export default function V1DrugView({
               <div className="d-generic">
                 {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
               </div>
-              {drug.brand_names?.length > 0 && (
-                <div className="d-tags">{drug.brand_names.slice(0, 4).map((b: string) => <span key={b} className="d-tag">{b}</span>)}</div>
-              )}
+              {(() => {
+                const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
+                if (brands.length === 0) return null;
+                const shown = brands.slice(0, 5);
+                const rest = brands.length - shown.length;
+                return (
+                  <div className="d-tags">
+                    {shown.map((b) => <span key={b} className="d-tag">{b}</span>)}
+                    {rest > 0 && <span className="d-tag" title={brands.slice(5).join(", ")}>+{rest} more</span>}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -225,18 +238,13 @@ export default function V1DrugView({
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
               <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
-              <div className="sw-d">{topAlt ? `${topAlt.pct != null ? `${topAlt.pct}% match · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
+              <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
             </div>
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
               <div className="sw-v">{expected ?? "No estimate"}</div>
               <div className="sw-d">{expected ? `Sponsor est. via ${expSource}` : "No estimate provided"}</div>
             </div>
-            <Link href="/login" className="sw-card emph">
-              <div className="sw-h"><span className="sw-ic grad">↯</span> Source it now</div>
-              <div className="sw-v">Request via Mederti</div>
-              <div className="sw-d">Connect with suppliers</div>
-            </Link>
           </div>
 
           {/* Substitution pathways (AU only) */}
@@ -336,21 +344,30 @@ export default function V1DrugView({
             <div className="sec">
               <div className="sec-title">Related alternatives <span className="help">same class</span></div>
               <div className="alt-list">
-                {alts.map((a, i) => (
-                  <div key={i} className="alt-card alt-rich">
-                    <div className="alt-main">
-                      <div className="alt-n">{a.name}</div>
-                      <div className="alt-f">{a.rel}</div>
-                      {a.note && <div className="alt-note">{a.note}</div>}
-                    </div>
-                    {a.pct != null && (
-                      <div className="alt-match">
-                        <div className="alt-bar"><span style={{ width: `${a.pct}%` }} /></div>
-                        <div className="alt-pct">{a.pct}% match</div>
+                {alts.map((a, i) => {
+                  const inner = (
+                    <>
+                      <div className="alt-main">
+                        <div className="alt-n">{a.name}</div>
+                        <div className="alt-f">{a.rel}</div>
+                        {a.note && <div className="alt-note">{a.note}</div>}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {affinity(a.pct) && (
+                        <div className="alt-match">
+                          <div className="alt-bar"><span style={{ width: `${a.pct}%` }} /></div>
+                          <div className="alt-pct">{affinity(a.pct)}</div>
+                        </div>
+                      )}
+                    </>
+                  );
+                  return a.id != null ? (
+                    <Link key={i} href={`/drugs/${a.id}`} className="alt-card alt-rich alt-link">
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={i} className="alt-card alt-rich">{inner}</div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -459,13 +476,13 @@ const CSS = `
   background:var(--bg-2);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
-.v1home .logo-img{height:24px;width:auto;display:block}
+.v1home .logo-img{height:31px;width:auto;display:block}
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none}
 .home-nav{position:sticky;top:0;z-index:50;height:58px;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
 .nav-actions{display:flex;gap:10px;align-items:center}
 .shell{display:flex;align-items:flex-start;min-height:100vh}
 .sb{width:262px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.sb-top{padding:18px 18px 14px}
+.sb-top{height:64px;padding:0 28px;display:flex;align-items:center}
 .sb-new{margin:0 14px 10px;display:flex;align-items:center;gap:8px;justify-content:center;padding:11px;border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text-2);background:var(--bg);text-decoration:none}
 .sb-new:hover{border-color:var(--green);color:var(--green-d);background:var(--green-bg)}
 .sb-scroll{flex:1;overflow-y:auto;padding:8px 14px}
@@ -511,16 +528,16 @@ const CSS = `
 .sc-title{font-size:24px;font-weight:700;letter-spacing:-.028em;margin-bottom:5px}
 .sc-sub{font-size:13px;color:var(--text-3)}
 .sc-asof{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:12px}
-.sw-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
-.sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:13px 13px;text-decoration:none;color:inherit;display:block}
+.sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}
-.sw-h{display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-4)}
+.sw-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-4)}
 .sw-ic{width:16px;height:16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
 .sw-ic.ok{background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b)}
 .sw-ic.neutral{background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
 .sw-ic.grad{background:var(--grad-brand);color:#fff}
-.sw-v{font-size:13.5px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:8px;line-height:1.2}
-.sw-d{font-size:10px;color:var(--text-3);margin-top:4px}
+.sw-v{font-size:17px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:9px;line-height:1.2}
+.sw-d{font-size:11.5px;color:var(--text-3);margin-top:5px}
 .sec{margin-top:30px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
 .ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -547,6 +564,8 @@ const CSS = `
 .subpath-d{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:3px}
 .alt-list{display:flex;flex-direction:column;gap:9px}
 .alt-card{background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.alt-link{text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+.alt-link:hover{border-color:var(--green);box-shadow:0 1px 8px rgba(0,0,0,.06)}
 .alt-main{min-width:0}
 .alt-n{font-size:14px;font-weight:600;margin-bottom:3px}
 .alt-f{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace}

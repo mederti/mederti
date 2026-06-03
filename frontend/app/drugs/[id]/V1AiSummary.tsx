@@ -56,9 +56,6 @@ export default function V1AiSummary({ id, embedded = false }: { id: string; embe
     <div className={wrapCls}>
       {data.headline && <div className="ai-sum-hl">{data.headline}</div>}
       <div className="ai-sum-body">{data.body}</div>
-      <div className="ai-sum-foot">
-        Composed from live regulator &amp; supply signals · confidence {data.confidence}
-      </div>
     </div>
   );
 }

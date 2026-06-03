@@ -15,6 +15,8 @@ import { HeaderActions } from "./header-actions";
 import { getDevice } from "@/lib/get-device";
 import { MobileDrugPage } from "@/app/components/mobile/MobileDrugPage";
 import { truncateDrugName } from "@/lib/utils";
+import { affinity } from "@/lib/alternatives";
+import { cleanBrandNames } from "@/lib/brand";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import { DrugImage } from "./drug-image";
 import AvailableSuppliers from "./AvailableSuppliers";
@@ -138,7 +140,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       `${drug.generic_name} supply`,
       `${drug.generic_name} alternatives`,
       `${drug.generic_name} manufacturer`,
-      ...(drug.brand_names ?? []).slice(0, 3),
+      ...cleanBrandNames(drug.brand_names, drug.generic_name).slice(0, 3),
       drug.drug_class,
       drug.atc_description,
     ].filter(Boolean) as string[],
@@ -551,6 +553,34 @@ export default async function DrugPage({ params, searchParams }: Props) {
           }
         : null;
 
+    // Structured regulatory-eligibility entries (TGA Section 19A et al) from the
+    // regulatory_eligibility table (migration 040), populated by the eligibility
+    // scrapers. This is the authoritative substitution-pathway signal — a real
+    // approval number a pharmacist can quote, with a verifiable source URL —
+    // replacing the brittle string-match on shortage notes. If the migration
+    // isn't applied yet the query errors softly (data → null) and the view
+    // falls back to notes-parsing, so this is safe to ship ahead of the DDL.
+    const { data: eligRows } = await supabase
+      .from("regulatory_eligibility")
+      .select(
+        "scheme, status, scheme_reference, description, brand_name, listed_at, expires_at, source_url, source_name, country_code",
+      )
+      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+      .eq("status", "active")
+      .limit(50);
+    const eligibility = (eligRows ?? []) as {
+      scheme: string;
+      status: string;
+      scheme_reference: string | null;
+      description: string | null;
+      brand_name: string | null;
+      listed_at: string | null;
+      expires_at: string | null;
+      source_url: string | null;
+      source_name: string | null;
+      country_code: string | null;
+    }[];
+
     return (
       <V1DrugView
         id={id}
@@ -562,6 +592,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         apiConcentration={apiConcentration}
         recalls={recalls}
         approvalFootprint={approvalFootprint}
+        eligibility={eligibility}
       />
     );
   }
@@ -764,7 +795,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     {
       id,
       generic_name: drug.generic_name,
-      brand_names: (drug as { brand_names?: string[] | null }).brand_names ?? null,
+      brand_names: cleanBrandNames((drug as { brand_names?: string[] | null }).brand_names, drug.generic_name),
       atc_code: drug.atc_code ?? null,
       atc_description: (drug as { atc_description?: string | null }).atc_description ?? null,
       drug_class: drug.drug_class ?? null,
@@ -1460,9 +1491,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
                             {alt.clinical_evidence_level}
                           </span>
                         )}
-                        {alt.similarity_score != null && (
+                        {affinity(alt.similarity_score != null ? Math.round(alt.similarity_score * 100) : null) && (
                           <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                            {Math.round(alt.similarity_score * 100)}% match
+                            {affinity(Math.round(alt.similarity_score * 100))}
                           </span>
                         )}
                       </div>

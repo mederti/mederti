@@ -128,9 +128,32 @@ export default function V1DrugView({
   const expected = monthYear(mine?.estimated_resolution_date);
   const expSource = abbr(mine?.data_sources?.name, mine?.data_sources?.abbreviation) || "regulator";
 
-  // Substitution — only assert "yes" when the regulator notice carries S19A language.
+  // Substitution pathways — prefer the STRUCTURED regulatory_eligibility feed
+  // (real approval references, expiry dates, verifiable source URLs). Filter to
+  // the user's market so we only assert a pathway that applies where they
+  // dispense. Fall back to string-matching the regulator notice for S19A only
+  // when no structured entry is on file (e.g. before migration 040 is applied
+  // or before the eligibility scraper has backfilled this drug).
+  const eligActive = (eligibility ?? []).filter(
+    (e) => (e.status || "").toLowerCase() === "active",
+  );
+  const eligMine = eligActive.filter(
+    (e) => !e.country_code || e.country_code.toUpperCase() === userCountry,
+  );
+  const s19aStructured = eligMine.find((e) => e.scheme === "tga_s19a") ?? null;
+
+  // Notes fallback (legacy path) — only consulted when no structured entry.
   const s19aEvt = active.find((s) => detectS19A(s.notes));
-  const s19aText = s19aEvt ? getS19AText(s19aEvt.notes) : null;
+  const s19aNotesText = s19aEvt ? getS19AText(s19aEvt.notes) : null;
+
+  // Short detail line for the "Can I substitute?" tile.
+  const s19aTileDetail = s19aStructured
+    ? s19aStructured.scheme_reference
+      ? `TGA s19A · ${s19aStructured.scheme_reference}`
+      : "TGA-approved overseas product"
+    : s19aNotesText
+      ? "TGA-approved overseas product"
+      : null;
 
   // Alternatives — real similarity only; null hides the %.
   const alts = (alternatives || []).slice(0, 5).map((a) => ({
@@ -260,8 +283,8 @@ export default function V1DrugView({
           <div className="sw-cards">
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic ok">✓</span> Can I substitute?</div>
-              <div className="sw-v">{s19aText ? "Yes — under S19A" : "Per normal rules"}</div>
-              <div className="sw-d">{s19aText ? "TGA-approved overseas product" : "Confirm with prescriber"}</div>
+              <div className="sw-v">{s19aTileDetail ? "Yes — under S19A" : "Per normal rules"}</div>
+              <div className="sw-d">{s19aTileDetail ?? "Confirm with prescriber"}</div>
             </div>
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
@@ -280,15 +303,46 @@ export default function V1DrugView({
             <div className="sec">
               <div className="sec-title">Substitution pathways <span className="help">🇦🇺 Australia · TGA</span></div>
               <div className="subpath">
-                <div className="subpath-row">
-                  <div className="subpath-l">
-                    <span className={`subpath-ic ${s19aText ? "ok" : "neutral"}`}>{s19aText ? "✓" : "—"}</span>
-                    <div>
-                      <div className="subpath-n">{s19aText ? "Section 19A approval in force" : "No substitution instrument in force"}</div>
-                      <div className="subpath-d">{s19aText || "Dispense per normal rules, or refer to the prescriber. No active SSSI/S19A instrument detected for this medicine."}</div>
+                {eligMine.length > 0 ? (
+                  eligMine.map((e, i) => {
+                    const exp = monthYear(e.expires_at);
+                    return (
+                      <div className="subpath-row" key={e.scheme_reference ?? `${e.scheme}-${i}`}>
+                        <div className="subpath-l">
+                          <span className="subpath-ic ok">✓</span>
+                          <div>
+                            <div className="subpath-n">
+                              {SCHEME_LABEL[e.scheme] ?? "Substitution instrument in force"}
+                              {e.scheme_reference ? ` · ${e.scheme_reference}` : ""}
+                            </div>
+                            <div className="subpath-d">
+                              {e.description || "TGA-approved overseas-registered product may be supplied during this shortage."}
+                              {exp ? ` Expires ${exp}.` : ""}
+                              {e.source_url ? (
+                                <>
+                                  {" "}
+                                  <a href={e.source_url} target="_blank" rel="noopener noreferrer">
+                                    Verify on {e.source_name || "TGA"} ↗
+                                  </a>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="subpath-row">
+                    <div className="subpath-l">
+                      <span className={`subpath-ic ${s19aNotesText ? "ok" : "neutral"}`}>{s19aNotesText ? "✓" : "—"}</span>
+                      <div>
+                        <div className="subpath-n">{s19aNotesText ? "Section 19A approval in force" : "No substitution instrument in force"}</div>
+                        <div className="subpath-d">{s19aNotesText || "Dispense per normal rules, or refer to the prescriber. No active SSSI/S19A instrument detected for this medicine."}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}

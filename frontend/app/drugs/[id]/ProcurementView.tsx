@@ -1,4 +1,5 @@
 import { Bell } from "lucide-react";
+import { affinity } from "@/lib/alternatives";
 
 /* =========================================================================
  * ProcurementView — "D · KPI dashboard" layout for the procurement persona
@@ -396,7 +397,7 @@ export default function ProcurementView({
             }}
           >
             {topAlternative
-              ? `${topAlternative.matchPercent != null ? `${topAlternative.matchPercent}% match · ` : ""}${
+              ? `${affinity(topAlternative.matchPercent) ? `${affinity(topAlternative.matchPercent)} · ` : ""}${
                   topAlternative.isAvailable ? "available" : "limited"
                 }`
               : "none found"}
@@ -631,7 +632,7 @@ export default function ProcurementView({
                           fontWeight: 500,
                         }}
                       >
-                        {alt.matchPercent != null ? `${alt.matchPercent}% match` : "listed alternative"}
+                        {affinity(alt.matchPercent) ?? "listed alternative"}
                       </div>
                       <div
                         style={{

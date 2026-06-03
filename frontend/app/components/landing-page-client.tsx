@@ -9,6 +9,7 @@ import {
   ExternalLink, ScanBarcode, Loader2, Search, RotateCcw,
 } from "lucide-react";
 import { DrugHit } from "@/lib/api";
+import { cleanBrandNames } from "@/lib/brand";
 import LandingContent from "./landing-content";
 import BulkUpload from "./bulk-upload";
 import { useAutocomplete } from "@/lib/hooks/use-autocomplete";
@@ -575,11 +576,14 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
                             </div>
                             <ExternalLink style={{ width: 12, height: 12, color: "var(--app-text-4)", flexShrink: 0 }} />
                           </div>
-                          {drug.brand_names?.length > 0 && (
-                            <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-                              {drug.brand_names.slice(0, 3).join(" \u00B7 ")}
-                            </div>
-                          )}
+                          {(() => {
+                            const bn = cleanBrandNames(drug.brand_names, drug.generic_name);
+                            return bn.length > 0 ? (
+                              <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
+                                {bn.slice(0, 3).join(" \u00B7 ")}
+                              </div>
+                            ) : null;
+                          })()}
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
                             {drug.active_shortage_count > 0 ? (
                               <span style={{

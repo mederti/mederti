@@ -2,6 +2,7 @@
 
 import { useContext } from "react";
 import type { DrugDetail, Persona } from "@/lib/chat/types";
+import { cleanBrandNames } from "@/lib/brand";
 import { PersonaToggle } from "../PersonaToggle";
 import { PaneContext } from "../PaneContext";
 import { SEV_TAG_CLASS, isDrugAvailable, pickPrimary } from "../cardUtils";
@@ -53,9 +54,12 @@ export function CardHeader({
           {drug.drug_class && drug.drug_class !== drug.atc_description ? ` · ${drug.drug_class}` : ""}
         </div>
       ) : null}
-      {showBrands && drug.brand_names.length > 0 ? (
-        <div className="card-brands"><em>brands</em>{drug.brand_names.slice(0, 6).join(", ")}</div>
-      ) : null}
+      {(() => {
+        const bn = cleanBrandNames(drug.brand_names, drug.generic_name);
+        return showBrands && bn.length > 0 ? (
+          <div className="card-brands"><em>brands</em>{bn.slice(0, 6).join(", ")}</div>
+        ) : null;
+      })()}
     </div>
   );
 }

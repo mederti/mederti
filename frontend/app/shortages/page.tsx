@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertCircle, WifiOff } from "lucide-react";
 import { api, ShortageListResponse } from "@/lib/api";
 import { truncateDrugName } from "@/lib/utils";
+import { cleanBrandNames } from "@/lib/brand";
 import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 
@@ -213,11 +214,14 @@ export default async function ShortagesPage({ searchParams }: Props) {
                           <div style={{ fontSize: 14, fontWeight: 500, color: "var(--app-text)", marginBottom: 2 }}>
                             {truncateDrugName(row.generic_name)}
                           </div>
-                          {row.brand_names?.[0] && (
-                            <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-                              {row.brand_names[0]}
-                            </div>
-                          )}
+                          {(() => {
+                            const b = cleanBrandNames(row.brand_names, row.generic_name)[0];
+                            return b ? (
+                              <div style={{ fontSize: 12, color: "var(--app-text-4)" }}>
+                                {b}
+                              </div>
+                            ) : null;
+                          })()}
                         </Link>
                       </td>
                       <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>

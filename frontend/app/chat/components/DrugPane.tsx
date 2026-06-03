@@ -10,6 +10,7 @@ import type {
   ShortageRow,
   SubstituteRow,
 } from "@/lib/chat/types";
+import { cleanBrandNames } from "@/lib/brand";
 
 const SEV_CLASS: Record<string, string> = {
   critical: "sev sev-critical",
@@ -185,12 +186,15 @@ function PaneContent({
           {drug.who_essential_medicine ? <span className="badge badge-who">WHO Essential</span> : null}
           {drug.critical_medicine_eu ? <span className="badge badge-crit-eu">EU Critical</span> : null}
         </div>
-        {drug.brand_names.length > 0 ? (
-          <div className="pane-hero-brands">
-            Brands: {drug.brand_names.slice(0, 6).join(", ")}
-            {drug.brand_names.length > 6 ? ` +${drug.brand_names.length - 6}` : ""}
-          </div>
-        ) : null}
+        {(() => {
+          const bn = cleanBrandNames(drug.brand_names, drug.generic_name);
+          return bn.length > 0 ? (
+            <div className="pane-hero-brands">
+              Brands: {bn.slice(0, 6).join(", ")}
+              {bn.length > 6 ? ` +${bn.length - 6}` : ""}
+            </div>
+          ) : null;
+        })()}
       </header>
 
       {/* PRODUCT SUMMARY — what is this drug, what does it come in */}

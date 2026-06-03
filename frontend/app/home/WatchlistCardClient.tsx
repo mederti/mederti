@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { truncateDrugName } from "@/lib/utils";
+import { cleanBrandNames } from "@/lib/brand";
 import { Bookmark, Bell, ExternalLink, LogIn } from "lucide-react";
 
 interface WatchItem {
@@ -148,11 +149,14 @@ export default function WatchlistCardClient() {
             }}>
               {truncateDrugName(item.generic_name ?? `Drug ${item.drug_id.slice(0, 8)}…`)}
             </div>
-            {item.brand_names?.[0] && (
-              <div style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                {item.brand_names[0]}
-              </div>
-            )}
+            {(() => {
+              const b = cleanBrandNames(item.brand_names, item.generic_name ?? "")[0];
+              return b ? (
+                <div style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
+                  {b}
+                </div>
+              ) : null;
+            })()}
           </div>
           <ExternalLink {...ICON} color="var(--app-text-4)" />
         </Link>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
+import { affinity } from "@/lib/alternatives";
 import {
   Sparkles,
   Baby,
@@ -244,9 +245,9 @@ export default function PharmacistAnswerCard({
                 {topAlternative.isAvailable && (
                   <Pill tone="positive">Available in AU</Pill>
                 )}
-                {topAlternative.matchPercent != null && (
+                {affinity(topAlternative.matchPercent) && (
                   <Pill tone="neutral">
-                    {topAlternative.matchPercent}% clinical match
+                    {affinity(topAlternative.matchPercent)}
                   </Pill>
                 )}
                 {topAlternative.isPbsListed && (

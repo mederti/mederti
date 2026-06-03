@@ -6,6 +6,7 @@ import { V4BellButton } from "@/app/drugs/[id]/bell-button";
 import type { SupplierPartner } from "@/lib/suppliers";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { truncateDrugName } from "@/lib/utils";
+import { cleanBrandNames } from "@/lib/brand";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 
 const SEV_ORDER = ["critical", "high", "medium", "low"] as const;
@@ -116,7 +117,7 @@ export function MobileDrugPage({
             <span style={{ fontWeight: 400, color: "var(--app-text-3)", fontSize: 16 }}>{drugStrength}</span>
           </div>
           <div style={{ fontSize: 11, color: "var(--app-text-4)", marginTop: 2 }}>
-            {drug.brand_names?.[0] ? `${drug.brand_names[0]} \u00b7 ` : ""}Updated recently
+            {(() => { const b = cleanBrandNames(drug.brand_names, drug.generic_name)[0]; return b ? `${b} \u00b7 ` : ""; })()}Updated recently
           </div>
         </div>
 

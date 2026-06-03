@@ -11,6 +11,34 @@ import { cleanBrandNames } from "@/lib/brand";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// Structured regulatory-eligibility entry from the regulatory_eligibility table
+// (migration 040), populated by backend/scrapers/eligibility/*. The authoritative
+// substitution-pathway signal — carries a regulator-published approval reference
+// and a verifiable source URL.
+export type EligibilityEntry = {
+  scheme: string;
+  status: string;
+  scheme_reference: string | null;
+  description: string | null;
+  brand_name: string | null;
+  listed_at: string | null;
+  expires_at: string | null;
+  source_url: string | null;
+  source_name: string | null;
+  country_code: string | null;
+};
+
+// Human labels for the substitution schemes. Drives the pathways block so a new
+// scraper (MHRA SSP etc.) renders correctly with no further UI change.
+const SCHEME_LABEL: Record<string, string> = {
+  tga_s19a: "Section 19A approval in force",
+  mhra_ssp: "Serious Shortage Protocol active",
+  dhsc_msn: "Medicine Supply Notification issued",
+  fda_503b: "503B outsourcing eligibility",
+  fda_shortage: "On FDA Drug Shortage list",
+  eu_art_5_2: "Article 5(2) exemption available",
+};
+
 const FLAG: Record<string, string> = {
   AU: "🇦🇺", NZ: "🇳🇿", GB: "🇬🇧", UK: "🇬🇧", US: "🇺🇸", CA: "🇨🇦", SG: "🇸🇬",
   DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", IE: "🇮🇪", CH: "🇨🇭", NO: "🇳🇴",

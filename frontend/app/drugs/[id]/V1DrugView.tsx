@@ -251,6 +251,22 @@ export default function V1DrugView({
               <div className="d-generic">
                 {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
               </div>
+              {drug.who_essential_medicine ? (
+                <a
+                  className="d-eml"
+                  href="https://list.essentialmeds.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={
+                    drug.who_eml_section
+                      ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
+                      : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+                  }
+                >
+                  <span className="d-eml-dot" />
+                  WHO Essential Medicine
+                </a>
+              ) : null}
               {(() => {
                 const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
                 if (brands.length === 0) return null;
@@ -287,11 +303,19 @@ export default function V1DrugView({
               <div className="sw-v">{s19aTileDetail ? "Yes — under S19A" : "Per normal rules"}</div>
               <div className="sw-d">{s19aTileDetail ?? "Confirm with prescriber"}</div>
             </div>
-            <div className="sw-card">
-              <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
-              <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
-              <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
-            </div>
+            {topAlt?.id != null ? (
+              <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
+                <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
+                <div className="sw-v">{topAlt.name}</div>
+                <div className="sw-d">{`${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}`}</div>
+              </Link>
+            ) : (
+              <div className="sw-card">
+                <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
+                <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
+                <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
+              </div>
+            )}
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
               <div className="sw-v">{expected ?? "No estimate"}</div>
@@ -601,6 +625,9 @@ const CSS = `
 .d-generic{font-size:13px;color:var(--text-3);margin-top:5px;font-family:'DM Mono',monospace}
 .d-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .d-tag{font-size:11px;font-weight:500;padding:4px 9px;border-radius:7px;background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
+.d-eml{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b);text-decoration:none;width:fit-content}
+.d-eml:hover{background:#dcfce7}
+.d-eml-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
 .status-card{margin:18px 0 0;border-radius:18px;padding:20px}
 .status-card.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border:1px solid var(--crit-b)}
 .status-card.med{background:linear-gradient(135deg,#fffdf5,#fffbeb);border:1px solid var(--med-b)}
@@ -614,6 +641,8 @@ const CSS = `
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}
+.sw-card-link{transition:border-color .15s,box-shadow .15s,transform .15s}
+.sw-card-link:hover{border-color:var(--green);box-shadow:0 1px 8px rgba(0,0,0,.06)}
 .sw-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-4)}
 .sw-ic{width:16px;height:16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
 .sw-ic.ok{background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b)}

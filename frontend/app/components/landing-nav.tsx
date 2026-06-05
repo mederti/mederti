@@ -216,7 +216,7 @@ export default function SiteNav() {
           display: "flex", alignItems: "center",
           textDecoration: "none", flexShrink: 0,
         }}>
-          <img src={logo} alt="Mederti" style={{ height: 28, transition: "opacity 0.2s" }} />
+          <img src={logo} alt="Mederti" style={{ height: 31, transition: "opacity 0.2s" }} />
         </Link>
 
         {/* ── Center: Nav links (hidden when search overlay is open) ── */}

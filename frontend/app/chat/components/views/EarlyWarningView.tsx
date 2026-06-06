@@ -8,21 +8,19 @@ export function EarlyWarningView() {
   return (
     <div className="ewradar">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-
         .ewradar{
           height:100%;overflow-y:auto;background:#f4f5f7;
-          font-family:'Inter',sans-serif;color:#18181b;
+          font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;color:#0c1118;
           --bg:#fafafa; --bg-2:#f4f4f5; --bg-3:#e4e4e7; --card:#fff; --border:#e4e4e7; --border-2:#d4d4d8;
-          --text:#18181b; --text-2:#3f3f46; --text-3:#71717a; --text-4:#a1a1aa;
+          --text:#0c1118; --text-2:#3f3f46; --text-3:#71717a; --text-4:#a1a1aa;
           --teal:#0d9488; --teal-l:#14b8a6; --teal-bg:#f0fdfa; --teal-b:#99f6e4;
           --crit:#dc2626; --crit-bg:#fef2f2; --crit-b:#fecaca;
-          --med:#ca8a04; --med-bg:#fefce8; --med-b:#fde68a;
-          --ok:#16a34a; --ok-bg:#f0fdf4; --ok-b:#bbf7d0;
+          --med:#ca8a04; --med-bg:#fefce8; --med-b:#f3dcae;
+          --ok:#16a34a; --ok-bg:#e8f6f0; --ok-b:#dcebe6;
           --indigo:#6366f1; --ind-bg:#eef2ff; --ind-b:#c7d2fe;
           --high:#ea580c; --high-bg:#fff7ed; --high-b:#fed7aa;
-          --low:#16a34a; --low-bg:#f0fdf4; --low-b:#bbf7d0;
-          --money:#059669;
+          --low:#16a34a; --low-bg:#e8f6f0; --low-b:#dcebe6;
+          --money:#0c8a62;
         }
         .ewradar *{margin:0;padding:0;box-sizing:border-box}
 
@@ -48,13 +46,13 @@ export function EarlyWarningView() {
         .ewradar .kpi-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-4);margin-bottom:8px;font-weight:600}
         .ewradar .kpi-val{font-size:27px;font-weight:600;letter-spacing:-0.02em;color:var(--text);line-height:1}
         .ewradar .kpi-of{font-size:14px;color:var(--text-4);font-weight:500}
-        .ewradar .kpi-delta{font-size:10.5px;margin-top:7px;font-family:'DM Mono'}
+        .ewradar .kpi-delta{font-size:10.5px;margin-top:7px;font-family:var(--font-geist-mono),ui-monospace,monospace}
         .ewradar .kpi-delta.up{color:var(--crit)}
         .ewradar .kpi-delta.down{color:var(--low)}
         .ewradar .kpi-delta.flat{color:var(--text-4)}
 
         .ewradar .gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-        .ewradar .gov-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+        .ewradar .gov-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06),inset 0 1px 0 rgba(255,255,255,.7)}
         .ewradar .gov-card.span2{grid-column:1 / -1}
         .ewradar .moat-card{border-color:var(--ind-b);background:linear-gradient(#fff,#fbfbff)}
         .ewradar .gc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:13px}
@@ -73,15 +71,15 @@ export function EarlyWarningView() {
         .ewradar .rad-row.crit{background:var(--crit-bg)}
         .ewradar .rad-row.high{background:var(--high-bg)}
         .ewradar .rad-drug{font-weight:600;color:var(--text);display:flex;flex-direction:column;gap:2px}
-        .ewradar .rad-cls{font-weight:400;font-size:10.5px;color:var(--text-4);font-family:'DM Mono'}
+        .ewradar .rad-cls{font-weight:400;font-size:10.5px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
         .ewradar .rad-sig{font-size:11.5px;color:var(--text-2);line-height:1.4}
         .ewradar .sig-flag{margin-right:5px}
-        .ewradar .rad-win{font-family:'DM Mono';font-size:11.5px;color:var(--text-2)}
+        .ewradar .rad-win{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11.5px;color:var(--text-2)}
         .ewradar .rad-prob{display:flex;align-items:center;gap:8px}
         .ewradar .probbar{flex:1;height:6px;border-radius:3px;background:var(--bg-3);overflow:hidden}
         .ewradar .probbar i{display:block;height:100%;background:var(--crit)}
-        .ewradar .prob-n{font-family:'DM Mono';font-size:11.5px;font-weight:500;color:var(--text);min-width:30px}
-        .ewradar .rad-conf{font-family:'DM Mono';font-size:14px;font-weight:500;color:var(--teal)}
+        .ewradar .prob-n{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11.5px;font-weight:500;color:var(--text);min-width:30px}
+        .ewradar .rad-conf{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:14px;font-weight:500;color:var(--teal)}
         .ewradar .conf-of{font-size:9px;color:var(--text-4)}
         .ewradar .rad-btn{font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;background:#fff;border:1px solid var(--border-2);color:var(--text-2);cursor:pointer;white-space:nowrap}
         .ewradar .rad-btn:hover{border-color:var(--teal);color:var(--teal)}
@@ -96,7 +94,7 @@ export function EarlyWarningView() {
         .ewradar .feed-body{min-width:0;flex:1}
         .ewradar .feed-top{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);margin-bottom:3px}
         .ewradar .feed-top strong{font-weight:600}
-        .ewradar .feed-time{margin-left:auto;font-size:10px;color:var(--text-4);font-family:'DM Mono'}
+        .ewradar .feed-time{margin-left:auto;font-size:10px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
         .ewradar .feed-txt{font-size:11.5px;color:var(--text-3);line-height:1.5}
 
         /* calibration */
@@ -109,7 +107,7 @@ export function EarlyWarningView() {
         .ewradar .calib-bar i{display:block;height:100%}
         .ewradar .calib-bar i.low{background:var(--teal)}
         .ewradar .calib-bar i.med{background:var(--med)}
-        .ewradar .calib-pct{font-family:'DM Mono';font-size:11px;color:var(--text-2);text-align:right}
+        .ewradar .calib-pct{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11px;color:var(--text-2);text-align:right}
         .ewradar .peer-note{font-size:11.5px;color:var(--text-3);margin-top:12px;padding-top:11px;border-top:1px solid var(--bg-3)}
       `}</style>
 

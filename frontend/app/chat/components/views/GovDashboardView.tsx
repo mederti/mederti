@@ -10,24 +10,22 @@ export function GovDashboardView() {
   return (
     <div className="govdash">
       <style>{`
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-
 .govdash{
   --bg:#fafafa; --bg-2:#f4f4f5; --bg-3:#e4e4e7; --card:#fff; --border:#e4e4e7; --border-2:#d4d4d8;
-  --text:#18181b; --text-2:#3f3f46; --text-3:#71717a; --text-4:#a1a1aa;
+  --text:#0c1118; --text-2:#3f3f46; --text-3:#71717a; --text-4:#a1a1aa;
   --teal:#0d9488; --teal-l:#14b8a6; --teal-bg:#f0fdfa; --teal-b:#99f6e4;
   --crit:#dc2626; --crit-bg:#fef2f2; --crit-b:#fecaca;
-  --med:#ca8a04; --med-bg:#fefce8; --med-b:#fde68a;
-  --ok:#16a34a; --ok-bg:#f0fdf4; --ok-b:#bbf7d0;
+  --med:#ca8a04; --med-bg:#fefce8; --med-b:#f3dcae;
+  --ok:#16a34a; --ok-bg:#e8f6f0; --ok-b:#dcebe6;
   --indigo:#6366f1; --ind-bg:#eef2ff; --ind-b:#c7d2fe;
   --high:#ea580c; --high-bg:#fff7ed; --high-b:#fed7aa;
-  --low:#16a34a; --low-bg:#f0fdf4; --low-b:#bbf7d0;
+  --low:#16a34a; --low-bg:#e8f6f0; --low-b:#dcebe6;
 
   height:100%;
   overflow-y:auto;
   background:#f4f5f7;
-  font-family:'Inter',sans-serif;
-  color:#18181b;
+  font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;
+  color:#0c1118;
   display:flex;
   flex-direction:column;
 }
@@ -54,13 +52,13 @@ export function GovDashboardView() {
 .govdash .kpi-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-4);margin-bottom:8px;font-weight:600}
 .govdash .kpi-val{font-size:27px;font-weight:600;letter-spacing:-0.02em;color:var(--text);line-height:1}
 .govdash .kpi-of{font-size:14px;color:var(--text-4);font-weight:500}
-.govdash .kpi-delta{font-size:10.5px;margin-top:7px;font-family:'DM Mono'}
+.govdash .kpi-delta{font-size:10.5px;margin-top:7px;font-family:var(--font-geist-mono),ui-monospace,monospace}
 .govdash .kpi-delta.up{color:var(--crit)}
 .govdash .kpi-delta.down{color:var(--low)}
 .govdash .kpi-delta.flat{color:var(--text-4)}
 
 .govdash .gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.govdash .gov-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.govdash .gov-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06),inset 0 1px 0 rgba(255,255,255,.7)}
 .govdash .gov-card.span2{grid-column:1 / -1}
 .govdash .gc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:13px}
 .govdash .gc-title{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
@@ -83,11 +81,11 @@ export function GovDashboardView() {
 .govdash .em-sup{font-size:11.5px;color:var(--text-2)}
 .govdash .ss-bad{color:var(--high);font-weight:600}
 .govdash .ss-bad.sole{color:var(--crit)}
-.govdash .em-dur{font-family:'DM Mono';color:var(--text-2)}
+.govdash .em-dur{font-family:var(--font-geist-mono),ui-monospace,monospace;color:var(--text-2)}
 .govdash .em-risk{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-2)}
 .govdash .riskbar{width:34px;height:5px;border-radius:3px;background:var(--bg-3);overflow:hidden;flex-shrink:0}
 .govdash .riskbar i{display:block;height:100%;background:var(--crit)}
-.govdash .em-fc{font-family:'DM Mono';font-size:11px;color:var(--teal)}
+.govdash .em-fc{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11px;color:var(--teal)}
 .govdash .em-foot{font-size:11.5px;color:var(--text-3);padding-top:11px}
 .govdash .em-link{color:var(--teal);font-weight:500;cursor:pointer}
 
@@ -98,7 +96,7 @@ export function GovDashboardView() {
 .govdash .conc-bar{height:8px;border-radius:4px;background:var(--bg-3);overflow:hidden}
 .govdash .conc-bar i{display:block;height:100%}
 .govdash .conc-bar i.crit{background:var(--crit)} .govdash .conc-bar i.high{background:var(--high)} .govdash .conc-bar i.med{background:var(--med)} .govdash .conc-bar i.low{background:var(--low)}
-.govdash .conc-pct{font-family:'DM Mono';font-size:11.5px;color:var(--text-2);text-align:right}
+.govdash .conc-pct{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11.5px;color:var(--text-2);text-align:right}
 
 /* peer */
 .govdash .peer-list{display:flex;flex-direction:column;gap:10px}
@@ -108,7 +106,7 @@ export function GovDashboardView() {
 .govdash .peer-bar{height:8px;border-radius:4px;background:var(--bg-3);overflow:hidden}
 .govdash .peer-bar i{display:block;height:100%;background:var(--text-4)}
 .govdash .peer-bar i.self{background:var(--teal)}
-.govdash .peer-val{font-family:'DM Mono';font-size:11.5px;color:var(--text-2);text-align:right}
+.govdash .peer-val{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11.5px;color:var(--text-2);text-align:right}
 .govdash .peer-note{font-size:11.5px;color:var(--text-3);margin-top:12px;padding-top:11px;border-top:1px solid var(--bg-3)}
 
 /* upstream */
@@ -123,7 +121,7 @@ export function GovDashboardView() {
 .govdash .up-sev.crit{background:var(--crit);color:#fff}
 .govdash .up-sev.high{background:var(--high);color:#fff}
 .govdash .up-body{font-size:11.5px;color:var(--text-2);line-height:1.5}
-.govdash .up-foot{font-size:10px;color:var(--text-4);font-family:'DM Mono';margin-top:9px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.06)}
+.govdash .up-foot{font-size:10px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:9px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.06)}
 
 @media(max-width:1500px){.govdash .kpi-row{grid-template-columns:repeat(5,1fr)}}
       `}</style>

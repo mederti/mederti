@@ -50,6 +50,43 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* ---- Tuned design system (Geist era) — utilities resolve to the
+     tokens defined in the Mederti :root block below. Lets components use
+     bg-surf / text-tx-3 / border-border-2 / rounded-card / shadow-card
+     instead of raw hex. Source of truth is the :root token block. ---- */
+  --color-bg: var(--bg);
+  --color-surf: var(--surf);
+  --color-surf-2: var(--surf-2);
+  --color-surf-3: var(--surf-3);
+  --color-hair: var(--hair);
+  --color-border-2: var(--border-2);
+  --color-teal: var(--teal);
+  --color-teal-2: var(--teal-2);
+  --color-teal-3: var(--teal-3);
+  --color-acc: var(--acc);
+  --color-acc-soft: var(--acc-soft);
+  --color-tint-b: var(--tint-b);
+  --color-tx: var(--tx);
+  --color-tx-2: var(--tx-2);
+  --color-tx-3: var(--tx-3);
+  --color-tx-4: var(--tx-4);
+  --color-tx-5: var(--tx-5);
+  --color-crit: var(--crit);
+  --color-crit-bg: var(--crit-bg);
+  --color-crit-b: var(--crit-b);
+  --color-med: var(--med);
+  --color-med-bg: var(--med-bg);
+  --color-med-b: var(--med-b);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-b: var(--ok-b);
+  --radius-tile: var(--r-tile);
+  --radius-card: var(--r-card);
+  --radius-pill: var(--r-pill);
+  --shadow-card: var(--sh-card);
+  --shadow-pop: var(--sh-pop);
+  --shadow-hi: var(--hi-inset);
 }
 
 :root {
@@ -127,12 +164,86 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-inter), sans-serif;
+    font-family: var(--font-geist-sans), "SF Pro Display", -apple-system,
+      system-ui, sans-serif;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 }
 
-/* Mederti design tokens */
+/* ============================================================
+   Mederti design tokens — "tuned" design system (Geist era).
+   The tuned palette (mederti-product-ui-tuned.html) is the single
+   source of truth. Legacy token names (--app-*, --panel, --teal-bg,
+   --teal-b) are aliased to it so the ~106 files already wired to them
+   shift to the new look with zero per-file edits. Aliases are renamed
+   to the tuned vocabulary surface-by-surface during the staged
+   rollout, then deleted. The shift is in neutrals, borders, shadows
+   and the inner-highlight — the brand hue is essentially unchanged.
+   ============================================================ */
 :root {
+  /* brand */
+  --teal:         #0fa676;
+  --teal-2:       #10b981;
+  --teal-3:       #34d399;
+  --teal-l:       #0c8a62;  /* darker teal — hover/active (legacy --teal-l) */
+
+  /* surfaces & neutrals */
+  --bg:           #fafbfc;
+  --surf:         #ffffff;
+  --surf-2:       #f5f7f9;
+  --surf-3:       #eef2f5;
+  --border:       #e8ecf0;
+  --border-2:     #dde3e9;
+  --hair:         #eef1f4;
+  --ring:         rgba(15,166,118,.18);
+
+  /* text ramp */
+  --tx:           #0c1118;
+  --tx-2:         #3b434e;
+  --tx-3:         #6a7280;
+  --tx-4:         #98a1ac;
+  --tx-5:         #bcc3cc;
+
+  /* accent */
+  --acc:          var(--teal);
+  --acc-soft:     #e8f6f0;
+  --tint:         #f1f5f4;
+  --tint-b:       #dcebe6;
+
+  /* status */
+  --crit:         #dc2647;
+  --crit-bg:      #fdeef1;
+  --crit-b:       #f8cdd6;
+  --med:          #b46708;
+  --med-bg:       #fdf6e9;
+  --med-b:        #f3dcae;
+  --ok:           #0fa676;
+  --ok-bg:        #e8f6f0;
+  --ok-b:         #bce4d4;
+  /* high/low retained for the existing 4-level severity scale */
+  --high:         #c2410c;
+  --high-bg:      #fdf1ea;
+  --high-b:       #f5cdb4;
+  --low:          #0fa676;
+  --low-bg:       #e8f6f0;
+  --low-b:        #bce4d4;
+  --indigo:       #4f46e5;
+  --ind-bg:       #eef2ff;
+  --ind-b:        #c7d2fe;
+
+  /* radii / depth */
+  --r-card:       16px;
+  --r-tile:       10px;
+  --r-pill:       99px;
+  --hi-inset:     inset 0 1px 0 rgba(255,255,255,.7);
+  --sh-card:      0 1px 1px rgba(12,17,24,.04), 0 2px 6px -2px rgba(12,17,24,.06);
+  --sh-pop:       0 2px 4px rgba(12,17,24,.05), 0 12px 28px -10px rgba(12,17,24,.16);
+  --sh-deep:      0 1px 2px rgba(12,17,24,.06), 0 24px 60px -28px rgba(12,17,24,.30);
+  --dot-grid:     rgba(12,17,24,.045);
+
+  /* dark surfaces (chat panel, insight cards) — intentionally dark */
   --navy:         #080f1e;
   --navy-2:       #0d1729;
   --navy-3:       #132035;
@@ -142,41 +253,24 @@
   --txt:          #f0f4f8;
   --txt-2:        #a8b8cc;
   --txt-3:        #637385;
-  /* Closes audit FINDING-UX-03 partially. --teal token was set to slate-900
-     (#0F172A) despite the variable name, making the live drug page render
-     monochrome slate while the reference mockup (mockups/mederti-pharmacist-
-     view_7.html) specifies actual teal (#0d9488). Aligning the token here
-     cascades to every `var(--teal)` consumer — primarily the AskMedertiCta,
-     action accents on PharmacistAnswerCard, and link hovers across persona
-     pages. Visible change; intentional. */
-  --teal:         #0d9488;  /* teal-600 — Tailwind palette */
-  --teal-l:       #0f766e;  /* teal-700 — for hover/active */
-  --teal-bg:      #f0fdfa;  /* teal-50  — light accent background */
-  --teal-b:       #99f6e4;  /* teal-200 — accent border */
-  --crit:         #dc2626;
-  --crit-bg:      #fef2f2;
-  --crit-b:       #fecaca;
-  --high:         #ea580c;
-  --high-bg:      #fff7ed;
-  --high-b:       #fed7aa;
-  --med:          #ca8a04;
-  --med-bg:       #fefce8;
-  --med-b:        #fef08a;
-  --low:          #16a34a;
-  --low-bg:       #f0fdf4;
-  --low-b:        #bbf7d0;
-  --indigo:       #4f46e5;
-  --ind-bg:       #eef2ff;
-  --ind-b:        #c7d2fe;
-  --panel:        #ffffff;
-  --app-bg:       #f8fafb;
-  --app-bg-2:     #ffffff;
-  --app-border:   #e2e8f0;
-  --app-border-2: #cbd5e1;
-  --app-text:     #0f172a;
-  --app-text-2:   #334155;
-  --app-text-3:   #64748b;
-  --app-text-4:   #94a3b8;
+
+  /* ---- legacy aliases → tuned palette (retired per surface) ---- */
+  --teal-bg:      var(--acc-soft);
+  --teal-b:       var(--tint-b);
+  --panel:        var(--surf);
+  --app-bg:       var(--bg);
+  --app-bg-2:     var(--surf);
+  --app-border:   var(--border);
+  --app-border-2: var(--border-2);
+  --app-text:     var(--tx);
+  --app-text-2:   var(--tx-2);
+  --app-text-3:   var(--tx-3);
+  --app-text-4:   var(--tx-4);
+
+  /* fonts: legacy names alias to Geist so existing var(--font-inter) /
+     var(--font-dm-mono) references keep resolving (now to Geist) */
+  --font-inter:   var(--font-geist-sans);
+  --font-dm-mono: var(--font-geist-mono);
 }
 
 
@@ -195,4 +289,8 @@
 }
 
 /* Font utilities */
-.font-mono { font-family: var(--font-dm-mono), monospace !important; }
+.font-mono {
+  font-family: var(--font-geist-mono), ui-monospace, monospace !important;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}

@@ -40,7 +40,7 @@
 
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -52,7 +52,7 @@
   box-sizing: border-box;
 }
 
-.mederti-chat-root .font-mono { font-family: "DM Mono", ui-monospace, monospace; }.mederti-chat-root /* ===== Chat shell ===== */
+.mederti-chat-root .font-mono { font-family: var(--font-geist-mono), ui-monospace, monospace; }.mederti-chat-root /* ===== Chat shell ===== */
 .chat-shell{
   max-width: 760px;
   margin: 0 auto;
@@ -108,7 +108,7 @@
   min-height: calc(100vh - 220px);
 }.mederti-chat-root .msg-role{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -199,7 +199,7 @@
   border-top: 1px dashed var(--border);
 }.mederti-chat-root .drug-card-field-label{
   font-size: 10px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -229,7 +229,7 @@
   border-radius: 999px;
   font-size: 11px;
   font-weight: 500;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }.mederti-chat-root .sev-critical{ background: var(--crit-bg); color: var(--crit); border: 1px solid var(--crit-b); }.mederti-chat-root .sev-high{ background: var(--high-bg); color: var(--high); border: 1px solid var(--high-b); }.mederti-chat-root .sev-medium{ background: var(--med-bg); color: var(--med); border: 1px solid var(--med-b); }.mederti-chat-root .sev-low{ background: var(--low-bg); color: var(--low); border: 1px solid var(--low-b); }.mederti-chat-root .sev-ok{ background: var(--teal-bg); color: var(--teal); border: 1px solid var(--teal-b); }.mederti-chat-root .sev-resolved{ background: var(--bg-3); color: var(--text-3); border: 1px solid var(--border); }.mederti-chat-root /* ===== Sub card (substitutes) ===== */
@@ -253,7 +253,7 @@
   margin-top: 2px;
 }.mederti-chat-root .sub-card-match{
   font-size: 12px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--indigo);
   background: var(--ind-bg);
   border: 1px solid var(--ind-b);
@@ -577,7 +577,7 @@
   font-size: 11px;
   color: var(--text-4);
   text-align: center;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }.mederti-chat-root /* ===== Typing indicator ===== */
@@ -624,7 +624,7 @@
   border-radius: 5px;
   font-size: 10px;
   font-weight: 500;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }.mederti-chat-root .badge-who{ background: var(--ind-bg);  color: var(--indigo); border: 1px solid var(--ind-b); }.mederti-chat-root .badge-crit-eu{ background: var(--crit-bg); color: var(--crit);   border: 1px solid var(--crit-b); }.mederti-chat-root /* ===== Per-country severity strip ===== */
@@ -645,7 +645,7 @@
   border: 1px solid var(--border);
   background: var(--bg);
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   letter-spacing: 0.04em;
 }.mederti-chat-root .country-chip-code{ color: var(--text-2); font-weight: 500; }.mederti-chat-root .country-chip-dot{
   width: 6px;
@@ -654,7 +654,7 @@
   background: var(--text-4);
 }.mederti-chat-root .country-chip-critical .country-chip-dot{ background: var(--crit); }.mederti-chat-root .country-chip-high     .country-chip-dot{ background: var(--high); }.mederti-chat-root .country-chip-medium   .country-chip-dot{ background: var(--med); }.mederti-chat-root .country-chip-low      .country-chip-dot{ background: var(--low); }.mederti-chat-root .country-chip-critical, .mederti-chat-root .country-chip-high{ border-color: var(--high-b); }.mederti-chat-root .country-chip-more{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-3);
   padding: 3px 6px;
 }.mederti-chat-root /* ===== Card footer ===== */
@@ -726,7 +726,7 @@
   flex-shrink: 0;
 }.mederti-chat-root .pane-head-meta{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -797,7 +797,7 @@
   font-weight: 600;
   padding: 5px 10px;
   border-radius: 14px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }.mederti-chat-root .pane-status-ok{
@@ -813,7 +813,7 @@
   margin-top: 20px;
 }.mederti-chat-root .pane-section-title{
   font-size: 10.5px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-weight: 500;
   color: var(--text-4);
   text-transform: uppercase;
@@ -836,7 +836,7 @@
   display: contents;
 }.mederti-chat-root .pane-product-row dt{
   font-size: 10.5px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -858,7 +858,7 @@
 }.mederti-chat-root .pane-product-counts strong{
   color: var(--text);
   font-weight: 600;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
 }.mederti-chat-root /* ===== Compact shortage row (collapsed by default) ===== */
 .pane-shortage-list{
   display: flex;
@@ -893,7 +893,7 @@
   padding: 2px 7px !important;
   text-transform: lowercase;
 }.mederti-chat-root .pane-shortage-dates{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
   color: var(--text-3);
   white-space: nowrap;
@@ -938,7 +938,7 @@
   letter-spacing: -0.01em;
 }.mederti-chat-root .pane-stat-label{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -986,14 +986,14 @@
   letter-spacing: 0.04em;
 }.mederti-chat-root .pane-row-status{
   font-size: 10px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 2px 6px;
   border-radius: 4px;
 }.mederti-chat-root .pane-row-status-active{ background: var(--high-bg); color: var(--high); }.mederti-chat-root .pane-row-status-resolved{ background: var(--bg-3); color: var(--text-3); }.mederti-chat-root .pane-row-status-anticipated{ background: var(--med-bg); color: var(--med); }.mederti-chat-root .pane-row-status-stale{ background: var(--bg-3); color: var(--text-4); }.mederti-chat-root .pane-row-dates{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-3);
   letter-spacing: 0.02em;
   margin-bottom: 6px;
@@ -1011,7 +1011,7 @@
   text-decoration: none;
 }.mederti-chat-root .pane-row-source:hover{ text-decoration: underline; }.mederti-chat-root .pane-row-more{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-align: center;
   padding: 8px 0;
@@ -1023,7 +1023,7 @@
   gap: 12px;
 }.mederti-chat-root .recall-class{
   font-size: 10px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1090,14 +1090,14 @@
   background: var(--ind-bg);
   color: var(--indigo);
   border: 1px solid var(--ind-b);
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   letter-spacing: 0.04em;
 }.mederti-chat-root .tag-status{
   font-size: 10px;
   font-weight: 600;
   padding: 5px 10px;
   border-radius: 14px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   flex-shrink: 0;
@@ -1170,7 +1170,7 @@
   align-items: baseline;
   gap: 6px;
 }.mederti-chat-root .card-a-status-pre{ font-size: 11px; color: var(--text-3); font-weight: 400; }.mederti-chat-root .card-a-status-val{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-2);
@@ -1179,7 +1179,7 @@
   background: var(--low-bg);
   border-color: var(--low-b);
 }.mederti-chat-root .card-a-status.available .card-a-status-headline{ color: var(--low); }.mederti-chat-root .card-a-status.available .card-a-status-dot{ background: var(--low); }.mederti-chat-root .card-a-status-supply{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 11.5px;
   color: var(--text-3);
 }.mederti-chat-root /* Clickable drug name — opens the detail pane to the right */
@@ -1222,7 +1222,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-2);
 }.mederti-chat-root .country-pill-dot{ width: 6px; height: 6px; border-radius: 50%; }.mederti-chat-root .country-pill-dot.crit{ background: var(--crit); }.mederti-chat-root .country-pill-dot.high{ background: var(--high); }.mederti-chat-root .country-pill-dot.med{ background: var(--med); }.mederti-chat-root .country-pill-dot.low{ background: var(--low); }.mederti-chat-root /* Actions strip */
 .card-actions{
@@ -1307,7 +1307,7 @@
   align-items: center;
   gap: 6px;
 }.mederti-chat-root .card-a-sub-match{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 13px;
   font-weight: 500;
   color: var(--low);
@@ -1320,7 +1320,7 @@
 }.mederti-chat-root .card-a-sub-form{
   font-size: 11px;
   color: var(--text-3);
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   margin-bottom: 10px;
 }.mederti-chat-root .card-a-sub-facts{
   display: flex;
@@ -1342,7 +1342,7 @@
   font-size: 13px;
   color: var(--text);
   font-weight: 500;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
 }.mederti-chat-root /* Supplier rows */
 .card-a-supplier{
   margin-top: 12px;
@@ -1359,7 +1359,7 @@
   justify-content: space-between;
   margin-bottom: 8px;
 }.mederti-chat-root .card-a-supplier-label-count{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   font-size: 9px;
   font-weight: 500;
@@ -1387,13 +1387,13 @@
   background: var(--low-bg);
   color: var(--low);
   border: 1px solid var(--low-b);
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }.mederti-chat-root .card-a-supplier-meta{
   font-size: 11px;
   color: var(--text-3);
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   flex: 1;
   text-align: right;
 }.mederti-chat-root .card-a-supplier-action{
@@ -1482,11 +1482,11 @@
   letter-spacing: 0.07em;
   color: var(--text-4);
   margin-bottom: 4px;
-}.mederti-chat-root .card-b-fact-val{ font-size: 13px; color: var(--text); line-height: 1.4; }.mederti-chat-root .card-b-fact-val.mono{ font-family: "DM Mono", monospace; font-size: 12.5px; }.mederti-chat-root .card-b-fact-sub{
+}.mederti-chat-root .card-b-fact-val{ font-size: 13px; color: var(--text); line-height: 1.4; }.mederti-chat-root .card-b-fact-val.mono{ font-family: var(--font-geist-mono), monospace; font-size: 12.5px; }.mederti-chat-root .card-b-fact-sub{
   font-size: 10px;
   color: var(--text-4);
   margin-top: 3px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
 }.mederti-chat-root .card-b-reason{
   padding: 0 20px 16px;
   font-size: 12.5px;
@@ -1522,8 +1522,8 @@
   font-size: 12px;
   gap: 12px;
   transition: background 0.15s;
-}.mederti-chat-root .card-b-alt-row:hover{ background: var(--bg-3); margin: 0 -10px; padding-left: 10px; padding-right: 10px; }.mederti-chat-root .card-b-alt-row:last-child{ border-bottom: 0; }.mederti-chat-root .card-b-alt-info{ flex: 1; min-width: 0; }.mederti-chat-root .card-b-alt-name{ color: var(--text); font-weight: 500; }.mederti-chat-root .card-b-alt-meta{ color: var(--text-3); font-family: "DM Mono", monospace; font-size: 11px; }.mederti-chat-root .card-b-alt-suppliers{
-  font-family: "DM Mono", monospace;
+}.mederti-chat-root .card-b-alt-row:hover{ background: var(--bg-3); margin: 0 -10px; padding-left: 10px; padding-right: 10px; }.mederti-chat-root .card-b-alt-row:last-child{ border-bottom: 0; }.mederti-chat-root .card-b-alt-info{ flex: 1; min-width: 0; }.mederti-chat-root .card-b-alt-name{ color: var(--text); font-weight: 500; }.mederti-chat-root .card-b-alt-meta{ color: var(--text-3); font-family: var(--font-geist-mono), monospace; font-size: 11px; }.mederti-chat-root .card-b-alt-suppliers{
+  font-family: var(--font-geist-mono), monospace;
   font-size: 10.5px;
   color: var(--text-3);
   margin-top: 5px;
@@ -1534,7 +1534,7 @@
   font-weight: 500;
   padding: 3px 8px;
   border-radius: 4px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   white-space: nowrap;
   flex-shrink: 0;
 }.mederti-chat-root .card-b-alt-status.green{ background: var(--low-bg); color: var(--low); border: 1px solid var(--low-b); }.mederti-chat-root .card-b-alt-status.amber{ background: var(--med-bg); color: var(--med); border: 1px solid var(--med-b); }.mederti-chat-root /* Supplier card hero */
@@ -1560,7 +1560,7 @@
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.02em;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   line-height: 1;
 }.mederti-chat-root .card-c-stat-label{
   font-size: 10px;
@@ -1572,7 +1572,7 @@
   font-size: 10px;
   color: var(--text-4);
   margin-top: 2px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
 }.mederti-chat-root .card-c-supplier-bar{
   margin: 0 20px 14px;
   padding: 12px 14px;
@@ -1591,7 +1591,7 @@
   letter-spacing: 0.07em;
   color: var(--text-3);
 }.mederti-chat-root .card-c-supplier-gauge{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
   color: var(--text-2);
 }.mederti-chat-root .card-c-supplier-bar-bg{
@@ -1671,14 +1671,14 @@
   margin-bottom: 16px;
 }.mederti-chat-root .modal-ctx-label{
   font-size: 10px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-4);
   margin-right: 4px;
 }.mederti-chat-root .modal-fields{ display: flex; flex-direction: column; gap: 12px; }.mederti-chat-root .modal-field{ display: flex; flex-direction: column; gap: 4px; flex: 1; }.mederti-chat-root .modal-field-label{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-3);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1744,7 +1744,7 @@
   text-align: left;
   line-height: 1.5;
 }.mederti-chat-root .modal-warn code{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   background: var(--bg);
   padding: 1px 4px;
@@ -1787,14 +1787,14 @@
   margin-bottom: 4px;
 }.mederti-chat-root .recall-callout-icon{ font-size: 13px; color: var(--crit); }.mederti-chat-root .recall-callout[data-class="II"] .recall-callout-icon, .mederti-chat-root .recall-callout[data-class="2"] .recall-callout-icon{ color: var(--high); }.mederti-chat-root .recall-callout[data-class="III"] .recall-callout-icon, .mederti-chat-root .recall-callout[data-class="3"] .recall-callout-icon{ color: var(--med); }.mederti-chat-root .recall-callout-class{
   font-size: 10px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--crit);
 }.mederti-chat-root .recall-callout[data-class="II"] .recall-callout-class, .mederti-chat-root .recall-callout[data-class="2"] .recall-callout-class{ color: var(--high); }.mederti-chat-root .recall-callout[data-class="III"] .recall-callout-class, .mederti-chat-root .recall-callout[data-class="3"] .recall-callout-class{ color: var(--med); }.mederti-chat-root .recall-callout-date{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-3);
   margin-left: auto;
 }.mederti-chat-root .recall-callout-body{
@@ -1831,7 +1831,7 @@
   font-weight: 500;
   cursor: default;
 }.mederti-chat-root .mfg-chip-count{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   color: var(--text-4);
   background: var(--bg-3);
@@ -1878,10 +1878,10 @@
   border-radius: 7px;
 }.mederti-chat-root .pane-mfg-name{ font-size: 13px; color: var(--text); font-weight: 500; }.mederti-chat-root .pane-mfg-meta{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-3);
 }.mederti-chat-root .pane-mfg-products{
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
   color: var(--text-2);
   background: var(--bg-3);
@@ -1904,10 +1904,10 @@
   font-size: 17px;
   font-weight: 600;
   color: var(--text);
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
 }.mederti-chat-root .pane-history-stat-label{
   font-size: 10px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1930,7 +1930,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   margin-top: 2px;
 }.mederti-chat-root .pane-history-recur{
@@ -1947,12 +1947,12 @@
   border: 1px solid var(--border);
   border-radius: 5px;
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-2);
 }.mederti-chat-root .pane-history-recur-chip strong{
   color: var(--text);
   font-weight: 600;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
 }.mederti-chat-root /* ===== Disambiguation chips above a drug card ===== */
 .alternates{
   margin: 8px 0 -4px;
@@ -1962,7 +1962,7 @@
   gap: 6px;
 }.mederti-chat-root .alternates-label{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -2019,7 +2019,7 @@
   border-color: var(--text);
 }.mederti-chat-root .products-count{
   font-size: 11px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -2044,11 +2044,11 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   letter-spacing: -0.01em;
 }.mederti-chat-root .products-group-count{
   font-size: 10px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -2072,7 +2072,7 @@
   overflow: hidden;
 }.mederti-chat-root .products-line-pill{
   font-size: 9px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-geist-mono), monospace;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;

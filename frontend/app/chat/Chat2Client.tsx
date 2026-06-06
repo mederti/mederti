@@ -13,7 +13,12 @@ import {
 } from "./components/ChatMain";
 import { collectDrugCandidates } from "./components/parser2";
 import { PreviewPane } from "./components/PreviewPane";
-import { ArticlePreviewPane, type ArticlePreviewItem } from "./components/ArticlePreviewPane";
+import { type ArticlePreviewItem } from "./components/ArticlePreviewPane";
+import { ArticleReader, type ArticleFull } from "./components/ArticleReader";
+import { ContextChat } from "./components/ContextChat";
+import { GovDashboardView } from "./components/views/GovDashboardView";
+import { EarlyWarningView } from "./components/views/EarlyWarningView";
+import { ChevronLeft } from "./components/icons";
 import { Sidebar } from "./components/Sidebar";
 import {
   deriveTitle,
@@ -68,6 +73,49 @@ function pickToolQuery(input: Record<string, unknown>): string {
   return "";
 }
 
+// ── Reading "views": polished operational dashboards that open into the
+// middle column with a grounded chat on the right (same pattern as articles).
+// Each view is a self-contained component plus the metadata used to seed the
+// side chat's grounding + starter questions.
+type ViewKind = "dashboard" | "early-warning";
+
+const VIEW_KINDS: ViewKind[] = ["dashboard", "early-warning"];
+
+const VIEW_COMPONENT: Record<ViewKind, React.ComponentType> = {
+  dashboard: GovDashboardView,
+  "early-warning": EarlyWarningView,
+};
+
+const VIEW_CONFIG: Record<
+  ViewKind,
+  { title: string; category: string; headerLabel: string; bodyText: string; starters: string[] }
+> = {
+  dashboard: {
+    title: "National Shortage Dashboard",
+    category: "National medicines-supply dashboard (Australia)",
+    headerLabel: "Ask about this dashboard",
+    bodyText:
+      "Mederti National Shortage Dashboard for Australia — the national medicines-supply picture across the TGA plus benchmarked regulators. Headline metrics: active shortages, essential medicines in shortage (WHO EML affected), medicines single-sourced nationally, median resolution time vs peers, and upstream alerts (India/China API sites). It lists the essential medicines currently in shortage (drug, class/ATC, suppliers active, duration, clinical risk, forecast return window), shows concentration risk by drug class (share dependent on a single API source), and benchmarks Australia's essential-medicine shortage burden against peer countries.",
+    starters: [
+      "Which essential medicines are at critical risk right now?",
+      "How does Australia's shortage burden compare to peer countries?",
+      "What's driving the beta-lactam antibiotic concentration risk?",
+    ],
+  },
+  "early-warning": {
+    title: "Early-warning radar",
+    category: "Predictive early-warning radar (global)",
+    headerLabel: "Ask about the radar",
+    bodyText:
+      "Mederti predictive early-warning radar (global). Forecasts which drugs are likely to go into shortage BEFORE official declaration, using upstream signals from 22 countries (e.g. India CDSCO GMP flags, China NMPA precursor export drops, environmental closures, recurring seasonal patterns, sponsor deregistrations). Drugs are ranked by probability × clinical impact, each with a signal driver, a predicted window, a probability, and a confidence score. Also surfaces a live upstream-site feed and the model's forecast-confidence / calibration.",
+    starters: [
+      "Why is cephalexin flagged as high-risk?",
+      "What upstream signals feed amoxicillin supply?",
+      "How accurate are these forecasts historically?",
+    ],
+  },
+};
+
 export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -115,7 +163,17 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("chat");
-  const [previewArticle, setPreviewArticle] = useState<ArticlePreviewItem | null>(null);
+  // Reading layout: an intelligence article opened into the middle column,
+  // with ArticleChat grounded in it on the right. `readingArticle` is the card
+  // metadata (instant header); `articleFull` is the fetched body (reader +
+  // chat grounding). See the fetch effect below.
+  const [readingArticle, setReadingArticle] = useState<ArticlePreviewItem | null>(null);
+  const [articleFull, setArticleFull] = useState<ArticleFull | null>(null);
+  const [articleLoading, setArticleLoading] = useState(false);
+  // A polished operational view (dashboard / early-warning / insights) opened
+  // into the middle column with a grounded chat on the right. Mutually
+  // exclusive with readingArticle.
+  const [readingView, setReadingView] = useState<ViewKind | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const idRef = useRef(0);
@@ -608,6 +666,11 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     setActiveView("chat");
     idRef.current = 0;
     setDrugId(null);
+    setReadingArticle(null);
+    setArticleFull(null);
+    setReadingView(null);
+    lastArticleSlugRef.current = null;
+    lastViewKeyRef.current = null;
     window.history.replaceState(null, "", "/chat");
   }, []);
 
@@ -635,6 +698,137 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     },
     [send]
   );
+
+  // ── Reading layout: open / close an intelligence article ──
+  // Reflect the open article in the URL (?article=<slug>) via
+  // history.replaceState — same reasoning as setDrugInUrl: avoid Next.js
+  // routing so we don't remount mid-session, while keeping refresh/share live.
+  const openReadingArticle = useCallback((article: ArticlePreviewItem) => {
+    setReadingView(null);
+    setReadingArticle(article);
+    setActiveView("intelligence");
+    const params = new URLSearchParams(window.location.search);
+    params.set("article", article.slug);
+    params.delete("view");
+    params.delete("drug");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, []);
+
+  const closeReadingArticle = useCallback(() => {
+    setReadingArticle(null);
+    setArticleFull(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("article");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, []);
+
+  // ── Reading layout: open / close an operational view ──
+  const openView = useCallback((kind: ViewKind) => {
+    setReadingArticle(null);
+    setArticleFull(null);
+    setReadingView(kind);
+    setActiveView("intelligence");
+    const params = new URLSearchParams(window.location.search);
+    params.set("view", kind);
+    params.delete("article");
+    params.delete("drug");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, []);
+
+  const closeView = useCallback(() => {
+    setReadingView(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("view");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, []);
+
+  // Fetch the full article body when the reading article changes. Feeds both
+  // the reader (sections) and the side chat (body_text grounding). Also folds
+  // the canonical metadata back into readingArticle so deep-links (?article=,
+  // which start with only a slug) get a real title/summary for the chat.
+  useEffect(() => {
+    const slug = readingArticle?.slug;
+    if (!slug) {
+      setArticleFull(null);
+      return;
+    }
+    let cancelled = false;
+    setArticleLoading(true);
+    setArticleFull(null);
+    fetch(`/api/intelligence/article/${encodeURIComponent(slug)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: ArticleFull | { error: string } | null) => {
+        if (cancelled || !j || "error" in j) return;
+        setArticleFull(j);
+        setReadingArticle((prev) =>
+          prev && prev.slug === slug
+            ? {
+                ...prev,
+                title: j.title,
+                category: j.category,
+                summary: j.summary,
+                date: j.date,
+                read_time: j.read_time,
+                tag: j.tag,
+                tag_tone: j.tag_tone,
+              }
+            : prev
+        );
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setArticleLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [readingArticle?.slug]);
+
+  // ── URL seed: ?article=<slug> deep link ──
+  // Powers the standalone /intelligence page links (router pushes
+  // /chat?article=<slug>). Opens the reading layout from a bare slug; the
+  // fetch effect above fills in the body + metadata.
+  const lastArticleSlugRef = useRef<string | null>(null);
+  useEffect(() => {
+    const slug = searchParams.get("article");
+    if (!slug || lastArticleSlugRef.current === slug) return;
+    lastArticleSlugRef.current = slug;
+    if (readingArticle?.slug === slug) return;
+    setReadingView(null);
+    // Readable placeholder title from the slug so a deep-link doesn't flash
+    // "Loading…" — the fetch effect replaces it with the canonical title.
+    const prettyTitle = slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    setReadingArticle({
+      slug,
+      category: "Intelligence",
+      title: prettyTitle,
+      summary: "",
+      date: new Date().toISOString(),
+      read_time: "",
+      tag: "Intelligence",
+      tag_tone: "neutral",
+    });
+    setActiveView("intelligence");
+  }, [searchParams, readingArticle?.slug]);
+
+  // ── URL seed: ?view=<kind> deep link ──
+  // Opens an operational view (dashboard / early-warning / insights) directly,
+  // e.g. from a link elsewhere in the app.
+  const lastViewKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const v = searchParams.get("view");
+    if (!v || lastViewKeyRef.current === v) return;
+    if (!VIEW_KINDS.includes(v as ViewKind)) return;
+    lastViewKeyRef.current = v;
+    setReadingArticle(null);
+    setArticleFull(null);
+    setReadingView(v as ViewKind);
+    setActiveView("intelligence");
+  }, [searchParams]);
 
   // ── URL seed: ?q=<text>&send=1 deep links ──
   // Powers global SiteNav search bar (router.push to /chat?q=...&send=1) and
@@ -751,60 +945,131 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               onToast={setToast}
             />
 
-            <ChatMain
-              turns={turns}
-              pending={pending}
-              drugsMap={drugsMap}
-              subsMap={subsMap}
-              drugIdByName={drugIdByName}
-              draft={draft}
-              onDraftChange={setDraft}
-              onSend={send}
-              textareaRef={textareaRef}
-              activeView={activeView}
-              onViewChange={setActiveView}
-              onAskFromView={askFromView}
-              onOpenArticle={setPreviewArticle}
-              attachedFiles={attachedFiles}
-              onFilesPicked={handleFilesPicked}
-              onRemoveAttachment={removeAttachment}
-              bulkFile={bulkFile}
-              onBulkClose={closeBulkUpload}
-            />
-
-            {drugId ? (
+            {readingArticle ? (
+              /* Reading layout: article fills the middle column, the
+                 article-grounded chat sits on the right. Replaces ChatMain +
+                 drug preview while active; the Sidebar stays. */
               <>
-                {/* Backdrop only renders below 3xl where the pane overlays
-                    chat content. At 3xl+ the pane sits inline, so the
-                    backdrop is hidden and chat stays usable beside it. */}
-                <button
-                  type="button"
-                  aria-label="Close preview"
-                  onClick={closeDrug}
-                  className="3xl:hidden fixed inset-0 z-20 bg-slate-900/30 backdrop-blur-[1px] animate-in fade-in duration-150"
+                <ArticleReader
+                  article={readingArticle}
+                  full={articleFull}
+                  loading={articleLoading}
+                  onClose={closeReadingArticle}
                 />
-                <PreviewPane
-                  key={drugId}
-                  drugId={drugId}
-                  onClose={closeDrug}
-                  onOpenDrug={openDrug}
-                  onAskAbout={askAboutDrug}
-                  onToast={setToast}
+                <ContextChat
+                  key={`article:${readingArticle.slug}`}
+                  contextKey={readingArticle.slug}
+                  title={readingArticle.title}
+                  category={`${readingArticle.category} article`}
+                  bodyText={articleFull?.body_text ?? readingArticle.summary}
+                  headerLabel="Ask about this article"
+                  emptyLead={
+                    <>
+                      I&apos;ve read{" "}
+                      <span className="font-medium text-slate-700">{readingArticle.title}</span>. Ask me
+                      anything about it — I&apos;ll ground answers in the article and pull live Mederti
+                      data where it helps.
+                    </>
+                  }
+                  starters={[
+                    "Summarise the key takeaways",
+                    "Which drugs are most exposed?",
+                    "What should a pharmacist do about this?",
+                  ]}
                 />
               </>
-            ) : null}
+            ) : readingView ? (
+              /* Operational view (dashboard / early-warning / insights) fills
+                 the middle column with a grounded chat on the right. */
+              (() => {
+                const cfg = VIEW_CONFIG[readingView];
+                const ViewComp = VIEW_COMPONENT[readingView];
+                return (
+                  <>
+                    <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
+                      <div className="h-14 flex items-center px-6 gap-3 shrink-0 border-b border-slate-100">
+                        <button
+                          type="button"
+                          onClick={closeView}
+                          className="inline-flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-slate-900 px-2 py-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                        >
+                          <ChevronLeft size={14} />
+                          Back
+                        </button>
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300 mx-1">
+                          Live view
+                        </span>
+                      </div>
+                      <div className="flex-1 min-h-0">
+                        <ViewComp />
+                      </div>
+                    </main>
+                    <ContextChat
+                      key={`view:${readingView}`}
+                      contextKey={readingView}
+                      title={cfg.title}
+                      category={cfg.category}
+                      bodyText={cfg.bodyText}
+                      headerLabel={cfg.headerLabel}
+                      emptyLead={
+                        <>
+                          You&apos;re viewing{" "}
+                          <span className="font-medium text-slate-700">{cfg.title}</span>. Ask me anything
+                          about it — I&apos;ll use live Mederti data for specifics.
+                        </>
+                      }
+                      starters={cfg.starters}
+                    />
+                  </>
+                );
+              })()
+            ) : (
+              <>
+                <ChatMain
+                  turns={turns}
+                  pending={pending}
+                  drugsMap={drugsMap}
+                  subsMap={subsMap}
+                  drugIdByName={drugIdByName}
+                  draft={draft}
+                  onDraftChange={setDraft}
+                  onSend={send}
+                  textareaRef={textareaRef}
+                  activeView={activeView}
+                  onViewChange={setActiveView}
+                  onAskFromView={askFromView}
+                  onOpenArticle={openReadingArticle}
+                  onOpenView={openView}
+                  attachedFiles={attachedFiles}
+                  onFilesPicked={handleFilesPicked}
+                  onRemoveAttachment={removeAttachment}
+                  bulkFile={bulkFile}
+                  onBulkClose={closeBulkUpload}
+                />
 
-            {previewArticle ? (
-              <ArticlePreviewPane
-                key={previewArticle.slug}
-                article={previewArticle}
-                onClose={() => setPreviewArticle(null)}
-                onAsk={(q) => {
-                  setPreviewArticle(null);
-                  askFromView(q);
-                }}
-              />
-            ) : null}
+                {drugId ? (
+                  <>
+                    {/* Backdrop only renders below 3xl where the pane overlays
+                        chat content. At 3xl+ the pane sits inline, so the
+                        backdrop is hidden and chat stays usable beside it. */}
+                    <button
+                      type="button"
+                      aria-label="Close preview"
+                      onClick={closeDrug}
+                      className="3xl:hidden fixed inset-0 z-20 bg-slate-900/30 backdrop-blur-[1px] animate-in fade-in duration-150"
+                    />
+                    <PreviewPane
+                      key={drugId}
+                      drugId={drugId}
+                      onClose={closeDrug}
+                      onOpenDrug={openDrug}
+                      onAskAbout={askAboutDrug}
+                      onToast={setToast}
+                    />
+                  </>
+                ) : null}
+              </>
+            )}
 
             {toast ? (
               <div

@@ -19,12 +19,17 @@ export default async function Home() {
   try {
     const admin = getSupabaseAdmin();
     const [catRes, activeRes, ctyRes] = await Promise.all([
-      admin.from("drug_catalogue").select("id", { count: "exact", head: true }),
+      // "Medicines tracked globally": planner-estimate count, not exact. An
+      // unfiltered exact count is a full scan of ~160k rows that intermittently
+      // hit Postgres's statement_timeout under Vercel's pooler → null count →
+      // a baked-in "—". The estimate is within a few rows and never times out.
+      admin.from("drug_catalogue").select("id", { count: "estimated", head: true }),
       admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
       // Countries & official regulators we monitor (the data_sources we scrape),
       // not just countries with active shortages this month. Exact count, no "+".
       admin.from("data_sources").select("country_code"),
     ]);
+    if (catRes.error) console.error("[home] drug_catalogue count failed:", catRes.error.message);
     if (catRes.count) medicines = k(catRes.count);
     if (activeRes.count) activeShortages = activeRes.count.toLocaleString();
     if (ctyRes.data) {
@@ -61,7 +66,7 @@ export default async function Home() {
         <div className="hero-bg" />
         <span className="hero-kicker"><span className="pulse" /> Free for pharmacists &amp; clinicians</span>
         <h1>Live shortage status<br />for <span className="em">any medicine</span>.</h1>
-        <p className="sub">Search any drug to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>
+        <p className="sub">Search any prescription medicine to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>
         <V1Search />
         <div className="hero-stats">
           <div className="stat"><div className="stat-n">{medicines}</div><div className="stat-l">Medicines tracked globally</div></div>
@@ -129,7 +134,7 @@ export default async function Home() {
       {/* ── CTA band ── */}
       <div className="cta-band">
         <h2>Built for the dispensary counter.</h2>
-        <p>Free forever for individual pharmacists and clinicians. No credit card.</p>
+        <p>Free for individual pharmacists and clinicians. No credit card.</p>
         <Link href="/signup" className="btn btn-primary">Create a free account</Link>
       </div>
 
@@ -154,20 +159,21 @@ function SwapIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="curre
 function BellIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>); }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
-.v1home .hero h1,.v1home .pp-title,.v1home .prop h3,.v1home .cta-band h2,.v1home .d-name,.v1home .sc-title{font-family:'Google Sans Flex','Inter',sans-serif;font-weight:500}
-.v1home .stat-n{font-family:'Inter',sans-serif;font-weight:500}
+/* Tuned design system: scoped token block mirrors the global tuned palette
+   (globals.css :root) and uses Geist. */
+.v1home .hero h1,.v1home .pp-title,.v1home .prop h3,.v1home .cta-band h2,.v1home .d-name,.v1home .sc-title{font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;font-weight:600;letter-spacing:-.04em}
+.v1home .stat-n{font-family:var(--font-geist-sans),system-ui,sans-serif;font-weight:600}
 .v1home{
-  --ink:#0a0f1a;--green:#10b981;--green-l:#34d399;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;
+  --ink:#0c1118;--green:#0fa676;--green-l:#34d399;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;
   --violet:#6366f1;--violet-bg:#eef2ff;--violet-b:#c7d2fe;
-  --bg:#ffffff;--bg-2:#f7f9fb;--bg-3:#eef2f6;--border:#e6eaf0;--border-2:#d3dae3;
-  --text:#0a0f1a;--text-2:#3a4452;--text-3:#697586;--text-4:#9aa4b2;
-  --crit:#e11d48;--crit-b:#fecdd3;--med:#d97706;--med-b:#fde68a;--ok:#10b981;--ok-bg:#ecfdf5;--ok-b:#a7f3d0;
-  --grad-brand:linear-gradient(135deg,#0a0f1a 0%,#0c3a30 48%,#34d399 100%);
-  position:relative;isolation:isolate;background:var(--bg-2);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh;padding-bottom:64px;overflow:hidden;
+  --bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
+  --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;
+  --crit:#dc2647;--crit-b:#f8cdd6;--med:#b46708;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;
+  --grad-brand:linear-gradient(135deg,#0c1118 0%,#0c3a30 48%,#34d399 100%);
+  position:relative;isolation:isolate;background:var(--bg-2);color:var(--text);font-family:var(--font-geist-sans),system-ui,sans-serif;font-size:14px;line-height:1.5;letter-spacing:-.011em;-webkit-font-smoothing:antialiased;min-height:100vh;padding-bottom:64px;overflow:hidden;
 }
 .v1home *{box-sizing:border-box}
-.v1home .mono{font-family:'DM Mono',monospace}
+.v1home .mono{font-family:var(--font-geist-mono),ui-monospace,monospace}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink)}
 .v1home .logo-img{height:31px;width:auto;display:block}
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;text-decoration:none}
@@ -184,7 +190,7 @@ const CSS = `
 .hero-kicker .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:v1blink 1.6s infinite}
 @keyframes v1blink{0%,100%{opacity:1}50%{opacity:.25}}
 .hero h1{font-size:77px;line-height:1.04;letter-spacing:-.04em;font-weight:800;margin-bottom:18px}
-.hero h1 .em{background:linear-gradient(110deg,#10b981,#0a0f1a 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero h1 .em{background:linear-gradient(110deg,#0fa676,#0c1118 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero p.sub{font-size:18px;color:var(--text-3);max-width:580px;margin:0 auto 34px;font-weight:400;letter-spacing:-.01em}
 .searchbox{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:16px;padding:9px 9px 9px 20px;box-shadow:0 18px 50px -22px rgba(10,15,26,.28);max-width:580px;margin:0 auto;transition:.15s}
 .searchbox:focus-within{border-color:var(--green);box-shadow:0 18px 50px -20px rgba(16,185,129,.4)}
@@ -199,7 +205,7 @@ const CSS = `
 .trust{margin-top:50px;text-align:center}
 .trust-label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-4);margin-bottom:16px}
 .trust-regs{display:flex;flex-wrap:wrap;gap:10px 20px;justify-content:center;align-items:center}
-.trust-reg{font-size:13px;font-weight:600;color:var(--text-3);font-family:'DM Mono',monospace}
+.trust-reg{font-size:13px;font-weight:600;color:var(--text-3);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .trust-line{font-size:12.5px;color:var(--text-4);margin-top:16px}
 .product-preview{max-width:920px;margin:clamp(40px,5vw,64px) auto 0;padding:0 clamp(20px,4vw,40px)}
 .pp-head{text-align:center;max-width:620px;margin:0 auto 26px}
@@ -209,20 +215,20 @@ const CSS = `
 .pp-frame{position:relative;background:var(--bg);border:1px solid var(--border);border-radius:18px;box-shadow:0 50px 90px -45px rgba(10,15,26,.34);overflow:hidden}
 .pp-bar{height:44px;background:var(--bg-2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;padding:0 16px}
 .pp-dot{width:11px;height:11px;border-radius:50%;background:var(--border-2)}
-.pp-url{margin-left:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text-3);padding:5px 14px}
+.pp-url{margin-left:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font-geist-mono),ui-monospace,monospace;color:var(--text-3);padding:5px 14px}
 .pp-body{padding:26px 28px 40px;max-width:560px;margin:0 auto}
 .pp-fade{position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
 .d-name{font-size:25px;font-weight:700;letter-spacing:-.032em;line-height:1.15}
-.d-generic{font-size:13px;color:var(--text-3);margin-top:4px;font-family:'DM Mono',monospace}
+.d-generic{font-size:13px;color:var(--text-3);margin-top:4px;font-family:var(--font-geist-mono),ui-monospace,monospace}
 .pp-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .d-tag{font-size:11px;font-weight:500;padding:4px 9px;border-radius:7px;background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
 .status-card{border-radius:18px}
-.status-card.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border:1px solid var(--crit-b)}
+.status-card.crit{background:linear-gradient(135deg,#fef5f7,#fdeef1);border:1px solid var(--crit-b)}
 .sc-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.078em;margin-bottom:7px;display:flex;align-items:center;gap:7px;color:var(--crit)}
 .sc-label .d{width:7px;height:7px;border-radius:50%;background:currentColor;animation:v1blink 1.6s infinite}
 .sc-title{font-size:26px;font-weight:700;letter-spacing:-.028em;margin-bottom:5px}
 .sc-sub{font-size:13px;color:var(--text-3)}
-.sc-asof{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:12px}
+.sc-asof{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px}
 .pp-sowhat{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px}
 .pp-sw{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:11px 12px}
 .pp-sw.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}
@@ -267,7 +273,7 @@ const CSS = `
 .cta-band h2{font-size:30px;font-weight:800;letter-spacing:-.03em;margin-bottom:10px}
 .cta-band p{font-size:15px;color:#c5cdd8;margin-bottom:26px}
 .cta-band .btn-primary{padding:13px 26px;font-size:15px;background:#fff;color:var(--ink);border-color:#fff;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
-.cta-band .btn-primary:hover{background:#eef2f6}
+.cta-band .btn-primary:hover{background:#eef2f5}
 .home-foot{max-width:1040px;margin:64px auto 0;padding:30px 24px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-4)}
 .home-foot a{color:inherit;text-decoration:none}
 .home-foot a:hover{color:var(--green-d)}

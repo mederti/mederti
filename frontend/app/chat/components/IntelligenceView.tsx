@@ -227,9 +227,13 @@ function mapMarketSignals(m: MarketDataResp | null): MarketSignal[] {
 export function IntelligenceView({
   onAsk,
   onOpenArticle,
+  onOpenView,
 }: {
   onAsk: (q: string) => void;
   onOpenArticle?: (article: ArticleCard) => void;
+  // Opens a full operational view (dashboard / early-warning) into the reading
+  // layout (middle column + grounded chat on the right).
+  onOpenView?: (kind: "dashboard" | "early-warning") => void;
 }) {
   const [briefing, setBriefing] = useState<BriefingPayload>(FALLBACK_BRIEFING);
   const [articles, setArticles] = useState<ArticleCard[]>(FALLBACK_ARTICLES);
@@ -279,6 +283,43 @@ export function IntelligenceView({
             Updated {formatTimeAgo(briefing.generated_at)}
           </div>
         </div>
+
+        {/* Live views — open a full operational dashboard into the reading
+            layout (middle column) with a grounded chat on the right. */}
+        {onOpenView ? (
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            {([
+              {
+                kind: "dashboard" as const,
+                label: "National Dashboard",
+                sub: "Live shortage status across the TGA + peer regulators",
+                accent: "bg-teal-500",
+              },
+              {
+                kind: "early-warning" as const,
+                label: "Early-warning radar",
+                sub: "Drugs forecast to go short before official declaration",
+                accent: "bg-red-500",
+              },
+            ]).map((v) => (
+              <button
+                key={v.kind}
+                type="button"
+                onClick={() => onOpenView(v.kind)}
+                className="text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-teal-200 hover:shadow-md transition-all group shadow-sm"
+              >
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className={`w-2 h-2 rounded-full ${v.accent}`} />
+                  <span className="text-slate-300 group-hover:text-teal-500 transition-colors text-[14px] leading-none">→</span>
+                </div>
+                <div className="text-[14px] font-semibold text-slate-900 group-hover:text-teal-700 transition-colors">
+                  {v.label}
+                </div>
+                <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">{v.sub}</p>
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {/* Daily Briefing */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 mb-8 shadow-sm">

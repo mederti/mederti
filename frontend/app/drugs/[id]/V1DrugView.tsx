@@ -251,6 +251,22 @@ export default function V1DrugView({
               <div className="d-generic">
                 {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
               </div>
+              {drug.who_essential_medicine ? (
+                <a
+                  className="d-eml"
+                  href="https://list.essentialmeds.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={
+                    drug.who_eml_section
+                      ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
+                      : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+                  }
+                >
+                  <span className="d-eml-dot" />
+                  WHO Essential Medicine
+                </a>
+              ) : null}
               {(() => {
                 const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
                 if (brands.length === 0) return null;
@@ -287,11 +303,19 @@ export default function V1DrugView({
               <div className="sw-v">{s19aTileDetail ? "Yes — under S19A" : "Per normal rules"}</div>
               <div className="sw-d">{s19aTileDetail ?? "Confirm with prescriber"}</div>
             </div>
-            <div className="sw-card">
-              <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
-              <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
-              <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
-            </div>
+            {topAlt?.id != null ? (
+              <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
+                <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
+                <div className="sw-v">{topAlt.name}</div>
+                <div className="sw-d">{`${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}`}</div>
+              </Link>
+            ) : (
+              <div className="sw-card">
+                <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
+                <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
+                <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
+              </div>
+            )}
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
               <div className="sw-v">{expected ?? "No estimate"}</div>
@@ -551,12 +575,15 @@ export default function V1DrugView({
 }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
-.v1home .d-name,.v1home .sc-title,.v1home .sec-title,.v1home .chat-title{font-family:'Google Sans Flex','Inter',sans-serif;font-weight:500}
-.v1home{--ink:#0a0f1a;--green:#10b981;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;--grad-soft:linear-gradient(135deg,#34d399,#10b981 45%,#0a0f1a 120%);--grad-brand:linear-gradient(135deg,#0a0f1a,#0c3a30 48%,#34d399);
-  --violet:#6366f1;--violet-b:#c7d2fe;--bg:#fff;--bg-2:#f7f9fb;--bg-3:#eef2f6;--border:#e6eaf0;--border-2:#d3dae3;
-  --text:#0a0f1a;--text-2:#3a4452;--text-3:#697586;--text-4:#9aa4b2;--crit:#e11d48;--crit-b:#fecdd3;--med:#d97706;--med-b:#fde68a;--ok:#10b981;--ok-bg:#ecfdf5;--ok-b:#a7f3d0;--crit-bg:#fff1f3;--med-bg:#fffbeb;
-  background:var(--bg-2);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh}
+/* Tuned design system: this surface's scoped token block now mirrors the
+   global tuned palette (globals.css :root) and uses Geist. Kept component-
+   local because V1DrugView was authored as a self-contained surface. */
+.v1home .d-name,.v1home .sc-title,.v1home .sec-title,.v1home .chat-title{font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;font-weight:600;letter-spacing:-.03em}
+.v1home{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;--grad-soft:linear-gradient(135deg,#34d399,#0fa676 45%,#0c1118 120%);--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
+  --violet:#6366f1;--violet-b:#c7d2fe;--bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
+  --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;--crit:#dc2647;--crit-b:#f8cdd6;--med:#b46708;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;--crit-bg:#fdeef1;--med-bg:#fdf6e9;
+  --hi-inset:inset 0 1px 0 rgba(255,255,255,.7);--sh-card:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06);--sh-pop:0 2px 4px rgba(12,17,24,.05),0 12px 28px -10px rgba(12,17,24,.16);
+  background:var(--bg-2);color:var(--text);font-family:var(--font-geist-sans),system-ui,sans-serif;font-size:14px;letter-spacing:-.011em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
 .v1home .logo-img{height:31px;width:auto;display:block}
@@ -598,10 +625,13 @@ const CSS = `
 @keyframes d-img-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @media(max-width:640px){.d-img{width:96px;height:96px;border-radius:13px}}
 .d-name{font-size:30px;font-weight:700;letter-spacing:-.032em;line-height:1.1}
-.d-generic{font-size:13px;color:var(--text-3);margin-top:5px;font-family:'DM Mono',monospace}
+.d-generic{font-size:13px;color:var(--text-3);margin-top:5px;font-family:var(--font-geist-mono),ui-monospace,monospace}
 .d-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .d-tag{font-size:11px;font-weight:500;padding:4px 9px;border-radius:7px;background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
-.status-card{margin:18px 0 0;border-radius:18px;padding:20px}
+.d-eml{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b);text-decoration:none;width:fit-content}
+.d-eml:hover{background:#dcfce7}
+.d-eml-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+.status-card{margin:18px 0 0;border-radius:18px;padding:20px;box-shadow:var(--sh-card),var(--hi-inset);}
 .status-card.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border:1px solid var(--crit-b)}
 .status-card.med{background:linear-gradient(135deg,#fffdf5,#fffbeb);border:1px solid var(--med-b)}
 .status-card.ok{background:linear-gradient(135deg,#f0fdf8,#ecfdf5);border:1px solid var(--ok-b)}
@@ -610,10 +640,12 @@ const CSS = `
 .sc-label .d{width:7px;height:7px;border-radius:50%;background:currentColor}
 .sc-title{font-size:24px;font-weight:700;letter-spacing:-.028em;margin-bottom:5px}
 .sc-sub{font-size:13px;color:var(--text-3)}
-.sc-asof{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:12px}
+.sc-asof{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px}
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
-.sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block}
+.sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block;box-shadow:var(--sh-card),var(--hi-inset);}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}
+.sw-card-link{transition:border-color .15s,box-shadow .15s,transform .15s}
+.sw-card-link:hover{border-color:var(--green);box-shadow:0 1px 8px rgba(0,0,0,.06);box-shadow:var(--sh-pop),var(--hi-inset);transform:translateY(-2px);}
 .sw-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-4)}
 .sw-ic{width:16px;height:16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
 .sw-ic.ok{background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b)}
@@ -634,11 +666,11 @@ const CSS = `
 .ai-sum-sig.neutral{color:var(--text-3);background:var(--bg-3);border:1px solid var(--border)}
 .ai-sum-hl{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-bottom:6px;line-height:1.3}
 .ai-sum-body{font-size:13px;color:var(--text-2);line-height:1.62}
-.ai-sum-foot{font-size:10.5px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:12px}
+.ai-sum-foot{font-size:10.5px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px}
 .ai-sum-skel{font-size:12.5px;color:var(--text-4);font-style:italic}
 .sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.078em;color:var(--text-4);margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sec-title .help{color:var(--text-4);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px}
-.subpath{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg)}
+.subpath{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:var(--sh-card),var(--hi-inset);}
 .subpath-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px}
 .subpath-l{display:flex;gap:12px;align-items:flex-start;min-width:0}
 .subpath-ic{width:22px;height:22px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-top:1px}
@@ -647,19 +679,19 @@ const CSS = `
 .subpath-n{font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 .subpath-d{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:3px}
 .alt-list{display:flex;flex-direction:column;gap:9px}
-.alt-card{background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.alt-card{background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;box-shadow:var(--sh-card),var(--hi-inset);}
 .alt-link{text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
-.alt-link:hover{border-color:var(--green);box-shadow:0 1px 8px rgba(0,0,0,.06)}
+.alt-link:hover{border-color:var(--green);box-shadow:0 1px 8px rgba(0,0,0,.06);box-shadow:var(--sh-pop),var(--hi-inset);transform:translateY(-2px);}
 .alt-main{min-width:0}
 .alt-n{font-size:14px;font-weight:600;margin-bottom:3px}
-.alt-f{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace}
+.alt-f{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .alt-note{font-size:11.5px;color:var(--text-3);margin-top:6px;line-height:1.45}
 .alt-match{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:110px}
 .alt-bar{width:96px;height:5px;border-radius:99px;background:var(--bg-3);overflow:hidden}
 .alt-bar span{display:block;height:100%;border-radius:99px;background:var(--grad-soft)}
-.alt-pct{font-size:10.5px;color:var(--text-4);font-family:'DM Mono',monospace}
+.alt-pct{font-size:10.5px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .country-list{display:flex;flex-direction:column;gap:9px}
-.country-row{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-radius:13px;background:var(--bg);border:1px solid var(--border)}
+.country-row{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-radius:13px;background:var(--bg);border:1px solid var(--border);box-shadow:var(--sh-card),var(--hi-inset);}
 .cl{display:flex;align-items:center;gap:11px}
 .cn{font-size:14px;font-weight:600}
 .flag{font-size:18px}
@@ -667,22 +699,22 @@ const CSS = `
 .tl-row{display:flex;gap:11px;align-items:flex-start}
 .tl-d{width:9px;height:9px;border-radius:50%;border:2px solid var(--border-2);background:var(--bg);margin-top:3px;flex-shrink:0}
 .tl-d.filled{background:var(--green);border-color:var(--green)}
-.tl-dt{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace}
+.tl-dt{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .tl-ev{font-size:12.5px;color:var(--text-2);margin-top:1px}
 .src-list{display:flex;flex-direction:column;gap:7px}
-.src-item{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border-radius:11px;background:var(--bg);border:1px solid var(--border)}
+.src-item{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border-radius:11px;background:var(--bg);border:1px solid var(--border);box-shadow:var(--sh-card),var(--hi-inset);}
 .src-l{display:flex;align-items:center;gap:9px}
 .src-n{font-size:12px;font-weight:600}
-.src-link{font-size:11px;color:var(--green-d);font-family:'DM Mono',monospace;font-weight:500;text-decoration:none}
-.conc{border:1px solid var(--border);border-radius:14px;background:var(--bg);padding:16px}
+.src-link{font-size:11px;color:var(--green-d);font-family:var(--font-geist-mono),ui-monospace,monospace;font-weight:500;text-decoration:none}
+.conc{border:1px solid var(--border);border-radius:14px;background:var(--bg);padding:16px;box-shadow:var(--sh-card),var(--hi-inset);}
 .conc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
 .conc-n{font-size:18px;font-weight:700;letter-spacing:-.02em;color:var(--ink)}
 .conc-d{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:4px;max-width:520px}
 .who-pq-badge{font-size:10.5px;font-weight:600;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:3px 9px;border-radius:99px;white-space:nowrap}
 .conc-makers{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
-.conc-foot{font-size:11px;color:var(--text-4);font-family:'DM Mono',monospace;margin-top:13px;border-top:1px solid var(--border);padding-top:11px}
+.conc-foot{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:13px;border-top:1px solid var(--border);padding-top:11px}
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.stat-cell{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 13px}
+.stat-cell{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 13px;box-shadow:var(--sh-card),var(--hi-inset);}
 .stat-v{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--ink);line-height:1.1}
 .stat-l{font-size:10.5px;color:var(--text-3);margin-top:5px;text-transform:uppercase;letter-spacing:.04em}
 .stat-foot{font-size:11.5px;color:var(--text-3);margin-top:11px;line-height:1.5}
@@ -694,17 +726,33 @@ const CSS = `
 .sp-ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-b)}
 .chat-col{width:380px;flex-shrink:0;border-left:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh}
 .chat-panel{display:flex;flex-direction:column;height:100%}
-.chat-head{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border)}
-.chat-h-l{display:flex;align-items:center;gap:10px}
-.chat-ic{font-size:16px;color:var(--violet)}
-.chat-title{font-size:13.5px;font-weight:700}
-.chat-sub{font-size:11px;color:var(--text-4)}
-.chat-free-tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:2px 7px;border-radius:6px}
+.chat-head{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fbfcfe,var(--bg))}
+.chat-h-l{display:flex;align-items:center;gap:11px}
+.chat-ic{width:30px;height:30px;border-radius:9px;background:var(--grad-brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;box-shadow:0 5px 14px -5px rgba(16,185,129,.55)}
+.chat-title{font-size:14px;font-weight:700;letter-spacing:-.01em}
+.chat-sub{font-size:11px;color:var(--text-4);display:flex;align-items:center;gap:5px;margin-top:2px}
+.chat-live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0;animation:chat-pulse 2.2s infinite}
+@keyframes chat-pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}70%{box-shadow:0 0 0 5px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.chat-free-tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:3px 8px;border-radius:99px;align-self:flex-start}
 .chat-stream{padding:16px;flex:1;overflow-y:auto}
 .chat-bubble{background:var(--bg-2);border:1px solid var(--border);border-radius:4px 13px 13px 13px;padding:11px 13px;font-size:12.5px;color:var(--text-2);line-height:1.5}
-.chat-suggest{display:flex;flex-direction:column;gap:7px;padding:0 16px 12px}
-.chat-q{text-align:left;font-size:12px;color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:9px 12px;text-decoration:none;transition:.12s}
-.chat-q:hover{border-color:var(--violet);color:var(--violet)}
+.chat-bubble>*:last-child{margin-bottom:0}
+.chat-bubble strong{font-weight:700;color:var(--text)}
+.chat-bubble .cb-p{margin:0 0 9px}
+.chat-bubble .cb-list{margin:0 0 9px;padding-left:17px;display:flex;flex-direction:column;gap:3px}
+.chat-bubble .cb-list li{line-height:1.45;padding-left:2px}
+.chat-bubble .cb-quote{margin:0 0 9px;padding:9px 11px;background:var(--med-bg);border-left:3px solid var(--med-b);border-radius:0 9px 9px 0;color:var(--text-2)}
+.chat-bubble .cb-table-wrap{margin:0 0 9px;overflow-x:auto;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
+.chat-bubble .cb-table{border-collapse:collapse;width:100%;font-size:11px}
+.chat-bubble .cb-table th{text-align:left;font-weight:700;color:var(--text-3);background:var(--bg-3);padding:6px 9px;white-space:nowrap;border-bottom:1px solid var(--border)}
+.chat-bubble .cb-table td{padding:6px 9px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:top}
+.chat-bubble .cb-table tr:last-child td{border-bottom:none}
+.chat-suggest{display:flex;flex-direction:column;gap:7px;padding:0 16px 14px}
+.chat-q{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;font-size:12px;font-weight:500;color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:10px 13px;text-decoration:none;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s,background .15s,color .15s}
+.chat-q-t{min-width:0}
+.chat-q:hover{border-color:var(--violet-b);background:#f6f6ff;color:var(--violet);box-shadow:0 6px 16px -10px rgba(99,102,241,.6);transform:translateY(-1px)}
+.chat-q-arrow{color:var(--text-4);font-size:13px;flex-shrink:0;opacity:0;transform:translateX(-5px);transition:.15s}
+.chat-q:hover .chat-q-arrow{color:var(--violet);opacity:1;transform:translateX(0)}
 .chat-input{display:flex;align-items:center;gap:8px;margin:0 16px 16px;padding:9px 9px 9px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg);text-decoration:none}
 .chat-input input{flex:1;border:none;background:transparent;outline:none;font-size:13px;font-family:inherit;color:var(--text)}
 .chat-input input::placeholder{color:var(--text-4)}

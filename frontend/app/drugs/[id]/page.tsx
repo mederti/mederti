@@ -300,7 +300,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const [drugRes, shortagesRes, logRes, alternativesRes, recallsRes, productsRes] =
     await Promise.allSettled([
       supabase.from("drugs")
-        .select("id, generic_name, brand_names, atc_code, atc_description, drug_class, dosage_forms, strengths, routes_of_administration, therapeutic_category, is_controlled_substance")
+        .select("id, generic_name, brand_names, atc_code, atc_description, drug_class, dosage_forms, strengths, routes_of_administration, therapeutic_category, is_controlled_substance, who_essential_medicine, who_eml_section, who_eml_year")
         .eq("id", id).single(),
       supabase.from("shortage_events")
         .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, data_sources(name, abbreviation, country_code)")

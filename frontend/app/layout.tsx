@@ -1,21 +1,9 @@
 import type { Metadata } from "next";
-import { Inter, DM_Mono } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "optional",
-});
-
-const dmMono = DM_Mono({
-  variable: "--font-dm-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  display: "optional",
-});
 
 const SITE_URL = "https://mederti.vercel.app";
 
@@ -57,9 +45,9 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head />
-      <body className={`${inter.variable} ${dmMono.variable} antialiased`}>
+      <body className="antialiased">
         {children}
         <Analytics />
         <SpeedInsights />

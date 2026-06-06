@@ -16,9 +16,103 @@ function clean(t: string): string {
     .replace(/<(sources|followups|sub_table)>[\s\S]*$/gi, "")
     .replace(/<drug_card[^>]*\/?>/gi, "")
     .replace(/<[^>]+>/g, "")
-    .replace(/\*\*/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// Lightweight markdown for the narrow side column: bold, tables, blockquotes,
+// and bullet lists. The full /chat page has a richer renderer (parser2.tsx),
+// but cards/source-chips don't belong in a 380px rail — this keeps it readable.
+function renderInline(text: string, kp: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const re = /\*\*([^*]+)\*\*/g;
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  let k = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > cursor) out.push(text.slice(cursor, m.index));
+    out.push(<strong key={`${kp}-b${k++}`}>{m[1]}</strong>);
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < text.length) out.push(text.slice(cursor));
+  return out;
+}
+
+function splitRow(row: string): string[] {
+  let r = row.trim();
+  if (r.startsWith("|")) r = r.slice(1);
+  if (r.endsWith("|")) r = r.slice(0, -1);
+  return r.split("|").map((c) => c.trim());
+}
+
+const isTableSep = (l: string) => /^[\s|:-]+$/.test(l) && l.includes("-") && l.includes("|");
+const isBullet = (l: string) => /^\s*[-*]\s+/.test(l);
+
+function renderRich(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim() === "") { i++; continue; }
+
+    // Table: a `|` row immediately followed by a `|---|` separator row.
+    if (line.includes("|") && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      const header = splitRow(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim() !== "" && lines[i].includes("|")) {
+        rows.push(splitRow(lines[i]));
+        i++;
+      }
+      const kk = key++;
+      blocks.push(
+        <div className="cb-table-wrap" key={`k${kk}`}>
+          <table className="cb-table">
+            <thead><tr>{header.map((h, ci) => <th key={ci}>{renderInline(h, `t${kk}h${ci}`)}</th>)}</tr></thead>
+            <tbody>{rows.map((r, ri) => <tr key={ri}>{r.map((c, ci) => <td key={ci}>{renderInline(c, `t${kk}r${ri}c${ci}`)}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // Blockquote / callout.
+    if (line.trimStart().startsWith(">")) {
+      const qs: string[] = [];
+      while (i < lines.length && lines[i].trimStart().startsWith(">")) {
+        qs.push(lines[i].replace(/^\s*>\s?/, ""));
+        i++;
+      }
+      const kk = key++;
+      blocks.push(<div className="cb-quote" key={`k${kk}`}>{renderInline(qs.join(" "), `q${kk}`)}</div>);
+      continue;
+    }
+
+    // Bullet list.
+    if (isBullet(line)) {
+      const items: string[] = [];
+      while (i < lines.length && isBullet(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*]\s+/, ""));
+        i++;
+      }
+      const kk = key++;
+      blocks.push(<ul className="cb-list" key={`k${kk}`}>{items.map((it, ii) => <li key={ii}>{renderInline(it, `u${kk}i${ii}`)}</li>)}</ul>);
+      continue;
+    }
+
+    // Paragraph — always consume the current line first to guarantee progress.
+    const para: string[] = [line];
+    i++;
+    while (i < lines.length && lines[i].trim() !== "" && !lines[i].includes("|") && !lines[i].trimStart().startsWith(">") && !isBullet(lines[i])) {
+      para.push(lines[i]);
+      i++;
+    }
+    const kk = key++;
+    blocks.push(<p className="cb-p" key={`k${kk}`}>{renderInline(para.join(" "), `p${kk}`)}</p>);
+  }
+  return blocks;
 }
 
 export default function V1Chat({ drugName }: { drugName: string }) {
@@ -127,7 +221,7 @@ export default function V1Chat({ drugName }: { drugName: string }) {
   return (
     <div className="chat-panel">
       <div className="chat-head">
-        <div className="chat-h-l"><span className="chat-ic">✦</span><div><div className="chat-title">Ask about this medicine</div><div className="chat-sub">Grounded in live regulator data</div></div></div>
+        <div className="chat-h-l"><span className="chat-ic">✦</span><div><div className="chat-title">Ask about this medicine</div><div className="chat-sub"><span className="chat-live-dot" />Grounded in live regulator data</div></div></div>
         <span className="chat-free-tag">FREE</span>
       </div>
 
@@ -140,7 +234,9 @@ export default function V1Chat({ drugName }: { drugName: string }) {
           if (!body) return null;
           return (
             <div key={i} className={`chat-msg ${m.role === "user" ? "user" : "ai"}`}>
-              <div className="chat-bubble" style={{ whiteSpace: "pre-wrap" }}>{body}</div>
+              <div className="chat-bubble" style={m.role === "user" ? { whiteSpace: "pre-wrap" } : undefined}>
+                {m.role === "user" ? body : renderRich(body)}
+              </div>
             </div>
           );
         })}
@@ -150,7 +246,7 @@ export default function V1Chat({ drugName }: { drugName: string }) {
       {msgs.length === 0 && (
         <div className="chat-suggest">
           {suggestions.map((q) => (
-            <button key={q} type="button" className="chat-q" onClick={() => send(q)}>{q}</button>
+            <button key={q} type="button" className="chat-q" onClick={() => send(q)}><span className="chat-q-t">{q}</span><span className="chat-q-arrow">→</span></button>
           ))}
         </div>
       )}

@@ -18,9 +18,43 @@ const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 // the facts); this ceiling is for thinking + multi-tool rounds, not long prose.
 const MAX_OUTPUT_TOKENS = 16384;
 
+type ArticleContext = {
+  title: string;
+  category?: string;
+  summary?: string;
+  body: string;
+};
+
 type IncomingBody = {
   messages: ChatMessage[];
+  // When the chat is opened alongside an intelligence article (the reading
+  // layout), the article body is passed here so answers are grounded in it.
+  article_context?: ArticleContext;
 };
+
+// Build the article-grounding system block that gets appended (uncached)
+// after the main cached SYSTEM_PROMPT when the user is reading an article.
+// Kept separate so the big prompt stays cacheable while the per-article body
+// rides as a small trailing block.
+function articleSystemBlock(article: ArticleContext): string {
+  // Cap the body so a very long article can't blow the context window. ~12k
+  // chars (~3k tokens) is plenty for grounding; the model can still call
+  // tools for live data beyond what the article states.
+  const body = article.body.length > 12000 ? article.body.slice(0, 12000) + "\n\n[…article truncated]" : article.body;
+  return [
+    "The user is currently viewing the following Mederti content (an intelligence article, dashboard, or analytical view) and their questions are about it.",
+    "Ground your answers in this content first, then use the Mederti database/tools for live shortage, drug, and substitute data when the user asks about specifics. If the content shown and the live data disagree, trust the live data and say so. Note that dashboard/view content may contain illustrative sample figures — when asked for exact current numbers, prefer the live tools.",
+    "Keep answers tight and operational. Do not restate the whole thing back to the user.",
+    "",
+    `TITLE: ${article.title}`,
+    article.category ? `CONTEXT: ${article.category}` : "",
+    "--- CONTENT ---",
+    body,
+    "--- END CONTENT ---",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 // ── Wire protocol ─────────────────────────────────────────────────────────
 // NDJSON: one JSON object per line. Event shapes:
@@ -340,6 +374,26 @@ export async function POST(req: NextRequest) {
     content: m.text,
   }));
 
+  // Optional article grounding (reading layout). Validated minimally; a
+  // malformed payload just falls through to a normal chat.
+  const articleContext: ArticleContext | null =
+    body.article_context &&
+    typeof body.article_context.body === "string" &&
+    body.article_context.body.length > 0 &&
+    typeof body.article_context.title === "string"
+      ? body.article_context
+      : null;
+
+  // System blocks: the big prompt stays cached; the per-article body rides as
+  // a small trailing (uncached) block when present. Reused across the tool
+  // loop and the final-synthesis stream so grounding is consistent.
+  const systemBlocks: Anthropic.TextBlockParam[] = [
+    { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+  ];
+  if (articleContext) {
+    systemBlocks.push({ type: "text", text: articleSystemBlock(articleContext) });
+  }
+
   // Resolve the authenticated user_id, if any. Auth-required tools
   // (get_my_portfolio_status, get_watchlist_demand, set_portfolio_alert)
   // check ctx.user_id and refuse cleanly when null. Anonymous chat continues
@@ -379,7 +433,11 @@ export async function POST(req: NextRequest) {
     // landscape, recall, comparison) — those fall straight through to
     // Tier 2. The confidence check is the top search_drugs hit's
     // generic-name first word appearing in the user's question.
-    const tier1 = await runTier1({ question: lastUserText, ctx, write });
+    // Skip the single-drug Tier 1 opener when grounding on an article — the
+    // templated drug headline would hijack an article-scoped question.
+    const tier1 = articleContext
+      ? null
+      : await runTier1({ question: lastUserText, ctx, write });
     if (tier1) {
       toolCalls += tier1.calls.length;
       assembledText += tier1.headline;
@@ -421,13 +479,7 @@ export async function POST(req: NextRequest) {
           output_config: {
             effort: "medium",
           },
-          system: [
-            {
-              type: "text",
-              text: SYSTEM_PROMPT,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
+          system: systemBlocks,
           tools: TOOL_DEFINITIONS,
           messages,
         });
@@ -520,13 +572,7 @@ export async function POST(req: NextRequest) {
           output_config: {
             effort: "medium",
           },
-          system: [
-            {
-              type: "text",
-              text: SYSTEM_PROMPT,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
+          system: systemBlocks,
           // Intentionally omit `tools` — forces Claude to produce a text answer.
           messages,
         });

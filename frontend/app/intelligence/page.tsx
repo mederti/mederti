@@ -134,6 +134,30 @@ export default async function IntelligencePage() {
           <IntelligenceBriefing />
         </div>
 
+        {/* ─── LIVE OPERATIONAL VIEWS ─── open into the reading layout (view + chat) */}
+        <div style={{ marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+          {[
+            { view: "dashboard", dot: "var(--teal)", label: "National Dashboard", sub: "Live shortage status across the TGA + peer regulators" },
+            { view: "early-warning", dot: "var(--crit)", label: "Early-warning radar", sub: "Drugs forecast to go short before official declaration" },
+          ].map((v) => (
+            <Link
+              key={v.view}
+              href={`/chat?view=${v.view}`}
+              style={{
+                textDecoration: "none", background: "#fff", border: "1px solid var(--app-border)",
+                borderRadius: 12, padding: "14px 16px", display: "block",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: v.dot, display: "inline-block" }} />
+                <span style={{ color: "var(--app-text-4)" }}>→</span>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>{v.label}</div>
+              <div style={{ fontSize: 12, color: "var(--app-text-3)", marginTop: 3, lineHeight: 1.5 }}>{v.sub}</div>
+            </Link>
+          ))}
+        </div>
+
         {/* ─── REGULATORY CALENDAR LINK ─── */}
         <div style={{ marginBottom: 32, padding: 18, background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div>
@@ -155,8 +179,8 @@ export default async function IntelligencePage() {
           gap: 48, padding: "48px 0 44px",
           borderBottom: "1px solid #e5e7eb",
         }}>
-          {/* Main hero */}
-          <Link href={`/intelligence/${hero.slug}`} style={{ textDecoration: "none", display: "flex", flexDirection: "column", gap: 0 }}>
+          {/* Main hero — opens the reading layout (article + side chat) */}
+          <Link href={`/chat?article=${hero.slug}`} style={{ textDecoration: "none", display: "flex", flexDirection: "column", gap: 0 }}>
             {/* Image placeholder */}
             <div style={{
               width: "100%", aspectRatio: "16/9", background: "#f1f5f9",
@@ -189,13 +213,19 @@ export default async function IntelligencePage() {
             </div>
           </Link>
 
-          {/* Side articles stack */}
+          {/* Side articles stack — each opens the reading layout */}
           <div style={{ display: "flex", flexDirection: "column" }}>
             {sideArticles.map((a, i) => (
-              <div key={a.slug} style={{
-                padding: "24px 0",
-                borderBottom: i < sideArticles.length - 1 ? "1px solid #e5e7eb" : "none",
-              }}>
+              <Link
+                key={a.slug}
+                href={`/chat?article=${a.slug}`}
+                style={{
+                  textDecoration: "none",
+                  display: "block",
+                  padding: "24px 0",
+                  borderBottom: i < sideArticles.length - 1 ? "1px solid #e5e7eb" : "none",
+                }}
+              >
                 <CategoryTag category={a.category} />
                 <div style={{
                   fontSize: 18, fontWeight: 650, color: "#0f172a",
@@ -212,7 +242,7 @@ export default async function IntelligencePage() {
                   {a.author && <span>&middot;</span>}
                   <span>{a.date}</span>
                 </div>
-              </div>
+              </Link>
             ))}
 
             {/* Data signal teaser */}

@@ -46,14 +46,14 @@ export function TradePriceStrip({ tradePrice }: { tradePrice: DrugDetailBundle["
         alignItems: "center",
         gap: 14,
         padding: "10px 14px",
-        background: "var(--app-bg-2, #f8fafc)",
+        background: "var(--app-bg-2, #fafbfc)",
         borderRadius: 8,
-        border: "1px solid var(--app-border, #e2e8f0)",
+        border: "1px solid var(--app-border, #e8ecf0)",
         margin: "8px 0",
         fontSize: 12,
       }}
     >
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--app-text-4, #94a3b8)" }}>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--app-text-4, #98a1ac)" }}>
         Trade · AU
       </span>
       <span
@@ -61,12 +61,12 @@ export function TradePriceStrip({ tradePrice }: { tradePrice: DrugDetailBundle["
           fontFamily: "var(--font-dm-mono), ui-monospace, monospace",
           fontSize: 14,
           fontWeight: 600,
-          color: "var(--app-text, #0f172a)",
+          color: "var(--app-text, #0c1118)",
         }}
       >
         {tradePrice.home.value}
       </span>
-      <span style={{ fontSize: 10, color: "var(--app-text-4, #94a3b8)" }}>
+      <span style={{ fontSize: 10, color: "var(--app-text-4, #98a1ac)" }}>
         {tradePrice.home.pack} · {tradePrice.home.updatedLabel}
       </span>
       {adj.length > 0 ? (
@@ -87,7 +87,7 @@ export function TradePriceStrip({ tradePrice }: { tradePrice: DrugDetailBundle["
                   style={{
                     fontFamily: "var(--font-dm-mono), ui-monospace, monospace",
                     fontSize: 10,
-                    color: m.delta > 0 ? "#ef4444" : "#10b981",
+                    color: m.delta > 0 ? "#ef4444" : "#0fa676",
                   }}
                 >
                   {m.delta > 0 ? "+" : ""}{m.delta}%

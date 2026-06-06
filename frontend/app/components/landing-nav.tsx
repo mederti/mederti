@@ -184,8 +184,8 @@ export default function SiteNav() {
   ];
 
   /* ── Header colors (light) ── */
-  const bg       = "#fff";
-  const border   = "1px solid var(--app-border)";
+  const bg       = "color-mix(in srgb, var(--surf) 80%, transparent)";
+  const border   = "1px solid var(--border)";
   const logo     = "/logo-black.png";
   const txt      = "var(--app-text-3)";
   const txtHi    = "var(--app-text)";
@@ -202,6 +202,8 @@ export default function SiteNav() {
       position: "sticky", top: 0, zIndex: 100,
       height: 64, background: bg,
       borderBottom: border,
+      backdropFilter: "blur(16px) saturate(1.4)",
+      WebkitBackdropFilter: "blur(16px) saturate(1.4)",
       transition: "background 0.2s, border-color 0.2s",
     }}>
       <div style={{
@@ -426,8 +428,8 @@ export default function SiteNav() {
             {showCountry && (
               <div style={{
                 position: "absolute", top: "calc(100% + 6px)", right: 0,
-                background: "#fff", border: "1px solid #e2e8f0",
-                borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+                background: "var(--surf)", border: "1px solid var(--border)",
+                borderRadius: 10, boxShadow: "var(--sh-pop)",
                 padding: 4, minWidth: 130, zIndex: 200,
               }}>
                 {COUNTRIES.map(c => (
@@ -439,7 +441,7 @@ export default function SiteNav() {
                       width: "100%", textAlign: "left",
                       padding: "8px 12px", borderRadius: 6, border: "none",
                       background: c.code === country.code ? "var(--teal-bg)" : "transparent",
-                      color: c.code === country.code ? "var(--teal)" : "#334155",
+                      color: c.code === country.code ? "var(--teal)" : "var(--tx-2)",
                       fontSize: 13, fontWeight: c.code === country.code ? 500 : 400,
                       cursor: "pointer", fontFamily: "var(--font-inter), system-ui, sans-serif",
                     }}
@@ -479,13 +481,13 @@ export default function SiteNav() {
                 ) : (
                   <div style={{
                     width: 28, height: 28, borderRadius: "50%",
-                    background: "#e2e8f0",
+                    background: "var(--surf-3)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     flexShrink: 0, overflow: "hidden",
                   }}>
                     <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                      <circle cx="14" cy="10" r="5" fill="#94a3b8"/>
-                      <ellipse cx="14" cy="26" rx="10" ry="8" fill="#94a3b8"/>
+                      <circle cx="14" cy="10" r="5" fill="var(--tx-4)"/>
+                      <ellipse cx="14" cy="26" rx="10" ry="8" fill="var(--tx-4)"/>
                     </svg>
                   </div>
                 )}
@@ -499,22 +501,22 @@ export default function SiteNav() {
               {showUser && (
                 <div style={{
                   position: "absolute", top: "calc(100% + 8px)", right: 0,
-                  background: "#fff", border: "1px solid #e2e8f0",
-                  borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                  background: "var(--surf)", border: "1px solid var(--border)",
+                  borderRadius: 10, boxShadow: "var(--sh-pop)",
                   padding: 8, minWidth: 200, zIndex: 200,
                 }}>
-                  <div style={{ padding: "8px 12px 12px", borderBottom: "1px solid #e2e8f0", marginBottom: 6 }}>
+                  <div style={{ padding: "8px 12px 12px", borderBottom: "1px solid var(--border)", marginBottom: 6 }}>
                     {displayName && (
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>{displayName}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--tx)", marginBottom: 2 }}>{displayName}</div>
                     )}
-                    <div style={{ fontSize: 12, color: "#94a3b8", wordBreak: "break-all" }}>{email}</div>
+                    <div style={{ fontSize: 12, color: "var(--tx-4)", wordBreak: "break-all" }}>{email}</div>
                   </div>
                   <Link href="/account" onClick={() => setShowUser(false)} style={{
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "8px 12px", borderRadius: 6,
-                    fontSize: 13, color: "#334155", textDecoration: "none",
+                    fontSize: 13, color: "var(--tx-2)", textDecoration: "none",
                   }}>
-                    <User {...ICON} color="#64748b" />
+                    <User {...ICON} color="var(--tx-3)" />
                     Account
                   </Link>
                   <button
@@ -560,7 +562,7 @@ export default function SiteNav() {
                 padding: "7px 20px", borderRadius: 7,
                 fontSize: 13, fontWeight: 600,
                 color: "#fff", textDecoration: "none",
-                background: "var(--teal, #0F172A)", border: "none",
+                background: "var(--teal)", border: "none",
                 transition: "opacity 0.15s",
               }}
               onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.88"; }}
@@ -577,8 +579,8 @@ export default function SiteNav() {
       {mobileMenuOpen && (
         <div className="mobile-menu-drawer" style={{
           position: "absolute", top: 64, left: 0, right: 0,
-          background: "#fff", borderBottom: "1px solid var(--app-border)",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
+          background: "var(--surf)", borderBottom: "1px solid var(--app-border)",
+          boxShadow: "var(--sh-pop)",
           zIndex: 99, padding: "8px 0",
           animation: "mobileMenuSlide 0.18s ease-out",
         }}>

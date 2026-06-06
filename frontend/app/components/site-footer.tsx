@@ -5,7 +5,7 @@ const SOFT_LAUNCH =
 
 export default function SiteFooter() {
   return (
-    <footer style={{ background: "#070B14", borderTop: "none" }}>
+    <footer style={{ background: "var(--navy)", borderTop: "none" }}>
       <div className="site-footer-inner" style={{
         maxWidth: 1200, margin: "0 auto", padding: "72px 32px 0",
       }}>

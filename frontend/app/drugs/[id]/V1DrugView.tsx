@@ -579,7 +579,7 @@ const CSS = `
    global tuned palette (globals.css :root) and uses Geist. Kept component-
    local because V1DrugView was authored as a self-contained surface. */
 .v1home .d-name,.v1home .sc-title,.v1home .sec-title,.v1home .chat-title{font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;font-weight:600;letter-spacing:-.03em}
-.v1home{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;--grad-soft:linear-gradient(135deg,#34d399,#10b981 45%,#0c1118 120%);--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
+.v1home{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;--grad-soft:linear-gradient(135deg,#34d399,#0fa676 45%,#0c1118 120%);--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
   --violet:#6366f1;--violet-b:#c7d2fe;--bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
   --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;--crit:#dc2647;--crit-b:#f8cdd6;--med:#b46708;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;--crit-bg:#fdeef1;--med-bg:#fdf6e9;
   --hi-inset:inset 0 1px 0 rgba(255,255,255,.7);--sh-card:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06);--sh-pop:0 2px 4px rgba(12,17,24,.05),0 12px 28px -10px rgba(12,17,24,.16);

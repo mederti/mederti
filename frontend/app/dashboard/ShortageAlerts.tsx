@@ -26,27 +26,27 @@ const SEV: Record<
   { color: string; bg: string; border: string; label: string }
 > = {
   critical: {
-    color: "#dc2626",
-    bg: "#fef2f2",
-    border: "#fecaca",
+    color: "#dc2647",
+    bg: "#fdeef1",
+    border: "#f8cdd6",
     label: "Critical",
   },
   high: {
-    color: "#ea580c",
-    bg: "#fff7ed",
-    border: "#fed7aa",
+    color: "#c2410c",
+    bg: "#fdf1ea",
+    border: "#f5cdb4",
     label: "High",
   },
   medium: {
-    color: "#ca8a04",
-    bg: "#fefce8",
-    border: "#fef08a",
+    color: "#b46708",
+    bg: "#fdf6e9",
+    border: "#f3dcae",
     label: "Medium",
   },
   low: {
-    color: "#16a34a",
-    bg: "#f0fdf4",
-    border: "#bbf7d0",
+    color: "#0fa676",
+    bg: "#e8f6f0",
+    border: "#bce4d4",
     label: "Low",
   },
 };
@@ -180,7 +180,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
     <div
       style={{
         background: "#fff",
-        border: "1px solid #e2e8f0",
+        border: "1px solid #e8ecf0",
         borderRadius: 12,
         overflow: "hidden",
       }}
@@ -192,7 +192,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
           alignItems: "center",
           justifyContent: "space-between",
           padding: "14px 20px",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: "1px solid #e8ecf0",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -201,7 +201,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
               width: 28,
               height: 28,
               borderRadius: 7,
-              background: "#fef2f2",
+              background: "#fdeef1",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -209,11 +209,11 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
           >
             <Bell
               style={{ width: 14, height: 14, strokeWidth: 1.5 }}
-              color="#dc2626"
+              color="#dc2647"
             />
           </div>
           <span
-            style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}
+            style={{ fontSize: 13, fontWeight: 600, color: "#0c1118" }}
           >
             New &amp; Updated Shortage Alerts
           </span>
@@ -221,7 +221,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
         <span
           style={{
             fontSize: 11,
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontFamily: "var(--font-dm-mono), monospace",
           }}
         >
@@ -235,7 +235,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
           style={{
             padding: "40px 20px",
             textAlign: "center",
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontSize: 13,
           }}
         >
@@ -246,7 +246,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
           style={{
             padding: "40px 20px",
             textAlign: "center",
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontSize: 13,
           }}
         >
@@ -266,7 +266,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
                   gap: 12,
                   padding: "12px 20px",
                   borderBottom:
-                    i < alerts.length - 1 ? "1px solid #f1f5f9" : "none",
+                    i < alerts.length - 1 ? "1px solid #f5f7f9" : "none",
                   textDecoration: "none",
                   transition: "background 0.1s",
                 }}
@@ -290,7 +290,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
                     minWidth: 0,
                     fontSize: 14,
                     fontWeight: 500,
-                    color: "#0f172a",
+                    color: "#0c1118",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -344,7 +344,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
                   <span
                     style={{
                       fontSize: 11,
-                      color: "#64748b",
+                      color: "#6a7280",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -356,7 +356,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
                   <span
                     style={{
                       fontSize: 11,
-                      color: "#94a3b8",
+                      color: "#98a1ac",
                       fontFamily: "var(--font-dm-mono), monospace",
                     }}
                   >
@@ -370,7 +370,7 @@ export default function ShortageAlerts({ countryFilter, timePeriod }: ShortageAl
       )}
 
       <style>{`
-        .db-alert-row:hover { background: #f8fafc !important; }
+        .db-alert-row:hover { background: #fafbfc !important; }
       `}</style>
     </div>
   );

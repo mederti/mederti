@@ -19,12 +19,12 @@ const RegionalSupplyMap = dynamic(() => import("./RegionalSupplyMap"), {
       style={{
         height: 400,
         background: "#fff",
-        border: "1px solid #e2e8f0",
+        border: "1px solid #e8ecf0",
         borderRadius: 12,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "#94a3b8",
+        color: "#98a1ac",
         fontSize: 13,
       }}
     >
@@ -124,9 +124,9 @@ export default function DashboardClient() {
   return (
     <div
       style={{
-        background: "#f8fafc",
+        background: "#fafbfc",
         minHeight: "100vh",
-        color: "#0f172a",
+        color: "#0c1118",
         fontFamily: "var(--font-inter), sans-serif",
       }}
     >
@@ -136,7 +136,7 @@ export default function DashboardClient() {
       <div
         style={{
           background: "#fff",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: "1px solid #e8ecf0",
         }}
       >
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 24px" }}>
@@ -152,14 +152,14 @@ export default function DashboardClient() {
                 style={{
                   fontSize: 22,
                   fontWeight: 700,
-                  color: "#0f172a",
+                  color: "#0c1118",
                   margin: "0 0 4px",
                   letterSpacing: "-0.01em",
                 }}
               >
                 Operational Dashboard
               </h1>
-              <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>
+              <p style={{ fontSize: 14, color: "#6a7280", margin: 0 }}>
                 Real-time pharmaceutical shortage intelligence across global
                 regulatory sources.
               </p>
@@ -170,7 +170,7 @@ export default function DashboardClient() {
                 alignItems: "center",
                 gap: 6,
                 fontSize: 12,
-                color: "#94a3b8",
+                color: "#98a1ac",
                 fontFamily: "var(--font-dm-mono), monospace",
               }}
             >
@@ -179,7 +179,7 @@ export default function DashboardClient() {
                   width: 6,
                   height: 6,
                   borderRadius: "50%",
-                  background: "#16a34a",
+                  background: "#0fa676",
                   display: "inline-block",
                 }}
               />
@@ -193,7 +193,7 @@ export default function DashboardClient() {
       <div
         style={{
           background: "#fff",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: "1px solid #e8ecf0",
           position: "sticky",
           top: 64,
           zIndex: 40,
@@ -221,7 +221,7 @@ export default function DashboardClient() {
               style={{
                 fontSize: 12,
                 fontWeight: 600,
-                color: "#64748b",
+                color: "#6a7280",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
                 whiteSpace: "nowrap",
@@ -245,12 +245,12 @@ export default function DashboardClient() {
                   padding: "7px 32px 7px 12px",
                   borderRadius: 8,
                   border: countryFilter
-                    ? "1.5px solid #99f6e4"
-                    : "1.5px solid #e2e8f0",
-                  background: countryFilter ? "#f0fdfa" : "#f8fafc",
+                    ? "1.5px solid #dcebe6"
+                    : "1.5px solid #e8ecf0",
+                  background: countryFilter ? "#f0fdfa" : "#fafbfc",
                   fontSize: 13,
                   fontWeight: 500,
-                  color: "#0f172a",
+                  color: "#0c1118",
                   cursor: "pointer",
                   outline: "none",
                   fontFamily: "var(--font-inter), sans-serif",
@@ -273,7 +273,7 @@ export default function DashboardClient() {
                   width: 14,
                   height: 14,
                   pointerEvents: "none",
-                  color: "#94a3b8",
+                  color: "#98a1ac",
                 }}
               />
             </div>
@@ -285,7 +285,7 @@ export default function DashboardClient() {
               style={{
                 fontSize: 12,
                 fontWeight: 600,
-                color: "#64748b",
+                color: "#6a7280",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
               }}
@@ -296,7 +296,7 @@ export default function DashboardClient() {
               style={{
                 display: "flex",
                 gap: 2,
-                background: "#f1f5f9",
+                background: "#f5f7f9",
                 borderRadius: 8,
                 padding: 3,
               }}
@@ -312,7 +312,7 @@ export default function DashboardClient() {
                       borderRadius: 6,
                       border: "none",
                       background: active ? "#fff" : "transparent",
-                      color: active ? "#0f172a" : "#64748b",
+                      color: active ? "#0c1118" : "#6a7280",
                       fontSize: 12,
                       fontWeight: active ? 600 : 500,
                       cursor: "pointer",
@@ -345,7 +345,7 @@ export default function DashboardClient() {
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
-              color: "#94a3b8",
+              color: "#98a1ac",
               marginBottom: 10,
             }}
           >
@@ -365,7 +365,7 @@ export default function DashboardClient() {
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
-              color: "#94a3b8",
+              color: "#98a1ac",
               marginBottom: 10,
             }}
           >
@@ -382,7 +382,7 @@ export default function DashboardClient() {
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
-              color: "#94a3b8",
+              color: "#98a1ac",
               marginBottom: 10,
             }}
           >
@@ -403,7 +403,7 @@ export default function DashboardClient() {
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
-              color: "#94a3b8",
+              color: "#98a1ac",
               marginBottom: 10,
             }}
           >
@@ -423,7 +423,7 @@ export default function DashboardClient() {
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
-              color: "#94a3b8",
+              color: "#98a1ac",
               marginBottom: 10,
             }}
           >

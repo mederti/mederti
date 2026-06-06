@@ -609,7 +609,7 @@ const CSS = `
 .drug-grid{display:flex;align-items:flex-start}
 .dg-main{flex:1;min-width:0;max-width:1180px;padding:18px 40px 80px;width:100%}
 .dsearch{display:flex;align-items:center;gap:8px;margin:18px 0 0;background:var(--bg);border:1.5px solid var(--border-2);border-radius:12px;padding:5px 6px 5px 14px;transition:.15s}
-.dsearch:focus-within{border-color:var(--green);box-shadow:0 8px 24px -16px rgba(16,185,129,.4)}
+.dsearch:focus-within{border-color:var(--green);box-shadow:0 8px 24px -16px rgba(15,166,118,.4)}
 .dsearch-ic{color:var(--text-4);font-size:16px}
 .dsearch input{flex:1;border:none;outline:none;background:transparent;font-size:15px;font-family:inherit;color:var(--text);padding:9px 0}
 .dsearch input::placeholder{color:var(--text-4)}
@@ -617,8 +617,8 @@ const CSS = `
 .dsearch button:hover{background:var(--green-d)}
 .d-head-row{display:flex;align-items:flex-start;gap:20px;padding:16px 0 0}
 .d-identity{flex:1;min-width:0}
-.d-img{position:relative;flex-shrink:0;width:128px;height:128px;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:#fff;padding:0;cursor:zoom-in;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px -10px rgba(15,23,32,.25);transition:.15s}
-.d-img:hover{border-color:var(--green);box-shadow:0 10px 28px -14px rgba(16,185,129,.4)}
+.d-img{position:relative;flex-shrink:0;width:128px;height:128px;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:#fff;padding:0;cursor:zoom-in;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px -10px rgba(12,17,24,.25);transition:.15s}
+.d-img:hover{border-color:var(--green);box-shadow:0 10px 28px -14px rgba(15,166,118,.4)}
 .d-img img{width:100%;height:100%;object-fit:contain;display:block;transition:opacity .3s}
 .d-img-src{position:absolute;bottom:0;left:0;right:0;font-size:8px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-4);background:rgba(255,255,255,.86);backdrop-filter:blur(2px);padding:3px 0;text-align:center;border-top:1px solid var(--border)}
 .d-img-skeleton{cursor:default;background:linear-gradient(100deg,var(--bg-3) 30%,var(--bg) 50%,var(--bg-3) 70%);background-size:200% 100%;animation:d-img-shimmer 1.3s ease-in-out infinite}
@@ -728,11 +728,11 @@ const CSS = `
 .chat-panel{display:flex;flex-direction:column;height:100%}
 .chat-head{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fbfcfe,var(--bg))}
 .chat-h-l{display:flex;align-items:center;gap:11px}
-.chat-ic{width:30px;height:30px;border-radius:9px;background:var(--grad-brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;box-shadow:0 5px 14px -5px rgba(16,185,129,.55)}
+.chat-ic{width:30px;height:30px;border-radius:9px;background:var(--grad-brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;box-shadow:0 5px 14px -5px rgba(15,166,118,.55)}
 .chat-title{font-size:14px;font-weight:700;letter-spacing:-.01em}
 .chat-sub{font-size:11px;color:var(--text-4);display:flex;align-items:center;gap:5px;margin-top:2px}
 .chat-live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0;animation:chat-pulse 2.2s infinite}
-@keyframes chat-pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}70%{box-shadow:0 0 0 5px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+@keyframes chat-pulse{0%{box-shadow:0 0 0 0 rgba(15,166,118,.5)}70%{box-shadow:0 0 0 5px rgba(15,166,118,0)}100%{box-shadow:0 0 0 0 rgba(15,166,118,0)}}
 .chat-free-tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:3px 8px;border-radius:99px;align-self:flex-start}
 .chat-stream{padding:16px;flex:1;overflow-y:auto}
 .chat-bubble{background:var(--bg-2);border:1px solid var(--border);border-radius:4px 13px 13px 13px;padding:11px 13px;font-size:12.5px;color:var(--text-2);line-height:1.5}

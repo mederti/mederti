@@ -99,46 +99,78 @@ function Results() {
 
 export default function SearchPage() {
   return (
-    <div className="v1home">
+    <div className="v1home v1search">
       <style>{CSS}</style>
-      <nav className="home-nav">
-        <Link href="/" className="brand" aria-label="Mederti home">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-black.png" alt="mederti" className="logo-img" />
-        </Link>
-        <div className="nav-actions">
-          <V1CountryPicker />
-          <Link href="/signup" className="btn btn-primary">Get started free</Link>
-          <Link href="/login" className="btn">Log in</Link>
+      <div className="shell">
+        {/* ── Left sidebar (app nav) — identical to the drug page shell ── */}
+        <aside className="sb">
+          <div className="sb-top">
+            <Link href="/" className="brand" aria-label="Mederti home">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-black.png" alt="mederti" className="logo-img" />
+            </Link>
+          </div>
+          <div style={{ padding: "14px 14px 8px 16px" }}><V1CountryPicker /></div>
+          <div className="sb-scroll">
+            <div className="sb-group">
+              <div className="sb-glabel">My medicines</div>
+              <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
+            </div>
+            <div className="sb-group">
+              <div className="sb-glabel">Browse</div>
+              <Link href="/search" className="sb-item sb-active"><span className="sb-dot green" />Search</Link>
+              <Link href="/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
+            </div>
+          </div>
+          <Link href="/login" className="sb-profile">Log in →</Link>
+        </aside>
+
+        {/* ── Center column (no right-hand chat column) ── */}
+        <div className="shell-main">
+          <div className="dg-main">
+            <Suspense fallback={<div style={{ height: 80 }} />}>
+              <Results />
+            </Suspense>
+          </div>
         </div>
-      </nav>
-      <main className="wrap-narrow">
-        <Suspense fallback={<div style={{ height: 80 }} />}>
-          <Results />
-        </Suspense>
-      </main>
+      </div>
     </div>
   );
 }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
-.v1home .res-l .rn{font-family:'Google Sans Flex','Inter',sans-serif;font-weight:500}
-.v1home{--ink:#0a0f1a;--green:#10b981;--green-d:#059669;--green-bg:#ecfdf5;--green-b:#a7f3d0;
-  --bg:#fff;--bg-2:#f7f9fb;--bg-3:#eef2f6;--border:#e6eaf0;--border-2:#d3dae3;
-  --text:#0a0f1a;--text-2:#3a4452;--text-3:#697586;--text-4:#9aa4b2;
-  --crit:#e11d48;--crit-bg:#fff1f3;--crit-b:#fecdd3;--med:#d97706;--med-bg:#fffbeb;--med-b:#fde68a;--ok:#10b981;--ok-bg:#ecfdf5;--ok-b:#a7f3d0;
-  background:var(--bg-2);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;min-height:100vh}
+/* Tuned design system: scoped token block mirrors the global tuned palette
+   (globals.css :root) and uses Geist. */
+.v1home .res-l .rn{font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;font-weight:600;letter-spacing:-.02em}
+.v1home{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;
+  --bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
+  --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;
+  --crit:#dc2647;--crit-bg:#fdeef1;--crit-b:#f8cdd6;--med:#b46708;--med-bg:#fdf6e9;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;
+  --hi-inset:inset 0 1px 0 rgba(255,255,255,.7);--sh-card:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06);
+  background:var(--bg-2);color:var(--text);font-family:var(--font-geist-sans),system-ui,sans-serif;font-size:14px;letter-spacing:-.011em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
 .v1home .logo-img{height:31px;width:auto;display:block}
-.v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;transition:.15s}
-.v1home .btn:hover{border-color:var(--border-2);background:var(--bg-2)}
-.v1home .btn-primary{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 8px 20px -8px rgba(16,185,129,.55)}
-.v1home .btn-primary:hover{background:var(--green-d)}
-.home-nav{position:sticky;top:0;z-index:50;height:64px;background:transparent;display:flex;align-items:center;justify-content:space-between;padding:0 28px}
-.nav-actions{display:flex;gap:10px;align-items:center}
-.wrap-narrow{max-width:680px;margin:0 auto;padding:32px 24px 80px}
+
+/* ── App shell (mirrors V1DrugView) ── */
+.shell{display:flex;align-items:flex-start;min-height:100vh}
+.sb{width:262px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.sb-top{height:64px;padding:0 28px;display:flex;align-items:center}
+.sb-scroll{flex:1;overflow-y:auto;padding:8px 14px 8px 19px}
+.sb-group{margin-top:14px}
+.sb-glabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-4);padding:6px 9px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px;border-radius:10px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none}
+.sb-item:hover{background:var(--bg-2)}
+.sb-item.sb-active{background:var(--green-bg);color:var(--green-d)}
+.sb-empty{color:var(--text-4);font-style:italic}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb-dot.green{background:var(--ok)}
+.sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
+.sb-profile:hover{color:var(--green-d)}
+.shell-main{flex:1;min-width:0}
+.dg-main{flex:1;min-width:0;max-width:900px;padding:32px 40px 80px;width:100%}
+
+/* ── Search box + results ── */
 .searchbox.v1sb{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:14px;padding:6px 8px 6px 18px;box-shadow:0 12px 36px -22px rgba(10,15,26,.28);transition:.15s}
 .searchbox.v1sb:focus-within{border-color:var(--green);box-shadow:0 12px 36px -18px rgba(16,185,129,.4)}
 .searchbox .ic{color:var(--text-4);font-size:17px}
@@ -148,11 +180,11 @@ const CSS = `
 .results-head .rh{font-size:12px;color:var(--text-3)}
 .results-head .rh b{color:var(--text);font-weight:700}
 .res-list{padding:10px 0 0;display:flex;flex-direction:column;gap:9px}
-.res-card{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:15px 17px;display:flex;align-items:center;justify-content:space-between;gap:12px;transition:transform .16s,box-shadow .16s,border-color .16s;cursor:pointer}
-.res-card:hover{border-color:var(--green);box-shadow:0 12px 28px -20px rgba(16,185,129,.5);transform:translateY(-1px)}
+.res-card{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:15px 17px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:var(--sh-card),var(--hi-inset);transition:transform .16s,box-shadow .16s,border-color .16s;cursor:pointer}
+.res-card:hover{transform:translateY(-2px);border-color:var(--border-2);box-shadow:0 2px 4px rgba(12,17,24,.05),0 12px 28px -10px rgba(12,17,24,.16),var(--hi-inset)}
 .res-l{min-width:0}
 .res-l .rn{font-size:15px;font-weight:700;letter-spacing:-.02em}
-.res-l .rg{font-size:12px;color:var(--text-3);font-family:'DM Mono',monospace;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res-l .rg{font-size:12px;color:var(--text-3);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .res-l .rmeta{font-size:11px;color:var(--text-4);margin-top:6px}
 .res-foot{padding:24px 0;text-align:center;font-size:12px;color:var(--text-4)}
 .status-pill{font-size:11px;font-weight:600;padding:5px 11px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
@@ -160,4 +192,6 @@ const CSS = `
 .sp-crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
 .sp-part{color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
 .sp-ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-b)}
+
+@media(max-width:820px){.sb{display:none}.dg-main{margin:0 auto;padding:24px 20px 80px}}
 `;

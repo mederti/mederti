@@ -134,7 +134,7 @@ export default async function Home() {
       {/* ── CTA band ── */}
       <div className="cta-band">
         <h2>Built for the dispensary counter.</h2>
-        <p>Free forever for individual pharmacists and clinicians. No credit card.</p>
+        <p>Free for individual pharmacists and clinicians. No credit card.</p>
         <Link href="/signup" className="btn btn-primary">Create a free account</Link>
       </div>
 

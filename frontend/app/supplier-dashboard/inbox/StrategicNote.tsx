@@ -64,21 +64,21 @@ export default function StrategicNote({ enquiryId }: StrategicNoteProps) {
       {open && (
         <div style={{
           marginTop: 10, padding: 14,
-          background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+          background: "linear-gradient(135deg, #0c1118 0%, #3b434e 100%)",
           color: "white", borderRadius: 8,
           fontSize: 12, lineHeight: 1.55,
         }}>
           {loading && (
-            <div style={{ color: "#94A3B8" }}>Analysing this enquiry…</div>
+            <div style={{ color: "#98a1ac" }}>Analysing this enquiry…</div>
           )}
           {!loading && !note && (
-            <div style={{ color: "#94A3B8" }}>Could not generate strategy note.</div>
+            <div style={{ color: "#98a1ac" }}>Could not generate strategy note.</div>
           )}
           {note && (
             <>
               {/* Buyer interpretation */}
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#5EEAD4", marginBottom: 4, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#34d399", marginBottom: 4, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
                   <Target size={11} /> Buyer interpretation
                 </div>
                 <div style={{ color: "white" }}>{note.buyer_interpretation}</div>
@@ -86,26 +86,26 @@ export default function StrategicNote({ enquiryId }: StrategicNoteProps) {
 
               {/* Win factors */}
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#5EEAD4", marginBottom: 6, textTransform: "uppercase" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#34d399", marginBottom: 6, textTransform: "uppercase" }}>
                   Win factors
                 </div>
-                <ul style={{ margin: 0, paddingLeft: 18, color: "#CADCFC" }}>
+                <ul style={{ margin: 0, paddingLeft: 18, color: "#a8b8cc" }}>
                   {note.win_factors.map((f, i) => <li key={i} style={{ marginBottom: 3 }}>{f}</li>)}
                 </ul>
               </div>
 
               {/* Competitive */}
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#5EEAD4", marginBottom: 4, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#34d399", marginBottom: 4, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
                   <Users size={11} /> Competition
                 </div>
-                <div style={{ color: "#CADCFC" }}>{note.competitive_landscape}</div>
+                <div style={{ color: "#a8b8cc" }}>{note.competitive_landscape}</div>
               </div>
 
               {/* Footer: response time + confidence */}
-              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)", fontSize: 11, color: "#94A3B8" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)", fontSize: 11, color: "#98a1ac" }}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <Clock size={11} color="#5EEAD4" />
+                  <Clock size={11} color="#34d399" />
                   Quote within <strong style={{ color: "white", margin: "0 3px" }}>{note.recommended_response_time_hours}h</strong> for best win rate
                 </span>
                 <span>

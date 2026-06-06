@@ -256,7 +256,7 @@ export default function QuoteModal({ enquiry, onClose, onSubmitted }: QuoteModal
         </div>
         {/* RIGHT COLUMN — AI Quote Coach (hidden on success state) */}
         {!submitted && (
-          <aside style={{ background: "#0F172A", padding: 20, borderLeft: "1px solid var(--app-border)" }}>
+          <aside style={{ background: "#0c1118", padding: 20, borderLeft: "1px solid var(--app-border)" }}>
             <QuoteCoaching enquiryId={enquiry.id} />
           </aside>
         )}

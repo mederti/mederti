@@ -644,10 +644,12 @@ export async function POST(req: NextRequest) {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      // Log the raw upstream detail for debugging, but never leak it to the
+      // client (e.g. Anthropic "credit balance too low", rate-limit internals).
       console.error("[chat] fatal:", msg);
       await write({
         type: "error",
-        message: `Sorry, the assistant had a hiccup: ${msg}`,
+        message: "The AI assistant is temporarily unavailable. Please try again in a moment.",
       });
     }
   });

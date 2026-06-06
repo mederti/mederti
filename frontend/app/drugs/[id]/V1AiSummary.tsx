@@ -23,17 +23,30 @@ interface Payload {
 export default function V1AiSummary({ id, embedded = false }: { id: string; embedded?: boolean }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const wrapCls = embedded ? "ai-sum embedded" : "ai-sum";
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setUnavailable(false);
     fetch(`/api/drugs/${id}/so-what`)
-      .then((r) => r.json())
-      .then((d: Payload) => {
+      .then(async (r) => {
+        // A non-ok status means the AI endpoint is down (503 key unset, 500
+        // upstream/credit error). Surface an honest "unavailable" line rather
+        // than silently vanishing, so it reads as a temporary outage, not a
+        // removed feature. A 200 with no body is a genuine "no insight" for
+        // this drug — render nothing, as before.
+        if (!r.ok) {
+          if (alive) setUnavailable(true);
+          return;
+        }
+        const d: Payload = await r.json();
         if (alive && !d.error && d.body) setData(d);
       })
-      .catch(() => {})
+      .catch(() => {
+        if (alive) setUnavailable(true);
+      })
       .finally(() => {
         if (alive) setLoading(false);
       });
@@ -46,6 +59,17 @@ export default function V1AiSummary({ id, embedded = false }: { id: string; embe
     return (
       <div className={wrapCls}>
         <div className="ai-sum-skel">Reading today&rsquo;s signals…</div>
+      </div>
+    );
+  }
+
+  if (unavailable) {
+    return (
+      <div className={wrapCls}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "12px", color: "var(--text-4)" }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text-4)", flexShrink: 0 }} />
+          AI insight is temporarily unavailable — the regulator data here is unaffected.
+        </div>
       </div>
     );
   }

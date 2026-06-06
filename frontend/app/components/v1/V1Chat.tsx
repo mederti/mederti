@@ -155,6 +155,7 @@ export default function V1Chat({ drugName }: { drugName: string }) {
       const dec = new TextDecoder();
       let buf = "";
       let acc = "";
+      let streamErr: string | null = null;
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -185,7 +186,10 @@ export default function V1Chat({ drugName }: { drugName: string }) {
                 return copy;
               });
             } else if (evt.type === "error") {
-              throw new Error(evt.message || "Assistant error.");
+              // Capture (don't throw here — this is inside the malformed-line
+              // catch, which would swallow it and mask the real cause as a
+              // generic "couldn't find an answer"). Handle after the stream.
+              streamErr = evt.message || "Assistant error.";
             }
           } catch {
             /* skip malformed line */
@@ -193,9 +197,14 @@ export default function V1Chat({ drugName }: { drugName: string }) {
         }
       }
       if (!acc.trim()) {
+        // An upstream/API error (e.g. AI provider down) → honest "temporarily
+        // unavailable", distinct from a genuine no-match.
+        const text = streamErr
+          ? "⚠️ The AI assistant is temporarily unavailable. Please try again in a moment."
+          : "I couldn't find an answer for that — try rephrasing.";
         setMsgs((cur) => {
           const copy = [...cur];
-          copy[copy.length - 1] = { role: "assistant", text: "I couldn't find an answer for that — try rephrasing." };
+          copy[copy.length - 1] = { role: "assistant", text };
           return copy;
         });
       }

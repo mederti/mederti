@@ -72,9 +72,9 @@ interface Props {
   timePeriod?: "24h" | "7d" | "30d" | "90d" | null;
 }
 
-/* ── Teal colour scale: #ccfbf1 (light) → #0F172A (deep) ── */
+/* ── Teal colour scale: #e8f6f0 (light) → #0c1118 (deep) ── */
 function getTealColor(count: number, maxCount: number): string {
-  if (count === 0) return "#ccfbf1";
+  if (count === 0) return "#e8f6f0";
   const ratio = Math.min(count / Math.max(maxCount, 1), 1);
   const t = Math.pow(ratio, 0.5);
   const r = Math.round(204 + (13 - 204) * t);
@@ -220,10 +220,10 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
   );
 
   const sevBadge: Record<string, { color: string; bg: string }> = {
-    critical: { color: "#fff", bg: "#dc2626" },
-    high: { color: "#fff", bg: "#ea580c" },
-    medium: { color: "#fff", bg: "#ca8a04" },
-    low: { color: "#fff", bg: "#16a34a" },
+    critical: { color: "#fff", bg: "#dc2647" },
+    high: { color: "#fff", bg: "#c2410c" },
+    medium: { color: "#fff", bg: "#b46708" },
+    low: { color: "#fff", bg: "#0fa676" },
   };
 
   /* ── Legend example counts ── */
@@ -238,7 +238,7 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
     <div
       style={{
         background: "#fff",
-        border: "1px solid #e2e8f0",
+        border: "1px solid #e8ecf0",
         borderRadius: 12,
         overflow: "hidden",
       }}
@@ -253,7 +253,7 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
           alignItems: "center",
           justifyContent: "space-between",
           padding: "14px 20px",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: "1px solid #e8ecf0",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -264,20 +264,20 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <MapPin style={{ width: 14, height: 14, strokeWidth: 1.5 }} color="#0F172A" />
+            <MapPin style={{ width: 14, height: 14, strokeWidth: 1.5 }} color="#0c1118" />
           </div>
           <div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#0c1118" }}>
               Regional Supply Map
             </span>
-            <span style={{ fontSize: 12, color: "#94a3b8", display: "block", marginTop: 1 }}>
+            <span style={{ fontSize: 12, color: "#98a1ac", display: "block", marginTop: 1 }}>
               Active shortages by country · click to filter
             </span>
           </div>
         </div>
         <span
           style={{
-            fontSize: 11, color: "#94a3b8",
+            fontSize: 11, color: "#98a1ac",
             fontFamily: "var(--font-dm-mono), monospace",
           }}
         >
@@ -287,7 +287,7 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
 
       {/* Map */}
       {loading ? (
-        <div style={{ height: 400, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: 13 }}>
+        <div style={{ height: 400, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a1ac", fontSize: 13 }}>
           Loading map…
         </div>
       ) : (
@@ -306,12 +306,12 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
                   <Geography
                     key={geo.rsmKey}
                     geography={geo}
-                    fill="#f1f5f9"
-                    stroke="#e2e8f0"
+                    fill="#f5f7f9"
+                    stroke="#e8ecf0"
                     strokeWidth={0.5}
                     style={{
                       default: { outline: "none" },
-                      hover: { outline: "none", fill: "#f1f5f9", cursor: "default" },
+                      hover: { outline: "none", fill: "#f5f7f9", cursor: "default" },
                       pressed: { outline: "none" },
                     }}
                   />
@@ -390,7 +390,7 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
               gap: 16,
               padding: "10px 0 14px",
               fontSize: 11,
-              color: "#64748b",
+              color: "#6a7280",
             }}
           >
             {/* Bubble size examples */}
@@ -413,8 +413,8 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
                 </div>
               );
             })}
-            <div style={{ width: 1, height: 12, background: "#e2e8f0", margin: "0 2px" }} />
-            <span style={{ color: "#94a3b8" }}>shortages</span>
+            <div style={{ width: 1, height: 12, background: "#e8ecf0", margin: "0 2px" }} />
+            <span style={{ color: "#98a1ac" }}>shortages</span>
           </div>
 
           {/* Tooltip */}
@@ -426,8 +426,8 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
                 top: tooltip.y - 60,
                 pointerEvents: "none",
                 zIndex: 9999,
-                background: "#0f172a",
-                color: "#f8fafc",
+                background: "#0c1118",
+                color: "#fafbfc",
                 borderRadius: 8,
                 padding: "10px 14px",
                 fontSize: 13,
@@ -442,19 +442,19 @@ export default function RegionalSupplyMap({ onCountryClick, activeFilter, timePe
                 <span style={{ fontFamily: "var(--font-dm-mono), monospace", fontSize: 16, fontWeight: 700 }}>
                   {tooltip.count.toLocaleString()}
                 </span>
-                <span style={{ color: "#94a3b8" }}>active shortage{tooltip.count !== 1 ? "s" : ""}</span>
+                <span style={{ color: "#98a1ac" }}>active shortage{tooltip.count !== 1 ? "s" : ""}</span>
                 <span
                   style={{
                     fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
                     textTransform: "uppercase", letterSpacing: "0.05em",
-                    background: sevBadge[tooltip.maxSeverity]?.bg ?? "#64748b",
+                    background: sevBadge[tooltip.maxSeverity]?.bg ?? "#6a7280",
                     color: "#fff",
                   }}
                 >
                   {tooltip.maxSeverity}
                 </span>
               </div>
-              <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: "#6a7280", marginTop: 4 }}>
                 Click to filter alerts
               </div>
             </div>

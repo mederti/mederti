@@ -45,14 +45,14 @@ const SEV: Record<
   string,
   { color: string; bg: string; border: string; label: string }
 > = {
-  critical: { color: "#dc2626", bg: "#fef2f2", border: "#fecaca", label: "Critical" },
-  high: { color: "#ea580c", bg: "#fff7ed", border: "#fed7aa", label: "High" },
-  medium: { color: "#ca8a04", bg: "#fefce8", border: "#fef08a", label: "Medium" },
-  low: { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", label: "Low" },
-  shortage: { color: "#ea580c", bg: "#fff7ed", border: "#fed7aa", label: "Shortage" },
-  limited: { color: "#ca8a04", bg: "#fefce8", border: "#fef08a", label: "Limited" },
-  recalled: { color: "#dc2626", bg: "#fef2f2", border: "#fecaca", label: "Recalled" },
-  available: { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", label: "Available" },
+  critical: { color: "#dc2647", bg: "#fdeef1", border: "#f8cdd6", label: "Critical" },
+  high: { color: "#c2410c", bg: "#fdf1ea", border: "#f5cdb4", label: "High" },
+  medium: { color: "#b46708", bg: "#fdf6e9", border: "#f3dcae", label: "Medium" },
+  low: { color: "#0fa676", bg: "#e8f6f0", border: "#bce4d4", label: "Low" },
+  shortage: { color: "#c2410c", bg: "#fdf1ea", border: "#f5cdb4", label: "Shortage" },
+  limited: { color: "#b46708", bg: "#fdf6e9", border: "#f3dcae", label: "Limited" },
+  recalled: { color: "#dc2647", bg: "#fdeef1", border: "#f8cdd6", label: "Recalled" },
+  available: { color: "#0fa676", bg: "#e8f6f0", border: "#bce4d4", label: "Available" },
 };
 
 interface WatchItem {
@@ -158,7 +158,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
     <div
       style={{
         background: "#fff",
-        border: "1px solid #e2e8f0",
+        border: "1px solid #e8ecf0",
         borderRadius: 12,
         overflow: "hidden",
       }}
@@ -170,7 +170,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
           alignItems: "center",
           justifyContent: "space-between",
           padding: "14px 20px",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: "1px solid #e8ecf0",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -191,7 +191,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
             />
           </div>
           <span
-            style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}
+            style={{ fontSize: 13, fontWeight: 600, color: "#0c1118" }}
           >
             Critical Medicines Watchlist
           </span>
@@ -199,7 +199,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
         <span
           style={{
             fontSize: 11,
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontFamily: "var(--font-dm-mono), monospace",
           }}
         >
@@ -214,8 +214,8 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
           gridTemplateColumns: "1fr 100px 80px 80px",
           gap: 8,
           padding: "8px 20px",
-          borderBottom: "1px solid #e2e8f0",
-          background: "#f8fafc",
+          borderBottom: "1px solid #e8ecf0",
+          background: "#fafbfc",
         }}
       >
         {["Medicine", "Status", "Severity", "Countries"].map((h) => (
@@ -226,7 +226,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
-              color: "#94a3b8",
+              color: "#98a1ac",
             }}
           >
             {h}
@@ -240,7 +240,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
           style={{
             padding: "40px 20px",
             textAlign: "center",
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontSize: 13,
           }}
         >
@@ -261,7 +261,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
                   padding: "10px 20px",
                   alignItems: "center",
                   borderBottom:
-                    i < items.length - 1 ? "1px solid #f1f5f9" : "none",
+                    i < items.length - 1 ? "1px solid #f5f7f9" : "none",
                 }}
               >
                 {/* Name */}
@@ -269,7 +269,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
                   style={{
                     fontSize: 13,
                     fontWeight: 500,
-                    color: "#0f172a",
+                    color: "#0c1118",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -288,9 +288,9 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
                       borderRadius: 20,
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
-                      background: isOk ? "#f0fdf4" : sev.bg,
-                      color: isOk ? "#16a34a" : sev.color,
-                      border: `1px solid ${isOk ? "#bbf7d0" : sev.border}`,
+                      background: isOk ? "#e8f6f0" : sev.bg,
+                      color: isOk ? "#0fa676" : sev.color,
+                      border: `1px solid ${isOk ? "#bce4d4" : sev.border}`,
                     }}
                   >
                     {isOk ? "OK" : item.worstStatus}
@@ -323,7 +323,7 @@ export default function CriticalWatchlist({ countryFilter }: CriticalWatchlistPr
                 <div
                   style={{
                     fontSize: 12,
-                    color: item.countriesAffected > 0 ? "#64748b" : "#94a3b8",
+                    color: item.countriesAffected > 0 ? "#6a7280" : "#98a1ac",
                     fontFamily: "var(--font-dm-mono), monospace",
                   }}
                 >

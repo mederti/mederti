@@ -118,33 +118,33 @@ export default function SituationBanner({
       label: "Active shortages",
       value: stats?.totalActive ?? "—",
       icon: AlertTriangle,
-      color: "#0f172a",
-      bg: "#f8fafc",
-      border: "#e2e8f0",
+      color: "#0c1118",
+      bg: "#fafbfc",
+      border: "#e8ecf0",
     },
     {
       label: "Critical severity",
       value: stats?.criticalCount ?? "—",
       icon: AlertTriangle,
-      color: "#dc2626",
-      bg: "#fef2f2",
-      border: "#fecaca",
+      color: "#dc2647",
+      bg: "#fdeef1",
+      border: "#f8cdd6",
     },
     {
       label: newLabel,
       value: stats?.newCount ?? "—",
       icon: TrendingUp,
-      color: "#ea580c",
-      bg: "#fff7ed",
-      border: "#fed7aa",
+      color: "#c2410c",
+      bg: "#fdf1ea",
+      border: "#f5cdb4",
     },
     {
       label: resolvedLabel,
       value: stats?.resolvedCount ?? "—",
       icon: CheckCircle2,
-      color: "#16a34a",
-      bg: "#f0fdf4",
-      border: "#bbf7d0",
+      color: "#0fa676",
+      bg: "#e8f6f0",
+      border: "#bce4d4",
     },
   ];
 
@@ -193,7 +193,7 @@ export default function SituationBanner({
                   fontWeight: 600,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
-                  color: "#94a3b8",
+                  color: "#98a1ac",
                   marginBottom: 4,
                 }}
               >
@@ -210,7 +210,7 @@ export default function SituationBanner({
                 }}
               >
                 {stats === null ? (
-                  <span style={{ color: "#94a3b8" }}>…</span>
+                  <span style={{ color: "#98a1ac" }}>…</span>
                 ) : typeof c.value === "number" ? (
                   c.value.toLocaleString()
                 ) : (

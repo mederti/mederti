@@ -22,7 +22,7 @@ export default function MedicineSearch() {
       ref={ac.containerRef}
       style={{
         background: "#fff",
-        border: "1px solid #e2e8f0",
+        border: "1px solid #e8ecf0",
         borderRadius: 12,
         overflow: "visible",
         padding: "10px 16px",
@@ -47,11 +47,11 @@ export default function MedicineSearch() {
         >
           <Search
             style={{ width: 14, height: 14, strokeWidth: 1.5 }}
-            color="#0F172A"
+            color="#0c1118"
           />
         </div>
         <span
-          style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}
+          style={{ fontSize: 13, fontWeight: 600, color: "#0c1118", whiteSpace: "nowrap" }}
         >
           Medicine Search
         </span>
@@ -68,7 +68,7 @@ export default function MedicineSearch() {
             width: 15,
             height: 15,
             strokeWidth: 1.5,
-            color: "#94a3b8",
+            color: "#98a1ac",
             pointerEvents: "none",
           }}
         />
@@ -82,10 +82,10 @@ export default function MedicineSearch() {
             width: "100%",
             padding: "9px 36px 9px 36px",
             borderRadius: 8,
-            border: `1.5px solid ${focused ? "#0F172A" : "#e2e8f0"}`,
+            border: `1.5px solid ${focused ? "#0c1118" : "#e8ecf0"}`,
             fontSize: 14,
-            color: "#0f172a",
-            background: "#f8fafc",
+            color: "#0c1118",
+            background: "#fafbfc",
             outline: "none",
             fontFamily: "var(--font-inter), sans-serif",
             boxSizing: "border-box",
@@ -110,7 +110,7 @@ export default function MedicineSearch() {
           >
             <X
               style={{ width: 14, height: 14, strokeWidth: 1.5 }}
-              color="#94a3b8"
+              color="#98a1ac"
             />
           </button>
         )}
@@ -124,7 +124,7 @@ export default function MedicineSearch() {
               width: 14,
               height: 14,
               strokeWidth: 2,
-              color: "#0F172A",
+              color: "#0c1118",
               animation: "spin 1s linear infinite",
             }}
           />

@@ -192,7 +192,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
     <div
       style={{
         background: "#fff",
-        border: "1px solid #e2e8f0",
+        border: "1px solid #e8ecf0",
         borderRadius: 12,
         overflow: "hidden",
       }}
@@ -204,7 +204,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
           alignItems: "center",
           justifyContent: "space-between",
           padding: "16px 20px",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: "1px solid #e8ecf0",
         }}
       >
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -223,14 +223,14 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
           >
             <Activity
               style={{ width: 16, height: 16, strokeWidth: 1.5 }}
-              color="#0F172A"
+              color="#0c1118"
             />
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#0c1118" }}>
               Predicted Supply Risks
             </div>
-            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: "#98a1ac", marginTop: 2 }}>
               AI-identified medicines at risk of shortage in the next 30–90 days
             </div>
           </div>
@@ -238,7 +238,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
         <span
           style={{
             fontSize: 11,
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontFamily: "var(--font-dm-mono), monospace",
             flexShrink: 0,
           }}
@@ -255,8 +255,8 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
           gridTemplateColumns: "28px 1fr 170px 90px 180px 80px",
           gap: 8,
           padding: "8px 20px",
-          borderBottom: "1px solid #e2e8f0",
-          background: "#f8fafc",
+          borderBottom: "1px solid #e8ecf0",
+          background: "#fafbfc",
           alignItems: "center",
         }}
       >
@@ -269,7 +269,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                 fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
-                color: "#94a3b8",
+                color: "#98a1ac",
               }}
             >
               {h}
@@ -284,7 +284,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
           style={{
             padding: "48px 20px",
             textAlign: "center",
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontSize: 13,
           }}
         >
@@ -295,7 +295,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
           style={{
             padding: "48px 20px",
             textAlign: "center",
-            color: "#ea580c",
+            color: "#c2410c",
             fontSize: 13,
           }}
         >
@@ -306,7 +306,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
           style={{
             padding: "48px 20px",
             textAlign: "center",
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontSize: 13,
           }}
         >
@@ -327,7 +327,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                   padding: "11px 20px",
                   alignItems: "center",
                   borderBottom:
-                    i < items.length - 1 ? "1px solid #f1f5f9" : "none",
+                    i < items.length - 1 ? "1px solid #f5f7f9" : "none",
                 }}
               >
                 {/* Rank */}
@@ -335,7 +335,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "#98a1ac",
                     fontFamily: "var(--font-dm-mono), monospace",
                   }}
                 >
@@ -355,7 +355,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                     style={{
                       fontSize: 13,
                       fontWeight: 500,
-                      color: "#0f172a",
+                      color: "#0c1118",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -371,9 +371,9 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                         gap: 2,
                         fontSize: 10,
                         fontWeight: 600,
-                        color: "#dc2626",
-                        background: "#fef2f2",
-                        border: "1px solid #fecaca",
+                        color: "#dc2647",
+                        background: "#fdeef1",
+                        border: "1px solid #f8cdd6",
                         borderRadius: 4,
                         padding: "1px 5px",
                         flexShrink: 0,
@@ -393,7 +393,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                       flex: 1,
                       height: 6,
                       borderRadius: 3,
-                      background: "#e2e8f0",
+                      background: "#e8ecf0",
                       overflow: "hidden",
                     }}
                   >
@@ -402,7 +402,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                         width: `${item.riskScore}%`,
                         height: "100%",
                         borderRadius: 3,
-                        background: `linear-gradient(90deg, #ca8a04 0%, ${rs.color} 100%)`,
+                        background: `linear-gradient(90deg, #b46708 0%, ${rs.color} 100%)`,
                       }}
                     />
                   </div>
@@ -443,7 +443,7 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
                 <span
                   style={{
                     fontSize: 12,
-                    color: "#64748b",
+                    color: "#6a7280",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -475,14 +475,14 @@ export default function PredictedSupplyRisks({ countryFilter }: PredictedSupplyR
       <div
         style={{
           padding: "10px 20px",
-          borderTop: "1px solid #e2e8f0",
-          background: "#f8fafc",
+          borderTop: "1px solid #e8ecf0",
+          background: "#fafbfc",
         }}
       >
         <span
           style={{
             fontSize: 11,
-            color: "#94a3b8",
+            color: "#98a1ac",
             fontStyle: "italic",
           }}
         >

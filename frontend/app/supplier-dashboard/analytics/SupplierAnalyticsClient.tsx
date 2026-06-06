@@ -97,15 +97,15 @@ export default function SupplierAnalyticsClient() {
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
       }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#5EEAD4", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#34d399", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
             Quote conversion rate
           </div>
-          <div style={{ fontSize: 14, color: "#CADCFC" }}>
+          <div style={{ fontSize: 14, color: "#a8b8cc" }}>
             Of every 100 enquiries received, you submit a quote on{" "}
             <strong style={{ color: "white", fontSize: 16 }}>{data.conversion_rate}</strong>.
           </div>
         </div>
-        <div style={{ fontSize: 56, fontWeight: 700, fontFamily: "var(--font-inter), sans-serif", color: "#5EEAD4" }}>
+        <div style={{ fontSize: 56, fontWeight: 700, fontFamily: "var(--font-inter), sans-serif", color: "#34d399" }}>
           {data.conversion_rate}%
         </div>
       </div>

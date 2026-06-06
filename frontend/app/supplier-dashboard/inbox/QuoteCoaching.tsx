@@ -30,7 +30,7 @@ export default function QuoteCoaching({ enquiryId }: { enquiryId: string }) {
     return (
       <div style={panelStyle}>
         <Header />
-        <div style={{ color: "#94A3B8", fontSize: 12 }}>Analysing this opportunity…</div>
+        <div style={{ color: "#98a1ac", fontSize: 12 }}>Analysing this opportunity…</div>
       </div>
     );
   }
@@ -38,7 +38,7 @@ export default function QuoteCoaching({ enquiryId }: { enquiryId: string }) {
   if (!data) return null;
 
   const winColor =
-    data.win_probability_pct >= 60 ? "#5EEAD4" :
+    data.win_probability_pct >= 60 ? "#34d399" :
     data.win_probability_pct >= 35 ? "#FBBF24" : "#F87171";
 
   return (
@@ -53,7 +53,7 @@ export default function QuoteCoaching({ enquiryId }: { enquiryId: string }) {
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
           <div style={{
-            width: 52, height: 52, borderRadius: "50%", background: "#0F172A",
+            width: 52, height: 52, borderRadius: "50%", background: "#0c1118",
             display: "flex", alignItems: "center", justifyContent: "center",
             color: winColor, fontWeight: 700, fontSize: 14, fontFamily: "var(--font-dm-mono), monospace",
           }}>
@@ -61,10 +61,10 @@ export default function QuoteCoaching({ enquiryId }: { enquiryId: string }) {
           </div>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#5EEAD4", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#34d399", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>
             Estimated win probability
           </div>
-          <div style={{ fontSize: 12, color: "#CADCFC", lineHeight: 1.45 }}>
+          <div style={{ fontSize: 12, color: "#a8b8cc", lineHeight: 1.45 }}>
             Based on shortage severity, urgency, and competitive landscape.
           </div>
         </div>
@@ -77,14 +77,14 @@ export default function QuoteCoaching({ enquiryId }: { enquiryId: string }) {
           <div style={{ fontSize: 22, fontWeight: 700, color: "white", fontFamily: "var(--font-dm-mono), monospace", marginTop: 2, marginBottom: 6 }}>
             {data.currency} {data.suggested_price_range_low?.toFixed(2)} – {data.suggested_price_range_high?.toFixed(2)}
           </div>
-          <div style={{ fontSize: 11, color: "#CADCFC", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: "#a8b8cc", lineHeight: 1.5 }}>
             {data.pricing_rationale}
           </div>
         </div>
       ) : (
         <div style={{ marginBottom: 14 }}>
           <SectionLabel><TrendingUp size={11} /> Pricing</SectionLabel>
-          <div style={{ fontSize: 12, color: "#CADCFC", lineHeight: 1.5, marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: "#a8b8cc", lineHeight: 1.5, marginTop: 4 }}>
             {data.pricing_rationale}
           </div>
         </div>
@@ -93,7 +93,7 @@ export default function QuoteCoaching({ enquiryId }: { enquiryId: string }) {
       {/* Response timing */}
       <div style={{ marginBottom: 14 }}>
         <SectionLabel><Clock size={11} /> Response timing</SectionLabel>
-        <div style={{ fontSize: 12, color: "#CADCFC", lineHeight: 1.5, marginTop: 4 }}>
+        <div style={{ fontSize: 12, color: "#a8b8cc", lineHeight: 1.5, marginTop: 4 }}>
           {data.response_timing_advice}
         </div>
       </div>
@@ -106,7 +106,7 @@ export default function QuoteCoaching({ enquiryId }: { enquiryId: string }) {
             {data.differentiators_to_highlight.map((d, i) => (
               <span key={i} style={{
                 fontSize: 11, padding: "4px 8px",
-                background: "rgba(94,234,212,0.1)", color: "#5EEAD4",
+                background: "rgba(94,234,212,0.1)", color: "#34d399",
                 border: "1px solid rgba(94,234,212,0.25)", borderRadius: 4,
               }}>
                 {d}
@@ -122,8 +122,8 @@ export default function QuoteCoaching({ enquiryId }: { enquiryId: string }) {
 function Header() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-      <Sparkles size={13} color="#5EEAD4" />
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#5EEAD4", textTransform: "uppercase" }}>
+      <Sparkles size={13} color="#34d399" />
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#34d399", textTransform: "uppercase" }}>
         AI Quote Coach
       </span>
     </div>
@@ -132,7 +132,7 @@ function Header() {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#94A3B8", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#98a1ac", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
       {children}
     </div>
   );
@@ -140,7 +140,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 const panelStyle: React.CSSProperties = {
   padding: 18,
-  background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+  background: "linear-gradient(135deg, #0c1118 0%, #3b434e 100%)",
   borderRadius: 10,
   color: "white",
 };

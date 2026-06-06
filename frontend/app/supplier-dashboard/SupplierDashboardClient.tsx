@@ -82,14 +82,14 @@ function EmptyState({ icon, title, description }: { icon: React.ReactNode; title
     }}>
       <div style={{
         width: 44, height: 44, borderRadius: "50%",
-        background: "var(--app-bg-2, #f1f5f9)", border: "1px solid var(--app-border)",
+        background: "var(--app-bg-2, #f5f7f9)", border: "1px solid var(--app-border)",
         display: "flex", alignItems: "center", justifyContent: "center",
         margin: "0 auto 14px",
       }}>
         {icon}
       </div>
       <div style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 13, color: "var(--app-text-3, #94a3b8)", lineHeight: 1.5, maxWidth: 380, margin: "0 auto" }}>{description}</div>
+      <div style={{ fontSize: 13, color: "var(--app-text-3, #98a1ac)", lineHeight: 1.5, maxWidth: 380, margin: "0 auto" }}>{description}</div>
     </div>
   );
 }
@@ -636,7 +636,7 @@ function RegulatorySignals() {
                       </span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: "#16a34a", textTransform: "uppercase" }}>{f.status}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: "#0fa676", textTransform: "uppercase" }}>{f.status}</span>
                       <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>{f.date}</span>
                       <ArrowUpRight style={{ width: 12, height: 12, color: "var(--app-text-4)" }} />
                     </div>
@@ -801,36 +801,36 @@ export default function SupplierDashboardClient() {
       <SiteNav />
 
       {/* Header */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 0" }}>
           <h1 style={{
             fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 700,
-            letterSpacing: "-0.02em", color: "#0f172a", margin: 0,
+            letterSpacing: "-0.02em", color: "#0c1118", margin: 0,
           }}>
             Supplier Dashboard
           </h1>
-          <p style={{ fontSize: 14, color: "#64748b", margin: "8px 0 20px", lineHeight: 1.5 }}>
+          <p style={{ fontSize: 14, color: "#6a7280", margin: "8px 0 20px", lineHeight: 1.5 }}>
             Supply opportunity intelligence, real-time buyer enquiries, and inventory broadcast.
           </p>
           {/* Tabs */}
           <div style={{ display: "flex", gap: 28, marginTop: 16 }}>
             <span style={{
-              fontSize: 13, fontWeight: 600, color: "#0f172a",
-              paddingBottom: 12, borderBottom: "2px solid #0f172a",
+              fontSize: 13, fontWeight: 600, color: "#0c1118",
+              paddingBottom: 12, borderBottom: "2px solid #0c1118",
               cursor: "default",
             }}>Intelligence</span>
             <Link href="/supplier-dashboard/inbox" style={{
-              fontSize: 13, fontWeight: 500, color: "#64748b",
+              fontSize: 13, fontWeight: 500, color: "#6a7280",
               paddingBottom: 12, borderBottom: "2px solid transparent",
               textDecoration: "none",
             }}>Enquiry Inbox</Link>
             <Link href="/supplier-dashboard/inventory" style={{
-              fontSize: 13, fontWeight: 500, color: "#64748b",
+              fontSize: 13, fontWeight: 500, color: "#6a7280",
               paddingBottom: 12, borderBottom: "2px solid transparent",
               textDecoration: "none",
             }}>Inventory Broadcast</Link>
             <Link href="/supplier-dashboard/profile" style={{
-              fontSize: 13, fontWeight: 500, color: "#64748b",
+              fontSize: 13, fontWeight: 500, color: "#6a7280",
               paddingBottom: 12, borderBottom: "2px solid transparent",
               textDecoration: "none",
             }}>Profile</Link>

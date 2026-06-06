@@ -48,7 +48,7 @@ export default function PersonaSwitcher({ current = "pharmacist", drugId }: Prop
     <div
       style={{
         background: "#ffffff",
-        borderBottom: "1px solid #e2e8f0",
+        borderBottom: "1px solid #e8ecf0",
         padding: "10px 24px",
         display: "flex",
         alignItems: "center",
@@ -64,7 +64,7 @@ export default function PersonaSwitcher({ current = "pharmacist", drugId }: Prop
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
-          color: "#94a3b8",
+          color: "#98a1ac",
         }}
       >
         Viewing as
@@ -74,10 +74,10 @@ export default function PersonaSwitcher({ current = "pharmacist", drugId }: Prop
         style={{
           display: "flex",
           gap: 4,
-          background: "#f8fafc",
+          background: "#fafbfc",
           padding: 4,
           borderRadius: 10,
-          border: "1px solid #e2e8f0",
+          border: "1px solid #e8ecf0",
         }}
       >
         {PERSONAS.map((p) => {
@@ -94,8 +94,8 @@ export default function PersonaSwitcher({ current = "pharmacist", drugId }: Prop
                 gap: 1,
                 padding: "8px 14px",
                 borderRadius: 7,
-                background: active ? "#0F172A" : "transparent",
-                color: active ? "#ffffff" : "#64748b",
+                background: active ? "#0c1118" : "transparent",
+                color: active ? "#ffffff" : "#6a7280",
                 fontSize: 13,
                 fontWeight: 500,
                 textDecoration: "none",
@@ -123,7 +123,7 @@ export default function PersonaSwitcher({ current = "pharmacist", drugId }: Prop
       <div
         style={{
           fontSize: 11,
-          color: "#64748b",
+          color: "#6a7280",
           fontFamily: "monospace",
         }}
       >

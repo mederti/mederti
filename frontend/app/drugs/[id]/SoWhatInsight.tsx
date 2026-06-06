@@ -57,7 +57,7 @@ export default function SoWhatInsight({ drugId }: { drugId: string }) {
 
   return (
     <div style={{
-      background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+      background: "linear-gradient(135deg, #0c1118 0%, #3b434e 100%)",
       color: "white",
       borderRadius: 10,
       padding: 16,
@@ -68,8 +68,8 @@ export default function SoWhatInsight({ drugId }: { drugId: string }) {
       {/* Header strip */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Sparkles size={11} color="#5EEAD4" />
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", color: "#5EEAD4", textTransform: "uppercase" }}>
+          <Sparkles size={11} color="#34d399" />
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", color: "#34d399", textTransform: "uppercase" }}>
             So what
           </span>
           <span style={{
@@ -88,7 +88,7 @@ export default function SoWhatInsight({ drugId }: { drugId: string }) {
           title="Regenerate"
           style={{
             background: "none", border: "none", cursor: refreshing ? "wait" : "pointer",
-            color: "#94A3B8", padding: 2, display: "flex",
+            color: "#98a1ac", padding: 2, display: "flex",
           }}
         >
           <RefreshCw size={11} className={refreshing ? "spin" : ""} />
@@ -105,14 +105,14 @@ export default function SoWhatInsight({ drugId }: { drugId: string }) {
       </div>
 
       {/* Body */}
-      <div style={{ fontSize: 12.5, color: "#CADCFC", lineHeight: 1.6, fontFamily: "var(--font-inter), sans-serif" }}>
+      <div style={{ fontSize: 12.5, color: "#a8b8cc", lineHeight: 1.6, fontFamily: "var(--font-inter), sans-serif" }}>
         {data.body}
       </div>
 
       {/* Footer */}
       <div style={{
         marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)",
-        fontSize: 10, color: "#64748B", display: "flex", justifyContent: "space-between", alignItems: "center",
+        fontSize: 10, color: "#6a7280", display: "flex", justifyContent: "space-between", alignItems: "center",
       }}>
         <span style={{ fontStyle: "italic" }}>Composed by Mederti from live signals</span>
         <span>Confidence: <span style={{ color: data.confidence === "high" ? "var(--low)" : data.confidence === "medium" ? "var(--high)" : "var(--app-text-4)" }}>{data.confidence}</span></span>

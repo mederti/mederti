@@ -124,9 +124,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 style={{ fontSize: 17, fontWeight: 600, color: "var(--app-text)", marginBottom: 10, marginTop: 0 }}>
         {title}
       </h2>
-      <p style={{ fontSize: 14, color: "var(--app-text-2)", lineHeight: 1.75, margin: 0 }}>
+      <div style={{ fontSize: 14, color: "var(--app-text-2)", lineHeight: 1.75, margin: 0 }}>
         {children}
-      </p>
+      </div>
     </div>
   );
 }

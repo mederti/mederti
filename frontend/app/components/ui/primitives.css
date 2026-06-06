@@ -1,0 +1,74 @@
+/* ============================================================
+   Tuned design-system primitives — motion + state signatures.
+   Imported once via globals.css; consumed by the ui/* components.
+   All animation respects prefers-reduced-motion (see bottom).
+   ============================================================ */
+
+@keyframes ds-rise  { to { opacity: 1; transform: none; } }
+@keyframes ds-pulse { 0% { box-shadow: 0 0 0 0 var(--ring); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes ds-shimmer { 0% { background-position: -220px 0; } 100% { background-position: 220px 0; } }
+
+/* Staggered page-load reveal. Consumers set inline animation-delay. */
+.ds-rise {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: ds-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+/* Pulsing live dot / badge ring. */
+.ds-live { animation: ds-pulse 2s infinite; }
+
+/* Real shimmer sweep for live-fetch skeletons. */
+.ds-shimmer {
+  background: linear-gradient(90deg, var(--surf-3) 25%, var(--surf-2) 37%, var(--surf-3) 63%);
+  background-size: 440px 100%;
+  animation: ds-shimmer 1.5s linear infinite;
+}
+
+/* ListRow hover signature: bg fill + 3px accent bar scaling from center +
+   chevron fading/sliding in from the left. */
+.ds-row { position: relative; transition: background 0.15s; }
+.ds-row::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--acc);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 0.2s;
+}
+.ds-row:hover { background: var(--surf-2); }
+.ds-row:hover::before { transform: scaleY(1); }
+.ds-row .ds-chev {
+  color: var(--tx-5);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: 0.2s;
+}
+.ds-row:hover .ds-chev { opacity: 1; transform: none; }
+
+/* Card hover: lift + shadow deepen + border darken + inner tile scale. */
+.ds-card-hover { transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.2s, border-color 0.2s; }
+.ds-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--sh-pop), var(--hi-inset);
+  border-color: var(--border-2);
+}
+.ds-tile { transition: transform 0.18s; }
+.ds-card-hover:hover .ds-tile { transform: scale(1.06); }
+
+/* Focus-visible ring on every interactive primitive (not just hover). */
+.ds-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-rise { animation: none; opacity: 1; transform: none; }
+  .ds-live { animation: none; }
+  .ds-shimmer { animation: none; }
+  .ds-row, .ds-row::before, .ds-row .ds-chev, .ds-card-hover, .ds-tile { transition: none; }
+  .ds-card-hover:hover { transform: none; }
+}

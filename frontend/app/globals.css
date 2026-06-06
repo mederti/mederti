@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./components/ui/primitives.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -84,8 +85,11 @@
   --radius-tile: var(--r-tile);
   --radius-card: var(--r-card);
   --radius-pill: var(--r-pill);
-  --shadow-card: var(--sh-card);
-  --shadow-pop: var(--sh-pop);
+  /* card/pop pair the drop shadow with the inner highlight, matching the
+     reference (box-shadow: var(--sh-card), var(--hi-inset)); shadow-hi is
+     the standalone inner highlight for tiles/pills */
+  --shadow-card: var(--sh-card), var(--hi-inset);
+  --shadow-pop: var(--sh-pop), var(--hi-inset);
   --shadow-hi: var(--hi-inset);
 }
 

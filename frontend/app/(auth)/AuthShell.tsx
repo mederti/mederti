@@ -42,7 +42,7 @@ export default function AuthShell({ children }: { children: ReactNode }) {
         }}
       >
         <div style={{
-          width: 22, height: 22, borderRadius: "50%", background: "#0f172a",
+          width: 22, height: 22, borderRadius: "50%", background: "#0c1118",
         }} />
         mederti
       </Link>

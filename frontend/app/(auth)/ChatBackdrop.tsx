@@ -9,7 +9,7 @@ export default function ChatBackdrop() {
       aria-hidden="true"
       style={{
         position: "fixed", inset: 0,
-        display: "flex", background: "#f8fafb",
+        display: "flex", background: "#fafbfc",
         userSelect: "none", pointerEvents: "none",
         overflow: "hidden",
       }}
@@ -18,17 +18,17 @@ export default function ChatBackdrop() {
       <aside style={{
         width: 280, flexShrink: 0,
         background: "#fff",
-        borderRight: "1px solid #e2e8f0",
+        borderRight: "1px solid #e8ecf0",
         padding: "16px 14px",
         display: "flex", flexDirection: "column", gap: 14,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px 8px" }}>
-          <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#0f172a" }} />
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>mederti</div>
+          <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#0c1118" }} />
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#0c1118" }}>mederti</div>
         </div>
 
         <div style={{
-          background: "#0f172a", color: "#fff",
+          background: "#0c1118", color: "#fff",
           padding: "10px 12px", borderRadius: 10,
           fontSize: 13, fontWeight: 500,
         }}>
@@ -36,21 +36,21 @@ export default function ChatBackdrop() {
         </div>
 
         <div style={{
-          background: "#f1f5f9", color: "#64748b",
+          background: "#f5f7f9", color: "#6a7280",
           padding: "9px 12px", borderRadius: 10,
           fontSize: 13, display: "flex", justifyContent: "space-between",
         }}>
           <span>🔍 Search chats</span>
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>⌘K</span>
+          <span style={{ fontSize: 11, color: "#98a1ac" }}>⌘K</span>
         </div>
 
         <div style={{ marginTop: 4 }}>
           <SectionLabel>WATCHLISTS</SectionLabel>
           <SidebarRow indent={0} bold>📑 Critical for AU <Badge>4</Badge></SidebarRow>
-          <SidebarRow indent={1}><Dot color="#dc2626" /> Amoxicillin 500mg</SidebarRow>
-          <SidebarRow indent={1}><Dot color="#dc2626" /> Salbutamol inhaler</SidebarRow>
-          <SidebarRow indent={1}><Dot color="#ea580c" /> Methylphenidate ER 36mg</SidebarRow>
-          <SidebarRow indent={1}><Dot color="#16a34a" /> Atorvastatin 40mg</SidebarRow>
+          <SidebarRow indent={1}><Dot color="#dc2647" /> Amoxicillin 500mg</SidebarRow>
+          <SidebarRow indent={1}><Dot color="#dc2647" /> Salbutamol inhaler</SidebarRow>
+          <SidebarRow indent={1}><Dot color="#c2410c" /> Methylphenidate ER 36mg</SidebarRow>
+          <SidebarRow indent={1}><Dot color="#0fa676" /> Atorvastatin 40mg</SidebarRow>
           <SidebarRow indent={0}>📑 Injectables — Hormuz <Badge>8</Badge></SidebarRow>
           <SidebarRow indent={0}>📑 GLP-1 family <Badge>5</Badge></SidebarRow>
         </div>
@@ -74,13 +74,13 @@ export default function ChatBackdrop() {
         <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 10, padding: "10px 6px" }}>
           <div style={{
             width: 32, height: 32, borderRadius: "50%",
-            background: "#0f172a", color: "#fff",
+            background: "#0c1118", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 13, fontWeight: 600,
           }}>R</div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Rob</div>
-            <div style={{ fontSize: 11, color: "#64748b" }}>Mederti · Founder</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#0c1118" }}>Rob</div>
+            <div style={{ fontSize: 11, color: "#6a7280" }}>Mederti · Founder</div>
           </div>
         </div>
       </aside>
@@ -89,7 +89,7 @@ export default function ChatBackdrop() {
       <main style={{ flex: 1, display: "flex", flexDirection: "column", background: "#fff" }}>
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "12px 24px", borderBottom: "1px solid #e2e8f0",
+          padding: "12px 24px", borderBottom: "1px solid #e8ecf0",
         }}>
           <div style={{ display: "flex", gap: 6 }}>
             <NavTab>🔲 Dashboard</NavTab>
@@ -99,9 +99,9 @@ export default function ChatBackdrop() {
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div style={{
               fontSize: 13, padding: "6px 12px", borderRadius: 8,
-              border: "1px solid #e2e8f0", color: "#0f172a",
+              border: "1px solid #e8ecf0", color: "#0c1118",
             }}>🇦🇺 AU ▾</div>
-            <div style={{ fontSize: 18, color: "#64748b" }}>🔔</div>
+            <div style={{ fontSize: 18, color: "#6a7280" }}>🔔</div>
           </div>
         </div>
 
@@ -110,13 +110,13 @@ export default function ChatBackdrop() {
           alignItems: "center", justifyContent: "center", padding: 24,
         }}>
           <h1 style={{
-            fontSize: 32, fontWeight: 700, color: "#0f172a",
+            fontSize: 32, fontWeight: 700, color: "#0c1118",
             marginBottom: 16, textAlign: "center",
           }}>
             What do you need to know?
           </h1>
           <p style={{
-            fontSize: 15, color: "#64748b", maxWidth: 580,
+            fontSize: 15, color: "#6a7280", maxWidth: 580,
             textAlign: "center", lineHeight: 1.55, marginBottom: 28,
           }}>
             Ask about drug shortages, recalls, or substitutes across the markets
@@ -134,15 +134,15 @@ export default function ChatBackdrop() {
           <div style={{
             maxWidth: 720, margin: "0 auto",
             padding: "14px 18px", borderRadius: 14,
-            background: "#fff", border: "1px solid #e2e8f0",
+            background: "#fff", border: "1px solid #e8ecf0",
             boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-            display: "flex", alignItems: "center", gap: 12, color: "#94a3b8", fontSize: 14,
+            display: "flex", alignItems: "center", gap: 12, color: "#98a1ac", fontSize: 14,
           }}>
             <span>📎</span><span>[ ]</span>
             <span style={{ flex: 1 }}>Ask anything, upload a spreadsheet, or scan a barcode…</span>
             <span>↑</span>
           </div>
-          <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", marginTop: 12 }}>
+          <div style={{ textAlign: "center", fontSize: 11, color: "#98a1ac", marginTop: 12 }}>
             AI-powered · regulatory sources worldwide · Not medical advice
           </div>
         </div>
@@ -154,7 +154,7 @@ export default function ChatBackdrop() {
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 700, color: "#94a3b8",
+      fontSize: 10, fontWeight: 700, color: "#98a1ac",
       letterSpacing: 0.6, padding: "8px 6px 4px",
       display: "flex", justifyContent: "space-between", alignItems: "center",
     }}>
@@ -168,7 +168,7 @@ function SidebarRow({
 }: { children: React.ReactNode; indent?: number; bold?: boolean }) {
   return (
     <div style={{
-      fontSize: 13, color: bold ? "#0f172a" : "#475569",
+      fontSize: 13, color: bold ? "#0c1118" : "#3b434e",
       padding: "6px 6px", paddingLeft: 6 + indent * 16,
       display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between",
       fontWeight: bold ? 500 : 400,
@@ -188,7 +188,7 @@ function Dot({ color }: { color: string }) {
 
 function Badge({ children }: { children: React.ReactNode }) {
   return <span style={{
-    fontSize: 11, color: "#94a3b8", marginLeft: "auto",
+    fontSize: 11, color: "#98a1ac", marginLeft: "auto",
   }}>{children}</span>;
 }
 
@@ -196,8 +196,8 @@ function NavTab({ children, active = false }: { children: React.ReactNode; activ
   return (
     <div style={{
       fontSize: 13, padding: "6px 12px", borderRadius: 8,
-      background: active ? "#f1f5f9" : "transparent",
-      color: active ? "#0f172a" : "#64748b",
+      background: active ? "#f5f7f9" : "transparent",
+      color: active ? "#0c1118" : "#6a7280",
       fontWeight: active ? 600 : 500,
     }}>{children}</div>
   );
@@ -207,9 +207,9 @@ function Chip({ children, highlight = false }: { children: React.ReactNode; high
   return (
     <div style={{
       fontSize: 13, padding: "8px 16px", borderRadius: 999,
-      border: `1px solid ${highlight ? "#0f766e" : "#e2e8f0"}`,
-      background: highlight ? "#f0fdfa" : "#fff",
-      color: "#0f172a", textAlign: "center",
+      border: `1px solid ${highlight ? "#0c8a62" : "#e8ecf0"}`,
+      background: highlight ? "#e8f6f0" : "#fff",
+      color: "#0c1118", textAlign: "center",
     }}>{children}</div>
   );
 }

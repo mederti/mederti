@@ -45,8 +45,8 @@ export default function V1Sidebar() {
       <div className="sb-scroll">
         <div className="sb-group">
           <div className="sb-glabel">Browse</div>
-          <Link href="/chat?view=early-warning" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
-          <Link href="/chat?view=dashboard" className="sb-item"><span className="sb-dot green" />Dashboard</Link>
+          <Link href="/insights/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
+          <Link href="/insights/dashboard" className="sb-item"><span className="sb-dot green" />Dashboard</Link>
         </div>
         <div className="sb-group">
           <div className="sb-glabel">Search history</div>

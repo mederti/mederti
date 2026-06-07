@@ -206,7 +206,7 @@ export default async function RecallsPage({ searchParams }: Props) {
               <p style={{ fontSize: 13, color: "var(--app-text-4)" }}>Try adjusting the filters above.</p>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column" }}>
+            <><div className="rc-table-wrap" style={{ display: "flex", flexDirection: "column" }}>
               {/* Header row */}
               <div style={{
                 display: "grid",
@@ -309,6 +309,58 @@ export default async function RecallsPage({ searchParams }: Props) {
                 );
               })}
             </div>
+
+            {/* Mobile card list — grid doesn't fit narrow screens */}
+            <div className="rc-cards">
+              {results.map((row) => {
+                const href = row.drug_id
+                  ? `/drugs/${row.drug_id}`
+                  : row.press_release_url ?? "#";
+                const isExternal = !row.drug_id && !!row.press_release_url;
+                return (
+                  <Link
+                    key={row.id}
+                    href={href}
+                    target={isExternal ? "_blank" : undefined}
+                    rel={isExternal ? "noopener noreferrer" : undefined}
+                    className="rc-card"
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>
+                          {truncateDrugName(row.generic_name)}
+                          {row.brand_name && (
+                            <span style={{ fontSize: 12, fontWeight: 400, color: "var(--app-text-4)", marginLeft: 6 }}>
+                              ({row.brand_name})
+                            </span>
+                          )}
+                        </div>
+                        {row.manufacturer && (
+                          <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 2 }}>{row.manufacturer}</div>
+                        )}
+                      </div>
+                      <ClassBadge recallClass={row.recall_class} />
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "var(--app-text-4)" }}>
+                      <span style={{
+                        display: "inline-block", padding: "2px 7px", borderRadius: 5,
+                        fontSize: 11, fontWeight: 600, background: "var(--app-bg-2)",
+                        color: "var(--app-text-3)", letterSpacing: "0.04em",
+                      }}>{row.country_code}</span>
+                      <span style={{
+                        display: "inline-block", padding: "2px 9px", borderRadius: 20,
+                        fontSize: 11, fontWeight: 500, textTransform: "capitalize",
+                        background: row.status === "active" ? "var(--crit-bg)" : "var(--low-bg)",
+                        color: row.status === "active" ? "var(--crit)" : "var(--low)",
+                        border: `1px solid ${row.status === "active" ? "var(--crit-b)" : "var(--low-b)"}`,
+                      }}>{row.status}</span>
+                      <span style={{ marginLeft: "auto" }}>{fmtDate(row.announced_date)}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+            </>
           )}
 
           {/* Pagination */}
@@ -363,6 +415,17 @@ export default async function RecallsPage({ searchParams }: Props) {
 
       <style>{`
         .recall-row:hover { background: var(--app-bg) !important; }
+        .rc-cards { display: none; }
+        .rc-card {
+          display: block; padding: 14px 16px; text-decoration: none;
+          border-bottom: 1px solid var(--app-border);
+        }
+        .rc-card:last-child { border-bottom: none; }
+        .rc-card:active { background: var(--app-bg); }
+        @media (max-width: 767px) {
+          .rc-table-wrap { display: none; }
+          .rc-cards { display: block; }
+        }
       `}</style>
     </div>
   );

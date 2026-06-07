@@ -176,7 +176,7 @@ const CSS = `
 .v1home .mono{font-family:var(--font-geist-mono),ui-monospace,monospace}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink)}
 .v1home .logo-img{height:31px;width:auto;display:block}
-.v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;text-decoration:none}
+.v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;white-space:nowrap;transition:.15s;display:inline-flex;align-items:center;text-decoration:none}
 .v1home .btn:hover{border-color:var(--border-2);background:var(--bg-2)}
 .v1home .btn-primary{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 8px 20px -8px rgba(16,185,129,.55)}
 .v1home .btn-primary:hover{background:var(--green-d);border-color:var(--green-d)}
@@ -278,4 +278,5 @@ const CSS = `
 .home-foot a{color:inherit;text-decoration:none}
 .home-foot a:hover{color:var(--green-d)}
 @media(max-width:760px){.hero h1{font-size:50px}.props{grid-template-columns:1fr}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}.hero-stats{gap:10px}.hero-stats .stat-n{font-size:21px}.hero-stats .stat-l{font-size:11px}}
+@media(max-width:480px){.home-nav{padding:0 14px}.nav-actions{gap:6px}.v1home .nav-actions .btn{padding:8px 12px}}
 `;

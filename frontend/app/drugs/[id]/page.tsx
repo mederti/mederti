@@ -491,6 +491,14 @@ export default async function DrugPage({ params, searchParams }: Props) {
 
   // Pharmacist-only launch: render the V1 design, fed by the already-fetched
   // (and safety-hardened) data. Bypasses the legacy persona render entirely.
+  //
+  // NOTE ON MOBILE: V1DrugView is fully responsive (its 3-column shell
+  // collapses to a single column on phones), so we do NOT branch to
+  // MobileDrugPage here. The getDevice()/MobileDrugPage path further down
+  // is the LEGACY persona render's mobile variant and only runs when
+  // soft-launch is OFF (full platform). It is dormant — not dead — while
+  // PHARMACIST_ONLY is true; don't delete it without also retiring the
+  // persona views it serves.
   if (PHARMACIST_ONLY) {
     // API supply-base concentration from FDA Drug Master Files (active Type II
     // DMFs = manufacturers cleared to supply this API into the US market). This

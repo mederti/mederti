@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createBrowserClient } from "@/lib/supabase/client";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import { truncateDrugName } from "@/lib/utils";
 import {
@@ -22,6 +23,10 @@ import {
 export default function V1Sidebar() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recentMedicines, setRecentMedicines] = useState<RecentMedicine[]>([]);
+  // Signed-in users get the conversational /ask home from the logo; everyone
+  // else lands on the public marketing page. Resolved client-side, so the
+  // logo defaults to "/" until the session check returns.
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
     const refresh = () => {
@@ -33,10 +38,21 @@ export default function V1Sidebar() {
     return () => window.removeEventListener(RECENT_EVENT, refresh);
   }, []);
 
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSignedIn(!!session?.user);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setSignedIn(!!session?.user);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
   return (
     <aside className="sb">
       <div className="sb-top">
-        <Link href="/" className="brand" aria-label="Mederti home">
+        <Link href={signedIn ? "/ask" : "/"} className="brand" aria-label="Mederti home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-black.png" alt="mederti" className="logo-img" />
         </Link>

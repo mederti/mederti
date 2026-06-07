@@ -37,6 +37,9 @@ interface SearchHit {
   last_verified_at?: string | null;          // most recent regulator verification (market)
   substitution?: { scheme: string; reference: string | null } | null;
   best_alternative?: { name: string; relationship: string | null } | null;
+  // ── Form/Strength (catalogue product rows; parsed by migration 053) ──
+  form_bucket?: string | null;               // controlled dose-form bucket
+  strength_label?: string | null;            // e.g. "500mg"
 }
 
 // PostgrestSingleResponse-shaped value we can ignore the full type of.
@@ -78,7 +81,19 @@ export async function GET(req: NextRequest) {
     const s = sp.get("sort")?.trim().toLowerCase();
     return s === "resolution" || s === "severity" ? s : "relevance";
   })();
-  const hasFilter = !isGlobal || statusKeys.size > 0;
+  // form: comma-joined subset of the form_bucket vocab. strength: comma-joined
+  // strength labels like "500mg". Both apply to catalogue (product) rows only —
+  // molecule rows carry the shortage signal and are kept regardless. Supplements
+  // (ARTG Listed) are excluded by default; ?supplements=1 opts them back in.
+  const FORM_VOCAB = new Set(["tablet","capsule","oral_liquid","injectable","topical","inhalation","drops","suppository","patch","powder","other"]);
+  const formKeys = new Set(
+    (sp.get("form") ?? "").split(",").map((s) => s.trim().toLowerCase()).filter((s) => FORM_VOCAB.has(s))
+  );
+  const strengthKeys = new Set(
+    (sp.get("strength") ?? "").split(",").map((s) => s.trim().toLowerCase().replace(/\s+/g, "")).filter(Boolean)
+  );
+  const includeSupplements = sp.get("supplements") === "1";
+  const hasFilter = !isGlobal || statusKeys.size > 0 || formKeys.size > 0 || strengthKeys.size > 0;
   // Over-fetch the FTS pool when filters are active so server-side filtering
   // doesn't starve the capped result slice. Cheap: FTS is indexed.
   const pool = hasFilter ? Math.max(limit, 120) : limit;
@@ -177,6 +192,37 @@ export async function GET(req: NextRequest) {
   }
 
   const drugIds = drugRows.map((r) => r.id as string);
+
+  // ── Catalogue enrichment (form_bucket / is_supplement / strength) ────
+  // Defensive: if these columns don't exist yet (migration 053 unapplied) the
+  // probe errors and the map stays empty, so the Form/Strength filters and the
+  // supplement exclusion are simply inert — search never breaks. Kicked off here
+  // so it runs in parallel with the Round 3 aggregation below.
+  type CatEnrich = { form: string | null; supp: boolean; sVal: number | null; sUnit: string | null };
+  const catEnrich: Record<string, CatEnrich> = {};
+  const catIds = catRows.map((r) => r.id as string);
+  const catEnrichPromise: Promise<void> = catIds.length === 0
+    ? Promise.resolve()
+    : timer
+        .track("db_catalogue_enrich", () =>
+          sb
+            .from("drug_catalogue")
+            .select("id,form_bucket,is_supplement,strength_value,strength_unit")
+            .in("id", catIds)
+            .then(
+              (r) => r as PgResult<{ id: string; form_bucket: string | null; is_supplement: boolean | null; strength_value: number | null; strength_unit: string | null }>,
+              () => ({ data: null })
+            )
+        )
+        .then((r) => {
+          for (const row of r.data ?? []) {
+            catEnrich[row.id] = { form: row.form_bucket, supp: !!row.is_supplement, sVal: row.strength_value, sUnit: row.strength_unit };
+          }
+        });
+
+  // Strength display/match label, e.g. (500, "mg") → "500mg". Trims trailing .0.
+  const strengthLabel = (v: number | null, u: string | null): string | null =>
+    v == null ? null : `${Number.isInteger(v) ? v : Number(v.toFixed(3))}${(u ?? "").toLowerCase()}`;
 
   // ── Round 3: market-aware shortage aggregation + registration set + alts ──
   // shortage_events are scoped to the chosen market (unless ALL) so the count
@@ -383,6 +429,7 @@ export async function GET(req: NextRequest) {
 
     await Promise.all(jobs);
   }
+  await catEnrichPromise;
 
   // Market union: a molecule qualifies if registered-in OR short-in the market.
   const marketMatchDrug = (id: string): boolean =>
@@ -438,7 +485,11 @@ export async function GET(req: NextRequest) {
   // row per linked molecule (drug_id) — otherwise multi-strength products like
   // CADUET 5/10…10/80 each surface as a separate row — falling back to the
   // generic-name string when a catalogue row isn't linked to a canonical drug.
-  const catCandidates: Ranked[] = [];
+  // catCandidates = the supplement-excluded, deduped product POOL (NOT yet
+  // form/strength filtered) so the form/strength facet counts stay honest. Each
+  // carries its parsed form_bucket + strength_label (private _slabel for matching).
+  type CatRanked = Ranked & { _slabel: string | null };
+  const catCandidates: CatRanked[] = [];
   {
     const seenDrugIds = new Set(marketDrugs.map((r) => r.drug_id));
     const seenNames = new Set(marketDrugs.map((r) => r.generic_name.toLowerCase()));
@@ -447,6 +498,10 @@ export async function GET(req: NextRequest) {
       // Cap at the fetch pool, not the page limit, so facet counts and `total`
       // are consistent with the molecule pool. The page slice happens later.
       if (catCandidates.length >= pool) break;
+      const id = r.id as string;
+      const enrich = catEnrich[id];
+      // Supplement exclusion (ARTG Listed) — default on; ?supplements=1 opts in.
+      if (enrich?.supp && !includeSupplements) continue;
       const drugId = r.drug_id as string | null;
       const gn = ((r.generic_name as string) ?? "").toLowerCase();
       const country = ((r.source_country as string) ?? "").toUpperCase();
@@ -455,8 +510,9 @@ export async function GET(req: NextRequest) {
       if (!drugId && (seenNames.has(gn) || seenCatNames.has(gn))) continue;
       if (drugId) seenDrugIds.add(drugId);
       seenCatNames.add(gn);
+      const slabel = strengthLabel(enrich?.sVal ?? null, enrich?.sUnit ?? null);
       catCandidates.push({
-        drug_id: drugId ?? (r.id as string),
+        drug_id: drugId ?? id,
         generic_name: r.generic_name as string,
         brand_names: (r.brand_name as string) ? [r.brand_name as string] : [],
         atc_code: (r.atc_code as string) ?? null,
@@ -472,10 +528,23 @@ export async function GET(req: NextRequest) {
         last_verified_at: null,
         substitution: null,
         best_alternative: null,
+        form_bucket: enrich?.form ?? null,
+        strength_label: slabel,
         _res: null,
         _sev: 0,
+        _slabel: slabel ? slabel.toLowerCase() : null,
       });
     }
+  }
+
+  // Form & strength facet counts over the product pool (independent of the
+  // current form/strength selection, like the status facets). Powers the
+  // dropdown option lists for the queried term.
+  const facetForm: Record<string, number> = {};
+  const facetStrength: Record<string, number> = {};
+  for (const c of catCandidates) {
+    if (c.form_bucket) facetForm[c.form_bucket] = (facetForm[c.form_bucket] ?? 0) + 1;
+    if (c._slabel) facetStrength[c._slabel] = (facetStrength[c._slabel] ?? 0) + 1;
   }
 
   // Status facet counts (free — agg + catalogue candidates already in hand).
@@ -491,11 +560,18 @@ export async function GET(req: NextRequest) {
   facetStatus.supply += catCandidates.length;
 
   // Catalogue rows only satisfy the supply bucket; drop them when the status
-  // filter is set and excludes supply.
+  // filter is set and excludes supply. Form/strength filters apply to PRODUCT
+  // rows only — molecule rows carry the shortage signal and are kept.
   const catEligible = statusKeys.size === 0 || statusKeys.has("supply");
   const drugResults: Ranked[] =
     statusKeys.size === 0 ? marketDrugs : marketDrugs.filter((r) => statusMatch(r.drug_id));
-  const catResults: Ranked[] = catEligible ? catCandidates : [];
+  const catResults: Ranked[] = !catEligible
+    ? []
+    : catCandidates.filter(
+        (c) =>
+          (formKeys.size === 0 || (c.form_bucket != null && formKeys.has(c.form_bucket))) &&
+          (strengthKeys.size === 0 || (c._slabel != null && strengthKeys.has(c._slabel)))
+      );
 
   // ── Sort the combined set, then slice to the page limit ──────────────
   const combined: Ranked[] = [...drugResults, ...catResults];
@@ -510,7 +586,11 @@ export async function GET(req: NextRequest) {
   const total = combined.length;
   const results: SearchHit[] = combined
     .slice(0, limit)
-    .map(({ _res, _sev, ...rest }) => { void _res; void _sev; return rest; });
+    .map((row) => {
+      const { _res, _sev, _slabel, ...rest } = row as CatRanked;
+      void _res; void _sev; void _slabel;
+      return rest;
+    });
 
   // ── "Did you mean…" fuzzy fallback ──────────────────────────────────
   // Only when the term matched no drug at all (a likely typo), not when a
@@ -549,7 +629,10 @@ export async function GET(req: NextRequest) {
       market: isGlobal ? "ALL" : market,
       sort,
       status: [...statusKeys],
-      facets: { status: facetStatus },
+      form: [...formKeys],
+      strength: [...strengthKeys],
+      supplements_included: includeSupplements,
+      facets: { status: facetStatus, form: facetForm, strength: facetStrength },
     },
     { headers: timer.headers() }
   );

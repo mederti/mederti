@@ -50,6 +50,9 @@ export interface DrugHit {
   last_verified_at?: string | null;
   substitution?: { scheme: string; reference: string | null } | null;
   best_alternative?: { name: string; relationship: string | null } | null;
+  // Form/Strength (catalogue product rows; migration 053).
+  form_bucket?: string | null;
+  strength_label?: string | null;
 }
 
 export interface StatusFacets {
@@ -67,7 +70,10 @@ export interface SearchResponse {
   market?: string;
   sort?: string;
   status?: string[];
-  facets?: { status: StatusFacets };
+  form?: string[];
+  strength?: string[];
+  supplements_included?: boolean;
+  facets?: { status: StatusFacets; form?: Record<string, number>; strength?: Record<string, number> };
 }
 
 export interface DrugDetail {
@@ -174,12 +180,15 @@ export const api = {
   search: (
     q: string,
     limit = 10,
-    opts?: { market?: string; status?: string[]; sort?: string }
+    opts?: { market?: string; status?: string[]; sort?: string; form?: string[]; strength?: string[]; supplements?: boolean }
   ) => {
     const p = new URLSearchParams({ q, limit: String(limit) });
     if (opts?.market) p.set("market", opts.market);
     if (opts?.status?.length) p.set("status", opts.status.join(","));
     if (opts?.sort && opts.sort !== "relevance") p.set("sort", opts.sort);
+    if (opts?.form?.length) p.set("form", opts.form.join(","));
+    if (opts?.strength?.length) p.set("strength", opts.strength.join(","));
+    if (opts?.supplements) p.set("supplements", "1");
     return apiFetch<SearchResponse>(`/search?${p.toString()}`);
   },
 

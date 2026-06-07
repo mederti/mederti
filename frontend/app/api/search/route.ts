@@ -173,6 +173,12 @@ export async function GET(req: NextRequest) {
   const agg: Record<string, Agg> = {};
   const registeredInMarket = new Set<string>();
   const altCounts: Record<string, number> = {};
+  // Phase 3a de-noising: drug_ids tagged reference_document / export_only are
+  // dropped from results + facets. Read defensively — if the entity_type column
+  // doesn't exist yet (migration 052 not applied), the probe errors and the
+  // fallback excludes nothing, so search never breaks and de-noising switches on
+  // automatically once the column lands.
+  const excludedTypeIds = new Set<string>();
   const SEV: Record<string, number> = { critical: 3, high: 2, medium: 1 };
   const RESOLVED_WINDOW_MS = 90 * 24 * 3600 * 1000;
   const now = Date.now();
@@ -252,6 +258,21 @@ export async function GET(req: NextRequest) {
         })
     );
 
+    jobs.push(
+      timer
+        .track("db_excluded_types", () =>
+          sb
+            .from("drugs")
+            .select("id")
+            .in("id", drugIds)
+            .in("entity_type", ["reference_document", "export_only"])
+            .then((r) => r as PgResult<{ id: string }>, () => ({ data: null }))
+        )
+        .then((r) => {
+          for (const row of r.data ?? []) excludedTypeIds.add(row.id);
+        })
+    );
+
     await Promise.all(jobs);
   }
 
@@ -296,7 +317,7 @@ export async function GET(req: NextRequest) {
         _sev: a?.maxSev ?? 0,
       };
     })
-    .filter((r) => marketMatchDrug(r.drug_id));
+    .filter((r) => !excludedTypeIds.has(r.drug_id) && marketMatchDrug(r.drug_id));
 
   // ── Catalogue candidates: market-filtered + deduped, independent of the
   // status selection so the supply facet stays honest. Dedup collapses to one

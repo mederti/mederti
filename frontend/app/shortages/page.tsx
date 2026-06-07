@@ -183,7 +183,7 @@ export default async function ShortagesPage({ searchParams }: Props) {
               <p style={{ fontSize: 13 }}>Try adjusting the filters above.</p>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <><div className="sh-table-wrap" style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--app-border)", background: "var(--app-bg)" }}>
@@ -255,6 +255,38 @@ export default async function ShortagesPage({ searchParams }: Props) {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile card list — table doesn't fit narrow screens */}
+            <div className="sh-cards">
+              {results.map((row) => {
+                const brand = cleanBrandNames(row.brand_names, row.generic_name)[0];
+                return (
+                  <Link key={row.shortage_id} href={`/drugs/${row.drug_id}`} className="sh-card">
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>
+                          {truncateDrugName(row.generic_name)}
+                        </div>
+                        {brand ? (
+                          <div style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 2 }}>{brand}</div>
+                        ) : null}
+                      </div>
+                      {severityBadge(row.severity)}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "var(--app-text-4)" }}>
+                      <span style={{
+                        display: "inline-block", padding: "2px 7px", borderRadius: 5,
+                        fontSize: 11, fontWeight: 600, background: "var(--app-bg-2)",
+                        color: "var(--app-text-3)", letterSpacing: "0.04em",
+                      }}>{row.country_code}</span>
+                      {row.reason_category ? <span>{row.reason_category}</span> : null}
+                      <span style={{ marginLeft: "auto" }}>Since {fmtDate(row.start_date)}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+            </>
           )}
 
           {/* Pagination */}
@@ -309,6 +341,17 @@ export default async function ShortagesPage({ searchParams }: Props) {
 
       <style>{`
         .shortage-row:hover { background: var(--app-bg) !important; }
+        .sh-cards { display: none; }
+        .sh-card {
+          display: block; padding: 14px 16px; text-decoration: none;
+          border-bottom: 1px solid var(--app-border);
+        }
+        .sh-card:last-child { border-bottom: none; }
+        .sh-card:active { background: var(--app-bg); }
+        @media (max-width: 767px) {
+          .sh-table-wrap { display: none; }
+          .sh-cards { display: block; }
+        }
       `}</style>
     </div>
   );

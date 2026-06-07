@@ -11,21 +11,23 @@ export function GovDashboardView() {
     <div className="govdash">
       <style>{`
 .govdash{
-  --bg:#fafafa; --bg-2:#f4f4f5; --bg-3:#e4e4e7; --card:#fff; --border:#e4e4e7; --border-2:#d4d4d8;
-  --text:#0c1118; --text-2:#3f3f46; --text-3:#71717a; --text-4:#a1a1aa;
-  --teal:#0d9488; --teal-l:#14b8a6; --teal-bg:#f0fdfa; --teal-b:#99f6e4;
-  --crit:#dc2626; --crit-bg:#fef2f2; --crit-b:#fecaca;
-  --med:#ca8a04; --med-bg:#fefce8; --med-b:#f3dcae;
-  --ok:#16a34a; --ok-bg:#e8f6f0; --ok-b:#dcebe6;
+  /* Aligned to the tuned reskin palette (matches /search + /drugs).
+     Was a Tailwind/zinc default palette from the original HTML mockup. */
+  --bg:#fff; --bg-2:#fafbfc; --bg-3:#eef2f5; --card:#fff; --border:#e8ecf0; --border-2:#dde3e9;
+  --text:#0c1118; --text-2:#3b434e; --text-3:#6a7280; --text-4:#98a1ac;
+  --teal:#0fa676; --teal-l:#0c8a62; --teal-bg:#e8f6f0; --teal-b:#bce4d4;
+  --crit:#dc2647; --crit-bg:#fdeef1; --crit-b:#f8cdd6;
+  --med:#b46708; --med-bg:#fdf6e9; --med-b:#f3dcae;
+  --ok:#0fa676; --ok-bg:#e8f6f0; --ok-b:#bce4d4;
   --indigo:#6366f1; --ind-bg:#eef2ff; --ind-b:#c7d2fe;
-  --high:#ea580c; --high-bg:#fff7ed; --high-b:#fed7aa;
-  --low:#16a34a; --low-bg:#e8f6f0; --low-b:#dcebe6;
+  --high:#c2410c; --high-bg:#fdf1ea; --high-b:#fbd2bb;
+  --low:#0fa676; --low-bg:#e8f6f0; --low-b:#bce4d4;
 
   height:100%;
   overflow-y:auto;
-  background:#f4f5f7;
+  background:var(--bg-2);
   font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;
-  color:#0c1118;
+  color:var(--text);
   display:flex;
   flex-direction:column;
 }
@@ -43,7 +45,7 @@ export function GovDashboardView() {
 .govdash .gov-report-btn{font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:8px;background:var(--teal);color:#fff;border:none;cursor:pointer;white-space:nowrap}
 .govdash .gov-report-btn:hover{background:var(--teal-l)}
 
-.govdash .gov-scroll{flex:1;overflow-y:auto;padding:18px 28px 32px;background:#f4f5f7}
+.govdash .gov-scroll{flex:1;overflow-y:auto;padding:18px 28px 32px;background:var(--bg-2)}
 
 .govdash .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
 .govdash .kpi{background:#fff;border:1px solid var(--border);border-radius:11px;padding:15px 16px}

@@ -38,6 +38,7 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/search",            // drug search
   "/drugs",             // /drugs/[id]
   "/intelligence",      // Pharma Brief and any subroutes
+  "/insights",          // public Intelligence / Dashboard reading views (/insights/[kind])
   "/coming-soon",
   "/admin",             // separately gated by requireAdmin
   "/privacy",
@@ -89,6 +90,9 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   // Chat is the public Claude-led answer surface. Public to maximise first-touch
   // and SEO; auth happens later via lead capture / signup CTAs inside the chat.
   "/chat",
+  // Public operational reading views (Intelligence / Dashboard) — the grounded
+  // chat posts to /api/chat (already public). The full /chat product stays gated.
+  "/insights",
   // Static demo / preview HTML in public/
   "/table-preview.html",
   // Public APIs that are safe to expose

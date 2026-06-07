@@ -379,25 +379,22 @@ function Results() {
                       ) : isCat ? (
                         <span className="t-muted">—</span>
                       ) : (
-                        <span className="t-norm">Per normal rules</span>
+                        <>
+                          <div className="t-norm">Standard substitution</div>
+                          <div className="t-sub2">no shortage approval needed</div>
+                        </>
                       )}
                     </td>
                     <td>
-                      {/* Alternatives are only actionable during a shortage — when the
-                          medicine is available in-market, say so rather than surfacing one. */}
-                      {(d.active_shortage_count ?? 0) > 0 ? (
-                        d.best_alternative ? (
-                          <>
-                            <div className="t-alt">{d.best_alternative.name}</div>
-                            {d.best_alternative.relationship && <div className="t-sub2">{d.best_alternative.relationship}</div>}
-                          </>
-                        ) : (
-                          <span className="t-muted">—</span>
-                        )
-                      ) : isCat ? (
-                        <span className="t-muted">—</span>
+                      {/* Always surface the closest alternative when we have one —
+                          useful for proactive planning, not just during a shortage. */}
+                      {d.best_alternative ? (
+                        <>
+                          <div className="t-alt">{d.best_alternative.name}</div>
+                          {d.best_alternative.relationship && <div className="t-sub2">{d.best_alternative.relationship}</div>}
+                        </>
                       ) : (
-                        <span className="t-muted">Not needed — in supply</span>
+                        <span className="t-muted">—</span>
                       )}
                     </td>
                     <td className="center">

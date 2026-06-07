@@ -65,10 +65,11 @@ function NavItem({ kind, active, children }: { kind: InsightKind; active: boolea
     <Link
       href={`/insights/${kind}`}
       className={`flex items-center gap-2.5 text-[13.5px] px-2 py-2 rounded-md transition-colors ${
-        active ? "bg-teal-50 text-teal-700 font-semibold" : "text-slate-600 hover:bg-slate-100"
+        active ? "font-semibold" : "text-slate-600 hover:bg-slate-100"
       }`}
+      style={active ? { background: "var(--teal-bg)", color: "var(--teal-l)" } : undefined}
     >
-      <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--teal)" }} />
       {children}
     </Link>
   );
@@ -103,7 +104,7 @@ export default function InsightsClient({ kind }: { kind: InsightKind }) {
               href="/search"
               className="flex items-center gap-2.5 text-[13.5px] px-2 py-2 rounded-md text-slate-600 hover:bg-slate-100 transition-colors"
             >
-              <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--teal)" }} />
               Search
             </Link>
             <NavItem kind="intelligence" active={kind === "intelligence"}>

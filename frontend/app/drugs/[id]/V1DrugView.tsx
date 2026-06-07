@@ -1,6 +1,6 @@
 import Link from "next/link";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
-import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
+import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import V1Chat from "@/app/components/v1/V1Chat";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
@@ -214,28 +214,8 @@ export default function V1DrugView({
     <div className="v1home v1drug">
       <style>{CSS}</style>
       <div className="shell">
-        {/* ── Left sidebar (app nav) ── */}
-        <aside className="sb">
-          <div className="sb-top">
-            <Link href="/" className="brand" aria-label="Mederti home">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-black.png" alt="mederti" className="logo-img" />
-            </Link>
-          </div>
-          <div style={{ padding: "14px 14px 8px 16px" }}><V1CountryPicker /></div>
-          <div className="sb-scroll">
-            <div className="sb-group">
-              <div className="sb-glabel">My medicines</div>
-              <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
-            </div>
-            <div className="sb-group">
-              <div className="sb-glabel">Browse</div>
-              <Link href="/search" className="sb-item"><span className="sb-dot green" />Search</Link>
-              <Link href="/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
-            </div>
-          </div>
-          <Link href="/login" className="sb-profile">Log in →</Link>
-        </aside>
+        {/* ── Left sidebar (app nav) — shared with the search page ── */}
+        <V1Sidebar />
 
         {/* ── Center + right ── */}
         <div className="shell-main">
@@ -601,6 +581,8 @@ const CSS = `
 .sb-item{display:flex;align-items:center;gap:10px;padding:9px;border-radius:10px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none}
 .sb-item:hover{background:var(--bg-2)}
 .sb-empty{color:var(--text-4);font-style:italic}
+.sb-sub{padding-left:18px;color:var(--text-3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.sb-sub:hover{color:var(--text);background:var(--bg-2)}
 .sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .sb-dot.green{background:var(--ok)}
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
@@ -761,4 +743,5 @@ const CSS = `
 @media(max-width:1080px){.chat-col{display:none}.dg-main{margin:0 auto}}
 @media(max-width:820px){.sb{display:none}}
 @media(max-width:620px){.sw-cards{grid-template-columns:repeat(2,1fr)}.d-name{font-size:24px}}
+@media(max-width:480px){.sw-cards{grid-template-columns:1fr}.dg-main{padding:16px 16px 64px}}
 `;

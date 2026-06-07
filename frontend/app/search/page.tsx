@@ -4,17 +4,10 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, type DrugHit, type StatusFacets } from "@/lib/api";
-import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
+import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import { truncateDrugName } from "@/lib/utils";
 import { cleanBrandNames } from "@/lib/brand";
-import {
-  RECENT_EVENT,
-  addRecentMedicine,
-  addRecentSearch,
-  getRecentMedicines,
-  getRecentSearches,
-  type RecentMedicine,
-} from "@/lib/recent-activity";
+import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
 
 function statusOf(d: DrugHit): { cls: string; label: string } {
   if (d.source === "catalogue") return { cls: "sp-ok", label: "Registered product" };
@@ -512,65 +505,12 @@ function Results() {
 }
 
 export default function SearchPage() {
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [recentMedicines, setRecentMedicines] = useState<RecentMedicine[]>([]);
-
-  useEffect(() => {
-    const refresh = () => {
-      setRecentSearches(getRecentSearches());
-      setRecentMedicines(getRecentMedicines());
-    };
-    refresh();
-    window.addEventListener(RECENT_EVENT, refresh);
-    return () => window.removeEventListener(RECENT_EVENT, refresh);
-  }, []);
-
   return (
     <div className="v1home v1search">
       <style>{CSS}</style>
       <div className="shell">
-        {/* ── Left sidebar (app nav) — identical to the drug page shell ── */}
-        <aside className="sb">
-          <div className="sb-top">
-            <Link href="/" className="brand" aria-label="Mederti home">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-black.png" alt="mederti" className="logo-img" />
-            </Link>
-          </div>
-          <div style={{ padding: "14px 14px 8px 16px" }}><V1CountryPicker /></div>
-          <div className="sb-scroll">
-            <div className="sb-group">
-              <div className="sb-glabel">Browse</div>
-              <Link href="/chat?view=early-warning" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
-              <Link href="/chat?view=dashboard" className="sb-item"><span className="sb-dot green" />Dashboard</Link>
-            </div>
-            <div className="sb-group">
-              <div className="sb-glabel">Search history</div>
-              {recentSearches.length > 0 ? (
-                recentSearches.map((term) => (
-                  <Link key={term} href={`/search?q=${encodeURIComponent(term)}`} className="sb-item sb-sub">
-                    {truncateDrugName(term, 28)}
-                  </Link>
-                ))
-              ) : (
-                <div className="sb-item sb-empty">No recent searches</div>
-              )}
-            </div>
-            <div className="sb-group">
-              <div className="sb-glabel">My medicines</div>
-              {recentMedicines.length > 0 ? (
-                recentMedicines.map((m) => (
-                  <Link key={m.id} href={`/drugs/${m.id}`} className="sb-item sb-sub">
-                    {truncateDrugName(m.name, 28)}
-                  </Link>
-                ))
-              ) : (
-                <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
-              )}
-            </div>
-          </div>
-          <Link href="/login" className="sb-profile">Log in →</Link>
-        </aside>
+        {/* ── Left sidebar (app nav) — shared with the drug page ── */}
+        <V1Sidebar />
 
         {/* ── Center column (no right-hand chat column) ── */}
         <div className="shell-main">

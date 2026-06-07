@@ -30,6 +30,13 @@ interface SearchHit {
   source_country?: string;
   source_name?: string;
   registration_number?: string;
+  // ── Table-view enrichment (bulk-fetched; country-scoped to the chosen market) ──
+  market_severity?: number;                 // 0-3 worst active severity in the market
+  other_markets_short?: number;             // # of OTHER markets with an active shortage
+  estimated_resolution_date?: string | null; // earliest sponsor-declared expected-back (market)
+  last_verified_at?: string | null;          // most recent regulator verification (market)
+  substitution?: { scheme: string; reference: string | null } | null;
+  best_alternative?: { name: string; relationship: string | null } | null;
 }
 
 // PostgrestSingleResponse-shaped value we can ignore the full type of.
@@ -169,10 +176,14 @@ export async function GET(req: NextRequest) {
   // ── Round 3: market-aware shortage aggregation + registration set + alts ──
   // shortage_events are scoped to the chosen market (unless ALL) so the count
   // badge, status buckets, and sort keys all reflect that market.
-  type Agg = { active: number; resolvedRecent: number; minRes: number | null; maxSev: number };
+  type Agg = { active: number; resolvedRecent: number; minRes: number | null; maxSev: number; lastVerified: number | null };
   const agg: Record<string, Agg> = {};
   const registeredInMarket = new Set<string>();
   const altCounts: Record<string, number> = {};
+  // Table-view enrichment maps (all keyed by drug_id).
+  const otherMarkets: Record<string, Set<string>> = {};                       // distinct OTHER countries short
+  const subMap: Record<string, { scheme: string; reference: string | null }> = {}; // active substitution pathway
+  const bestAlt: Record<string, { name: string; relationship: string | null }> = {}; // top alternative by similarity
   // Phase 3a de-noising: drug_ids tagged reference_document / export_only are
   // dropped from results + facets. Read defensively — if the entity_type column
   // doesn't exist yet (migration 052 not applied), the probe errors and the
@@ -191,7 +202,7 @@ export async function GET(req: NextRequest) {
         .track("db_shortage_agg", () => {
           let qb = sb
             .from("shortage_events")
-            .select("drug_id,status,end_date,severity,estimated_resolution_date")
+            .select("drug_id,status,end_date,severity,estimated_resolution_date,last_verified_at")
             .in("drug_id", drugIds);
           if (!isGlobal) qb = qb.eq("country_code", market);
           return qb.then(
@@ -202,13 +213,20 @@ export async function GET(req: NextRequest) {
                 end_date: string | null;
                 severity: string | null;
                 estimated_resolution_date: string | null;
+                last_verified_at: string | null;
               }>,
             () => ({ data: null })
           );
         })
         .then((r) => {
           for (const row of r.data ?? []) {
-            const a = (agg[row.drug_id] ??= { active: 0, resolvedRecent: 0, minRes: null, maxSev: 0 });
+            const a = (agg[row.drug_id] ??= { active: 0, resolvedRecent: 0, minRes: null, maxSev: 0, lastVerified: null });
+            // Freshness is tracked across all rows for the market (not just active),
+            // so an in-supply molecule still shows when its status was last confirmed.
+            if (row.last_verified_at) {
+              const v = Date.parse(row.last_verified_at);
+              if (!Number.isNaN(v) && (a.lastVerified === null || v > a.lastVerified)) a.lastVerified = v;
+            }
             if (row.status === "active" || row.status === "anticipated") {
               a.active++;
               if (row.estimated_resolution_date) {
@@ -221,6 +239,91 @@ export async function GET(req: NextRequest) {
               const t = Date.parse(row.end_date);
               if (!Number.isNaN(t) && now - t <= RESOLVED_WINDOW_MS) a.resolvedRecent++;
             }
+          }
+        })
+    );
+
+    // ── Other-markets-short: distinct OTHER countries with an active shortage.
+    // Powers the "+ N other markets short" subline. Skipped under the global
+    // scope (there is no "other"). One indexed bulk query over the result IDs.
+    if (!isGlobal) {
+      jobs.push(
+        timer
+          .track("db_other_markets", () =>
+            sb
+              .from("shortage_events")
+              .select("drug_id,country_code")
+              .in("drug_id", drugIds)
+              .in("status", ["active", "anticipated"])
+              .neq("country_code", market)
+              .then((r) => r as PgResult<{ drug_id: string; country_code: string | null }>, () => ({ data: null }))
+          )
+          .then((r) => {
+            for (const row of r.data ?? []) {
+              if (!row.country_code) continue;
+              (otherMarkets[row.drug_id] ??= new Set()).add(row.country_code.toUpperCase());
+            }
+          })
+      );
+    }
+
+    // ── Substitution pathway in force for the market. Read DEFENSIVELY: the
+    // regulatory_eligibility table may not exist in every environment (migration
+    // 040), so a probe error degrades to "no pathway" rather than 500-ing search.
+    // Keyed by drug_id; generic-name-only eligibility entries are not matched here.
+    jobs.push(
+      timer
+        .track("db_eligibility", () => {
+          let qb = sb
+            .from("regulatory_eligibility")
+            .select("drug_id,scheme,scheme_reference,status,country_code")
+            .in("drug_id", drugIds)
+            .eq("status", "active");
+          if (!isGlobal) qb = qb.or(`country_code.eq.${market},country_code.is.null`);
+          return qb.then(
+            (r) => r as PgResult<{ drug_id: string | null; scheme: string | null; scheme_reference: string | null; country_code: string | null }>,
+            () => ({ data: null })
+          );
+        })
+        .then((r) => {
+          for (const row of r.data ?? []) {
+            if (!row.drug_id || !row.scheme) continue;
+            const cur = subMap[row.drug_id];
+            // Keep the first entry, but upgrade if a later one carries a reference
+            // (a concrete approval ref like an s19A number is more useful to show).
+            if (!cur || (cur.reference === null && row.scheme_reference)) {
+              subMap[row.drug_id] = { scheme: row.scheme, reference: row.scheme_reference ?? null };
+            }
+          }
+        })
+    );
+
+    // ── Best alternative (top by similarity) + its name. Separate from the count
+    // job so a join failure can't regress alternatives_count. Globally ordered by
+    // similarity desc → the first row seen per drug is that drug's best match.
+    jobs.push(
+      timer
+        .track("db_best_alt", () =>
+          sb
+            .from("drug_alternatives")
+            .select("drug_id,relationship_type,similarity_score,drugs!drug_alternatives_alternative_drug_id_fkey(generic_name)")
+            .in("drug_id", drugIds)
+            .eq("is_approved", true)
+            .order("similarity_score", { ascending: false, nullsFirst: false })
+            .then(
+              (r) => r as PgResult<{ drug_id: string; relationship_type: string | null; drugs: { generic_name: string | null } | null }>,
+              () => ({ data: null })
+            )
+        )
+        .then((r) => {
+          for (const row of r.data ?? []) {
+            if (bestAlt[row.drug_id]) continue; // first = highest similarity
+            const name = row.drugs?.generic_name;
+            if (!name) continue;
+            bestAlt[row.drug_id] = {
+              name,
+              relationship: row.relationship_type ? String(row.relationship_type).replace(/_/g, " ") : null,
+            };
           }
         })
     );
@@ -313,6 +416,12 @@ export async function GET(req: NextRequest) {
         active_shortage_count: a?.active ?? 0,
         alternatives_count: altCounts[id] ?? 0,
         source: "drugs",
+        market_severity: a?.maxSev ?? 0,
+        other_markets_short: otherMarkets[id]?.size ?? 0,
+        estimated_resolution_date: a?.minRes != null ? new Date(a.minRes).toISOString() : null,
+        last_verified_at: a?.lastVerified != null ? new Date(a.lastVerified).toISOString() : null,
+        substitution: subMap[id] ?? null,
+        best_alternative: bestAlt[id] ?? null,
         _res: a?.minRes ?? null,
         _sev: a?.maxSev ?? 0,
       };
@@ -352,6 +461,12 @@ export async function GET(req: NextRequest) {
         source_country: r.source_country as string,
         source_name: r.source_name as string,
         registration_number: r.registration_number as string,
+        market_severity: 0,
+        other_markets_short: 0,
+        estimated_resolution_date: null,
+        last_verified_at: null,
+        substitution: null,
+        best_alternative: null,
         _res: null,
         _sev: 0,
       });

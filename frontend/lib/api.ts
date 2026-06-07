@@ -43,6 +43,13 @@ export interface DrugHit {
   source_country?: string;
   source_name?: string;
   registration_number?: string;
+  // Table-view enrichment (country-scoped to the chosen market).
+  market_severity?: number;
+  other_markets_short?: number;
+  estimated_resolution_date?: string | null;
+  last_verified_at?: string | null;
+  substitution?: { scheme: string; reference: string | null } | null;
+  best_alternative?: { name: string; relationship: string | null } | null;
 }
 
 export interface StatusFacets {

@@ -144,6 +144,11 @@ export async function GET(req: NextRequest) {
   }
   if (fallbackJobs.length > 0) await Promise.all(fallbackJobs);
 
+  // The term itself matched nothing in either table (not merely filtered out
+  // downstream). This is the signal for the "Did you mean…" fuzzy fallback,
+  // computed before promotion mutates drugRows.
+  const termMatchedNothing = drugRows.length === 0 && catRows.length === 0;
+
   // ── Promote catalogue hits to their canonical drug ──────────────────
   // A catalogue product linked to a canonical drug (drug_id, populated by
   // backend/importers/catalogue_inn_backfill) should roll up to that INN —
@@ -507,6 +512,22 @@ export async function GET(req: NextRequest) {
     .slice(0, limit)
     .map(({ _res, _sev, ...rest }) => { void _res; void _sev; return rest; });
 
+  // ── "Did you mean…" fuzzy fallback ──────────────────────────────────
+  // Only when the term matched no drug at all (a likely typo), not when a
+  // filter merely emptied the page. One indexed trigram lookup; never runs on
+  // the common path. The frontend auto-loads results for the suggestion.
+  let suggestion: string | null = null;
+  if (termMatchedNothing) {
+    const sug = await timer.track("db_suggestion", () =>
+      sb.rpc("search_suggestion", { q }).then(
+        (r) => r as PgResult<{ name: string; score: number }>,
+        () => ({ data: null })
+      )
+    );
+    const top = sug.data?.[0]?.name;
+    if (top && top.toLowerCase() !== q.toLowerCase()) suggestion = top;
+  }
+
   // Demand-signal instrumentation (Sprint 3 PR 2 substrate, Sprint 4 PR 1
   // wiring). Fire-and-forget; never blocks the response. The first drug
   // result is attributed to the search signal so SUP demand queries can
@@ -524,6 +545,7 @@ export async function GET(req: NextRequest) {
       query: q,
       results,
       total,
+      suggestion,
       market: isGlobal ? "ALL" : market,
       sort,
       status: [...statusKeys],

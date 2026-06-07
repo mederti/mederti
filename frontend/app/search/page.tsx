@@ -235,6 +235,16 @@ function Results() {
     setParams({ status: set.size ? [...set].join(",") : null });
   }
 
+  // "Search instead for <original>": honour the raw term and don't re-correct it.
+  function searchInsteadFor(original: string) {
+    forcedRef.current.add(original.trim().toLowerCase());
+    setCorrected(null);
+    setParams({ q: original.trim() });
+  }
+
+  const showCorrection =
+    corrected && urlQ.trim().toLowerCase() === corrected.to.toLowerCase() && results.length > 0;
+
   const mk = marketOf(market);
 
   return (
@@ -347,6 +357,17 @@ function Results() {
           )}
         </div>
       </div>
+
+      {showCorrection && corrected && (
+        <div className="did-you-mean">
+          Showing results for <b>{corrected.to}</b>
+          <span className="dym-sep"> · </span>
+          Search instead for{" "}
+          <button className="link-btn" onClick={() => searchInsteadFor(corrected.from)}>
+            &ldquo;{corrected.from}&rdquo;
+          </button>
+        </div>
+      )}
 
       {q.trim() && (
         <div className="results-head"><div className="rh">{loading ? "Searching…" : <>Results for <b>{q.trim()}</b>{total > 0 ? ` · ${total}` : ""}{!isGlobalMarket && <> · {mk.name}</>}</>}</div></div>
@@ -634,6 +655,9 @@ const CSS = `
 .fbar .dd-note{padding:7px 9px 9px;font-size:11px;color:var(--text-4);line-height:1.4}
 .link-btn{background:none;border:none;padding:0;color:var(--green-d);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline}
 @media(max-width:820px){.fbar .sortw{margin-left:0;width:100%}.fbar .dd{height:40px}}
+.did-you-mean{margin-top:14px;padding:10px 14px;background:var(--green-soft,rgba(15,166,118,.07));border:1px solid var(--border);border-radius:12px;font-size:13px;color:var(--text-3)}
+.did-you-mean b{color:var(--text);font-weight:700}
+.did-you-mean .dym-sep{color:var(--text-4)}
 .results-head{padding:22px 2px 4px}
 .results-head .rh{font-size:12px;color:var(--text-3)}
 .results-head .rh b{color:var(--text);font-weight:700}

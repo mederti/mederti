@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mederti — "Did you mean" + results table (sample)</title>
+<style>
+  :root{
+    --ink:#0c1118; --text-2:#3b434e; --text-3:#6a7280; --text-4:#98a1ac;
+    --bg:#ffffff; --bg-2:#f5f7f9; --page:#fafbfc;
+    --border:#e8ecf0; --border-2:#dde3e9;
+    --green:#0fa676; --green-d:#0c8a62; --green-soft:rgba(15,166,118,.08);
+    --crit:#dc2647; --crit-bg:#fdeef1; --crit-b:#f8cdd6;
+    --med:#b46708;  --med-bg:#fdf6e9;  --med-b:#f3dcae;
+    --ok:#0fa676;   --ok-bg:#e8f6f0;   --ok-b:#bce4d4;
+    --sh-card:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06);
+    --hi-inset:inset 0 1px 0 rgba(255,255,255,.7);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 28px 80px}
+  .note{font-size:12px;color:var(--text-4);margin:0 0 22px;padding:9px 13px;
+    background:var(--bg);border:1px dashed var(--border-2);border-radius:10px}
+  .note b{color:var(--text-2)}
+
+  /* search box */
+  .searchbox{display:flex;align-items:center;gap:11px;background:var(--bg);
+    border:2px solid var(--green);border-radius:16px;padding:18px 22px;
+    box-shadow:var(--sh-card);font-size:19px}
+  .searchbox .ic{color:var(--text-4);font-size:18px}
+  .searchbox input{border:0;outline:0;flex:1;font-size:19px;color:var(--ink);background:transparent}
+
+  /* filter bar */
+  .fbar{display:flex;align-items:center;gap:9px;margin-top:16px}
+  .dd{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 15px;
+    border:1px solid var(--border);border-radius:11px;background:var(--bg);
+    font-size:13.5px;font-weight:600;color:var(--text-2);cursor:pointer;box-shadow:var(--sh-card)}
+  .dd.active{border-color:var(--green);color:var(--green-d);background:var(--green-soft)}
+  .dd.ghost{border-style:dashed;color:var(--text-3)}
+  .dd .cv{color:var(--text-4);font-size:11px}
+  .dd .fl{font-size:15px}
+  .sortw{margin-left:auto}
+
+  /* did-you-mean banner (matches app .did-you-mean) */
+  .did-you-mean{margin-top:14px;padding:10px 14px;background:var(--green-soft);
+    border:1px solid var(--border);border-radius:12px;font-size:13px;color:var(--text-3)}
+  .did-you-mean b{color:var(--ink);font-weight:700}
+  .did-you-mean .dym-sep{color:var(--text-4)}
+  .link-btn{background:none;border:none;padding:0;color:var(--green-d);font:inherit;
+    font-weight:600;cursor:pointer;text-decoration:underline}
+
+  .results-head{padding:22px 2px 4px}
+  .results-head .rh{font-size:12px;color:var(--text-3)}
+  .results-head .rh b{color:var(--ink);font-weight:700}
+
+  /* results table (verbatim from app) */
+  .res-table-wrap{margin-top:10px;background:var(--bg);border:1px solid var(--border);
+    border-radius:16px;overflow:hidden;box-shadow:var(--sh-card),var(--hi-inset)}
+  .res-table{width:100%;border-collapse:collapse;table-layout:fixed}
+  .res-table thead th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--text-4);padding:13px 16px;background:var(--bg-2);
+    border-bottom:1px solid var(--border);white-space:nowrap}
+  .res-table th.c-med{width:22%}.res-table th.c-mkt{width:17%}.res-table th.c-sub{width:14%}
+  .res-table th.c-alt{width:16%}.res-table th.c-n{width:7%;text-align:center}
+  .res-table th.c-eb{width:12%}.res-table th.c-ver{width:12%}
+  .res-table tbody td{padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:top}
+  .res-table tbody tr:last-child td{border-bottom:none}
+  .res-table tbody tr.clickable{cursor:pointer;transition:background .12s}
+  .res-table tbody tr.clickable:hover{background:var(--bg-2)}
+  .res-table td.center{text-align:center;vertical-align:top}
+
+  .t-name{font-size:14px;font-weight:700;letter-spacing:-.02em;line-height:1.25;color:var(--ink)}
+  .t-brands{font-size:11.5px;color:var(--text-3);font-family:var(--mono);margin-top:3px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .t-atc{font-size:10.5px;color:var(--text-4);font-family:var(--mono);margin-top:5px}
+  .t-mktsub{font-size:10.5px;margin-top:5px;color:var(--text-4)}
+  .t-mktsub.warn{color:var(--med)}
+  .t-subyes{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;
+    color:#6366f1;background:#eef0ff;border:1px solid #d7daff;padding:4px 9px;border-radius:8px}
+  .t-norm{font-size:12.5px;font-weight:600;color:var(--text-2)}
+  .t-alt{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.3}
+  .t-sub2{font-size:10.5px;color:var(--text-4);margin-top:3px}
+  .t-muted{font-size:12.5px;color:var(--text-4)}
+  .t-count{font-size:13px;font-weight:700;color:var(--text-2);font-family:var(--mono)}
+  .t-count.zero{color:var(--text-4);font-weight:500}
+  .t-eb{font-size:12.5px;font-weight:700;color:var(--ink)}
+  .t-eb.none{font-weight:500;color:var(--text-4)}
+  .t-ver{font-size:11.5px;color:var(--text-3);font-family:var(--mono)}
+  .t-ver.stale{color:var(--med)}
+
+  .status-pill{font-size:11px;font-weight:600;padding:5px 11px;border-radius:99px;
+    white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+  .status-pill .d{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .sp-crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
+  .sp-part{color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
+  .sp-ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-b)}
+
+  .res-foot{padding:24px 0;text-align:center;font-size:12px;color:var(--text-4)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="note">
+    <b>Sample only.</b> Static mock of the <code>/search</code> typo-correction flow + the new desktop results
+    table. The user typed <b>“cefalaxin”</b> (no match) → the app auto-loaded the closest drug
+    <b>Cefalexin</b> and offered a one-click revert. Data below is illustrative.
+  </p>
+
+  <!-- search box: shows the corrected term, as the real app does -->
+  <div class="searchbox">
+    <span class="ic">⌕</span>
+    <input value="Cefalexin" aria-label="Search a drug" />
+  </div>
+
+  <!-- filter bar (static) -->
+  <div class="fbar">
+    <button class="dd active"><span class="fl">🇦🇺</span>Australia<span class="cv">▾</span></button>
+    <button class="dd">Status<span class="cv">▾</span></button>
+    <button class="dd ghost">More filters<span class="cv">▾</span></button>
+    <button class="dd sortw">Sort: Relevance<span class="cv">▾</span></button>
+  </div>
+
+  <!-- the "Did you mean" banner -->
+  <div class="did-you-mean">
+    Showing results for <b>Cefalexin</b>
+    <span class="dym-sep"> · </span>
+    Search instead for <button class="link-btn">&ldquo;cefalaxin&rdquo;</button>
+  </div>
+
+  <div class="results-head"><div class="rh">Results for <b>Cefalexin</b> · 5 · Australia</div></div>
+
+  <!-- new results table -->
+  <div class="res-table-wrap">
+    <table class="res-table">
+      <thead>
+        <tr>
+          <th class="c-med">Medicine</th>
+          <th class="c-mkt">In your market 🇦🇺</th>
+          <th class="c-sub">Can I substitute?</th>
+          <th class="c-alt">Best alternative</th>
+          <th class="c-n">Alts</th>
+          <th class="c-eb">Expected back</th>
+          <th class="c-ver">Last verified</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- 1: active shortage, severe, with s19A pathway -->
+        <tr class="clickable">
+          <td>
+            <div class="t-name">Cefalexin</div>
+            <div class="t-brands">Keflex · Ceporex · Cephalexin</div>
+            <div class="t-atc">ATC J01DB01</div>
+          </td>
+          <td>
+            <span class="status-pill sp-crit"><span class="d"></span>Short in AU</span>
+            <div class="t-mktsub warn">+ 3 other markets short</div>
+          </td>
+          <td>
+            <span class="t-subyes">✓ Yes — S19A</span>
+            <div class="t-sub2">TGA 2024-AU-0413</div>
+          </td>
+          <td>
+            <div class="t-alt">Cefaclor</div>
+            <div class="t-sub2">same class (2nd-gen)</div>
+          </td>
+          <td class="center"><span class="t-count">3</span></td>
+          <td><div class="t-eb">Aug 2026</div><div class="t-sub2">Sponsor est.</div></td>
+          <td><span class="t-ver">2d ago</span></td>
+        </tr>
+
+        <!-- 2: active shortage, partial, standard substitution -->
+        <tr class="clickable">
+          <td>
+            <div class="t-name">Cefalexin monohydrate</div>
+            <div class="t-brands">Ibilex · Cilex</div>
+            <div class="t-atc">ATC J01DB01</div>
+          </td>
+          <td>
+            <span class="status-pill sp-part"><span class="d"></span>Short in AU</span>
+            <div class="t-mktsub">single brand affected</div>
+          </td>
+          <td>
+            <div class="t-norm">Standard substitution</div>
+            <div class="t-sub2">no shortage approval needed</div>
+          </td>
+          <td>
+            <div class="t-alt">Cefalexin (Keflex)</div>
+            <div class="t-sub2">same molecule</div>
+          </td>
+          <td class="center"><span class="t-count">1</span></td>
+          <td><div class="t-eb none">No estimate</div></td>
+          <td><span class="t-ver">5d ago</span></td>
+        </tr>
+
+        <!-- 3: available locally, short elsewhere, stale verification -->
+        <tr class="clickable">
+          <td>
+            <div class="t-name">Cephalexin</div>
+            <div class="t-brands">Keflex · Daxbia</div>
+            <div class="t-atc">ATC J01DB01</div>
+          </td>
+          <td>
+            <span class="status-pill sp-ok"><span class="d"></span>Available in AU</span>
+            <div class="t-mktsub warn">short in 2 other markets</div>
+          </td>
+          <td>
+            <div class="t-norm">Standard substitution</div>
+            <div class="t-sub2">no shortage approval needed</div>
+          </td>
+          <td>
+            <div class="t-alt">Cefadroxil</div>
+            <div class="t-sub2">same class (1st-gen)</div>
+          </td>
+          <td class="center"><span class="t-count">2</span></td>
+          <td><span class="t-muted">—</span></td>
+          <td><span class="t-ver stale">22d ago</span></td>
+        </tr>
+
+        <!-- 4: registered catalogue product (not clickable) -->
+        <tr>
+          <td>
+            <div class="t-name">IBILEX 250 cefalexin 250mg/5mL powder</div>
+            <div class="t-brands">Ibilex</div>
+            <div class="t-atc">ATC J01DB01</div>
+          </td>
+          <td>
+            <span class="status-pill sp-ok"><span class="d"></span>Registered in AU</span>
+            <div class="t-mktsub">ARTG · TGA</div>
+          </td>
+          <td><span class="t-muted">—</span></td>
+          <td><span class="t-muted">—</span></td>
+          <td class="center"><span class="t-count zero">—</span></td>
+          <td><span class="t-muted">—</span></td>
+          <td><span class="t-muted">—</span></td>
+        </tr>
+
+        <!-- 5: registered catalogue product (not clickable) -->
+        <tr>
+          <td>
+            <div class="t-name">IBILEX 125 cefalexin 125mg/5mL powder</div>
+            <div class="t-brands">Ibilex</div>
+            <div class="t-atc">ATC J01DB01</div>
+          </td>
+          <td>
+            <span class="status-pill sp-ok"><span class="d"></span>Registered in AU</span>
+            <div class="t-mktsub">ARTG · TGA</div>
+          </td>
+          <td><span class="t-muted">—</span></td>
+          <td><span class="t-muted">—</span></td>
+          <td class="center"><span class="t-count zero">—</span></td>
+          <td><span class="t-muted">—</span></td>
+          <td><span class="t-muted">—</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="res-foot">Status from official regulators · tap a result for full detail</div>
+</div>
+</body>
+</html>

@@ -62,6 +62,8 @@ export interface SearchResponse {
   query: string;
   results: DrugHit[];
   total: number;
+  /** Closest canonical drug name when the query matched nothing (typo fallback). */
+  suggestion?: string | null;
   market?: string;
   sort?: string;
   status?: string[];

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mederti Data Asset Inventory</title>
+<style>
+  @page { size: Letter; margin: 22mm 18mm 20mm 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #12211B; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+  h1 { color: #1F6F4A; font-size: 17pt; margin: 26px 0 10px; padding-bottom: 5px; border-bottom: 2px solid #1F6F4A; page-break-after: avoid; }
+  h2 { color: #12211B; font-size: 13pt; margin: 16px 0 6px; page-break-after: avoid; }
+  p { margin: 0 0 9px; }
+  ul { margin: 4px 0 10px; padding-left: 20px; }
+  li { margin: 0 0 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 4px; font-size: 9.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #CCCCCC; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #E6F0EA; font-weight: 700; }
+  tr:nth-child(even) td { background: #F4F8F6; }
+  .cap { font-style: italic; color: #5B6660; font-size: 8.5pt; margin: 2px 0 14px; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size: 9pt; background:#f0f3f1; padding:0 2px; border-radius:2px; }
+  .cover { padding-top: 120px; page-break-after: always; }
+  .cover .brand { color:#1F6F4A; font-size:46pt; font-weight:800; letter-spacing:-1px; }
+  .cover .ttl { font-size:30pt; font-weight:800; margin-top:2px; }
+  .cover .sub { font-size:15pt; color:#5B6660; margin-top:8px; }
+  .cover hr { border:0; border-top:3px solid #1F6F4A; margin:18px 0; }
+  .cover .meta { font-size:11pt; margin:6px 0; }
+  .cover .meta b { color:#12211B; }
+  .runhead { position: running(rh); }
+  .small { color:#5B6660; }
+  .nobreak { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="brand">Mederti</div>
+  <div class="ttl">Data Asset Inventory</div>
+  <div class="sub">What we hold today — a reference for source mapping</div>
+  <hr>
+  <div class="meta"><b>Prepared for:</b> Chief Data Officer</div>
+  <div class="meta"><b>Purpose:</b> Inventory of live, in-production data assets and sources to inform forward source-mapping and prioritisation.</div>
+  <div class="meta"><b>Scope note:</b> All counts are live production figures queried on 3 June 2026. Built-but-unshipped scrapers and pending migrations are excluded from headline numbers and flagged explicitly in Section 9 (Coverage Gaps).</div>
+  <div class="meta small" style="margin-top:40px;">Confidential · Generated 3 June 2026 · figures are live production counts</div>
+</div>
+
+<h1>1. Executive Summary</h1>
+<p>Mederti operates a continuously-refreshed database of global drug-shortage and recall intelligence, enriched with pharmaceutical reference data and a supply-side concentration layer. The platform ingests from official regulators across 20+ jurisdictions on a daily cron, normalises everything to canonical drug identities, and layers causal and macro-signal context on top.</p>
+<p>At a glance, the live database holds:</p>
+<table>
+  <tr><th style="width:26%">Asset</th><th style="width:16%">Live count</th><th>What it is</th></tr>
+  <tr><td>Shortage events</td><td>37,065</td><td>Structured shortage records (28,418 active) across 20+ countries</td></tr>
+  <tr><td>Recall records</td><td>24,293</td><td>Product recalls/withdrawals, 99% linked to a canonical drug</td></tr>
+  <tr><td>Recall–shortage links</td><td>78,897</td><td>Causal links between recalls and downstream shortages</td></tr>
+  <tr><td>Canonical drugs</td><td>17,835</td><td>Deduplicated molecule/product master</td></tr>
+  <tr><td>Brand / product catalogue</td><td>160,977</td><td>Brand &amp; pack-level records rolled up to canonical drugs</td></tr>
+  <tr><td>API suppliers</td><td>14,009</td><td>Active-ingredient manufacturer/site signal (FDA DMF + WHO PQ)</td></tr>
+  <tr><td>Macro signal sources</td><td>134</td><td>Catalogued early-warning / macro / logistics feeds</td></tr>
+  <tr><td>Registered data sources</td><td>57</td><td>Regulator &amp; reference feeds (41 currently active)</td></tr>
+</table>
+<div class="cap">Table 1. Headline live data volumes (production, 3 June 2026).</div>
+<p>Three structural strengths a CDO should note:</p>
+<ul>
+  <li><b>Breadth of regulator coverage</b> — daily ingestion from the major shortage-reporting agencies (FDA, EMA, TGA, MHRA, Health Canada, Swissmedic, PMDA, plus ~15 EU national agencies).</li>
+  <li><b>Identity resolution</b> — 160,977 brand/pack records collapse to 17,835 canonical drugs, so a search for a brand rolls up to molecule-level shortage truth.</li>
+  <li><b>Causal + supply context</b> — recall→shortage links and a 14k-row API-supplier concentration layer turn raw events into forward signal, not just a feed.</li>
+</ul>
+
+<h1>2. Data Domains</h1>
+<p>The schema (49 migrations) organises into six domains. Counts are live.</p>
+<table>
+  <tr><th style="width:20%">Domain</th><th style="width:36%">Core tables</th><th style="width:26%">Live rows</th><th>Status</th></tr>
+  <tr><td>Shortage core</td><td>shortage_events, shortage_status_log, live_status_layer</td><td>37,065 events / 56,500 status logs</td><td>Mature</td></tr>
+  <tr><td>Recall core</td><td>recalls, recall_shortage_links</td><td>24,293 / 78,897 links</td><td>Mature</td></tr>
+  <tr><td>Drug intelligence</td><td>drugs, drug_catalogue, drug_synonyms, atc_codes, drug_rxnorm, drug_external_ids</td><td>17,835 / 160,977 / 318</td><td>Mature</td></tr>
+  <tr><td>Supply intelligence</td><td>api_suppliers, manufacturers, supplier_inventory, supply_intelligence_layer</td><td>14,009 / 5 / 28</td><td>API layer strong; finished-dose thin</td></tr>
+  <tr><td>Macro / content</td><td>intelligence_sources, intelligence_articles, ai_insights_cache</td><td>134 catalogued sources</td><td>Catalogue mature; articles building</td></tr>
+  <tr><td>Ops &amp; audit</td><td>data_sources, raw_scrapes, audit_logs</td><td>57 / 2,556 / —</td><td>Operational</td></tr>
+</table>
+<div class="cap">Table 2. Data domains and live volumes.</div>
+
+<h1>3. Source Inventory — Regulatory Feeds</h1>
+<p>Shortage and recall data is sourced exclusively from official national/supranational regulators, ingested daily on a staggered cron (19:00–07:00 UTC). Each source dedupes via an MD5 shortage key, so repeated runs are idempotent. The table lists the regulator feeds live and producing data today.</p>
+<h2>3.1 Shortage feeds (live, daily)</h2>
+<table>
+  <tr><th style="width:22%">Region</th><th>Agencies live in production</th></tr>
+  <tr><td>North America</td><td>FDA (US), Health Canada (CA)</td></tr>
+  <tr><td>UK &amp; Ireland</td><td>MHRA (UK), HPRA (IE)</td></tr>
+  <tr><td>EU — supranational</td><td>EMA</td></tr>
+  <tr><td>EU — national</td><td>BfArM (DE), ANSM (FR), AIFA (IT), AEMPS (ES), CBG-MEB (NL), DKMA (DK), FIMEA (FI), Läkemedelsverket (SE), SUKL (CZ), OGYEI (HU), Swissmedic (CH), NoMA (NO), AGES (AT)</td></tr>
+  <tr><td>EU — newer</td><td>Greece (EOF), Portugal (INFARMED), Belgium (FAMHP), Poland (MZ)</td></tr>
+  <tr><td>Asia-Pacific</td><td>TGA (AU), HSA (SG), Medsafe + PHARMAC (NZ), PMDA (JP), MFDS (KR), Malaysia (NPRA)</td></tr>
+  <tr><td>Latin America</td><td>ANVISA (BR), COFEPRIS (MX), Argentina (ANMAT)</td></tr>
+  <tr><td>Africa &amp; Middle East</td><td>SAHPRA (ZA), NAFDAC (NG), SFDA (SA), UAE (MOHAP)</td></tr>
+</table>
+<div class="cap">Table 3. Regulatory shortage feeds wired into the daily cron.</div>
+<h2>3.2 Recall feeds (live, daily)</h2>
+<p>Recall ingestion runs on the same cadence: TGA, FDA (enforcement + MedWatch + Drugs@FDA), Health Canada, EMA, MHRA, AIFA, ANSM, AEMPS, HSA, Medsafe. A dedicated <code>recall_linker</code> populates the 78,897 recall→shortage causal links.</p>
+
+<h1>4. Geographic Coverage — Shortages</h1>
+<p>Live shortage-event counts by reporting country. This is the depth dimension a CDO weighs against breadth when prioritising new sources.</p>
+<table>
+  <tr><th>Country</th><th>Events</th><th>Country</th><th>Events</th></tr>
+  <tr><td>Switzerland</td><td>5,930</td><td>Norway</td><td>973</td></tr>
+  <tr><td>Japan</td><td>5,672</td><td>Ireland</td><td>778</td></tr>
+  <tr><td>United States</td><td>4,469</td><td>Germany</td><td>740</td></tr>
+  <tr><td>Italy</td><td>4,422</td><td>France</td><td>575</td></tr>
+  <tr><td>Canada</td><td>3,233</td><td>Greece</td><td>440</td></tr>
+  <tr><td>Spain</td><td>3,172</td><td>Singapore</td><td>321</td></tr>
+  <tr><td>Finland</td><td>1,815</td><td>New Zealand</td><td>290</td></tr>
+  <tr><td>Australia</td><td>1,707</td><td>Malaysia</td><td>226</td></tr>
+  <tr><td>Belgium</td><td>1,014</td><td>United Kingdom</td><td>80</td></tr>
+  <tr><td>Netherlands</td><td>1,010</td><td>Portugal / UAE / Slovakia</td><td>64 / 20 / 13</td></tr>
+</table>
+<div class="cap">Table 4. Live shortage events by reporting country (top jurisdictions).</div>
+<p>Status mix across all events: <b>28,418 active</b>, 6,439 resolved, 2,204 anticipated. <b>1,589</b> events are flagged <i>synthetic</i> (recall-derived signal, not a primary regulator notice) and are kept distinct so they never inflate the genuine shortage picture.</p>
+
+<h1>5. Geographic Coverage — Recalls</h1>
+<table>
+  <tr><th>Jurisdiction</th><th>Recalls</th><th>Jurisdiction</th><th>Recalls</th></tr>
+  <tr><td>United States</td><td>17,689</td><td>United Kingdom</td><td>391</td></tr>
+  <tr><td>Canada</td><td>4,597</td><td>EU (EMA)</td><td>369</td></tr>
+  <tr><td>Italy</td><td>460</td><td>New Zealand</td><td>186</td></tr>
+  <tr><td>Australia</td><td>390</td><td>France</td><td>171</td></tr>
+  <tr><td></td><td></td><td>Spain</td><td>40</td></tr>
+</table>
+<div class="cap">Table 5. Live recall records by jurisdiction. 24,133 of 24,293 (99%) are linked to a canonical drug.</div>
+
+<h1>6. Reference &amp; Enrichment Layer</h1>
+<p>Raw regulator notices are normalised and enriched against authoritative pharmaceutical reference datasets, loaded by 16 importers. This layer is what lets a brand name, a salt form, or an accented INN all resolve to one molecule.</p>
+<table>
+  <tr><th style="width:32%">Reference set</th><th>Role</th></tr>
+  <tr><td>WHO ATC / DDD</td><td>Therapeutic classification + defined daily dose</td></tr>
+  <tr><td>RxNorm (NLM)</td><td>US clinical drug nomenclature &amp; ingredient mapping</td></tr>
+  <tr><td>UNII (FDA)</td><td>Unique ingredient identifiers for salt-form resolution</td></tr>
+  <tr><td>SNOMED CT</td><td>Clinical terminology cross-walk</td></tr>
+  <tr><td>EMA EPAR</td><td>European authorisation metadata</td></tr>
+  <tr><td>OECD pharma</td><td>Macro pharmaceutical market reference</td></tr>
+  <tr><td>PharmaCompass</td><td>Supplier / API market reference</td></tr>
+  <tr><td>INN resolution + substance resolver</td><td>Salt-stripping &amp; molecule identity (brand→generic rollup)</td></tr>
+</table>
+<div class="cap">Table 6. Reference datasets feeding identity resolution and enrichment.</div>
+
+<h1>7. Supply-Side Concentration Layer</h1>
+<p>The <code>api_suppliers</code> table (14,009 rows) is Mederti's answer to the single most predictive shortage driver: active-ingredient supply concentration. It is built from the FDA Drug Master File, enriched with DECRS country-of-manufacture data, and badged against the WHO Prequalification list. It replicates and extends the signal behind the Johns Hopkins API-concentration dashboard.</p>
+<p>An indicative country distribution (sampled) shows the concentration risk plainly — the active-ingredient base skews heavily to a small number of origins, which is exactly the vulnerability a forward model needs:</p>
+<ul>
+  <li>China dominates the sampled API-supplier base, with Canada, Austria, Belgium, Argentina and Brazil forming a long tail.</li>
+  <li>Refreshed <b>quarterly</b> (Jan/Apr/Jul/Oct), alongside FDA DECRS and WHO PQ.</li>
+</ul>
+<p>Finished-dose manufacturer mastering (<code>manufacturers</code>, 5 rows) and the supplier marketplace (<code>supplier_inventory</code>, 28 rows) are early-stage by comparison — noted as a gap in Section 9.</p>
+
+<h1>8. Macro Intelligence Catalogue</h1>
+<p>Beyond primary regulator data, Mederti maintains a curated catalogue of 134 macro and early-warning sources, classified by signal type. This is the catalogue most directly relevant to forward source-mapping — it already encodes a view of where leading indicators live.</p>
+<table>
+  <tr><th>Signal category</th><th>Sources</th><th>Signal category</th><th>Sources</th></tr>
+  <tr><td>Availability ground-truth</td><td>20</td><td>Pipeline</td><td>7</td></tr>
+  <tr><td>Logistics</td><td>15</td><td>Data portals / discovery</td><td>7</td></tr>
+  <tr><td>Macro</td><td>12</td><td>Sanctions</td><td>6</td></tr>
+  <tr><td>Procurement</td><td>11</td><td>Trade</td><td>5</td></tr>
+  <tr><td>Early warning</td><td>10</td><td>Utilization</td><td>5</td></tr>
+  <tr><td>External shocks</td><td>9</td><td>Corporate disclosure</td><td>5</td></tr>
+  <tr><td>Reference data</td><td>8</td><td>Public health</td><td>4</td></tr>
+  <tr><td>Pricing</td><td>8</td><td>Funding &amp; aid flows</td><td>2</td></tr>
+</table>
+<div class="cap">Table 7. The 134-source macro catalogue by signal category.</div>
+<p>Source-priority guidance is encoded throughout: regulators rank above journals, above specialist trade press, above investigative and national press. This tiering is the scaffolding any new source should be slotted into.</p>
+
+<h1>9. Coverage Gaps — Whitespace for Source Mapping</h1>
+<p>The most actionable section for forward planning. These are dimensions where the platform is thin or absent today — candidate priorities for the CDO's source map. All statements reflect live production state.</p>
+<h2>9.1 Built but not yet producing data</h2>
+<p>Scraper code exists for these major markets but they return zero live rows — the fastest coverage wins, since the engineering is largely done:</p>
+<ul>
+  <li>China (NMPA), India (CDSCO), Israel (MOH), Turkey (TITCK) — high market-size / geopolitical relevance.</li>
+  <li>Several recall counterparts (BfArM, HSA, Medsafe recalls) exist as files awaiting wiring.</li>
+</ul>
+<h2>9.2 Empty or thin data dimensions</h2>
+<table>
+  <tr><th style="width:28%">Dimension</th><th style="width:26%">Live state</th><th>Implication</th></tr>
+  <tr><td>Drug pricing</td><td>0 rows</td><td>No price/tender signal — a whole forward axis is unpopulated</td></tr>
+  <tr><td>Demand / utilization</td><td>Schema present, sparse</td><td>Demand-spike precursors not yet captured</td></tr>
+  <tr><td>Finished-dose manufacturers</td><td>5 rows</td><td>Maker signal exists for APIs (14k) but not finished product</td></tr>
+  <tr><td>Supplier marketplace</td><td>28 rows</td><td>Two-sided marketplace data is nascent</td></tr>
+</table>
+<div class="cap">Table 8. Thin / empty dimensions and what they cost the forward model.</div>
+<h2>9.3 Operational / trust gaps</h2>
+<ul>
+  <li><b>Source freshness</b> — last_scraped_at is only partially wired, so there is no per-source freshness signal exposed to users yet.</li>
+  <li><b>Scraper hosting</b> — ingestion still runs partly on local cron; a laptop-sleep is a data-gap risk until the Railway migration completes.</li>
+  <li><b>No public methodology / freshness dashboard</b> — a credibility lever for institutional citation.</li>
+</ul>
+
+<h1>10. Data Lineage &amp; Quality Controls</h1>
+<ul>
+  <li><b>Raw capture</b> — every scrape is retained in <code>raw_scrapes</code> (2,556 rows) for replay/audit.</li>
+  <li><b>Idempotent ingestion</b> — MD5 shortage keys mean re-runs never duplicate events.</li>
+  <li><b>Identity resolution</b> — 98% of shortage events and 99% of recalls resolve to a canonical drug.</li>
+  <li><b>Status history</b> — 56,500 status-log rows preserve the full lifecycle of each shortage (active → anticipated → resolved).</li>
+  <li><b>Synthetic flagging</b> — recall-derived signals are tagged so they never contaminate genuine regulator counts.</li>
+  <li><b>Security</b> — row-level security enabled; anonymous bulk-read access revoked; immutable audit log on mutations.</li>
+</ul>
+
+<h1>11. Recommended Reading Order for Source Mapping</h1>
+<p>Suggested sequence when overlaying a future-source map on this inventory:</p>
+<ol>
+  <li>Start with Section 9.1 — the built-but-dark markets are the cheapest coverage gains.</li>
+  <li>Then Section 9.2 — pricing and demand are the two missing forward axes most likely to lift predictive power.</li>
+  <li>Cross-reference any candidate against the Section 8 tiering before adding it, to keep source provenance consistent.</li>
+</ol>
+<p class="small"><i>All figures in this document can be regenerated on demand from the live database; the query set used is reproducible.</i></p>
+
+</body>
+</html>

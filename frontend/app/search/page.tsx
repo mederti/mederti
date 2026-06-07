@@ -3,10 +3,18 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, type DrugHit } from "@/lib/api";
+import { api, type DrugHit, type StatusFacets } from "@/lib/api";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import { truncateDrugName } from "@/lib/utils";
 import { cleanBrandNames } from "@/lib/brand";
+import {
+  RECENT_EVENT,
+  addRecentMedicine,
+  addRecentSearch,
+  getRecentMedicines,
+  getRecentSearches,
+  type RecentMedicine,
+} from "@/lib/recent-activity";
 
 function statusOf(d: DrugHit): { cls: string; label: string } {
   if (d.source === "catalogue") return { cls: "sp-ok", label: "Registered product" };
@@ -16,40 +24,141 @@ function statusOf(d: DrugHit): { cls: string; label: string } {
   return { cls: "sp-ok", label: "In supply" };
 }
 
+// Markets that actually carry data (catalogue registration and/or shortage
+// events). "ALL" maps to the legacy global scope. Not the mockup's aspirational
+// "22 markets" — only what's backed.
+const MARKETS: { code: string; name: string; flag: string }[] = [
+  { code: "AU", name: "Australia", flag: "🇦🇺" },
+  { code: "US", name: "United States", flag: "🇺🇸" },
+  { code: "GB", name: "United Kingdom", flag: "🇬🇧" },
+  { code: "CA", name: "Canada", flag: "🇨🇦" },
+  { code: "JP", name: "Japan", flag: "🇯🇵" },
+  { code: "CH", name: "Switzerland", flag: "🇨🇭" },
+  { code: "DE", name: "Germany", flag: "🇩🇪" },
+  { code: "FR", name: "France", flag: "🇫🇷" },
+  { code: "ES", name: "Spain", flag: "🇪🇸" },
+  { code: "IT", name: "Italy", flag: "🇮🇹" },
+  { code: "NL", name: "Netherlands", flag: "🇳🇱" },
+  { code: "BE", name: "Belgium", flag: "🇧🇪" },
+  { code: "FI", name: "Finland", flag: "🇫🇮" },
+  { code: "NZ", name: "New Zealand", flag: "🇳🇿" },
+  { code: "NO", name: "Norway", flag: "🇳🇴" },
+  { code: "IE", name: "Ireland", flag: "🇮🇪" },
+];
+const marketOf = (code: string) =>
+  MARKETS.find((m) => m.code === code) ?? { code, name: code, flag: "🏳️" };
+
+const STATUS_OPTS: { key: string; label: string; facet: keyof StatusFacets }[] = [
+  { key: "shortage", label: "Active shortage", facet: "shortage" },
+  { key: "supply", label: "In supply", facet: "supply" },
+  { key: "resolved", label: "Recently resolved", facet: "resolved" },
+];
+
+const SORT_OPTS: { key: string; label: string }[] = [
+  { key: "relevance", label: "Relevance" },
+  { key: "resolution", label: "Soonest to resolve" },
+  { key: "severity", label: "Most severe first" },
+];
+
+// Gated controls — backing data not present in prod. Rendered disabled with an
+// honest caption rather than silently no-opping.
+const GATED: { label: string; caption: string }[] = [
+  { label: "s19A alternative available", caption: "Needs TGA s19A feed — gated" },
+  { label: "PBS-listed", caption: "Needs PBS feed — gated" },
+  { label: "Brand substitution permitted", caption: "Needs substitution feed — gated" },
+];
+
+type Menu = null | "market" | "status" | "sort" | "more";
+
 function Results() {
   const params = useSearchParams();
   const router = useRouter();
-  const initialQ = params.get("q") ?? "";
-  const [q, setQ] = useState(initialQ);
+
+  const urlQ = params.get("q") ?? "";
+  const market = (params.get("market") || "AU").toUpperCase();
+  const isGlobalMarket = market === "ALL";
+  const statusStr = params.get("status") || "";
+  const sort = params.get("sort") || "relevance";
+  const statusSel = statusStr ? statusStr.split(",").filter(Boolean) : [];
+
+  const [q, setQ] = useState(urlQ);
   const [results, setResults] = useState<DrugHit[]>([]);
   const [total, setTotal] = useState(0);
+  const [facets, setFacets] = useState<StatusFacets | null>(null);
   const [loading, setLoading] = useState(false);
+  const [menu, setMenu] = useState<Menu>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
 
-  const search = useCallback(async (term: string) => {
-    if (!term.trim()) { setResults([]); setTotal(0); return; }
+  // Merge a param patch into the current URL (null clears a key).
+  const setParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(params.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v) next.set(k, v);
+        else next.delete(k);
+      }
+      router.replace(`/search?${next.toString()}`, { scroll: false });
+    },
+    [params, router]
+  );
+
+  // URL is the source of truth for filters → run search when q or any filter changes.
+  useEffect(() => {
+    const term = urlQ.trim();
+    if (!term) { setResults([]); setTotal(0); setFacets(null); return; }
+    let cancelled = false;
     setLoading(true);
-    try {
-      const data = await api.search(term, 25);
-      setResults(data.results);
-      setTotal(data.total);
-    } catch {
-      setResults([]); setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const sel = statusStr ? statusStr.split(",").filter(Boolean) : [];
+    api.search(term, 25, { market, status: sel, sort })
+      .then((data) => {
+        if (cancelled) return;
+        setResults(data.results);
+        setTotal(data.total);
+        setFacets(data.facets?.status ?? null);
+      })
+      .catch(() => { if (!cancelled) { setResults([]); setTotal(0); setFacets(null); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [urlQ, market, statusStr, sort]);
 
-  useEffect(() => { if (initialQ) search(initialQ); }, [initialQ, search]);
+  // Keep the input mirror in sync when the URL query changes externally.
+  useEffect(() => { setQ(urlQ); }, [urlQ]);
+
+  // Log the search term to history once typing settles (avoids prefix spam).
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) return;
+    const t = setTimeout(() => addRecentSearch(term), 1200);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // Click-outside closes any open dropdown.
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: MouseEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) setMenu(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [menu]);
 
   function onChange(v: string) {
     setQ(v);
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
-      router.replace(v.trim() ? `/search?q=${encodeURIComponent(v.trim())}` : "/search", { scroll: false });
-      search(v);
+      setParams({ q: v.trim() || null });
     }, 200);
   }
+
+  function toggleStatus(key: string) {
+    const set = new Set(statusSel);
+    if (set.has(key)) set.delete(key);
+    else set.add(key);
+    setParams({ status: set.size ? [...set].join(",") : null });
+  }
+
+  const mk = marketOf(market);
 
   return (
     <>
@@ -63,8 +172,107 @@ function Results() {
         />
       </div>
 
+      {/* ── Compact filter bar ── */}
+      <div className="fbar" ref={barRef}>
+        {/* Market */}
+        <div className="dd-wrap">
+          <button
+            className={`dd ${isGlobalMarket ? "" : "active"}`}
+            onClick={() => setMenu(menu === "market" ? null : "market")}
+          >
+            <span className="fl">{isGlobalMarket ? "🌐" : mk.flag}</span>
+            {isGlobalMarket ? "All markets" : mk.name}
+            <span className="cv">▾</span>
+          </button>
+          {menu === "market" && (
+            <div className="dd-menu">
+              {MARKETS.map((m) => (
+                <button
+                  key={m.code}
+                  className={`dd-opt ${market === m.code ? "sel" : ""}`}
+                  onClick={() => { setParams({ market: m.code }); setMenu(null); }}
+                >
+                  <span className="fl">{m.flag}</span>{m.name}
+                </button>
+              ))}
+              <div className="dd-div" />
+              <button
+                className={`dd-opt ${isGlobalMarket ? "sel" : ""}`}
+                onClick={() => { setParams({ market: "ALL" }); setMenu(null); }}
+              >
+                <span className="fl">🌐</span>All markets
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Status (multi) */}
+        <div className="dd-wrap">
+          <button
+            className={`dd ${statusSel.length ? "active" : ""}`}
+            onClick={() => setMenu(menu === "status" ? null : "status")}
+          >
+            Status{statusSel.length > 0 && <span className="badge">{statusSel.length}</span>}
+            <span className="cv">▾</span>
+          </button>
+          {menu === "status" && (
+            <div className="dd-menu">
+              {STATUS_OPTS.map((o) => (
+                <button key={o.key} className="dd-opt check" onClick={() => toggleStatus(o.key)}>
+                  <span className={`cb ${statusSel.includes(o.key) ? "on" : ""}`} />
+                  {o.label}
+                  {facets && <span className="fc">{facets[o.facet]}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* More filters (gated) */}
+        <div className="dd-wrap">
+          <button className="dd ghost" onClick={() => setMenu(menu === "more" ? null : "more")}>
+            More filters<span className="cv">▾</span>
+          </button>
+          {menu === "more" && (
+            <div className="dd-menu wide">
+              <div className="dd-note">Strength · Form · Type need a parsed-field migration — coming next.</div>
+              {GATED.map((g) => (
+                <div key={g.label} className="dd-opt gated" aria-disabled>
+                  <span className="cb" />
+                  <span>{g.label}<span className="gcap">{g.caption}</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Sort (pinned right) */}
+        <div className="dd-wrap sortw">
+          <button
+            className={`dd ${sort !== "relevance" ? "active" : ""}`}
+            onClick={() => setMenu(menu === "sort" ? null : "sort")}
+          >
+            Sort: {SORT_OPTS.find((s) => s.key === sort)?.label ?? "Relevance"}
+            <span className="cv">▾</span>
+          </button>
+          {menu === "sort" && (
+            <div className="dd-menu right">
+              {SORT_OPTS.map((o) => (
+                <button
+                  key={o.key}
+                  className={`dd-opt ${sort === o.key ? "sel" : ""}`}
+                  onClick={() => { setParams({ sort: o.key === "relevance" ? null : o.key }); setMenu(null); }}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {q.trim() && (
-        <div className="results-head"><div className="rh">{loading ? "Searching…" : <>Results for <b>{q.trim()}</b>{total > 0 ? ` · ${total}` : ""}</>}</div></div>
+        <div className="results-head"><div className="rh">{loading ? "Searching…" : <>Results for <b>{q.trim()}</b>{total > 0 ? ` · ${total}` : ""}{!isGlobalMarket && <> · {mk.name}</>}</>}</div></div>
       )}
 
       <div className="res-list">
@@ -85,12 +293,24 @@ function Results() {
           );
           return d.source === "catalogue"
             ? <div key={d.drug_id}>{inner}</div>
-            : <Link key={d.drug_id} href={`/drugs/${d.drug_id}`} style={{ textDecoration: "none", color: "inherit" }}>{inner}</Link>;
+            : <Link
+                key={d.drug_id}
+                href={`/drugs/${d.drug_id}`}
+                style={{ textDecoration: "none", color: "inherit" }}
+                onClick={() => addRecentMedicine({ id: String(d.drug_id), name: d.generic_name })}
+              >{inner}</Link>;
         })}
       </div>
 
       {!loading && q.trim() && results.length === 0 && (
-        <div className="res-foot">No results for &ldquo;{q.trim()}&rdquo;. Try the generic or brand name.</div>
+        <div className="res-foot">
+          No results for &ldquo;{q.trim()}&rdquo;{!isGlobalMarket && <> in {mk.name}</>}.
+          {!isGlobalMarket ? (
+            <> Try <button className="link-btn" onClick={() => setParams({ market: "ALL" })}>all markets</button> or the generic name.</>
+          ) : (
+            <> Try the generic or brand name.</>
+          )}
+        </div>
       )}
       {results.length > 0 && <div className="res-foot">Status from official regulators · tap a result for full detail</div>}
     </>
@@ -98,6 +318,19 @@ function Results() {
 }
 
 export default function SearchPage() {
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [recentMedicines, setRecentMedicines] = useState<RecentMedicine[]>([]);
+
+  useEffect(() => {
+    const refresh = () => {
+      setRecentSearches(getRecentSearches());
+      setRecentMedicines(getRecentMedicines());
+    };
+    refresh();
+    window.addEventListener(RECENT_EVENT, refresh);
+    return () => window.removeEventListener(RECENT_EVENT, refresh);
+  }, []);
+
   return (
     <div className="v1home v1search">
       <style>{CSS}</style>
@@ -113,13 +346,33 @@ export default function SearchPage() {
           <div style={{ padding: "14px 14px 8px 16px" }}><V1CountryPicker /></div>
           <div className="sb-scroll">
             <div className="sb-group">
-              <div className="sb-glabel">My medicines</div>
-              <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
+              <div className="sb-glabel">Browse</div>
+              <Link href="/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
+              <Link href="/dashboard" className="sb-item"><span className="sb-dot green" />Dashboard</Link>
             </div>
             <div className="sb-group">
-              <div className="sb-glabel">Browse</div>
-              <Link href="/search" className="sb-item sb-active"><span className="sb-dot green" />Search</Link>
-              <Link href="/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
+              <div className="sb-glabel">Search history</div>
+              {recentSearches.length > 0 ? (
+                recentSearches.map((term) => (
+                  <Link key={term} href={`/search?q=${encodeURIComponent(term)}`} className="sb-item sb-sub">
+                    {truncateDrugName(term, 28)}
+                  </Link>
+                ))
+              ) : (
+                <div className="sb-item sb-empty">No recent searches</div>
+              )}
+            </div>
+            <div className="sb-group">
+              <div className="sb-glabel">My medicines</div>
+              {recentMedicines.length > 0 ? (
+                recentMedicines.map((m) => (
+                  <Link key={m.id} href={`/drugs/${m.id}`} className="sb-item sb-sub">
+                    {truncateDrugName(m.name, 28)}
+                  </Link>
+                ))
+              ) : (
+                <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
+              )}
             </div>
           </div>
           <Link href="/login" className="sb-profile">Log in →</Link>
@@ -163,6 +416,8 @@ const CSS = `
 .sb-item:hover{background:var(--bg-2)}
 .sb-item.sb-active{background:var(--green-bg);color:var(--green-d)}
 .sb-empty{color:var(--text-4);font-style:italic}
+.sb-sub{padding-left:18px;color:var(--text-3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.sb-sub:hover{color:var(--text);background:var(--bg-2)}
 .sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .sb-dot.green{background:var(--ok)}
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
@@ -176,6 +431,36 @@ const CSS = `
 .searchbox .ic{color:var(--text-4);font-size:17px}
 .searchbox.v1sb input{flex:1;border:none;outline:none;font-size:15px;font-family:inherit;background:transparent;color:var(--text);padding:10px 0}
 .searchbox.v1sb input::placeholder{color:var(--text-4)}
+/* ── Compact filter bar ── */
+.fbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:14px 2px 2px}
+.fbar .dd-wrap{position:relative}
+.fbar .sortw{margin-left:auto}
+.fbar .dd{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border:1px solid var(--border-2);border-radius:10px;background:var(--bg);color:var(--text-2);font-family:inherit;font-size:12.5px;font-weight:600;letter-spacing:-.01em;cursor:pointer;transition:.14s;white-space:nowrap}
+.fbar .dd:hover{border-color:var(--text-4);color:var(--text)}
+.fbar .dd.active{border-color:var(--green);background:var(--green-bg);color:var(--green-d)}
+.fbar .dd.ghost{border-style:dashed;color:var(--text-3);font-weight:500}
+.fbar .dd .cv{font-size:9px;color:var(--text-4);margin-left:1px}
+.fbar .dd.active .cv{color:var(--green-d)}
+.fbar .dd .fl{font-size:14px;line-height:1}
+.fbar .dd .badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--green);color:#fff;font-size:10.5px;font-weight:700}
+.fbar .dd-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:200px;max-height:340px;overflow-y:auto;background:var(--bg);border:1px solid var(--border-2);border-radius:12px;padding:6px;box-shadow:0 12px 32px -8px rgba(12,17,24,.22),var(--hi-inset)}
+.fbar .dd-menu.wide{min-width:280px}
+.fbar .dd-menu.right{left:auto;right:0}
+.fbar .dd-opt{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:8px 9px;border:none;border-radius:8px;background:transparent;color:var(--text-2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.fbar .dd-opt:hover{background:var(--bg-2)}
+.fbar .dd-opt.sel{background:var(--green-bg);color:var(--green-d);font-weight:600}
+.fbar .dd-opt .fl{font-size:15px;line-height:1}
+.fbar .dd-opt .fc{margin-left:auto;font-size:11px;color:var(--text-4);font-weight:600}
+.fbar .dd-opt .cb{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--border-2);flex-shrink:0;position:relative}
+.fbar .dd-opt .cb.on{background:var(--green);border-color:var(--green)}
+.fbar .dd-opt .cb.on::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.fbar .dd-opt.gated{cursor:not-allowed;opacity:.85}
+.fbar .dd-opt.gated:hover{background:transparent}
+.fbar .dd-opt .gcap{display:block;font-size:10.5px;color:var(--med);font-weight:600;margin-top:2px}
+.fbar .dd-div{height:1px;background:var(--border);margin:5px 2px}
+.fbar .dd-note{padding:7px 9px 9px;font-size:11px;color:var(--text-4);line-height:1.4}
+.link-btn{background:none;border:none;padding:0;color:var(--green-d);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline}
+@media(max-width:820px){.fbar .sortw{margin-left:0;width:100%}.fbar .dd{height:40px}}
 .results-head{padding:22px 2px 4px}
 .results-head .rh{font-size:12px;color:var(--text-3)}
 .results-head .rh b{color:var(--text);font-weight:700}

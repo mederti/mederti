@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mederti — Business Plan</title>
+<style>
+  :root{
+    --ink:#0E1A16;
+    --ink-soft:#33433C;
+    --muted:#6B7B73;
+    --green:#1F7A52;
+    --green-deep:#12503A;
+    --green-bright:#23A56B;
+    --line:#E3E9E5;
+    --paper:#FFFFFF;
+    --wash:#F4F7F5;
+    --wash-green:#EAF4EE;
+    --amber:#B5751E;
+    --red:#B0392B;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  @page{ size:A4; margin:0; }
+  html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body{
+    font-family:"Plus Jakarta Sans","Helvetica Neue",Arial,sans-serif;
+    color:var(--ink);
+    font-size:10.2pt;
+    line-height:1.55;
+    background:var(--paper);
+  }
+  .page{
+    width:210mm; min-height:297mm;
+    padding:20mm 18mm 16mm;
+    position:relative;
+    page-break-after:always;
+    overflow:hidden;
+  }
+  .page:last-child{ page-break-after:auto; }
+
+  /* ---------- typography ---------- */
+  h1{ font-size:30pt; font-weight:800; letter-spacing:-0.02em; line-height:1.05; }
+  h2{ font-size:17pt; font-weight:800; letter-spacing:-0.01em; color:var(--ink); margin-bottom:3mm; }
+  h3{ font-size:11.5pt; font-weight:700; color:var(--green); margin-bottom:1.5mm; letter-spacing:-0.01em;}
+  p{ margin-bottom:3mm; color:var(--ink-soft); }
+  strong{ color:var(--ink); font-weight:700; }
+  .lead{ font-size:11.5pt; color:var(--ink-soft); }
+  .eyebrow{
+    font-size:8pt; font-weight:700; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--green); margin-bottom:4mm;
+  }
+  .section-num{
+    font-size:8pt; font-weight:700; letter-spacing:0.14em; color:var(--muted);
+    text-transform:uppercase; margin-bottom:2mm;
+  }
+  .divider{ height:1px; background:var(--line); margin:6mm 0; border:0; }
+
+  /* ---------- cover ---------- */
+  .cover{
+    background:linear-gradient(160deg,#0E1A16 0%,#143226 55%,#1F7A52 140%);
+    color:#fff; display:flex; flex-direction:column; justify-content:space-between;
+    padding:24mm 20mm 20mm;
+  }
+  .cover .brandrow{ display:flex; align-items:center; gap:3mm; }
+  .logo-dot{ width:13px;height:13px;border-radius:50%;background:var(--green-bright);
+    box-shadow:0 0 0 4px rgba(35,165,107,.22); }
+  .cover .brand{ font-size:13pt; font-weight:800; letter-spacing:-0.01em; }
+  .cover h1{ color:#fff; font-size:38pt; }
+  .cover .sub{ color:#CFE6DA; font-size:13pt; font-weight:500; max-width:150mm; margin-top:5mm; line-height:1.45;}
+  .cover .tag{ display:inline-block; font-size:8pt; font-weight:700; letter-spacing:0.14em;
+    text-transform:uppercase; color:#BFE9D2; border:1px solid rgba(191,233,210,.4);
+    padding:2mm 4mm; border-radius:40px; margin-bottom:8mm; }
+  .cover .meta{ display:flex; gap:14mm; color:#9FC4B2; font-size:9pt; border-top:1px solid rgba(255,255,255,.16); padding-top:6mm;}
+  .cover .meta b{ display:block; color:#fff; font-size:10pt; font-weight:700; margin-bottom:1mm; }
+  .cover .statband{ display:flex; gap:6mm; margin-top:10mm; }
+  .cover .statband .s{ flex:1; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
+    border-radius:10px; padding:5mm; }
+  .cover .statband .s .n{ font-size:21pt; font-weight:800; color:#fff; letter-spacing:-0.02em;}
+  .cover .statband .s .l{ font-size:8pt; color:#A9CBB9; letter-spacing:0.04em; margin-top:1mm; }
+
+  /* ---------- components ---------- */
+  .grid2{ display:flex; gap:8mm; }
+  .grid2 > *{ flex:1; }
+  .grid3{ display:flex; gap:5mm; }
+  .grid3 > *{ flex:1; }
+
+  .card{ background:var(--wash); border:1px solid var(--line); border-radius:10px; padding:5mm; }
+  .card.green{ background:var(--wash-green); border-color:#D2E7DA; }
+  .card h3{ margin-bottom:1.5mm; }
+  .card p{ margin-bottom:0; font-size:9.4pt; }
+
+  .stat-row{ display:flex; gap:5mm; margin:5mm 0; }
+  .stat{ flex:1; border-left:3px solid var(--green); padding-left:4mm; }
+  .stat .n{ font-size:20pt; font-weight:800; color:var(--ink); letter-spacing:-0.02em; line-height:1;}
+  .stat .l{ font-size:8.4pt; color:var(--muted); margin-top:1.5mm; line-height:1.3; }
+
+  ul.clean{ list-style:none; margin:2mm 0 3mm; }
+  ul.clean li{ position:relative; padding-left:6mm; margin-bottom:2.2mm; color:var(--ink-soft); font-size:9.8pt;}
+  ul.clean li:before{ content:""; position:absolute; left:0; top:2.6mm; width:7px;height:7px;
+    border-radius:2px; background:var(--green-bright); }
+  ul.check li:before{ content:"✓"; background:none; color:var(--green); font-weight:800; top:0; font-size:10pt;}
+
+  table{ width:100%; border-collapse:collapse; font-size:9.2pt; margin:3mm 0; }
+  th{ text-align:left; font-size:7.6pt; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--muted); font-weight:700; padding:2.5mm 3mm; border-bottom:2px solid var(--line); }
+  td{ padding:2.6mm 3mm; border-bottom:1px solid var(--line); color:var(--ink-soft); vertical-align:top;}
+  td strong{ color:var(--ink); }
+  tr:last-child td{ border-bottom:0; }
+  .num{ text-align:right; font-variant-numeric:tabular-nums; font-weight:700; color:var(--ink);}
+
+  .pill{ display:inline-block; font-size:7.4pt; font-weight:700; letter-spacing:0.05em;
+    padding:1mm 2.5mm; border-radius:30px; text-transform:uppercase; }
+  .pill.live{ background:#DDF1E4; color:#136B43; }
+  .pill.build{ background:#FBEFD8; color:#8A5A12; }
+
+  .quote{ border-left:3px solid var(--green-bright); padding:1mm 0 1mm 6mm; font-size:12pt;
+    font-weight:600; color:var(--ink); font-style:italic; line-height:1.4; margin:5mm 0; }
+
+  .footer{ position:absolute; bottom:9mm; left:18mm; right:18mm; display:flex;
+    justify-content:space-between; font-size:7.6pt; color:var(--muted);
+    border-top:1px solid var(--line); padding-top:2.5mm; letter-spacing:0.03em;}
+  .footer .conf{ color:var(--green); font-weight:700; }
+
+  .hl{ color:var(--green); font-weight:800; }
+  .big-num{ font-size:13pt; font-weight:800; color:var(--ink); }
+
+  .timeline{ }
+  .timeline .row{ display:flex; gap:5mm; padding:3mm 0; border-bottom:1px solid var(--line); }
+  .timeline .row:last-child{ border-bottom:0; }
+  .timeline .when{ width:32mm; font-weight:800; color:var(--green); font-size:9.4pt; flex-shrink:0;}
+  .timeline .what b{ color:var(--ink); }
+  .timeline .what{ font-size:9.4pt; color:var(--ink-soft); }
+
+  .moat{ display:flex; gap:4mm; margin-bottom:3mm; align-items:flex-start; }
+  .moat .ic{ width:9mm;height:9mm;border-radius:8px;background:var(--wash-green);
+    display:flex;align-items:center;justify-content:center;color:var(--green);font-weight:800;font-size:11pt;flex-shrink:0;
+    border:1px solid #D2E7DA;}
+  .moat .tx b{ color:var(--ink); font-size:10pt; }
+  .moat .tx p{ font-size:9.2pt; margin:0; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="page cover">
+  <div>
+    <div class="brandrow">
+      <span class="logo-dot"></span>
+      <span class="brand">Mederti</span>
+    </div>
+  </div>
+  <div>
+    <span class="tag">Business Plan · Confidential</span>
+    <h1>The intelligence layer<br>for global drug supply.</h1>
+    <p class="sub">Mederti turns the world's fragmented drug-shortage and recall data into a single, searchable, AI-native source of truth — for the pharmacists, hospitals, regulators and suppliers who keep medicine on the shelf.</p>
+    <div class="statband">
+      <div class="s"><div class="n">29k+</div><div class="l">Live shortage events tracked</div></div>
+      <div class="s"><div class="n">20+</div><div class="l">National regulators ingested daily</div></div>
+      <div class="s"><div class="n">68</div><div class="l">Automated data scrapers</div></div>
+      <div class="s"><div class="n">Live</div><div class="l">Shipping real data today</div></div>
+    </div>
+  </div>
+  <div class="meta">
+    <div><b>Prepared</b>June 2026</div>
+    <div><b>Stage</b>Live product · Pre-seed</div>
+    <div><b>Product</b>mederti.vercel.app</div>
+    <div><b>Category</b>Healthcare data &amp; AI intelligence</div>
+  </div>
+</section>
+
+<!-- ============ EXECUTIVE SUMMARY ============ -->
+<section class="page">
+  <div class="eyebrow">Executive Summary</div>
+  <h2>A real, growing, expensive problem — with no system of record.</h2>
+  <p class="lead">Drug shortages have roughly tripled over the past decade. Every developed health system now runs a permanent shortage desk, yet the underlying data lives in dozens of incompatible national registries, PDFs and email alerts. No one owns the global picture. Mederti does.</p>
+
+  <div class="divider"></div>
+
+  <div class="grid2">
+    <div>
+      <h3>The problem</h3>
+      <p>A hospital pharmacist learning that a critical injectable is short must today check the FDA, their national regulator, wholesaler portals and manufacturer notices — each in a different format, none cross-referenced, none predictive. The answer to "what do I do about it" doesn't exist in one place.</p>
+      <h3>The solution</h3>
+      <p>Mederti ingests every major regulator daily, resolves drugs to a canonical identity across brands, salts and countries, and layers Claude-level synthesis on top. One search returns the global shortage status, alternatives, recalls and an operational answer — grounded in the database, not hallucinated.</p>
+    </div>
+    <div>
+      <h3>Why now</h3>
+      <p>Three forces converge: shortages at record highs and politically salient; regulators mandating supply-chain transparency (EU, US, UK); and frontier LLMs finally able to synthesise messy regulatory text reliably. The data was always there — the means to unify and reason over it arrived in 2024–25.</p>
+      <h3>Where we are</h3>
+      <p>Not a deck — a <strong>live product</strong>. 29,000+ shortage events, 20+ regulators on daily cron, persona-aware UX for pharmacists, procurement and suppliers, and a tool-using Claude chat grounded in the database. Built and shipping.</p>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="n">$3–4B</div><div class="l">Est. annual cost of shortage management to US hospitals alone (labour + substitution)</div></div>
+    <div class="stat"><div class="n">$2B+</div><div class="l">Serviceable software &amp; data spend across pharmacy, procurement &amp; supplier intelligence</div></div>
+    <div class="stat"><div class="n">15M+</div><div class="l">Potential professional end-users across target personas globally</div></div>
+  </div>
+
+  <div class="card green">
+    <h3>The ask</h3>
+    <p>We are raising a <strong>pre-seed round</strong> to convert a working product into a commercial platform: harden the data pipeline off laptop-cron onto cloud infrastructure, ship the institutional API and alerting tier, and land the first 10 paying hospital and supplier customers. Detail in §9.</p>
+  </div>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ PROBLEM ============ -->
+<section class="page">
+  <div class="section-num">01 — The Problem</div>
+  <h2>The data exists. The intelligence doesn't.</h2>
+  <p class="lead">Drug shortages are a structural feature of modern pharmaceutical supply chains — and the people managing them are flying blind across a dozen disconnected sources.</p>
+
+  <div class="grid3" style="margin:6mm 0;">
+    <div class="card"><h3>Fragmented</h3><p>Every country runs its own shortage registry — FDA, TGA, EMA, MHRA, Health Canada, plus 15+ others — in different schemas, languages and update cadences. None talk to each other.</p></div>
+    <div class="card"><h3>Unstructured</h3><p>The same molecule appears as a brand, a salt form, an INN and a local trade name. "Is amoxicillin short?" has no single answer because the data was never resolved to one entity.</p></div>
+    <div class="card"><h3>Backward-looking</h3><p>Registries tell you a drug <em>is</em> short. None tell you what to do, what the alternatives are, or which drug is <em>about</em> to go short next.</p></div>
+  </div>
+
+  <h3>Who feels the pain — and what it costs them</h3>
+  <table>
+    <thead><tr><th>Persona</th><th>Today's workflow</th><th>Cost of getting it wrong</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Hospital pharmacist</strong></td><td>Manually checks 4–6 portals per drug; rebuilds substitution plans by hand</td><td>Hours/day of clinical time; delayed or unsafe substitutions</td></tr>
+      <tr><td><strong>Procurement / supply chain</strong></td><td>Reacts to stockouts after they happen; no forward signal</td><td>Emergency spot-buys at 5–50× price; tendering chaos</td></tr>
+      <tr><td><strong>Suppliers &amp; manufacturers</strong></td><td>No visibility into where demand gaps are opening globally</td><td>Missed revenue; mis-allocated production</td></tr>
+      <tr><td><strong>Regulators &amp; government</strong></td><td>Own national data only; no cross-border early warning</td><td>Public-health exposure; political risk</td></tr>
+    </tbody>
+  </table>
+
+  <div class="quote">"There is no Bloomberg Terminal for drug supply. Every stakeholder is reconstructing the same global picture, badly, every single day."</div>
+
+  <p>This is not a niche inconvenience. The U.S. alone consistently tracks <strong>250–300+ active national shortages</strong> at any time; the EU and individual member states track hundreds more. Managing them is a permanent, staffed, expensive function at every major health system on earth — and the tooling is spreadsheets and email.</p>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ SOLUTION ============ -->
+<section class="page">
+  <div class="section-num">02 — The Solution</div>
+  <h2>One source of truth, with Claude on top.</h2>
+  <p class="lead">Mederti unifies global regulatory data into a canonical drug graph, then makes it answerable in plain language — grounded in the database, never invented.</p>
+
+  <div class="grid2" style="margin-top:5mm;">
+    <div>
+      <h3>1 · Ingest everything, daily</h3>
+      <p>68 automated scrapers pull shortage and recall data from 20+ national regulators every day. Each record is de-duplicated and normalised on the way in.</p>
+      <h3>2 · Resolve to canonical identity</h3>
+      <p>Brands, salt forms, synonyms and trade names roll up to a single INN via RxNorm and WHO ATC mappings — so <em>LORSTAT</em> and <em>atorvastatin</em> are one answer, not twelve.</p>
+      <h3>3 · Layer live intelligence</h3>
+      <p>Recalls link causally to shortages. Peer-set lead-time analysis across 16 EU markets surfaces forward signals. Pricing, alternatives and supplier data attach to every drug.</p>
+      <h3>4 · Answer in plain language</h3>
+      <p>A tool-using Claude agent queries the live database — 29k+ events and a 124-entry intelligence catalogue — and returns an operational answer with sources. Macro questions it can't ground, it declines rather than fabricates.</p>
+    </div>
+    <div class="card green" style="display:flex;flex-direction:column;justify-content:center;">
+      <div class="eyebrow" style="margin-bottom:3mm;">One query · one answer</div>
+      <p style="font-weight:700;color:var(--ink);font-size:11pt;margin-bottom:2mm;">"Is amoxicillin short, and what do I switch to?"</p>
+      <hr class="divider" style="margin:3mm 0;">
+      <ul class="clean check" style="margin:0;">
+        <li>17 active shortages resolved across markets</li>
+        <li>Canonical INN — every brand &amp; salt rolled up</li>
+        <li>Alternatives ranked, with their own status</li>
+        <li>Linked recalls flagged as causal precursors</li>
+        <li>A grounded, sourced operational answer</li>
+      </ul>
+      <hr class="divider" style="margin:3mm 0;">
+      <p style="font-size:8.6pt;color:var(--muted);margin:0;">Live today at <strong>mederti.vercel.app</strong> — not a mockup.</p>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h3>Persona-aware by design</h3>
+  <p>The same data renders differently for each user. A pharmacist sees a radically simplified <em>answer + actions</em> card. Procurement sees supply-risk and sourcing. Suppliers see demand gaps and market opportunities. One backend, four products.</p>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ MARKET ============ -->
+<section class="page">
+  <div class="section-num">03 — Market Opportunity</div>
+  <h2>A category waiting to be defined.</h2>
+  <p class="lead">There is no incumbent "system of record" for global drug supply. The spend exists — scattered across point tools, manual labour and emergency procurement — but no one has unified it.</p>
+
+  <div class="stat-row" style="margin:6mm 0;">
+    <div class="stat"><div class="n">$18B+</div><div class="l">TAM — global pharma supply-chain &amp; data intelligence software</div></div>
+    <div class="stat"><div class="n">$2.4B</div><div class="l">SAM — shortage/recall intelligence for pharmacy, procurement &amp; suppliers</div></div>
+    <div class="stat"><div class="n">$120M</div><div class="l">SOM — beachhead: hospital pharmacy + supplier intel, English-speaking + EU markets, yrs 1–3</div></div>
+  </div>
+  <p style="font-size:8.2pt;color:var(--muted);margin-top:-2mm;">TAM/SAM/SOM are directional estimates for planning, triangulated from health-system count, pharmacy staffing and comparable data-platform pricing — not audited market figures.</p>
+
+  <div class="divider"></div>
+
+  <div class="grid2">
+    <div>
+      <h3>Multiple, stacking buyers</h3>
+      <ul class="clean">
+        <li><strong>Hospitals &amp; health systems</strong> — ~7,000 hospitals in the US/EU/UK/ANZ alone, each with a shortage function</li>
+        <li><strong>Pharmacy networks</strong> — chains and independents needing live substitution data</li>
+        <li><strong>Manufacturers &amp; suppliers</strong> — global demand-gap intelligence to allocate production</li>
+        <li><strong>Regulators &amp; government</strong> — cross-border early-warning no single agency can build alone</li>
+        <li><strong>Researchers &amp; press</strong> — citation-grade data = top-of-funnel moat</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Why this market opens now</h3>
+      <ul class="clean">
+        <li><strong>Shortages at record highs</strong> — politically and clinically urgent worldwide</li>
+        <li><strong>Regulatory mandates</strong> — EU/US/UK forcing supply-chain transparency and reporting</li>
+        <li><strong>LLMs crossed a threshold</strong> — synthesising messy regulatory text is now reliable</li>
+        <li><strong>Geopolitical supply risk</strong> — API concentration in a few countries is now a board-level concern</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card green" style="margin-top:4mm;">
+    <p style="margin:0;"><strong>The wedge:</strong> own the data and the canonical drug graph first — the asset no competitor and no single regulator has. Everything else (alerting, API, supplier marketplace, forecasting) is a product layer on a moat that compounds daily.</p>
+  </div>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ PRODUCT / TRACTION ============ -->
+<section class="page">
+  <div class="section-num">04 — Product &amp; Traction</div>
+  <h2>Already built. Already live.</h2>
+  <p class="lead">Most plans at this stage are promises. Mederti is shipping real data to a live URL today — the platform, pipeline and AI layer already exist.</p>
+
+  <div class="grid2" style="margin:5mm 0;">
+    <div>
+      <h3>What's live <span class="pill live">Shipping</span></h3>
+      <ul class="clean check">
+        <li>29,000+ shortage events across 20+ regulators</li>
+        <li>68 scrapers, idempotent daily ingestion</li>
+        <li>Canonical drug graph — 16,000+ brand→INN links</li>
+        <li>Persona-aware drug pages (pharmacist / procurement / supplier)</li>
+        <li>Tool-using Claude chat, grounded in the database</li>
+        <li>Recall→shortage causal linking</li>
+        <li>Peer-set predictive signals across 16 EU markets</li>
+        <li>Email alerts &amp; watchlists</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Near-term roadmap <span class="pill build">Building</span></h3>
+      <ul class="clean">
+        <li>Migrate pipeline off laptop-cron to cloud (reliability)</li>
+        <li>Institutional <strong>API tier</strong> &amp; bulk data exports</li>
+        <li>Forward-signal model — which drug shortages <em>next</em></li>
+        <li>Wire 12+ built-but-unscheduled country scrapers (India, China, Brazil…)</li>
+        <li>Supplier marketplace &amp; demand-gap matching</li>
+        <li>Public methodology &amp; data-freshness dashboard</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>The architecture is real and modern</h3>
+  <table>
+    <thead><tr><th>Layer</th><th>Stack</th><th>State</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Data ingestion</strong></td><td>Python 3.11, 68 scrapers, MD5 de-dup</td><td><span class="pill live">Live</span></td></tr>
+      <tr><td><strong>Database</strong></td><td>Supabase / PostgreSQL — 46 migrations, RLS, full-text + trigram search</td><td><span class="pill live">Live</span></td></tr>
+      <tr><td><strong>Application</strong></td><td>Next.js 16, React 19, 30+ API route handlers</td><td><span class="pill live">Live</span></td></tr>
+      <tr><td><strong>AI layer</strong></td><td>Claude (tool-using) with DB grounding + web search</td><td><span class="pill live">Live</span></td></tr>
+      <tr><td><strong>Infra hardening</strong></td><td>Cloud cron migration, monitoring, freshness SLAs</td><td><span class="pill build">In progress</span></td></tr>
+    </tbody>
+  </table>
+
+  <p>Translation: the capital-intensive, slow part — building the data asset and the platform — is <strong>done and running</strong>. Investment accelerates commercialisation, not basic construction.</p>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ BUSINESS MODEL ============ -->
+<section class="page">
+  <div class="section-num">05 — Business Model</div>
+  <h2>Data underneath, four ways to monetise on top.</h2>
+  <p class="lead">A single compounding data asset supports recurring revenue across every persona — classic data-platform economics with high gross margin and strong retention.</p>
+
+  <table style="margin-top:5mm;">
+    <thead><tr><th>Tier</th><th>Buyer</th><th>What they get</th><th>Pricing model</th><th class="num">ACV (illustrative)</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Free / Pro</strong></td><td>Individual pharmacists, clinicians</td><td>Search, drug pages, alerts, AI chat</td><td>Freemium → seat</td><td class="num">$0–300</td></tr>
+      <tr><td><strong>Institutional</strong></td><td>Hospitals, pharmacy networks</td><td>Team seats, watchlists, substitution workflows, SSO</td><td>Per-site SaaS</td><td class="num">$8–40k</td></tr>
+      <tr><td><strong>Supplier Intelligence</strong></td><td>Manufacturers, distributors</td><td>Demand-gap signals, market opportunities, marketplace</td><td>SaaS + leads</td><td class="num">$25–100k</td></tr>
+      <tr><td><strong>Data &amp; API</strong></td><td>Govt, regulators, researchers, enterprise</td><td>Bulk exports, API access, custom feeds</td><td>Data licence</td><td class="num">$30–250k</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid3" style="margin:5mm 0;">
+    <div class="card"><h3>High gross margin</h3><p>Data is collected once, sold many times. Marginal cost per customer is near-zero — the pipeline runs regardless of seat count.</p></div>
+    <div class="card"><h3>Compounding moat</h3><p>Every day of ingestion deepens the historical record and the canonical graph — an asset a new entrant cannot backfill.</p></div>
+    <div class="card"><h3>Sticky by workflow</h3><p>Once a shortage desk runs on Mederti, switching means rebuilding a daily-critical workflow. Retention is structural.</p></div>
+  </div>
+
+  <div class="card green">
+    <p style="margin:0;"><strong>Land &amp; expand:</strong> free pharmacist search seeds organic, bottom-up adoption inside hospitals → institutional contracts → supplier and data-licence revenue layered on the same backend. The cheapest user to acquire funds the most valuable one to sell.</p>
+  </div>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ COMPETITION & MOAT ============ -->
+<section class="page">
+  <div class="section-num">06 — Competition &amp; Moat</div>
+  <h2>Fragments of the answer exist. The whole doesn't.</h2>
+  <p class="lead">Today's "competitors" each own one slice — one country, one persona, or static data with no intelligence. None unify global data with AI synthesis.</p>
+
+  <table style="margin-top:5mm;">
+    <thead><tr><th>Category</th><th>Examples</th><th>Their limit</th></tr></thead>
+    <tbody>
+      <tr><td><strong>National registries</strong></td><td>FDA, EMA, TGA databases</td><td>Single-country, raw, unresolved, no synthesis or alternatives</td></tr>
+      <tr><td><strong>Pharmacy point tools</strong></td><td>ASHP, wholesaler portals</td><td>US-centric, manual, no cross-border or supplier view</td></tr>
+      <tr><td><strong>Supply-chain suites</strong></td><td>Enterprise procurement ERPs</td><td>Internal-inventory focused, blind to global regulatory signal</td></tr>
+      <tr><td><strong>Generic AI chat</strong></td><td>ChatGPT, web search</td><td>No grounded drug-supply data; hallucinates status &amp; dates</td></tr>
+    </tbody>
+  </table>
+
+  <div class="divider"></div>
+
+  <h3>Why Mederti wins — and keeps winning</h3>
+
+  <div class="moat"><div class="ic">◆</div><div class="tx"><b>The canonical drug graph</b><p>Resolving brands, salts, synonyms and trade names to one INN across countries is the hard, unglamorous asset competitors haven't built. It's what makes one query return one answer.</p></div></div>
+  <div class="moat"><div class="ic">↻</div><div class="tx"><b>Daily compounding history</b><p>29k+ events and growing every day. The longitudinal record — which drug shorted, when, why, for how long — cannot be retro-acquired. Time is the moat.</p></div></div>
+  <div class="moat"><div class="ic">✦</div><div class="tx"><b>AI-native, grounded</b><p>Claude synthesis sits on real data with guardrails against fabrication — the trust bar healthcare demands. Generic chat can't, and registries won't.</p></div></div>
+  <div class="moat"><div class="ic">◫</div><div class="tx"><b>Multi-persona network</b><p>Pharmacists' demand signals become suppliers' market intelligence. Each side makes the other more valuable — a two-sided data network on one backend.</p></div></div>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ GTM ============ -->
+<section class="page">
+  <div class="section-num">07 — Go-to-Market</div>
+  <h2>Bottom-up adoption, top-down contracts.</h2>
+  <p class="lead">Win the individual pharmacist for free; convert their institution; expand into suppliers and data licensing. Credibility content seeds the top of the funnel.</p>
+
+  <div class="grid3" style="margin:5mm 0;">
+    <div class="card"><h3>Phase 1 — Seed</h3><p><strong>Land the practitioner.</strong> Free search + AI chat for pharmacists and clinicians. SEO &amp; citation-grade data make Mederti the default answer to "is X short?"</p></div>
+    <div class="card"><h3>Phase 2 — Convert</h3><p><strong>Sell the institution.</strong> Bottom-up usage inside hospitals becomes the wedge for per-site contracts with team workflows, SSO and SLAs.</p></div>
+    <div class="card"><h3>Phase 3 — Expand</h3><p><strong>Monetise the network.</strong> Supplier intelligence and government/enterprise data licences on the same compounding backend.</p></div>
+  </div>
+
+  <h3>Growth engines</h3>
+  <div class="grid2">
+    <div>
+      <ul class="clean">
+        <li><strong>Content &amp; SEO moat</strong> — a public, cited methodology and freshness dashboard make Mederti the reference researchers and press link to</li>
+        <li><strong>Product-led free tier</strong> — zero-friction entry for the highest-volume persona</li>
+        <li><strong>Regulatory tailwind</strong> — transparency mandates create budget and urgency at institutions</li>
+      </ul>
+    </div>
+    <div>
+      <ul class="clean">
+        <li><strong>Design partnerships</strong> — a handful of lighthouse hospitals &amp; suppliers shape the institutional product</li>
+        <li><strong>Supplier pull</strong> — manufacturers pay for demand-gap signal they can't get elsewhere</li>
+        <li><strong>Geographic expansion</strong> — each new country scraper is a new addressable market at near-zero marginal cost</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="card green"><p style="margin:0;"><strong>First commercial milestone:</strong> 10 paying institutional/supplier logos within 12 months of funding — enough to validate ACV, prove retention, and anchor the seed round.</p></div>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ FINANCIALS ============ -->
+<section class="page">
+  <div class="section-num">08 — Financial Outlook</div>
+  <h2>Lean to build, leveraged to scale.</h2>
+  <p class="lead">Because the platform already exists, capital funds commercialisation — not construction. Data-platform margins mean revenue compounds far faster than cost.</p>
+
+  <h3>Illustrative 3-year trajectory</h3>
+  <table style="margin-top:3mm;">
+    <thead><tr><th>Metric</th><th class="num">Year 1</th><th class="num">Year 2</th><th class="num">Year 3</th></tr></thead>
+    <tbody>
+      <tr><td>Paying institutional / supplier logos</td><td class="num">10</td><td class="num">45</td><td class="num">140</td></tr>
+      <tr><td>Blended ACV</td><td class="num">$22k</td><td class="num">$30k</td><td class="num">$38k</td></tr>
+      <tr><td><strong>ARR</strong></td><td class="num">$0.2M</td><td class="num">$1.4M</td><td class="num">$5.3M</td></tr>
+      <tr><td>Gross margin</td><td class="num">~80%</td><td class="num">~85%</td><td class="num">~88%</td></tr>
+      <tr><td>Free-tier users (top of funnel)</td><td class="num">25k</td><td class="num">120k</td><td class="num">400k</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:8.2pt;color:var(--muted);margin-top:-1mm;">Illustrative model for planning purposes, not a forecast or guarantee. Assumes pre-seed close in 2026, cloud-pipeline migration complete by Q1, and API/institutional tiers live by mid-year.</p>
+
+  <div class="divider"></div>
+
+  <div class="grid2">
+    <div>
+      <h3>Cost structure</h3>
+      <ul class="clean">
+        <li><strong>Engineering &amp; data</strong> — pipeline reliability, API, forecasting model</li>
+        <li><strong>Cloud &amp; AI inference</strong> — scales with usage, not headcount</li>
+        <li><strong>Go-to-market</strong> — founder-led sales + content, then first AE</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Unit economics drivers</h3>
+      <ul class="clean">
+        <li>Near-zero marginal cost per customer (data collected once)</li>
+        <li>Workflow lock-in → low churn, high net revenue retention</li>
+        <li>Free tier as a low-CAC engine for institutional conversion</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ ASK / ROADMAP ============ -->
+<section class="page">
+  <div class="section-num">09 — The Ask &amp; Use of Funds</div>
+  <h2>Fund the path from product to platform.</h2>
+  <p class="lead">We are raising a pre-seed round to harden infrastructure, ship the commercial tiers, and land the first paying customers — turning a live product into a revenue-generating platform.</p>
+
+  <div class="grid3" style="margin:5mm 0;">
+    <div class="card green"><h3>40% · Engineering &amp; Data</h3><p>Cloud pipeline migration, institutional API, forward-signal model, +12 country scrapers.</p></div>
+    <div class="card green"><h3>35% · Go-to-Market</h3><p>Founder-led sales, design partnerships, content/SEO engine, first commercial hire.</p></div>
+    <div class="card green"><h3>25% · Operations</h3><p>Compliance &amp; data governance, monitoring &amp; SLAs, runway to commercial milestones.</p></div>
+  </div>
+
+  <h3>Milestones this round buys</h3>
+  <div class="timeline">
+    <div class="row"><div class="when">Quarter 1</div><div class="what"><b>Reliability.</b> Pipeline off laptop-cron onto cloud infra; monitoring, freshness SLAs and a public data-freshness dashboard live.</div></div>
+    <div class="row"><div class="when">Quarter 2</div><div class="what"><b>Commercial tiers.</b> Institutional seats + API/data-export tier shipped; first 3 design-partner logos signed.</div></div>
+    <div class="row"><div class="when">Quarter 3</div><div class="what"><b>Coverage &amp; signal.</b> 12+ new country scrapers live; forward-signal model in beta with lighthouse customers.</div></div>
+    <div class="row"><div class="when">Quarter 4</div><div class="what"><b>Validation.</b> 10 paying logos, proven ACV &amp; retention, supplier-intelligence revenue line open — seed-ready.</div></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="card" style="background:var(--ink);border:0;color:#fff;">
+    <div class="eyebrow" style="color:#7FD8A8;margin-bottom:2mm;">Why back Mederti now</div>
+    <div class="grid3" style="gap:6mm;">
+      <div><div class="big-num" style="color:#fff;">Built</div><p style="color:#BFD8CC;font-size:9pt;margin:0;">Live product &amp; real data — capital accelerates, not constructs.</p></div>
+      <div><div class="big-num" style="color:#fff;">Timely</div><p style="color:#BFD8CC;font-size:9pt;margin:0;">Record shortages + regulatory mandates + LLMs that finally work.</p></div>
+      <div><div class="big-num" style="color:#fff;">Defensible</div><p style="color:#BFD8CC;font-size:9pt;margin:0;">A canonical data asset that compounds daily and can't be backfilled.</p></div>
+    </div>
+  </div>
+
+  <div class="footer"><span>Mederti — Business Plan</span><span class="conf">Confidential</span></div>
+</section>
+
+<!-- ============ CLOSING ============ -->
+<section class="page cover" style="justify-content:center;">
+  <div style="margin:auto 0;">
+    <div class="brandrow" style="margin-bottom:10mm;"><span class="logo-dot"></span><span class="brand">Mederti</span></div>
+    <h1 style="color:#fff;font-size:30pt;max-width:150mm;">The world's leading source of drug-supply intelligence.</h1>
+    <p class="sub" style="max-width:140mm;">The data was always there, scattered and unusable. Mederti makes it one source of truth — and puts Claude-level reasoning on top. The product is live. The opportunity is open. The moat compounds every day we run.</p>
+    <div class="meta" style="margin-top:14mm;">
+      <div><b>Live product</b>mederti.vercel.app</div>
+      <div><b>Stage</b>Pre-seed</div>
+      <div><b>Contact</b>robfindlay@gmail.com</div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

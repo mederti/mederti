@@ -36,7 +36,7 @@ mederti/
 ├── backend/
 │   ├── scrapers/                 # 66 scraper files (.py)
 │   ├── alerts/                   # Resend email alerts
-│   ├── importers/                # WHO ATC/DDD, RxNorm, PharmaCompass, etc.
+│   ├── importers/                # WHO ATC/DDD, WHO EML (who_eml_importer), RxNorm, PharmaCompass, etc.
 │   └── utils/                    # db.py (Supabase client), logger.py, retry.py
 ├── frontend/
 │   ├── app/
@@ -72,7 +72,7 @@ mederti/
 
 Beyond the original shortage/recall core, the schema has grown into:
 
-- **Drug intelligence layer** — `drugs`, `drug_catalogue`, `drug_universe` (multi-country), `drug_synonyms`, `drug_rxnorm`, `atc_codes`, `drug_alternatives`, `drug_pricing`
+- **Drug intelligence layer** — `drugs`, `drug_catalogue`, `drug_universe` (multi-country), `drug_synonyms`, `drug_rxnorm`, `atc_codes`, `drug_alternatives`, `drug_pricing`, `who_essential_medicines` (WHO Model List of Essential Medicines, eEML — migration 051; denormalised onto `drugs.who_essential_medicine`/`who_eml_section`/`who_eml_year`)
 - **Shortage core** — `shortage_events` (with structured reason fields, MD5 dedup), `shortage_status_log`, `live_status_layer`
 - **Recall core** — `recalls`, `recall_shortage_links`
 - **Supplier & supply intelligence** — `manufacturers`, `supplier_inventory`, `supplier_enquiries`, `supplier_marketplace`, `supply_intelligence_layer`, `pipeline_and_regulatory`

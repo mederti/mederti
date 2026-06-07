@@ -45,10 +45,20 @@ export interface DrugHit {
   registration_number?: string;
 }
 
+export interface StatusFacets {
+  shortage: number;
+  supply: number;
+  resolved: number;
+}
+
 export interface SearchResponse {
   query: string;
   results: DrugHit[];
   total: number;
+  market?: string;
+  sort?: string;
+  status?: string[];
+  facets?: { status: StatusFacets };
 }
 
 export interface DrugDetail {
@@ -152,8 +162,17 @@ async function apiFetch<T>(path: string): Promise<T> {
 
 export const api = {
   // ── ✅ Backed by a real route handler ────────────────────────────────
-  search: (q: string, limit = 10) =>
-    apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  search: (
+    q: string,
+    limit = 10,
+    opts?: { market?: string; status?: string[]; sort?: string }
+  ) => {
+    const p = new URLSearchParams({ q, limit: String(limit) });
+    if (opts?.market) p.set("market", opts.market);
+    if (opts?.status?.length) p.set("status", opts.status.join(","));
+    if (opts?.sort && opts.sort !== "relevance") p.set("sort", opts.sort);
+    return apiFetch<SearchResponse>(`/search?${p.toString()}`);
+  },
 
   getDrug: (id: string) =>
     apiFetch<DrugDetail>(`/drugs/${id}`),

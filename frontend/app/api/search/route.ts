@@ -37,7 +37,7 @@ interface SearchHit {
   last_verified_at?: string | null;          // most recent regulator verification (market)
   substitution?: { scheme: string; reference: string | null } | null;
   best_alternative?: { name: string; relationship: string | null } | null;
-  // ── Form/Strength (catalogue product rows; parsed by migration 053) ──
+  // ── Form/Strength (catalogue product rows; parsed by migration 054) ──
   form_bucket?: string | null;               // controlled dose-form bucket
   strength_label?: string | null;            // e.g. "500mg"
 }
@@ -194,7 +194,7 @@ export async function GET(req: NextRequest) {
   const drugIds = drugRows.map((r) => r.id as string);
 
   // ── Catalogue enrichment (form_bucket / is_supplement / strength) ────
-  // Defensive: if these columns don't exist yet (migration 053 unapplied) the
+  // Defensive: if these columns don't exist yet (migration 054 unapplied) the
   // probe errors and the map stays empty, so the Form/Strength filters and the
   // supplement exclusion are simply inert — search never breaks. Kicked off here
   // so it runs in parallel with the Round 3 aggregation below.

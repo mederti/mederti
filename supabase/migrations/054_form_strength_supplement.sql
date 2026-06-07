@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration 053: drug_catalogue form_bucket + strength parse + supplement flag
+-- Migration 054: drug_catalogue form_bucket + strength parse + supplement flag
 -- ============================================================================
 -- Adds the structured fields behind the Form and Strength search filters, and
 -- tags non-medicine "listed" products (supplements/consumer-health) so they can

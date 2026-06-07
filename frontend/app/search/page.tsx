@@ -137,6 +137,13 @@ function Results() {
   const [facets, setFacets] = useState<StatusFacets | null>(null);
   const [loading, setLoading] = useState(false);
   const [menu, setMenu] = useState<Menu>(null);
+  // Google-style typo correction. `corrected` drives the "Showing results for X ·
+  // Search instead for Y" banner. `triedRef` prevents re-correcting a term we
+  // already auto-corrected away from (no loops); `forcedRef` holds terms the user
+  // explicitly chose to keep ("search instead"), so we never re-correct those.
+  const [corrected, setCorrected] = useState<{ from: string; to: string } | null>(null);
+  const triedRef = useRef<Set<string>>(new Set());
+  const forcedRef = useRef<Set<string>>(new Set());
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
 
@@ -160,9 +167,27 @@ function Results() {
     let cancelled = false;
     setLoading(true);
     const sel = statusStr ? statusStr.split(",").filter(Boolean) : [];
+    const lc = term.toLowerCase();
     api.search(term, 25, { market, status: sel, sort })
       .then((data) => {
         if (cancelled) return;
+        // Google-style auto-correct: term matched nothing but a close drug
+        // exists → swap the query to it (the URL change re-runs this search)
+        // and remember the original so we can offer "search instead".
+        const sug = data.suggestion;
+        if (
+          data.results.length === 0 && sug &&
+          sug.toLowerCase() !== lc &&
+          !triedRef.current.has(lc) && !forcedRef.current.has(lc)
+        ) {
+          triedRef.current.add(lc);
+          setCorrected({ from: term, to: sug });
+          setResults([]); setTotal(0); setFacets(null);
+          setParams({ q: sug });
+          return;
+        }
+        // Showing a fresh, unrelated query → drop any stale correction banner.
+        if (corrected && lc !== corrected.to.toLowerCase()) setCorrected(null);
         setResults(data.results);
         setTotal(data.total);
         setFacets(data.facets?.status ?? null);
@@ -170,6 +195,8 @@ function Results() {
       .catch(() => { if (!cancelled) { setResults([]); setTotal(0); setFacets(null); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
+    // setParams/corrected intentionally omitted — URL params are the source of truth.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlQ, market, statusStr, sort]);
 
   // Keep the input mirror in sync when the URL query changes externally.
@@ -493,8 +520,8 @@ export default function SearchPage() {
           <div className="sb-scroll">
             <div className="sb-group">
               <div className="sb-glabel">Browse</div>
-              <Link href="/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
-              <Link href="/dashboard" className="sb-item"><span className="sb-dot green" />Dashboard</Link>
+              <Link href="/chat?view=early-warning" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
+              <Link href="/chat?view=dashboard" className="sb-item"><span className="sb-dot green" />Dashboard</Link>
             </div>
             <div className="sb-group">
               <div className="sb-glabel">Search history</div>
@@ -635,7 +662,7 @@ const CSS = `
 .res-table tbody tr.clickable{cursor:pointer;transition:background .12s}
 .res-table tbody tr.clickable:hover{background:var(--bg-2)}
 .res-table tbody tr.clickable:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
-.res-table td.center{text-align:center;vertical-align:middle}
+.res-table td.center{text-align:center;vertical-align:top}
 .t-name{font-size:14px;font-weight:700;letter-spacing:-.02em;line-height:1.25;color:var(--ink);font-family:var(--font-geist-sans),system-ui,sans-serif}
 .t-brands{font-size:11.5px;color:var(--text-3);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .t-atc{font-size:10.5px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:5px}

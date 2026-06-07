@@ -249,6 +249,17 @@ class EligibilityScraper(ABC):
                 "last_verified_at": now,
             })
 
+        # Collapse rows that map to the same primary key (same scheme_reference,
+        # or same scheme/country/generic/listed_at composite when no reference) —
+        # two such rows in one POST trip Postgres 21000 ("ON CONFLICT DO UPDATE
+        # cannot affect row a second time"). Keep the last occurrence; this is
+        # exactly migration 040's intended fallback uniqueness, so collapsing
+        # loses nothing the schema would have kept distinct anyway.
+        deduped = {b["id"]: b for b in body}
+        if len(deduped) != len(body):
+            self.log(f"collapsed {len(body) - len(deduped)} duplicate-key rows before upsert")
+        body = list(deduped.values())
+
         if self.dry_run:
             with_id = sum(1 for b in body if b["drug_id"])
             self.log(f"DRY RUN — would upsert {len(body)} rows ({with_id} with drug_id). Sample:")

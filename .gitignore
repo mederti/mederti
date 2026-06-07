@@ -79,3 +79,7 @@ catalogue_inn_backfill_manifest.json
 
 # UNII bulk reference (large, re-downloadable)
 data/reference/
+
+# Dependencies (accidentally committed via #67 — untracked in this change)
+node_modules/
+/node_modules/

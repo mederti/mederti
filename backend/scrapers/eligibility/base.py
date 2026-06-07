@@ -31,10 +31,15 @@ import os
 import sys
 import urllib.parse
 import urllib.request
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Iterable
+
+# Fixed namespace for deterministic row ids (see _row_id). Stable across runs so
+# re-scrapes upsert onto the same primary-key row.
+_ELIGIBILITY_NS = uuid.UUID("6f0a2e6e-3b1e-4c2a-9d7f-a1b2c3d4e5f6")
 
 LOG = logging.getLogger("eligibility")
 if not LOG.handlers:
@@ -203,6 +208,22 @@ class EligibilityScraper(ABC):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read()
 
+    @staticmethod
+    def _row_id(r: EligibilityRow) -> str:
+        """Deterministic primary key for a row, stable across re-scrapes.
+
+        Keyed on (scheme, scheme_reference) when the regulator publishes a stable
+        reference; otherwise on the (scheme, country, generic_name, listed_at)
+        composite that migration 040 uses as its fallback uniqueness. This makes
+        the PK-targeted upsert idempotent without depending on a partial unique
+        index that PostgREST can't use for ON CONFLICT.
+        """
+        if r.scheme_reference:
+            key = f"{r.scheme}|{r.scheme_reference}"
+        else:
+            key = f"{r.scheme}|{r.country_code}|{(r.generic_name or '').lower()}|{r.listed_at or ''}"
+        return str(uuid.uuid5(_ELIGIBILITY_NS, key))
+
     def _upsert_all(self, rows: list[EligibilityRow], now: str | None = None) -> int:
         if not rows:
             return 0
@@ -210,6 +231,7 @@ class EligibilityScraper(ABC):
         body = []
         for r in rows:
             body.append({
+                "id": self._row_id(r),
                 "drug_id": r.drug_id,
                 "generic_name": r.generic_name,
                 "brand_name": r.brand_name,
@@ -238,9 +260,13 @@ class EligibilityScraper(ABC):
                 )
             return len(body)
 
-        # Conflict target: prefer scheme_reference; fall back to composite.
-        on_conflict = "scheme,scheme_reference"
-        url = f"{self.supabase_url}/rest/v1/regulatory_eligibility?on_conflict={on_conflict}"
+        # Upsert on the PRIMARY KEY (id). We supply a deterministic id per row
+        # (_row_id) so a re-scrape lands on the same row. We deliberately do NOT
+        # use ?on_conflict=scheme,scheme_reference: migration 040's uniqueness is
+        # enforced by a PARTIAL unique index (WHERE scheme_reference IS NOT NULL),
+        # and PostgREST cannot target a partial index for ON CONFLICT (it raises
+        # 42P10). The PK is a plain unique constraint PostgREST resolves by default.
+        url = f"{self.supabase_url}/rest/v1/regulatory_eligibility"
         req = urllib.request.Request(
             url, data=json.dumps(body).encode(), headers=self.headers, method="POST"
         )

@@ -589,6 +589,32 @@ export default async function DrugPage({ params, searchParams }: Props) {
       country_code: string | null;
     }[];
 
+    // PBS trade price (AEMP ex-manufacturer + DPMQ dispensed) for the user's
+    // market, from drug_pricing (populated by the PBS ingest). Defensive: if the
+    // dispensed_amount column / rows aren't there yet the query errors softly
+    // (data → null) and the view simply omits the price block. AU-only today.
+    const { data: priceRows } = await supabase
+      .from("drug_pricing")
+      .select("price_amount, dispensed_amount, currency, pack_size, price_date, source")
+      .eq("drug_id", id)
+      .eq("country_code", userCountry)
+      .order("price_date", { ascending: false, nullsFirst: false })
+      .limit(1);
+    const pr = (priceRows ?? [])[0] as
+      | { price_amount: number | null; dispensed_amount: number | null; currency: string | null; pack_size: string | null; price_date: string | null; source: string | null }
+      | undefined;
+    const pricing =
+      pr && pr.price_amount != null
+        ? {
+            ex_manufacturer: Number(pr.price_amount),
+            dispensed: pr.dispensed_amount != null ? Number(pr.dispensed_amount) : null,
+            currency: pr.currency ?? "AUD",
+            pack: pr.pack_size ?? null,
+            price_date: pr.price_date ?? null,
+            source: pr.source ?? "PBS",
+          }
+        : null;
+
     return (
       <V1DrugView
         id={id}
@@ -601,6 +627,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         recalls={recalls}
         approvalFootprint={approvalFootprint}
         eligibility={eligibility}
+        pricing={pricing}
       />
     );
   }

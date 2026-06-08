@@ -50,6 +50,7 @@ export interface DrugHit {
   last_verified_at?: string | null;
   substitution?: { scheme: string; reference: string | null } | null;
   best_alternative?: { name: string; relationship: string | null } | null;
+  trade_price?: { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null } | null;
 }
 
 export interface StatusFacets {

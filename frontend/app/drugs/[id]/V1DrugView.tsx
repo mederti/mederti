@@ -79,9 +79,11 @@ function monthYear(iso?: string | null) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? null : d.toLocaleDateString("en-AU", { month: "short", year: "numeric" });
 }
+const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR: "€", NZD: "NZ$", CAD: "C$" };
+const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing,
 }: {
   id: string;
   drug: any;
@@ -104,6 +106,14 @@ export default function V1DrugView({
     latest: string | null;
   } | null;
   eligibility?: EligibilityEntry[] | null;
+  pricing?: {
+    ex_manufacturer: number;
+    dispensed: number | null;
+    currency: string;
+    pack: string | null;
+    price_date: string | null;
+    source: string;
+  } | null;
 }) {
   const CONC_LABEL: Record<string, string> = {
     very_high: "Very high", high: "High", medium: "Moderate", low: "Low",
@@ -275,6 +285,35 @@ export default function V1DrugView({
 
             <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
           </div>
+
+          {/* Trade price (PBS — ex-manufacturer + dispensed). Renders only when
+              we have a price for this market; AU-only until other feeds land. */}
+          {pricing && (
+            <div className="price-card">
+              <div className="price-row">
+                <div className="price-col">
+                  <div className="price-label">Ex-manufacturer</div>
+                  <div className="price-val">{fmtPrice(pricing.ex_manufacturer, pricing.currency)}</div>
+                </div>
+                {pricing.dispensed != null && (
+                  <div className="price-col">
+                    <div className="price-label">Dispensed (DPMQ)</div>
+                    <div className="price-val">{fmtPrice(pricing.dispensed, pricing.currency)}</div>
+                  </div>
+                )}
+                {pricing.pack && (
+                  <div className="price-col">
+                    <div className="price-label">Pack</div>
+                    <div className="price-val sm">{pricing.pack}</div>
+                  </div>
+                )}
+              </div>
+              <div className="price-foot">
+                Trade price · {pricing.source}
+                {pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}
+              </div>
+            </div>
+          )}
 
           {/* So-what tiles */}
           <div className="sw-cards">
@@ -614,6 +653,12 @@ const CSS = `
 .d-eml:hover{background:#dcfce7}
 .d-eml-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
 .status-card{margin:18px 0 0;border-radius:18px;padding:20px;box-shadow:var(--sh-card),var(--hi-inset);}
+.price-card{margin:12px 0 0;border:1px solid var(--border);border-radius:14px;background:var(--bg);padding:16px 18px;box-shadow:var(--sh-card),var(--hi-inset)}
+.price-row{display:flex;gap:34px;flex-wrap:wrap}
+.price-label{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);margin-bottom:5px}
+.price-val{font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace}
+.price-val.sm{font-size:15px;font-weight:600;color:var(--text-2)}
+.price-foot{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px;border-top:1px solid var(--border);padding-top:11px}
 .status-card.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border:1px solid var(--crit-b)}
 .status-card.med{background:linear-gradient(135deg,#fffdf5,#fffbeb);border:1px solid var(--med-b)}
 .status-card.ok{background:linear-gradient(135deg,#f0fdf8,#ecfdf5);border:1px solid var(--ok-b)}

@@ -37,6 +37,8 @@ interface SearchHit {
   last_verified_at?: string | null;          // most recent regulator verification (market)
   substitution?: { scheme: string; reference: string | null } | null;
   best_alternative?: { name: string; relationship: string | null } | null;
+  // PBS trade price (AU only; null elsewhere or until the PBS ingest lands).
+  trade_price?: { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null } | null;
 }
 
 // PostgrestSingleResponse-shaped value we can ignore the full type of.
@@ -189,6 +191,7 @@ export async function GET(req: NextRequest) {
   const otherMarkets: Record<string, Set<string>> = {};                       // distinct OTHER countries short
   const subMap: Record<string, { scheme: string; reference: string | null }> = {}; // active substitution pathway
   const bestAlt: Record<string, { name: string; relationship: string | null }> = {}; // top alternative by similarity
+  const priceMap: Record<string, { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null }> = {}; // PBS trade price (market-scoped)
   // Phase 3a de-noising: drug_ids tagged reference_document / export_only are
   // dropped from results + facets. Read defensively — if the entity_type column
   // doesn't exist yet (migration 052 not applied), the probe errors and the
@@ -381,6 +384,40 @@ export async function GET(req: NextRequest) {
         })
     );
 
+    // ── PBS trade price (AEMP ex-manufacturer + DPMQ dispensed), market-scoped.
+    // PBS is AU-only, so this only yields rows for market='AU'. Read DEFENSIVELY:
+    // the dispensed_amount column / populated rows may not exist yet (the PBS
+    // ingest + migration are in flight), so a probe error degrades to "no price"
+    // rather than 500-ing search. Lights up automatically once the ingest lands.
+    if (!isGlobal) {
+      jobs.push(
+        timer
+          .track("db_pricing", () =>
+            sb
+              .from("drug_pricing")
+              .select("drug_id,price_amount,dispensed_amount,currency,pack_size,price_date")
+              .eq("country_code", market)
+              .in("drug_id", drugIds)
+              .order("price_date", { ascending: false, nullsFirst: false })
+              .then(
+                (r) => r as PgResult<{ drug_id: string; price_amount: number | null; dispensed_amount: number | null; currency: string | null; pack_size: string | null }>,
+                () => ({ data: null })
+              )
+          )
+          .then((r) => {
+            for (const row of r.data ?? []) {
+              if (priceMap[row.drug_id] || row.price_amount == null) continue; // first = latest price_date
+              priceMap[row.drug_id] = {
+                ex_manufacturer: Number(row.price_amount),
+                dispensed: row.dispensed_amount != null ? Number(row.dispensed_amount) : null,
+                currency: row.currency ?? "AUD",
+                pack: row.pack_size ?? null,
+              };
+            }
+          })
+      );
+    }
+
     await Promise.all(jobs);
   }
 
@@ -427,6 +464,7 @@ export async function GET(req: NextRequest) {
         last_verified_at: a?.lastVerified != null ? new Date(a.lastVerified).toISOString() : null,
         substitution: subMap[id] ?? null,
         best_alternative: bestAlt[id] ?? null,
+        trade_price: priceMap[id] ?? null,
         _res: a?.minRes ?? null,
         _sev: a?.maxSev ?? 0,
       };
@@ -472,6 +510,7 @@ export async function GET(req: NextRequest) {
         last_verified_at: null,
         substitution: null,
         best_alternative: null,
+        trade_price: null,
         _res: null,
         _sev: 0,
       });

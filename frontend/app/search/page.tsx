@@ -43,6 +43,9 @@ function timeAgo(iso?: string | null): string | null {
 const isStale = (iso?: string | null): boolean =>
   !!iso && (Date.now() - new Date(iso).getTime()) / 86_400_000 >= 14;
 
+const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR: "€", NZD: "NZ$", CAD: "C$" };
+const fmtPrice = (amt: number, cur: string): string => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
+
 // Country-first supply verdict: answers "available in MY market or not", with
 // the global picture demoted to a subline.
 function marketStatus(
@@ -377,6 +380,7 @@ function Results() {
                 <th className="c-sub">Can I substitute?</th>
                 <th className="c-alt">Best alternative</th>
                 <th className="c-n">Alts</th>
+                {market === "AU" && <th className="c-price">Trade price</th>}
                 <th className="c-eb">Expected back</th>
                 <th className="c-ver">Last verified</th>
               </tr>
@@ -441,6 +445,22 @@ function Results() {
                     <td className="center">
                       <span className={`t-count ${d.alternatives_count ? "" : "zero"}`}>{d.alternatives_count || "—"}</span>
                     </td>
+                    {market === "AU" && (
+                      <td>
+                        {d.trade_price ? (
+                          <>
+                            <div className="t-price">{fmtPrice(d.trade_price.ex_manufacturer, d.trade_price.currency)}</div>
+                            <div className="t-sub2">
+                              {d.trade_price.dispensed != null
+                                ? `disp. ${fmtPrice(d.trade_price.dispensed, d.trade_price.currency)} · PBS`
+                                : "ex-mfr · PBS"}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="t-muted">—</span>
+                        )}
+                      </td>
+                    )}
                     <td>
                       {eb ? (
                         <><div className="t-eb">{eb}</div><div className="t-sub2">Sponsor est.</div></>
@@ -620,7 +640,8 @@ const CSS = `
 .res-table-wrap{display:none;margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--sh-card),var(--hi-inset)}
 .res-table{width:100%;border-collapse:collapse;table-layout:fixed}
 .res-table thead th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);padding:13px 16px;background:var(--bg-2);border-bottom:1px solid var(--border);white-space:nowrap}
-.res-table th.c-med{width:22%}.res-table th.c-mkt{width:17%}.res-table th.c-sub{width:14%}.res-table th.c-alt{width:16%}.res-table th.c-n{width:7%;text-align:center}.res-table th.c-eb{width:12%}.res-table th.c-ver{width:12%}
+.res-table th.c-med{width:20%}.res-table th.c-mkt{width:15%}.res-table th.c-sub{width:13%}.res-table th.c-alt{width:14%}.res-table th.c-n{width:6%;text-align:center}.res-table th.c-price{width:11%}.res-table th.c-eb{width:11%}.res-table th.c-ver{width:10%}
+.t-price{font-size:13px;font-weight:700;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .res-table tbody td{padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:top}
 .res-table tbody tr:last-child td{border-bottom:none}
 .res-table tbody tr.clickable{cursor:pointer;transition:background .12s}

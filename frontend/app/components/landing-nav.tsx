@@ -536,10 +536,10 @@ export default function SiteNav() {
             </div>
           ) : (
             <>
-              <Link href="/login" style={{
+              <Link href="/login" className="nav-cta" style={{
                 display: "flex", alignItems: "center",
                 padding: "7px 18px", borderRadius: 7,
-                fontSize: 13, fontWeight: 500,
+                fontSize: 13, fontWeight: 500, whiteSpace: "nowrap",
                 color: "var(--app-text-2)",
                 textDecoration: "none",
                 border: `1px solid ${btnBd}`,
@@ -557,10 +557,10 @@ export default function SiteNav() {
               >
                 Log in
               </Link>
-              <Link href="/signup" style={{
+              <Link href="/signup" className="nav-cta" style={{
                 display: "flex", alignItems: "center",
                 padding: "7px 20px", borderRadius: 7,
-                fontSize: 13, fontWeight: 600,
+                fontSize: 13, fontWeight: 600, whiteSpace: "nowrap",
                 color: "#fff", textDecoration: "none",
                 background: "var(--teal)", border: "none",
                 transition: "opacity 0.15s",
@@ -682,6 +682,9 @@ export default function SiteNav() {
           .site-nav-links { display: none !important; }
           .nav-search-overlay { left: 52px !important; right: 0 !important; }
           .mobile-menu-btn { display: flex !important; }
+        }
+        @media (max-width: 420px) {
+          .nav-cta { padding-left: 12px !important; padding-right: 12px !important; }
         }
       `}</style>
     </nav>

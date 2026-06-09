@@ -22,9 +22,10 @@ export default function Loading() {
         <div
           style={{
             width: 280,
+            maxWidth: "60%",
             height: 32,
             borderRadius: 6,
-            background: "var(--bd, #e2e8f0)",
+            background: "var(--app-border-2, #e2e8f0)",
             animation: "mederti-pulse 1.2s ease-in-out infinite",
           }}
         />
@@ -33,7 +34,7 @@ export default function Loading() {
             width: 80,
             height: 22,
             borderRadius: 999,
-            background: "var(--bd2, #f1f5f9)",
+            background: "var(--surf-3, #f1f5f9)",
             animation: "mederti-pulse 1.2s ease-in-out infinite",
             animationDelay: "0.15s",
           }}
@@ -44,9 +45,10 @@ export default function Loading() {
       <div
         style={{
           width: 420,
+          maxWidth: "100%",
           height: 16,
           borderRadius: 4,
-          background: "var(--bd2, #f1f5f9)",
+          background: "var(--surf-3, #f1f5f9)",
           marginBottom: 32,
           animation: "mederti-pulse 1.2s ease-in-out infinite",
           animationDelay: "0.3s",
@@ -61,8 +63,8 @@ export default function Loading() {
             style={{
               height: 140,
               borderRadius: 14,
-              background: "var(--bd2, #f1f5f9)",
-              border: "1px solid var(--bd, #e2e8f0)",
+              background: "var(--surf-3, #f1f5f9)",
+              border: "1px solid var(--app-border-2, #e2e8f0)",
               animation: "mederti-pulse 1.2s ease-in-out infinite",
               animationDelay: `${0.45 + i * 0.1}s`,
             }}

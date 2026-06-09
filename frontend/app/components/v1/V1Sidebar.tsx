@@ -63,11 +63,10 @@ export default function V1Sidebar() {
           <img src="/logo-black.png" alt="mederti" className="logo-img" />
         </Link>
       </div>
-      <div style={{ padding: "14px 14px 8px 16px" }}><V1CountryPicker /></div>
       <div className="sb-scroll">
         <div className="sb-group">
-          <div className="sb-glabel">Browse</div>
-          <Link href="/insights/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
+          <Link href="/search" className="sb-item"><span className="sb-dot green" />Search</Link>
+          <Link href="/insights/intelligence" className="sb-item"><span className="sb-dot green" />Forecast</Link>
           <Link href="/insights/dashboard" className="sb-item"><span className="sb-dot green" />Dashboard</Link>
         </div>
         <div className="sb-group">
@@ -99,6 +98,7 @@ export default function V1Sidebar() {
           )}
         </div>
       </div>
+      <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)" }}><V1CountryPicker /></div>
       <Link href="/login" className="sb-profile">Log in →</Link>
     </aside>
   );

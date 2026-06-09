@@ -23,7 +23,7 @@ import {
 export default function V1Sidebar() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recentMedicines, setRecentMedicines] = useState<RecentMedicine[]>([]);
-  // Signed-in users get the conversational /ask home from the logo; everyone
+  // Signed-in users get the 3-column /chat home from the logo; everyone
   // else lands on the public marketing page. Resolved client-side, so the
   // logo defaults to "/" until the session check returns.
   const [signedIn, setSignedIn] = useState(false);
@@ -52,7 +52,7 @@ export default function V1Sidebar() {
   return (
     <aside className="sb">
       <div className="sb-top">
-        <Link href={signedIn ? "/ask" : "/"} className="brand" aria-label="Mederti home">
+        <Link href={signedIn ? "/chat" : "/"} className="brand" aria-label="Mederti home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-black.png" alt="mederti" className="logo-img" />
         </Link>

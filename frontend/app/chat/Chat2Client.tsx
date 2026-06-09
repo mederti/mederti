@@ -19,13 +19,12 @@ import { ContextChat } from "./components/ContextChat";
 import { GovDashboardView } from "./components/views/GovDashboardView";
 import { EarlyWarningView } from "./components/views/EarlyWarningView";
 import { ChevronLeft } from "./components/icons";
-import { Sidebar } from "./components/Sidebar";
+import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import {
   deriveTitle,
   getChat,
   newChatId,
   upsertChat,
-  useChatList,
   type SavedChat,
 } from "./chatStore";
 // Contexts the rich /chat drug cards expect. We provide them at this level
@@ -127,29 +126,6 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
   // user back on the welcome screen. useSearchParams doesn't pick up
   // history.replaceState changes, so state is the source of truth from here on.
   const [drugId, setDrugId] = useState<string | null>(searchParams.get("drug"));
-  // ?demo=1 populates the sidebar with the seed watchlists/folders/recents
-  // for design review. Default is the empty new-user state.
-  const isDemo = searchParams.get("demo") === "1";
-
-  const chatList = useChatList();
-
-  // Sidebar collapse — persisted to localStorage so it survives reloads.
-  // SSR safety: start collapsed=false, hydrate on mount.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("chat2:sidebar:collapsed") === "1") setSidebarCollapsed(true);
-    } catch {}
-  }, []);
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("chat2:sidebar:collapsed", next ? "1" : "0");
-      } catch {}
-      return next;
-    });
-  }, []);
 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [drugsMap, setDrugsMap] = useState<Record<string, DrugDetail>>({});
@@ -650,30 +626,6 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     [setDrugInUrl]
   );
 
-  // Reset to a fresh new-chat state. Can't just navigate to /chat because
-  // send() writes the URL via history.replaceState — Next's router state is
-  // still "/chat", so a <Link href="/chat"> no-ops. Reset state ourselves and
-  // rewrite the URL the same way.
-  const handleNewChat = useCallback(() => {
-    activeIdRef.current = null;
-    setTurns([]);
-    setDrugsMap({});
-    setSubsMap({});
-    setDrugIdByName({});
-    setDraft("");
-    setAttachedFiles([]);
-    setBulkFile(null);
-    setActiveView("chat");
-    idRef.current = 0;
-    setDrugId(null);
-    setReadingArticle(null);
-    setArticleFull(null);
-    setReadingView(null);
-    lastArticleSlugRef.current = null;
-    lastViewKeyRef.current = null;
-    window.history.replaceState(null, "", "/chat");
-  }, []);
-
   const closeDrug = useCallback(() => setDrugInUrl(null), [setDrugInUrl]);
 
   const askAboutDrug = useCallback(
@@ -933,17 +885,10 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
             className="mederti-chat-root flex h-screen overflow-hidden bg-white text-slate-900"
             style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}
           >
-            <Sidebar
-              activeChatId={chatId}
-              activeDrugSlug={drugId}
-              isDemo={isDemo}
-              chats={chatList}
-              collapsed={sidebarCollapsed}
-              onCollapse={toggleSidebar}
-              onNewChat={handleNewChat}
-              onOpenDrugPreview={() => setToast("Watchlist drug rows are seeded — wire to real drug IDs in v2")}
-              onToast={setToast}
-            />
+            {/* Shared V1Sidebar — the single left column used across all
+                logged-in surfaces (/search, /drugs, /ask, /insights). Self-
+                styled, so it renders correctly inside the chat shell too. */}
+            <V1Sidebar />
 
             {readingArticle ? (
               /* Reading layout: article fills the middle column, the

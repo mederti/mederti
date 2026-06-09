@@ -31,10 +31,15 @@ import os
 import sys
 import urllib.parse
 import urllib.request
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Iterable
+
+# Fixed namespace for deterministic row ids (see _row_id). Stable across runs so
+# re-scrapes upsert onto the same primary-key row.
+_ELIGIBILITY_NS = uuid.UUID("6f0a2e6e-3b1e-4c2a-9d7f-a1b2c3d4e5f6")
 
 LOG = logging.getLogger("eligibility")
 if not LOG.handlers:
@@ -60,6 +65,10 @@ class EligibilityRow:
     source_url: str | None = None
     source_name: str | None = None
     raw_data: dict[str, Any] = field(default_factory=dict)
+    # Resolved canonical drug. Filled by EligibilityScraper._resolve_drug_ids
+    # before upsert — WITHOUT this the row only surfaces on the drug page
+    # (generic_name ilike), never in /search results (which match by drug_id).
+    drug_id: str | None = None
 
 
 class EligibilityScraper(ABC):
@@ -84,24 +93,103 @@ class EligibilityScraper(ABC):
             "Content-Type": "application/json",
             "Prefer": "resolution=merge-duplicates,return=representation",
         }
+        # Honour the project-wide MEDERTI_DRY_RUN convention: when set, resolve and
+        # log everything but perform no writes.
+        self.dry_run = os.environ.get("MEDERTI_DRY_RUN", "0").strip().lower() not in (
+            "0", "", "false", "no",
+        )
 
     # ─── lifecycle ────────────────────────────────────────────────────────
 
     def run(self) -> dict[str, int]:
-        self.log("starting")
+        self.log("starting" + (" (DRY RUN — no writes)" if self.dry_run else ""))
         try:
             payload = self.fetch()
         except Exception as e:
             self.log(f"fetch failed: {e}", level="error")
-            return {"fetched": 0, "upserted": 0, "lapsed": 0, "errors": 1}
+            return {"fetched": 0, "resolved": 0, "upserted": 0, "lapsed": 0, "errors": 1}
 
         rows = list(self.parse(payload))
         self.log(f"parsed {len(rows)} rows")
 
-        upserted = self._upsert_all(rows)
-        lapsed = self._mark_missing_as_lapsed(rows)
-        self.log(f"upserted {upserted}, lapsed {lapsed}")
-        return {"fetched": len(rows), "upserted": upserted, "lapsed": lapsed, "errors": 0}
+        run_start = datetime.now(timezone.utc).isoformat()
+        resolved = self._resolve_drug_ids(rows)
+        upserted = self._upsert_all(rows, now=run_start)
+        # Only lapse when the upsert actually landed — otherwise a failed write
+        # (or a missing table) would wrongly lapse every live entry.
+        lapsed = self._mark_missing_as_lapsed(rows, run_start=run_start) if upserted else 0
+        self.log(f"resolved drug_id for {resolved}/{len(rows)}, upserted {upserted}, lapsed {lapsed}")
+        return {
+            "fetched": len(rows), "resolved": resolved,
+            "upserted": upserted, "lapsed": lapsed, "errors": 0,
+        }
+
+    # ─── drug_id resolution ───────────────────────────────────────────────
+
+    def _resolve_drug_ids(self, rows: list[EligibilityRow]) -> int:
+        """Resolve each row to a canonical `drugs.id` so it surfaces in /search.
+
+        Reuses the vetted longest-canonical-substring resolver from
+        catalogue_inn_backfill (same DENY list + combination-product refusal).
+        For a clean generic_name ("indapamide") it resolves directly; for a messy
+        regulator product title ("NATRILIX SR indapamide 1.5mg ... (Germany)") it
+        still finds the INN. On a hit we also canonicalise generic_name to the
+        matched INN (cleaner display + makes the drug-page `generic_name.ilike`
+        path agree with the drug_id path), keeping the raw source string in
+        raw_data['source_name_raw'].
+        """
+        if not rows:
+            return 0
+        try:
+            from backend.importers.catalogue_inn_backfill import build_index, make_resolver
+            from backend.utils.inn_normalize import normalise
+        except Exception as e:
+            self.log(f"drug_id resolver unavailable ({e}); rows will carry generic_name only", level="warning")
+            return 0
+
+        # build_index does ~50 un-retried paginated fetches (drugs +
+        # shortage_events); a single transient timeout would otherwise silently
+        # collapse resolution to 0 and leave the /search column dark. Retry, and
+        # bail WITHOUT writing partial drug_ids if it never succeeds.
+        phrase_index = None
+        for attempt in range(3):
+            try:
+                phrase_index, max_words = build_index()
+                if phrase_index:
+                    break
+            except Exception as e:
+                self.log(f"build_index attempt {attempt + 1}/3 failed: {e}", level="warning")
+                import time as _t
+                _t.sleep(3 * (attempt + 1))
+        if not phrase_index:
+            self.log("drug_id index could not be built; rows will carry generic_name only", level="error")
+            return 0
+        resolve = make_resolver(phrase_index, max_words)
+
+        resolved = 0
+        for r in rows:
+            if r.drug_id:
+                resolved += 1
+                continue
+            # Try the richest strings available, most specific first. Normalise
+            # first to strip strength/form noise — a "/" in a strength fraction
+            # ("micrograms/24 hours", "mg/ml") otherwise trips the resolver's
+            # combination-product guard and refuses an otherwise-clean match.
+            for cand in (r.brand_name, r.generic_name):
+                if not cand:
+                    continue
+                cleaned = normalise(cand).query or cand
+                drug, _reason = resolve(cleaned)
+                if drug:
+                    r.drug_id = drug["id"]
+                    if (drug.get("generic_name") or "").strip():
+                        if r.generic_name and r.generic_name != drug["generic_name"]:
+                            r.raw_data = dict(r.raw_data or {})
+                            r.raw_data.setdefault("source_name_raw", r.generic_name)
+                        r.generic_name = drug["generic_name"]
+                    resolved += 1
+                    break
+        return resolved
 
     # ─── subclass hooks ───────────────────────────────────────────────────
 
@@ -120,13 +208,31 @@ class EligibilityScraper(ABC):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read()
 
-    def _upsert_all(self, rows: list[EligibilityRow]) -> int:
+    @staticmethod
+    def _row_id(r: EligibilityRow) -> str:
+        """Deterministic primary key for a row, stable across re-scrapes.
+
+        Keyed on (scheme, scheme_reference) when the regulator publishes a stable
+        reference; otherwise on the (scheme, country, generic_name, listed_at)
+        composite that migration 040 uses as its fallback uniqueness. This makes
+        the PK-targeted upsert idempotent without depending on a partial unique
+        index that PostgREST can't use for ON CONFLICT.
+        """
+        if r.scheme_reference:
+            key = f"{r.scheme}|{r.scheme_reference}"
+        else:
+            key = f"{r.scheme}|{r.country_code}|{(r.generic_name or '').lower()}|{r.listed_at or ''}"
+        return str(uuid.uuid5(_ELIGIBILITY_NS, key))
+
+    def _upsert_all(self, rows: list[EligibilityRow], now: str | None = None) -> int:
         if not rows:
             return 0
-        now = datetime.now(timezone.utc).isoformat()
+        now = now or datetime.now(timezone.utc).isoformat()
         body = []
         for r in rows:
             body.append({
+                "id": self._row_id(r),
+                "drug_id": r.drug_id,
                 "generic_name": r.generic_name,
                 "brand_name": r.brand_name,
                 "country_code": r.country_code,
@@ -143,9 +249,35 @@ class EligibilityScraper(ABC):
                 "last_verified_at": now,
             })
 
-        # Conflict target: prefer scheme_reference; fall back to composite.
-        on_conflict = "scheme,scheme_reference"
-        url = f"{self.supabase_url}/rest/v1/regulatory_eligibility?on_conflict={on_conflict}"
+        # Collapse rows that map to the same primary key (same scheme_reference,
+        # or same scheme/country/generic/listed_at composite when no reference) —
+        # two such rows in one POST trip Postgres 21000 ("ON CONFLICT DO UPDATE
+        # cannot affect row a second time"). Keep the last occurrence; this is
+        # exactly migration 040's intended fallback uniqueness, so collapsing
+        # loses nothing the schema would have kept distinct anyway.
+        deduped = {b["id"]: b for b in body}
+        if len(deduped) != len(body):
+            self.log(f"collapsed {len(body) - len(deduped)} duplicate-key rows before upsert")
+        body = list(deduped.values())
+
+        if self.dry_run:
+            with_id = sum(1 for b in body if b["drug_id"])
+            self.log(f"DRY RUN — would upsert {len(body)} rows ({with_id} with drug_id). Sample:")
+            for b in body[:5]:
+                self.log(
+                    f"  drug_id={b['drug_id']} generic={b['generic_name']!r} "
+                    f"ref={b['scheme_reference']!r} listed={b['listed_at']} "
+                    f"expires={b['expires_at']} status={b['status']}"
+                )
+            return len(body)
+
+        # Upsert on the PRIMARY KEY (id). We supply a deterministic id per row
+        # (_row_id) so a re-scrape lands on the same row. We deliberately do NOT
+        # use ?on_conflict=scheme,scheme_reference: migration 040's uniqueness is
+        # enforced by a PARTIAL unique index (WHERE scheme_reference IS NOT NULL),
+        # and PostgREST cannot target a partial index for ON CONFLICT (it raises
+        # 42P10). The PK is a plain unique constraint PostgREST resolves by default.
+        url = f"{self.supabase_url}/rest/v1/regulatory_eligibility"
         req = urllib.request.Request(
             url, data=json.dumps(body).encode(), headers=self.headers, method="POST"
         )
@@ -160,35 +292,46 @@ class EligibilityScraper(ABC):
             self.log(f"upsert failed: {e}", level="error")
             return 0
 
-    def _mark_missing_as_lapsed(self, rows: list[EligibilityRow]) -> int:
+    def _mark_missing_as_lapsed(self, rows: list[EligibilityRow], run_start: str | None = None) -> int:
         """For entries in our DB but NOT in the current scrape, flip status to 'lapsed'.
 
-        Scope: same (scheme, country_code), status='active', scheme_reference not in
-        the current set. Skipped entirely when scheme_reference is unreliable for the
-        source — subclasses can override.
+        Strategy: every row re-found this run had its last_verified_at bumped to
+        `run_start` by _upsert_all. So any still-active row for this
+        (scheme, country_code) whose last_verified_at predates this run was NOT
+        re-found and is therefore stale → lapse it. This is a tiny, constant-size
+        query regardless of how many refs were scraped (the previous not.in.(…)
+        approach blew past the URL length limit — HTTP 414 — once the register
+        grew past a few hundred entries).
         """
-        if not rows:
+        if not rows or not run_start:
             return 0
-        current_refs = sorted({r.scheme_reference for r in rows if r.scheme_reference})
-        if not current_refs:
+        # Only lapse when we actually wrote this run — otherwise an upsert failure
+        # would wrongly lapse every live entry.
+        if self.dry_run:
+            self.log(f"DRY RUN — would lapse active {self.SCHEME}/{self.COUNTRY_CODE} rows not re-verified this run")
             return 0
         try:
-            in_clause = "(" + ",".join(f'"{ref}"' for ref in current_refs) + ")"
             url = (
                 f"{self.supabase_url}/rest/v1/regulatory_eligibility"
                 f"?scheme=eq.{urllib.parse.quote(self.SCHEME)}"
                 f"&country_code=eq.{urllib.parse.quote(self.COUNTRY_CODE)}"
                 f"&status=eq.active"
-                f"&scheme_reference=not.in.{urllib.parse.quote(in_clause)}"
+                f"&last_verified_at=lt.{urllib.parse.quote(run_start)}"
             )
             body = json.dumps({
                 "status": "lapsed",
                 "withdrawn_at": date.today().isoformat(),
             }).encode()
-            req = urllib.request.Request(url, data=body, headers=self.headers, method="PATCH")
+            headers = dict(self.headers)
+            headers["Prefer"] = "count=exact"  # ask PG for the affected-row count
+            req = urllib.request.Request(url, data=body, headers=headers, method="PATCH")
             with urllib.request.urlopen(req, timeout=30) as resp:
-                _ = resp.read()
-            return 0  # PATCH return count requires Prefer: count=exact; best-effort
+                cr = resp.headers.get("Content-Range", "")
+            # Content-Range looks like "*/<count>" on a PATCH with count=exact.
+            try:
+                return int(cr.rsplit("/", 1)[-1])
+            except (ValueError, IndexError):
+                return 0
         except Exception as e:
             self.log(f"lapsed-mark step failed (non-fatal): {e}", level="warning")
             return 0

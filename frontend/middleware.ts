@@ -26,6 +26,8 @@ const MOBILE_UA_REGEX =
 const SOFT_LAUNCH =
   (process.env.NEXT_PUBLIC_SOFT_LAUNCH ?? "").toLowerCase() === "true";
 
+// NOTE: /ask, /chat, /shortages added to the allowlist so the conversational
+// home + its prompt routing work during soft-launch.
 const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/",                  // homepage
   "/signup",
@@ -37,6 +39,9 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/account",           // user can manage their account
   "/search",            // drug search
   "/drugs",             // /drugs/[id]
+  "/ask",               // conversational home (logged-in landing; logo target)
+  "/chat",              // Claude-led answer surface (asks/prompts route here)
+  "/shortages",         // "See all active" target from the trending row
   "/intelligence",      // Pharma Brief and any subroutes
   "/insights",          // public Intelligence / Dashboard reading views (/insights/[kind])
   "/coming-soon",

@@ -18,7 +18,6 @@ import { truncateDrugName } from "@/lib/utils";
 import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
 import { getPartnerForCountry } from "@/lib/suppliers";
-import { DrugImage } from "./drug-image";
 import AvailableSuppliers from "./AvailableSuppliers";
 import SoWhatInsight from "./SoWhatInsight";
 import PersonaSwitcher from "./PersonaSwitcher";
@@ -628,6 +627,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         approvalFootprint={approvalFootprint}
         eligibility={eligibility}
         pricing={pricing}
+        products={products}
       />
     );
   }
@@ -1178,9 +1178,6 @@ export default async function DrugPage({ params, searchParams }: Props) {
             >
               {/* LEFT — Drug Identity */}
               <div style={{ flex: 1, display: "flex", gap: 20 }}>
-                {/* Drug product image from DailyMed */}
-                <DrugImage genericName={drug.generic_name} />
-
                 <div style={{ flex: 1 }}>
                 {/* Badges */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>

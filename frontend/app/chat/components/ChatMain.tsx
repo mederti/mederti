@@ -10,6 +10,7 @@ import { parseAgentResponse, RenderedResponse } from "./parser2";
 import { DashboardView } from "./DashboardView";
 import { IntelligenceView } from "./IntelligenceView";
 import BulkUpload from "@/app/components/bulk-upload";
+import ConversationalHome from "@/app/components/v1/ConversationalHome";
 
 export type ActiveView = "chat" | "dashboard" | "intelligence";
 
@@ -58,13 +59,6 @@ function chipIcon(type: string, name: string) {
   if (SPREADSHEET_EXTS.includes(ext)) return <SheetChip size={12} />;
   return <FileChip size={12} />;
 }
-
-const WELCOME_SUGGESTIONS = [
-  "How will Iran's Strait of Hormuz closure affect critical injectable shortages?",
-  "Is amoxicillin in shortage in Australia?",
-  "Show me critical antibiotic shortages globally",
-  "What's substitutable for hydrochlorothiazide?",
-];
 
 // User-facing label for each tool the chat backend can call. Keep these
 // short — they appear next to a spinner/check in the assistant turn.
@@ -346,25 +340,19 @@ export function ChatMain({
         <div ref={scrollerRef} className="flex-1 overflow-y-auto pt-6 pb-8">
         <div className="max-w-[900px] mx-auto px-8">
           {isEmpty ? (
-            <div className="text-center pt-14 pb-6">
-              <h1 className="text-[28px] font-semibold tracking-tight text-slate-900 mb-2.5">
-                What do you need to know?
-              </h1>
-              <p className="text-[14px] text-slate-500 max-w-[480px] mx-auto">
-                Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what's not covered.
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center mt-7">
-                {WELCOME_SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => onSend(s)}
-                    className="bg-slate-50 border border-slate-200 rounded-full px-3.5 py-2 text-[13px] text-slate-700 hover:bg-teal-50 hover:border-teal-200 hover:text-teal-700 transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
+            <div className="pt-12 pb-6">
+              <div className="text-center mb-8">
+                <h1 className="text-[28px] font-semibold tracking-tight text-slate-900 mb-2.5">
+                  What do you need to know?
+                </h1>
+                <p className="text-[14px] text-slate-500 max-w-[480px] mx-auto">
+                  Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what's not covered.
+                </p>
               </div>
+              {/* Shared conversational-home content (suggested prompts +
+                  trending shortages). The ask box is hidden here because the
+                  chat composer already lives at the bottom of this column. */}
+              <ConversationalHome onAsk={onSend} showHeroAsk={false} />
             </div>
           ) : (
             <div className="flex flex-col gap-5">

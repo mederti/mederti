@@ -21,8 +21,10 @@
 const FORM_WORDS =
   /\b(?:film|coated|tablett?en?|tablets?|comprimid[oa]s?|comprim[eé]s?|capsul[ea]s?|kapseln?|c[aá]psulas?|recubiert[oa]s?|pelicula|p[eé]l[ií]cula|con|de|la|injection|injectable|solution|soluci[oó]n|suspension|sirup|syrup|oral|hard|soft|prolonged|release|efg|efervescentes?|granul[ea]s?|powder|polvo|sachets?|vials?|ampoules?|ampollas?)\b/i;
 
-/** Trim one raw registry product string down to its recognisable brand label. */
-export function cleanBrand(raw: string): string {
+/** Trim one raw registry product string down to its recognisable brand label.
+ *  Pass `generic` to also collapse the verbose "GENERIC brand generic" pattern
+ *  some registries use (e.g. "ATORVASTATIN SANDOZ atorvastatin" → "Sandoz"). */
+export function cleanBrand(raw: string, generic?: string | null): string {
   let s = (raw || "").trim();
   if (!s) return "";
   s = s.replace(/\([^)]*\)/g, " ");                                                       // drop parenthetical packaging
@@ -31,6 +33,23 @@ export function cleanBrand(raw: string): string {
   let prev = "";
   while (s !== prev) { prev = s; s = s.replace(new RegExp(FORM_WORDS.source + "[\\s,;.]*$", "i"), " ").trim(); }
   s = s.replace(/[\s,;.]+$/g, "").trim();
+  // Collapse a duplicated molecule name: when the INN appears 2+ times the brand
+  // is the token wedged between them — strip leading/trailing generic occurrences.
+  // Only when duplicated, so single-INN brands ("Atorvastatin Basics") survive.
+  const g = (generic ?? "").trim();
+  if (g) {
+    const gEsc = g.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const occurrences = s.match(new RegExp(`\\b${gEsc}\\b`, "ig"));
+    if (occurrences && occurrences.length >= 2) {
+      let p = "";
+      while (s !== p) {
+        p = s;
+        s = s.replace(new RegExp(`^\\s*${gEsc}\\b[\\s,;.\\-]*`, "i"), "");
+        s = s.replace(new RegExp(`[\\s,;.\\-]*\\b${gEsc}\\s*$`, "i"), "");
+        s = s.trim();
+      }
+    }
+  }
   if (s && s === s.toUpperCase()) s = s.toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase()); // title-case ALL-CAPS
   return s;
 }
@@ -44,7 +63,7 @@ export function cleanBrandNames(raw: string[] | null | undefined, generic?: stri
   const seen = new Set<string>();
   const out: string[] = [];
   for (const r of raw ?? []) {
-    const c = cleanBrand(r);
+    const c = cleanBrand(r, generic);
     if (!c) continue;
     const lc = c.toLowerCase();
     if (lc === genericLc || seen.has(lc)) continue;

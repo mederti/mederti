@@ -242,6 +242,10 @@ function Results() {
     corrected && urlQ.trim().toLowerCase() === corrected.to.toLowerCase() && results.length > 0;
 
   const mk = marketOf(market);
+  // Only show the Trade price column once at least one result actually has a
+  // price — keeps the column hidden (rather than a sea of "—") until the PBS
+  // pricing feed is populated.
+  const hasTradePrice = market === "AU" && results.some((d) => !!d.trade_price);
 
   return (
     <>
@@ -380,7 +384,7 @@ function Results() {
                 <th className="c-sub">Can I substitute?</th>
                 <th className="c-alt">Best alternative</th>
                 <th className="c-n">Alts</th>
-                {market === "AU" && <th className="c-price">Trade price</th>}
+                {hasTradePrice && <th className="c-price">Trade price</th>}
                 <th className="c-eb">Expected back</th>
                 <th className="c-ver">Last verified</th>
               </tr>
@@ -445,7 +449,7 @@ function Results() {
                     <td className="center">
                       <span className={`t-count ${d.alternatives_count ? "" : "zero"}`}>{d.alternatives_count || "—"}</span>
                     </td>
-                    {market === "AU" && (
+                    {hasTradePrice && (
                       <td>
                         {d.trade_price ? (
                           <>

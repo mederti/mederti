@@ -4,7 +4,7 @@ import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import V1Chat from "@/app/components/v1/V1Chat";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
-import V1DrugImage from "./V1DrugImage";
+import V1ReportActions from "./V1ReportActions";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -83,7 +83,7 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, products,
 }: {
   id: string;
   drug: any;
@@ -114,6 +114,9 @@ export default function V1DrugView({
     price_date: string | null;
     source: string;
   } | null;
+  // Registered products for this molecule (drug_products + joined sponsor / MA
+  // holder). Already fetched in page.tsx; drives the "Full drug record" section.
+  products?: any[] | null;
 }) {
   const CONC_LABEL: Record<string, string> = {
     very_high: "Very high", high: "High", medium: "Moderate", low: "Low",
@@ -227,6 +230,98 @@ export default function V1DrugView({
     .sort((a, b) => new Date(b.announced_date || 0).getTime() - new Date(a.announced_date || 0).getTime())
     .slice(0, 6);
 
+  // ── "Full drug record" (Phase 1) ─────────────────────────────────────────
+  // Reference data we already hold but never surfaced on the V1 page. Pure
+  // display — no new queries. Safety rule: only emit a field when real data
+  // exists; never fabricate or show placeholders.
+  const cleanList = (arr?: string[] | null) =>
+    (arr ?? []).filter((x) => x && !/scraper|auto.created/i.test(x));
+  const cleanName = (raw?: string | null): string | null => {
+    if (!raw) return null;
+    return cleanBrandNames([raw], drug.generic_name)[0] ?? raw;
+  };
+  const atcL5: string | null = drug.atc_code || null;
+  const atcL4: string | null = atcL5 && atcL5.length >= 5 ? atcL5.slice(0, 5) : null;
+  const strengths = cleanList(drug.strengths);
+  const forms = cleanList(drug.dosage_forms);
+  const routes = cleanList(drug.routes_of_administration);
+
+  // Registration / MA-holder table from drug_products. Dedupe by
+  // brand+strength+market so noisy substring matches collapse.
+  const seenReg = new Set<string>();
+  const regRows = (products ?? [])
+    .map((p) => ({
+      name: cleanName(p.trade_name || p.product_name),
+      strength: p.strength && !/scraper|auto.created/i.test(p.strength) ? p.strength : null,
+      form: p.dosage_form && !/scraper|auto.created/i.test(p.dosage_form) ? p.dosage_form : null,
+      country: (p.country || "").toUpperCase() || null,
+      sponsor: p.sponsors?.name || null,
+      status: p.registry_status || null,
+    }))
+    .filter((p) => p.name)
+    .filter((p) => {
+      const k = `${(p.name || "").toLowerCase()}|${p.strength ?? ""}|${p.country ?? ""}`;
+      if (seenReg.has(k)) return false;
+      seenReg.add(k);
+      return true;
+    });
+  const regShown = regRows.slice(0, 15);
+  const regRest = regRows.length - regShown.length;
+  // Distinct MA holders (sponsors) — a quick top-line even when the table is long.
+  const maHolders = [...new Set(regRows.map((r) => r.sponsor).filter(Boolean))] as string[];
+
+  // Report identity (drives the export/print header).
+  const generatedLabel = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+  const marketLabel = `${cName} market`;
+
+  // Product-card top-line status pill.
+  const statusPill = localShortage
+    ? anticipated
+      ? { cls: "sp-part", txt: `Anticipated · ${cName}` }
+      : isCrit
+        ? { cls: "sp-crit", txt: `In shortage · ${cName}` }
+        : { cls: "sp-part", txt: `Limited supply · ${cName}` }
+    : { cls: "sp-ok", txt: `In supply · ${cName}` };
+
+  // Detailed product-attribute table (2-col label/value). Only emits rows with
+  // real data; the PIL/SPC document rows are shown muted as "Not on file" so the
+  // field is visible without fabricating a value.
+  const attrBrands = cleanBrandNames(drug.brand_names, drug.generic_name);
+  const attrBrandValue = attrBrands.length
+    ? attrBrands.slice(0, 6).join(", ") + (attrBrands.length > 6 ? ` +${attrBrands.length - 6} more` : "")
+    : null;
+  type AttrRow = { label: string; value: string | null; muted?: boolean };
+  const attrRows: AttrRow[] = (
+    [
+      { label: "Active ingredient (INN)", value: drug.generic_name },
+      { label: "Brand names", value: attrBrandValue },
+      { label: "ATC level 5", value: atcL5 },
+      { label: "ATC level 4", value: atcL4 },
+      { label: "Drug class", value: drug.drug_class || null },
+      { label: "Therapeutic category", value: drug.therapeutic_category || null },
+      { label: "Strength", value: strengths.join(" · ") || null },
+      { label: "Dosage form", value: forms.join(" · ") || null },
+      { label: "Route of administration", value: routes.join(" · ") || null },
+      {
+        label: "WHO Essential Medicine",
+        value: drug.who_essential_medicine
+          ? `Yes${drug.who_eml_section ? ` · ${drug.who_eml_section}` : ""}${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+          : null,
+      },
+      {
+        label: "Controlled substance",
+        value: drug.is_controlled_substance === true ? "Yes — scheduled" : drug.is_controlled_substance === false ? "No" : null,
+      },
+      {
+        label: "Marketing-authorisation holders",
+        value: maHolders.length ? maHolders.slice(0, 4).join(", ") + (maHolders.length > 4 ? ` +${maHolders.length - 4} more` : "") : null,
+      },
+      { label: "Registrations on file", value: regRows.length ? String(regRows.length) : null },
+      { label: "Patient information leaflet (PIL)", value: "Not on file", muted: true },
+      { label: "Summary of product characteristics (SPC)", value: "Not on file", muted: true },
+    ] as AttrRow[]
+  ).filter((r) => r.value);
+
   return (
     <div className="v1home v1drug">
       <style>{CSS}</style>
@@ -241,29 +336,40 @@ export default function V1DrugView({
             <div className="dg-main">
           <V1DrugSearch initial={drug.generic_name} />
 
-          <div className="d-head-row">
-            <V1DrugImage genericName={drug.generic_name} brandNames={drug.brand_names ?? []} />
-            <div className="d-identity">
-              <div className="d-name">{drug.generic_name}</div>
-              <div className="d-generic">
-                {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
+          <div className="product-card">
+            <div className="pc-body">
+              <div className="pc-head">
+                <div className="pc-titles">
+                  <div className="d-name">{drug.generic_name}</div>
+                  <div className="d-generic">
+                    {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
+                  </div>
+                </div>
+                <span className={`status-pill ${statusPill.cls}`}><span className="d" />{statusPill.txt}</span>
               </div>
-              {drug.who_essential_medicine ? (
-                <a
-                  className="d-eml"
-                  href="https://list.essentialmeds.org/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={
-                    drug.who_eml_section
-                      ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
-                      : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
-                  }
-                >
-                  <span className="d-eml-dot" />
-                  WHO Essential Medicine
-                </a>
-              ) : null}
+
+              <div className="pc-badges">
+                {drug.who_essential_medicine ? (
+                  <a
+                    className="d-eml"
+                    href="https://list.essentialmeds.org/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={
+                      drug.who_eml_section
+                        ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
+                        : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+                    }
+                  >
+                    <span className="d-eml-dot" />
+                    WHO Essential Medicine
+                  </a>
+                ) : null}
+                {drug.is_controlled_substance === true ? (
+                  <span className="d-ctrl">Controlled substance</span>
+                ) : null}
+              </div>
+
               {(() => {
                 const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
                 if (brands.length === 0) return null;
@@ -320,35 +426,62 @@ export default function V1DrugView({
             </div>
           </div>
 
-          {/* Trade price (PBS — ex-manufacturer + dispensed), below the so-what
-              tiles. Renders only when we have a price for this market; AU-only
-              until other feeds land. */}
-          {pricing && (
-            <div className="price-card">
-              <div className="price-grid">
-                <div className="price-col">
-                  <div className="price-label">Ex-manufacturer</div>
-                  <div className="price-val">{fmtPrice(pricing.ex_manufacturer, pricing.currency)}</div>
-                </div>
-                <div className="price-col">
-                  <div className="price-label">Dispensed (DPMQ)</div>
-                  <div className="price-val">{pricing.dispensed != null ? fmtPrice(pricing.dispensed, pricing.currency) : "—"}</div>
-                </div>
-                <div className="price-col">
-                  <div className="price-label">Pack</div>
-                  <div className="price-val sm">{pricing.pack ?? "—"}</div>
-                </div>
-                <div className="price-col">
-                  <div className="price-label">Form</div>
-                  <div className="price-val sm">{drugForm ?? "—"}</div>
-                </div>
-              </div>
-              <div className="price-foot">
-                Trade price · {pricing.source}
-                {pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}
+          {/* Product attributes — detailed 2-column reference table */}
+          {attrRows.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Product attributes <span className="help">reference data we hold</span></div>
+              <div className="attr-wrap">
+                <table className="attr-table">
+                  <tbody>
+                    {attrRows.map((r) => (
+                      <tr key={r.label}>
+                        <th scope="row">{r.label}</th>
+                        <td className={r.muted ? "attr-muted" : undefined}>{r.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
+
+          {/* Trade price — adaptive panel. Renders whatever price tiers exist
+              for this market; degrades to a visible "awaiting ingest" structure
+              so it reads as pending, not broken. Never fabricates a price. */}
+          <div className="sec">
+            <div className="sec-title">Trade price <span className="help">{pricing ? `${flag(userCountry)} ${pricing.source}${pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}` : `${flag(userCountry)} ${cName} · awaiting price ingest`}</span></div>
+            <div className="price-panel">
+              <div className="price-top">
+                <div className="market-tabs"><span className="mtab on">{flag(userCountry)} {userCountry}</span></div>
+                {pricing && <span className="reimb">● Trade price on file</span>}
+              </div>
+              {pricing ? (
+                <>
+                  <div className="price-tiles">
+                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v">{fmtPrice(pricing.ex_manufacturer, pricing.currency)}</div><div className="ptile-sub">AEMP</div></div>
+                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v">{pricing.dispensed != null ? fmtPrice(pricing.dispensed, pricing.currency) : "—"}</div><div className="ptile-sub">incl. fees</div></div>
+                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v sm">{pricing.pack ?? "—"}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</div>
+                  </div>
+                  <div className="price-foot"><span>Source: {pricing.source}</span><span>{[monthYear(pricing.price_date) ? `Effective ${monthYear(pricing.price_date)}` : null, pricing.currency].filter(Boolean).join(" · ")}</span></div>
+                </>
+              ) : (
+                <>
+                  <div className="price-tiles">
+                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v empty">—</div></div>
+                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v empty">—</div></div>
+                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v empty">—</div></div>
+                  </div>
+                  <div className="price-empty-note">
+                    <div className="pe-ic" aria-hidden>$</div>
+                    <div>
+                      <div className="pe-t">Not yet captured for {cName}</div>
+                      <div className="pe-d">Official trade pricing — ex-manufacturer and dispensed (DPMQ) — isn’t on file for this market yet. PBS (Australia) and NHS Drug Tariff (United Kingdom) feeds are prioritised; this panel populates automatically once the data lands.</div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
 
           {/* Substitution pathways (AU only) */}
           {userCountry === "AU" && (
@@ -587,6 +720,58 @@ export default function V1DrugView({
             </div>
           )}
 
+          {/* Registration record — drug_products + MA holders */}
+          {regRows.length > 0 && (
+            <details className="record" open>
+              <summary className="record-sum">
+                <span className="record-title">Registration record</span>
+                <span className="record-meta">marketing-authorisation holders</span>
+                <span className="record-chev" aria-hidden>▾</span>
+              </summary>
+
+              {regRows.length > 0 && (
+                <div className="record-block">
+                  <div className="record-h">
+                    Registrations &amp; marketing-authorisation holders
+                    <span className="help">
+                      {regRows.length} registration{regRows.length !== 1 ? "s" : ""}
+                      {maHolders.length > 0 ? ` · ${maHolders.length} MA holder${maHolders.length !== 1 ? "s" : ""}` : ""}
+                    </span>
+                  </div>
+                  <div className="reg-wrap">
+                    <table className="reg-table">
+                      <thead>
+                        <tr>
+                          <th>Product</th>
+                          <th>Strength</th>
+                          <th>Form</th>
+                          <th>Market</th>
+                          <th>MA holder</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {regShown.map((p, i) => (
+                          <tr key={i}>
+                            <td className="reg-name">{p.name}</td>
+                            <td>{p.strength ?? "—"}</td>
+                            <td>{p.form ?? "—"}</td>
+                            <td>{p.country ? `${flag(p.country)} ${p.country}` : "—"}</td>
+                            <td>{p.sponsor ?? "—"}</td>
+                            <td>{p.status ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {regRest > 0 && <div className="reg-foot">+{regRest} more registration{regRest !== 1 ? "s" : ""} on file</div>}
+                </div>
+              )}
+            </details>
+          )}
+
+          <V1ReportActions generatedLabel={generatedLabel} marketLabel={marketLabel} sourceCount={sources.length} />
+
           <div className="sec"><ClinicalDisclaimer /></div>
         </div>
 
@@ -646,6 +831,22 @@ const CSS = `
 .dsearch button:hover{background:var(--green-d)}
 .d-head-row{display:flex;align-items:flex-start;gap:20px;padding:16px 0 0}
 .d-identity{flex:1;min-width:0}
+/* Product identity card */
+.product-card{display:flex;align-items:flex-start;gap:22px;margin-top:16px;padding:22px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(150deg,var(--bg),var(--bg-2) 130%);box-shadow:var(--sh-card),var(--hi-inset)}
+.pc-body{flex:1;min-width:0}
+.pc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.pc-titles{min-width:0}
+.pc-head .status-pill{flex-shrink:0;margin-top:4px}
+.pc-badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pc-badges:empty{display:none}
+.product-card .d-eml{margin-top:12px}
+.d-ctrl{display:inline-flex;align-items:center;margin-top:12px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--med-bg);color:var(--med);border:1px solid var(--med-b)}
+.product-card .d-tags{margin-top:13px}
+.pc-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin-top:18px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--border)}
+.pc-fact{background:var(--bg);padding:11px 14px}
+.pc-fact-l{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-4);margin-bottom:4px}
+.pc-fact-v{font-size:13px;font-weight:600;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace;line-height:1.3;word-break:break-word}
+@media(max-width:680px){.product-card{flex-direction:column;align-items:stretch;gap:16px}.pc-facts{grid-template-columns:repeat(2,1fr)}.pc-head{flex-direction:column}.pc-head .status-pill{margin-top:0}}
 .d-img{position:relative;flex-shrink:0;width:128px;height:128px;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:#fff;padding:0;cursor:zoom-in;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px -10px rgba(12,17,24,.25);transition:.15s}
 .d-img:hover{border-color:var(--green);box-shadow:0 10px 28px -14px rgba(15,166,118,.4)}
 .d-img img{width:100%;height:100%;object-fit:contain;display:block;transition:opacity .3s}
@@ -661,13 +862,26 @@ const CSS = `
 .d-eml:hover{background:#dcfce7}
 .d-eml-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
 .status-card{margin:18px 0 0;border-radius:18px;padding:20px;box-shadow:var(--sh-card),var(--hi-inset);}
-.price-card{margin:12px 0 0;border:1px solid var(--border);border-radius:14px;background:var(--bg);padding:16px 18px;box-shadow:var(--sh-card),var(--hi-inset)}
-.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;align-items:start}
-.price-label{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);margin-bottom:5px}
-.price-val{font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace}
-.price-val.sm{font-size:15px;font-weight:600;color:var(--text-2)}
-.price-foot{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:14px;border-top:1px solid var(--border);padding-top:11px}
-@media(max-width:620px){.price-grid{grid-template-columns:repeat(2,1fr);gap:16px}}
+/* Trade-price panel — adaptive: tiers + market chip + footer, degrades to empty */
+.price-panel{border:1px solid var(--border);border-radius:16px;background:var(--bg);box-shadow:var(--sh-card),var(--hi-inset);overflow:hidden}
+.price-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);background:var(--bg-2)}
+.market-tabs{display:flex;gap:6px}
+.mtab{font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-3)}
+.mtab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.reimb{font-size:10.5px;font-weight:600;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:3px 9px;border-radius:99px}
+.price-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border)}
+.ptile{background:var(--bg);padding:16px 18px}
+.ptile-l{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);margin-bottom:6px}
+.ptile-v{font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace;line-height:1.1}
+.ptile-v.sm{font-size:15px;font-weight:600;color:var(--text-2)}
+.ptile-v.empty{color:var(--border-2);font-weight:600}
+.ptile-sub{font-size:10.5px;color:var(--text-4);margin-top:4px}
+.price-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
+.price-empty-note{display:flex;gap:13px;align-items:flex-start;padding:14px 18px;background:var(--bg-2);border-top:1px dashed var(--border-2)}
+.pe-ic{width:30px;height:30px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;background:var(--bg-3);color:var(--text-4);border:1px solid var(--border);font-family:var(--font-geist-mono),ui-monospace,monospace}
+.pe-t{font-size:13px;font-weight:600;color:var(--text-2)}
+.pe-d{font-size:11.5px;color:var(--text-4);line-height:1.5;margin-top:3px;max-width:560px}
+@media(max-width:560px){.price-tiles{grid-template-columns:repeat(2,1fr)}}
 .status-card.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border:1px solid var(--crit-b)}
 .status-card.med{background:linear-gradient(135deg,#fffdf5,#fffbeb);border:1px solid var(--med-b)}
 .status-card.ok{background:linear-gradient(135deg,#f0fdf8,#ecfdf5);border:1px solid var(--ok-b)}
@@ -794,8 +1008,63 @@ const CSS = `
 .chat-input input::placeholder{color:var(--text-4)}
 .chat-send{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .chat-send:disabled{opacity:.5;cursor:default}
+/* Report identity bar */
+.report-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:30px;padding:12px 16px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(135deg,var(--bg),var(--bg-2));box-shadow:var(--sh-card),var(--hi-inset)}
+.report-kicker{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--green-d)}
+.report-meta{font-size:11.5px;color:var(--text-4);margin-top:3px;font-family:var(--font-geist-mono),ui-monospace,monospace}
+.report-export{display:inline-flex;align-items:center;gap:7px;flex-shrink:0;border:1px solid var(--border-2);background:var(--bg);color:var(--text-2);font-family:inherit;font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:10px;cursor:pointer;transition:.15s}
+.report-export:hover{border-color:var(--green);color:var(--green-d);background:var(--green-bg);box-shadow:var(--sh-pop)}
+/* Full drug record (Phase 1) */
+.v1home .record{margin-top:30px;border:1px solid var(--border);border-radius:16px;background:var(--bg);box-shadow:var(--sh-card),var(--hi-inset);overflow:hidden}
+.v1home .record-sum{display:flex;align-items:center;gap:10px;padding:15px 18px;cursor:pointer;list-style:none;user-select:none}
+.v1home .record-sum::-webkit-details-marker{display:none}
+.v1home .record-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.078em;color:var(--text-3)}
+.v1home .record-meta{font-size:11px;color:var(--text-4)}
+.v1home .record-chev{margin-left:auto;color:var(--text-4);font-size:12px;transition:transform .18s}
+.v1home .record[open] .record-chev{transform:rotate(180deg)}
+.v1home .record-block{padding:0 18px 18px;border-top:1px solid var(--border)}
+.v1home .record-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-4);margin:16px 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.v1home .record-h .help{color:var(--text-4);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px}
+.spec-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 28px}
+.spec-row{min-width:0}
+.spec-l{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-4);margin-bottom:3px}
+.spec-v{font-size:13.5px;color:var(--ink);font-weight:500;line-height:1.4}
+/* Product-attributes table (2-col label/value) */
+.attr-wrap{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:var(--sh-card),var(--hi-inset)}
+.attr-table{width:100%;border-collapse:collapse;font-size:13px}
+.attr-table tr{border-bottom:1px solid var(--border)}
+.attr-table tr:last-child{border-bottom:none}
+.attr-table th{text-align:left;vertical-align:top;width:42%;padding:12px 16px;font-size:11.5px;font-weight:600;color:var(--text-3);background:var(--bg-2);border-right:1px solid var(--border)}
+.attr-table td{padding:12px 16px;color:var(--ink);font-weight:500;line-height:1.45;word-break:break-word}
+.attr-table .attr-muted{color:var(--text-4);font-weight:400;font-style:italic}
+@media(max-width:560px){.attr-table th{width:46%;font-size:11px}.attr-table td{font-size:12.5px}}
+.reg-wrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto}
+.reg-table{border-collapse:collapse;width:100%;font-size:12.5px}
+.reg-table th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-4);background:var(--bg-2);padding:9px 10px;white-space:nowrap;border-bottom:1px solid var(--border)}
+.reg-table td{padding:10px 10px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:top}
+.reg-table td:nth-child(2),.reg-table td:nth-child(3),.reg-table td:nth-child(4),.reg-table td:nth-child(6){white-space:nowrap}
+.reg-table tr:last-child td{border-bottom:none}
+.reg-table .reg-name{font-weight:600;color:var(--ink);white-space:normal;min-width:96px}
+.reg-foot{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:10px}
+@media(max-width:620px){.spec-grid{grid-template-columns:1fr}}
 @media(max-width:1080px){.chat-col{display:none}.dg-main{margin:0 auto}}
 @media(max-width:820px){.sb{display:none}}
 @media(max-width:620px){.sw-cards{grid-template-columns:repeat(2,1fr)}.d-name{font-size:24px}}
 @media(max-width:480px){.sw-cards{grid-template-columns:1fr}.dg-main{padding:16px 16px 64px}}
+/* Print / Export PDF — strip the app chrome and lay the report out as a clean
+   document. Sections avoid breaking mid-block; the collapsible record is forced
+   open so nothing is hidden in the exported file. */
+@media print{
+  .v1home{background:#fff;font-size:11px}
+  .sb,.chat-col,.dsearch,.report-export,.sb-profile,.home-nav{display:none !important}
+  .shell,.drug-grid{display:block}
+  .dg-main{max-width:100%;padding:0 4px}
+  .report-bar{box-shadow:none;border-color:#ccc}
+  .sec,.status-card,.price-panel,.subpath,.conc,.record,.record-block,.country-row,.alt-card,.stat-row,.reg-wrap,.attr-wrap{break-inside:avoid;page-break-inside:avoid}
+  .sec{margin-top:18px}
+  .record[open] .record-chev,.record-chev{display:none}
+  .record .record-block{display:block !important}
+  .status-card,.sw-card,.price-panel,.conc,.subpath,.alt-card,.country-row,.src-item,.record{box-shadow:none !important}
+  a[href]{text-decoration:none;color:inherit}
+}
 `;

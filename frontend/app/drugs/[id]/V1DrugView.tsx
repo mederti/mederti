@@ -175,6 +175,13 @@ export default function V1DrugView({
   }));
   const topAlt = alts[0] ?? null;
 
+  // Dosage form for the price card's 4th column (e.g. "Tablet", "Capsule").
+  // Drug-level; filters out scraper/auto-created junk values.
+  const drugForm: string | null =
+    ((drug.dosage_forms as string[] | undefined) ?? []).filter(
+      (f) => f && !/scraper|auto.created/i.test(f),
+    )[0] ?? null;
+
   // Regulator status by country
   const byCountry = new Map<string, any>();
   for (const s of shortages) {
@@ -318,30 +325,27 @@ export default function V1DrugView({
               until other feeds land. */}
           {pricing && (
             <div className="price-card">
-              <div className="price-row">
+              <div className="price-grid">
                 <div className="price-col">
                   <div className="price-label">Ex-manufacturer</div>
                   <div className="price-val">{fmtPrice(pricing.ex_manufacturer, pricing.currency)}</div>
                 </div>
-                {pricing.dispensed != null && (
-                  <div className="price-col">
-                    <div className="price-label">Dispensed (DPMQ)</div>
-                    <div className="price-val">{fmtPrice(pricing.dispensed, pricing.currency)}</div>
-                  </div>
-                )}
-                {pricing.pack && (
-                  <div className="price-col">
-                    <div className="price-label">Pack</div>
-                    <div className="price-val sm">{pricing.pack}</div>
-                  </div>
-                )}
-                <div className="price-meta">
-                  <span className="price-src">Trade price</span>
-                  <span className="price-date">
-                    {pricing.source}
-                    {pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}
-                  </span>
+                <div className="price-col">
+                  <div className="price-label">Dispensed (DPMQ)</div>
+                  <div className="price-val">{pricing.dispensed != null ? fmtPrice(pricing.dispensed, pricing.currency) : "—"}</div>
                 </div>
+                <div className="price-col">
+                  <div className="price-label">Pack</div>
+                  <div className="price-val sm">{pricing.pack ?? "—"}</div>
+                </div>
+                <div className="price-col">
+                  <div className="price-label">Form</div>
+                  <div className="price-val sm">{drugForm ?? "—"}</div>
+                </div>
+              </div>
+              <div className="price-foot">
+                Trade price · {pricing.source}
+                {pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}
               </div>
             </div>
           )}
@@ -658,13 +662,12 @@ const CSS = `
 .d-eml-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
 .status-card{margin:18px 0 0;border-radius:18px;padding:20px;box-shadow:var(--sh-card),var(--hi-inset);}
 .price-card{margin:12px 0 0;border:1px solid var(--border);border-radius:14px;background:var(--bg);padding:16px 18px;box-shadow:var(--sh-card),var(--hi-inset)}
-.price-row{display:flex;align-items:center;gap:40px;flex-wrap:wrap}
+.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;align-items:start}
 .price-label{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);margin-bottom:5px}
 .price-val{font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .price-val.sm{font-size:15px;font-weight:600;color:var(--text-2)}
-.price-meta{margin-left:auto;text-align:right;padding-left:24px}
-.price-src{display:block;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4)}
-.price-date{display:block;font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:5px}
+.price-foot{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:14px;border-top:1px solid var(--border);padding-top:11px}
+@media(max-width:620px){.price-grid{grid-template-columns:repeat(2,1fr);gap:16px}}
 .status-card.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border:1px solid var(--crit-b)}
 .status-card.med{background:linear-gradient(135deg,#fffdf5,#fffbeb);border:1px solid var(--med-b)}
 .status-card.ok{background:linear-gradient(135deg,#f0fdf8,#ecfdf5);border:1px solid var(--ok-b)}

@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import {
-  BarChart, Bell, ChatBubble, Check, Close, FileChip, Grid, ImageChip,
+  Check, Close, FileChip, ImageChip,
   Paperclip, ScanBarcode, Search, Send, SheetChip,
 } from "./icons";
 import { parseAgentResponse, RenderedResponse } from "./parser2";
@@ -155,57 +155,6 @@ export function ToolSteps({ steps, hasText }: { steps: ToolStep[]; hasText: bool
   );
 }
 
-export function Chat2TopBar({
-  activeView,
-  onViewChange,
-}: {
-  activeView: ActiveView;
-  onViewChange: (v: ActiveView) => void;
-}) {
-  const navBtn = (view: ActiveView, icon: React.ReactNode, label: string) => {
-    const active = activeView === view;
-    return (
-      <button
-        type="button"
-        onClick={() => onViewChange(view)}
-        className={`text-[13px] px-3 py-1.5 rounded-md inline-flex items-center gap-1.5 transition-colors ${
-          active
-            ? "text-slate-900 font-medium bg-slate-100"
-            : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-        }`}
-      >
-        {icon}
-        {label}
-      </button>
-    );
-  };
-
-  return (
-    <div className="h-14 flex items-center px-6 gap-3.5 shrink-0 border-b border-slate-100">
-      <div className="mr-auto flex items-center gap-1">
-        {navBtn("dashboard", <Grid size={14} />, "Dashboard")}
-        {navBtn("chat", <ChatBubble size={14} />, "Chat")}
-        {navBtn("intelligence", <BarChart size={14} />, "Intelligence")}
-      </div>
-      <button
-        type="button"
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50"
-      >
-        🇦🇺 AU
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        className="w-8 h-8 inline-flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-      >
-        <Bell size={16} />
-      </button>
-    </div>
-  );
-}
-
 export function ChatMain({
   turns,
   pending,
@@ -321,8 +270,6 @@ export function ChatMain({
 
   return (
     <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
-      <Chat2TopBar activeView={activeView} onViewChange={onViewChange} />
-
       {activeView === "dashboard" ? (
         <DashboardView onAsk={onAskFromView} />
       ) : activeView === "intelligence" ? (

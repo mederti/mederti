@@ -918,7 +918,7 @@ const CSS = `
 .ai-sum-body{font-size:13px;color:var(--text-2);line-height:1.62}
 .ai-sum-foot{font-size:10.5px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px}
 .ai-sum-skel{font-size:12.5px;color:var(--text-4);font-style:italic}
-.sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.078em;color:var(--text-4);margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.078em;color:var(--ink);margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sec-title .help{color:var(--text-4);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px}
 .subpath{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:var(--sh-card),var(--hi-inset);}
 .subpath-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px}

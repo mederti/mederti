@@ -122,3 +122,8 @@ SHELL=/bin/bash
 10  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py who_pq        >> logs/cron.log 2>&1
 15  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_decrs      >> logs/cron.log 2>&1
 30  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_inspections >> logs/cron.log 2>&1
+
+# ─── Log rotation (weekly: Sun 18:30 UTC, before the 19:00 scraper cycle) ───
+# Rotates cron.log past 50MB, gzips >7-day scraper logs, drops archives >60d.
+# cron.log had reached 500MB+ unrotated before this existed.
+30 18 * * 0  /Users/findlaysingapore/mederti/cron/rotate_logs.sh >> logs/cron.log 2>&1

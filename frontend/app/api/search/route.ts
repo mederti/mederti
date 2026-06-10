@@ -53,10 +53,23 @@ export async function GET(req: NextRequest) {
   const limited = await enforceRateLimit(req, "search");
   if (limited) return limited;
 
-  const q = req.nextUrl.searchParams.get("q")?.trim();
-  const limit = Math.min(Number(req.nextUrl.searchParams.get("limit") ?? 10), 50);
+  const sp = req.nextUrl.searchParams;
+  const q = sp.get("q")?.trim();
 
-  if (!q || q.length < 2) {
+  // ── "ids" mode: enrich a specific set of drug_ids with the same table-view
+  // signals as a normal search, skipping FTS entirely. Powers the signed-in
+  // "My medicines" (watchlist) list so it gets full parity with /search rows.
+  const idsParam = sp.get("ids")?.trim();
+  const ids = idsParam
+    ? [...new Set(idsParam.split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 200)
+    : [];
+  const idsMode = ids.length > 0;
+
+  const limit = idsMode
+    ? ids.length
+    : Math.min(Number(sp.get("limit") ?? 10), 50);
+
+  if (!idsMode && (!q || q.length < 2)) {
     return NextResponse.json({ error: "q must be at least 2 characters" }, { status: 400 });
   }
 
@@ -67,7 +80,6 @@ export async function GET(req: NextRequest) {
   //   .country_code) that market — the union semantic.
   // status: comma-joined subset of shortage | supply | resolved.
   // sort:   relevance (default) | resolution | severity.
-  const sp = req.nextUrl.searchParams;
   const market = (sp.get("market")?.trim().toUpperCase() || "AU");
   const isGlobal = market === "ALL";
   const statusKeys = new Set(
@@ -89,92 +101,107 @@ export async function GET(req: NextRequest) {
   const timer = new ServerTimer();
   const catLimit = pool + 20; // overfetch for dedup against drugs
 
-  // ── Round 1: drugs FTS + catalogue FTS in parallel ──────────────────
-  const [drugFts, catFts] = await Promise.all([
-    timer.track("db_drugs_fts", () =>
-      sb.from("drugs")
-        .select(DRUG_COLS)
-        .textSearch("search_vector", q, { config: "english" })
-        .limit(pool)
-        .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
-    ),
-    timer.track("db_catalogue_fts", () =>
-      sb.from("drug_catalogue")
-        .select(CAT_COLS)
-        .textSearch("search_vector", q, { config: "english" })
-        .limit(catLimit)
-        .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
-    ),
-  ]);
-
-  let drugRows = drugFts.data ?? [];
-  let catRows = catFts.data ?? [];
-
-  // ── Round 2: ilike fallbacks (only when FTS returned nothing) ───────
-  // Run any required fallbacks in parallel with each other so we don't
-  // pay two RTTs in series when both branches need ilike.
-  const fallbackJobs: Promise<void>[] = [];
-  if (drugRows.length === 0) {
-    fallbackJobs.push(
-      timer
-        .track("db_drugs_ilike", () =>
-          sb.from("drugs")
-            .select(DRUG_COLS)
-            .ilike("generic_name", `%${q}%`)
-            .limit(pool)
-            .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
-        )
-        .then((r) => {
-          drugRows = r.data ?? [];
-        })
-    );
-  }
-  if (catRows.length === 0) {
-    fallbackJobs.push(
-      timer
-        .track("db_catalogue_ilike", () =>
-          sb.from("drug_catalogue")
-            .select(CAT_COLS)
-            .ilike("generic_name", `%${q}%`)
-            .limit(catLimit)
-            .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
-        )
-        .then((r) => {
-          catRows = r.data ?? [];
-        })
-    );
-  }
-  if (fallbackJobs.length > 0) await Promise.all(fallbackJobs);
-
+  let drugRows: Record<string, unknown>[] = [];
+  let catRows: Record<string, unknown>[] = [];
   // The term itself matched nothing in either table (not merely filtered out
-  // downstream). This is the signal for the "Did you mean…" fuzzy fallback,
-  // computed before promotion mutates drugRows.
-  const termMatchedNothing = drugRows.length === 0 && catRows.length === 0;
+  // downstream). This is the signal for the "Did you mean…" fuzzy fallback.
+  let termMatchedNothing = false;
 
-  // ── Promote catalogue hits to their canonical drug ──────────────────
-  // A catalogue product linked to a canonical drug (drug_id, populated by
-  // backend/importers/catalogue_inn_backfill) should roll up to that INN —
-  // with its real shortage count — instead of surfacing as a raw "0 active
-  // shortages" product row. e.g. searching the AU brand "LORSTAT" (only in
-  // the ARTG catalogue) now resolves to Atorvastatin and its live shortages.
-  const drugIdSet = new Set(drugRows.map((r) => r.id as string));
-  const promoteIds = [
-    ...new Set(
-      catRows
-        .map((r) => r.drug_id as string | null)
-        .filter((id): id is string => !!id && !drugIdSet.has(id))
-    ),
-  ];
-  if (promoteIds.length > 0) {
-    const promoted = await timer.track("db_promote_canonical", () =>
+  if (idsMode) {
+    // Direct fetch of the requested molecules; no FTS, no catalogue, no
+    // promotion. Enrichment below runs identically off `drugRows`/`drugIds`.
+    const byId = await timer.track("db_drugs_by_ids", () =>
       sb.from("drugs")
         .select(DRUG_COLS)
-        .in("id", promoteIds)
+        .in("id", ids)
         .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
     );
-    for (const row of promoted.data ?? []) {
-      drugRows.push(row);
-      drugIdSet.add(row.id as string);
+    drugRows = byId.data ?? [];
+  } else {
+    // ── Round 1: drugs FTS + catalogue FTS in parallel ──────────────────
+    const [drugFts, catFts] = await Promise.all([
+      timer.track("db_drugs_fts", () =>
+        sb.from("drugs")
+          .select(DRUG_COLS)
+          .textSearch("search_vector", q!, { config: "english" })
+          .limit(pool)
+          .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+      ),
+      timer.track("db_catalogue_fts", () =>
+        sb.from("drug_catalogue")
+          .select(CAT_COLS)
+          .textSearch("search_vector", q!, { config: "english" })
+          .limit(catLimit)
+          .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+      ),
+    ]);
+
+    drugRows = drugFts.data ?? [];
+    catRows = catFts.data ?? [];
+
+    // ── Round 2: ilike fallbacks (only when FTS returned nothing) ───────
+    // Run any required fallbacks in parallel with each other so we don't
+    // pay two RTTs in series when both branches need ilike.
+    const fallbackJobs: Promise<void>[] = [];
+    if (drugRows.length === 0) {
+      fallbackJobs.push(
+        timer
+          .track("db_drugs_ilike", () =>
+            sb.from("drugs")
+              .select(DRUG_COLS)
+              .ilike("generic_name", `%${q}%`)
+              .limit(pool)
+              .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+          )
+          .then((r) => {
+            drugRows = r.data ?? [];
+          })
+      );
+    }
+    if (catRows.length === 0) {
+      fallbackJobs.push(
+        timer
+          .track("db_catalogue_ilike", () =>
+            sb.from("drug_catalogue")
+              .select(CAT_COLS)
+              .ilike("generic_name", `%${q}%`)
+              .limit(catLimit)
+              .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+          )
+          .then((r) => {
+            catRows = r.data ?? [];
+          })
+      );
+    }
+    if (fallbackJobs.length > 0) await Promise.all(fallbackJobs);
+
+    termMatchedNothing = drugRows.length === 0 && catRows.length === 0;
+
+    // ── Promote catalogue hits to their canonical drug ──────────────────
+    // A catalogue product linked to a canonical drug (drug_id, populated by
+    // backend/importers/catalogue_inn_backfill) should roll up to that INN —
+    // with its real shortage count — instead of surfacing as a raw "0 active
+    // shortages" product row. e.g. searching the AU brand "LORSTAT" (only in
+    // the ARTG catalogue) now resolves to Atorvastatin and its live shortages.
+    const drugIdSet = new Set(drugRows.map((r) => r.id as string));
+    const promoteIds = [
+      ...new Set(
+        catRows
+          .map((r) => r.drug_id as string | null)
+          .filter((id): id is string => !!id && !drugIdSet.has(id))
+      ),
+    ];
+    if (promoteIds.length > 0) {
+      const promoted = await timer.track("db_promote_canonical", () =>
+        sb.from("drugs")
+          .select(DRUG_COLS)
+          .in("id", promoteIds)
+          .then((r) => r as PgResult<Record<string, unknown>>, () => ({ data: null }))
+      );
+      for (const row of promoted.data ?? []) {
+        drugRows.push(row);
+        drugIdSet.add(row.id as string);
+      }
     }
   }
 
@@ -422,7 +449,10 @@ export async function GET(req: NextRequest) {
   }
 
   // Market union: a molecule qualifies if registered-in OR short-in the market.
+  // In ids mode every requested molecule is shown (the user explicitly saved
+  // it) — only the status signals are market-scoped, not membership.
   const marketMatchDrug = (id: string): boolean =>
+    idsMode ||
     isGlobal ||
     registeredInMarket.has(id) ||
     (agg[id]?.active ?? 0) > 0 ||
@@ -544,6 +574,11 @@ export async function GET(req: NextRequest) {
     );
   } else if (sort === "severity") {
     combined.sort((a, b) => b._sev - a._sev);
+  } else if (idsMode) {
+    // Default (relevance) in ids mode = preserve the caller's order, which the
+    // watchlist passes as newest-saved-first.
+    const order = new Map(ids.map((id, i) => [id, i]));
+    combined.sort((a, b) => (order.get(a.drug_id) ?? 1e9) - (order.get(b.drug_id) ?? 1e9));
   }
 
   const total = combined.length;
@@ -556,15 +591,15 @@ export async function GET(req: NextRequest) {
   // filter merely emptied the page. One indexed trigram lookup; never runs on
   // the common path. The frontend auto-loads results for the suggestion.
   let suggestion: string | null = null;
-  if (termMatchedNothing) {
+  if (!idsMode && termMatchedNothing) {
     const sug = await timer.track("db_suggestion", () =>
-      sb.rpc("search_suggestion", { q }).then(
+      sb.rpc("search_suggestion", { q: q! }).then(
         (r) => r as PgResult<{ name: string; score: number }>,
         () => ({ data: null })
       )
     );
     const top = sug.data?.[0]?.name;
-    if (top && top.toLowerCase() !== q.toLowerCase()) suggestion = top;
+    if (top && top.toLowerCase() !== q!.toLowerCase()) suggestion = top;
   }
 
   // Demand-signal instrumentation (Sprint 3 PR 2 substrate, Sprint 4 PR 1
@@ -572,16 +607,18 @@ export async function GET(req: NextRequest) {
   // result is attributed to the search signal so SUP demand queries can
   // pivot to a specific drug; raw_query carries the unresolved text when
   // there's no top hit.
-  recordDemandSignal({
-    signal_type: "search",
-    drug_id: results[0]?.drug_id ?? null,
-    raw_query: q,
-    identifier: getClientIp(req),
-  });
+  if (!idsMode) {
+    recordDemandSignal({
+      signal_type: "search",
+      drug_id: results[0]?.drug_id ?? null,
+      raw_query: q!,
+      identifier: getClientIp(req),
+    });
+  }
 
   return NextResponse.json(
     {
-      query: q,
+      query: q ?? "",
       results,
       total,
       suggestion,

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Search, TrendingUp, LayoutDashboard } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import { truncateDrugName } from "@/lib/utils";
@@ -63,12 +64,11 @@ export default function V1Sidebar() {
           <img src="/logo-black.png" alt="mederti" className="logo-img" />
         </Link>
       </div>
-      <div style={{ padding: "14px 14px 8px 16px" }}><V1CountryPicker /></div>
       <div className="sb-scroll">
         <div className="sb-group">
-          <div className="sb-glabel">Browse</div>
-          <Link href="/insights/intelligence" className="sb-item"><span className="sb-dot green" />Intelligence</Link>
-          <Link href="/insights/dashboard" className="sb-item"><span className="sb-dot green" />Dashboard</Link>
+          <Link href="/search" className="sb-item"><Search size={17} strokeWidth={1.9} className="sb-ico" />Search</Link>
+          <Link href="/insights/intelligence" className="sb-item"><TrendingUp size={17} strokeWidth={1.9} className="sb-ico" />Forecast</Link>
+          <Link href="/insights/dashboard" className="sb-item"><LayoutDashboard size={17} strokeWidth={1.9} className="sb-ico" />Dashboard</Link>
         </div>
         <div className="sb-group">
           <div className="sb-glabel">Search history</div>
@@ -89,16 +89,20 @@ export default function V1Sidebar() {
         <div className="sb-group">
           <div className="sb-glabel">My medicines</div>
           {recentMedicines.length > 0 ? (
-            recentMedicines.map((m) => (
-              <Link key={m.id} href={`/drugs/${m.id}`} className="sb-item sb-sub">
-                {truncateDrugName(m.name, 28)}
-              </Link>
-            ))
+            <>
+              {recentMedicines.map((m) => (
+                <Link key={m.id} href={`/drugs/${m.id}`} className="sb-item sb-sub">
+                  {truncateDrugName(m.name, 28)}
+                </Link>
+              ))}
+              <Link href="/watchlist" className="sb-item sb-viewall">View all →</Link>
+            </>
           ) : (
             <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
           )}
         </div>
       </div>
+      <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)" }}><V1CountryPicker /></div>
       <Link href="/login" className="sb-profile">Log in →</Link>
     </aside>
   );
@@ -130,11 +134,14 @@ const SIDEBAR_CSS = `
 .sb-item:hover{background:var(--bg-2)}
 .sb-item.sb-active{background:var(--green-bg);color:var(--green-d)}
 .sb-empty{color:var(--text-4);font-style:italic}
+.sb-viewall{padding-left:18px;color:var(--green-d);font-weight:600;font-size:12.5px}
+.sb-viewall:hover{background:var(--bg-2)}
 .sb-sub{padding-left:18px;color:var(--text-3);font-weight:500;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;display:block}
 .sb-sub:hover{color:var(--text);background:var(--bg-2)}
-.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.sb-dot.green{background:var(--ok)}
+.sb-ico{flex-shrink:0;color:var(--text-3)}
+.sb-item:hover .sb-ico{color:var(--green-d)}
+.sb-item.sb-active .sb-ico{color:var(--green-d)}
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;
   color:var(--text-2);text-decoration:none}
 .sb-profile:hover{color:var(--green-d)}

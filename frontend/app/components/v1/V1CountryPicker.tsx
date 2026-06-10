@@ -64,14 +64,14 @@ export default function V1CountryPicker() {
         }}
       >
         <span style={{ fontSize: 15 }}>{cur.flag}</span>
-        {cur.code}
+        {cur.name}
         <span style={{ fontSize: 9, color: "var(--text-4)" }}>▾</span>
       </button>
 
       {open && (
         <div
           style={{
-            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 100,
+            position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 100,
             background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12,
             boxShadow: "0 20px 50px -20px rgba(10,15,26,.3)", padding: 6,
             width: 200, maxHeight: 320, overflowY: "auto",

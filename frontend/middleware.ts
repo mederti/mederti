@@ -39,6 +39,7 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/account",           // user can manage their account
   "/search",            // drug search
   "/drugs",             // /drugs/[id]
+  "/watchlist",         // signed-in "My medicines" list (auth-gated below)
   "/ask",               // conversational home (logged-in landing; logo target)
   "/chat",              // Claude-led answer surface (asks/prompts route here)
   "/shortages",         // "See all active" target from the trending row

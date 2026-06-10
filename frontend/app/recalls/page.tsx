@@ -2,8 +2,7 @@ import Link from "next/link";
 import { PackageX, WifiOff } from "lucide-react";
 import { api, RecallListResponse } from "@/lib/api";
 import { truncateDrugName } from "@/lib/utils";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import AppShell from "@/app/components/v1/AppShell";
 
 interface SearchParams {
   country_code?: string;
@@ -97,10 +96,7 @@ export default async function RecallsPage({ searchParams }: Props) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)" }}>
-
-      {/* Nav */}
-      <SiteNav />
+    <AppShell contentClassName="flush">
 
       {/* Hero */}
       <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
@@ -411,8 +407,6 @@ export default async function RecallsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <SiteFooter />
-
       <style>{`
         .recall-row:hover { background: var(--app-bg) !important; }
         .rc-cards { display: none; }
@@ -427,6 +421,6 @@ export default async function RecallsPage({ searchParams }: Props) {
           .rc-cards { display: block; }
         }
       `}</style>
-    </div>
+    </AppShell>
   );
 }

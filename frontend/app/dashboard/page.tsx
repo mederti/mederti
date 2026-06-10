@@ -1,19 +1,8 @@
-export const dynamic = "force-dynamic";
+import { redirect } from "next/navigation";
 
-import type { Metadata } from "next";
-import DashboardClient from "./DashboardClient";
-
-export const metadata: Metadata = {
-  title: "Mederti Dashboard — Real-time pharmaceutical shortage command centre",
-  description:
-    "Live operational dashboard for drug shortage monitoring. Active shortages, severity alerts, regional supply maps, and predictive intelligence.",
-  openGraph: {
-    title: "Mederti Dashboard — Real-time pharmaceutical shortage command centre",
-    description:
-      "Live operational dashboard for drug shortage monitoring. Active shortages, severity alerts, regional supply maps, and predictive intelligence.",
-  },
-};
-
+// The legacy "command centre" dashboard is superseded by the insights
+// dashboard (the sidebar's Dashboard target). Redirect keeps old links and
+// bookmarks working while the site converges on one dashboard surface.
 export default function DashboardPage() {
-  return <DashboardClient />;
+  redirect("/insights/dashboard");
 }

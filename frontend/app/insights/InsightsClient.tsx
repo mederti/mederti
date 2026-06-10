@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { DesktopOnly } from "@/app/components/DesktopOnly";
-import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
+import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import { EarlyWarningView } from "@/app/chat/components/views/EarlyWarningView";
 import { GovDashboardView } from "@/app/chat/components/views/GovDashboardView";
 import { ContextChat } from "@/app/chat/components/ContextChat";
@@ -60,21 +60,6 @@ const CONFIG: Record<
   },
 };
 
-function NavItem({ kind, active, children }: { kind: InsightKind; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={`/insights/${kind}`}
-      className={`flex items-center gap-2.5 text-[13.5px] px-2 py-2 rounded-md transition-colors ${
-        active ? "font-semibold" : "text-slate-600 hover:bg-slate-100"
-      }`}
-      style={active ? { background: "var(--teal-bg)", color: "var(--teal-l)" } : undefined}
-    >
-      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--teal)" }} />
-      {children}
-    </Link>
-  );
-}
-
 export default function InsightsClient({ kind }: { kind: InsightKind }) {
   const cfg = CONFIG[kind];
   const ViewComp = cfg.Component;
@@ -85,39 +70,8 @@ export default function InsightsClient({ kind }: { kind: InsightKind }) {
         className="mederti-chat-root flex h-screen overflow-hidden bg-white text-slate-900"
         style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}
       >
-        {/* ── Left sidebar ── */}
-        <aside className="w-[236px] shrink-0 border-r border-slate-200 flex flex-col bg-white">
-          <div className="px-4 pt-4 pb-2.5">
-            <Link href="/" className="inline-flex items-center" aria-label="Mederti home">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-black.png" alt="mederti" className="h-6 w-auto" />
-            </Link>
-          </div>
-          <div className="px-3.5 pb-2">
-            <V1CountryPicker />
-          </div>
-          <div className="flex-1 overflow-y-auto px-2.5 pb-2.5">
-            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 px-2 pt-2 pb-2">
-              Browse
-            </div>
-            <Link
-              href="/search"
-              className="flex items-center gap-2.5 text-[13.5px] px-2 py-2 rounded-md text-slate-600 hover:bg-slate-100 transition-colors"
-            >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--teal)" }} />
-              Search
-            </Link>
-            <NavItem kind="intelligence" active={kind === "intelligence"}>
-              Intelligence
-            </NavItem>
-            <NavItem kind="dashboard" active={kind === "dashboard"}>
-              Dashboard
-            </NavItem>
-          </div>
-          <Link href="/login" className="px-4 py-3.5 border-t border-slate-200 text-[13px] text-slate-600 hover:text-slate-900">
-            Log in →
-          </Link>
-        </aside>
+        {/* ── Left sidebar (shared app shell, identical to /chat, /search, /drugs) ── */}
+        <V1Sidebar />
 
         {/* ── Center: the operational view ── */}
         <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">

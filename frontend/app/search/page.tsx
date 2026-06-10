@@ -106,6 +106,22 @@ const SORT_OPTS: { key: string; label: string }[] = [
   { key: "severity", label: "Most severe first" },
 ];
 
+// Form filter — labels for the form_bucket values (migration 053). Only buckets
+// present in the result facet are shown, so this is just the display map + order.
+const FORM_OPTS: { key: string; label: string }[] = [
+  { key: "tablet", label: "Tablet" },
+  { key: "capsule", label: "Capsule" },
+  { key: "oral_liquid", label: "Oral liquid" },
+  { key: "injectable", label: "Injectable" },
+  { key: "topical", label: "Topical" },
+  { key: "inhalation", label: "Inhalation" },
+  { key: "drops", label: "Drops" },
+  { key: "suppository", label: "Suppository" },
+  { key: "patch", label: "Patch" },
+  { key: "powder", label: "Powder" },
+  { key: "other", label: "Other" },
+];
+
 // Gated controls — backing data not present in prod. Rendered disabled with an
 // honest caption rather than silently no-opping.
 const GATED: { label: string; caption: string }[] = [
@@ -114,7 +130,7 @@ const GATED: { label: string; caption: string }[] = [
   { label: "Brand substitution permitted", caption: "Needs substitution feed — gated" },
 ];
 
-type Menu = null | "market" | "status" | "sort" | "more";
+type Menu = null | "market" | "status" | "form" | "strength" | "sort" | "more";
 
 function Results() {
   const params = useSearchParams();
@@ -126,11 +142,17 @@ function Results() {
   const statusStr = params.get("status") || "";
   const sort = params.get("sort") || "relevance";
   const statusSel = statusStr ? statusStr.split(",").filter(Boolean) : [];
+  const formStr = params.get("form") || "";
+  const formSel = formStr ? formStr.split(",").filter(Boolean) : [];
+  const strengthStr = params.get("strength") || "";
+  const strengthSel = strengthStr ? strengthStr.split(",").filter(Boolean) : [];
 
   const [q, setQ] = useState(urlQ);
   const [results, setResults] = useState<DrugHit[]>([]);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState<StatusFacets | null>(null);
+  const [formFacet, setFormFacet] = useState<Record<string, number>>({});
+  const [strengthFacet, setStrengthFacet] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [menu, setMenu] = useState<Menu>(null);
   // Google-style typo correction. `corrected` drives the "Showing results for X ·
@@ -159,12 +181,14 @@ function Results() {
   // URL is the source of truth for filters → run search when q or any filter changes.
   useEffect(() => {
     const term = urlQ.trim();
-    if (!term) { setResults([]); setTotal(0); setFacets(null); return; }
+    if (!term) { setResults([]); setTotal(0); setFacets(null); setFormFacet({}); setStrengthFacet({}); return; }
     let cancelled = false;
     setLoading(true);
     const sel = statusStr ? statusStr.split(",").filter(Boolean) : [];
+    const formS = formStr ? formStr.split(",").filter(Boolean) : [];
+    const strS = strengthStr ? strengthStr.split(",").filter(Boolean) : [];
     const lc = term.toLowerCase();
-    api.search(term, 25, { market, status: sel, sort })
+    api.search(term, 25, { market, status: sel, sort, form: formS, strength: strS })
       .then((data) => {
         if (cancelled) return;
         // Google-style auto-correct: term matched nothing but a close drug
@@ -187,13 +211,15 @@ function Results() {
         setResults(data.results);
         setTotal(data.total);
         setFacets(data.facets?.status ?? null);
+        setFormFacet(data.facets?.form ?? {});
+        setStrengthFacet(data.facets?.strength ?? {});
       })
       .catch(() => { if (!cancelled) { setResults([]); setTotal(0); setFacets(null); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // setParams/corrected intentionally omitted — URL params are the source of truth.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlQ, market, statusStr, sort]);
+  }, [urlQ, market, statusStr, sort, formStr, strengthStr]);
 
   // Keep the input mirror in sync when the URL query changes externally.
   useEffect(() => { setQ(urlQ); }, [urlQ]);
@@ -230,6 +256,21 @@ function Results() {
     else set.add(key);
     setParams({ status: set.size ? [...set].join(",") : null });
   }
+
+  function toggleParam(param: "form" | "strength", current: string[], key: string) {
+    const set = new Set(current);
+    if (set.has(key)) set.delete(key);
+    else set.add(key);
+    setParams({ [param]: set.size ? [...set].join(",") : null });
+  }
+
+  // Form options present in the current result set (facet-driven). Strength
+  // options sorted by numeric magnitude. Empty → the dropdown shows nothing
+  // actionable, so we render it disabled rather than an empty menu.
+  const formOptions = FORM_OPTS.filter((o) => (formFacet[o.key] ?? 0) > 0);
+  const strengthOptions = Object.keys(strengthFacet).sort(
+    (a, b) => (parseFloat(a) || 0) - (parseFloat(b) || 0)
+  );
 
   // "Search instead for <original>": honour the raw term and don't re-correct it.
   function searchInsteadFor(original: string) {
@@ -315,6 +356,52 @@ function Results() {
           )}
         </div>
 
+        {/* Form (multi) — only actionable when the result set has parsed forms */}
+        <div className="dd-wrap">
+          <button
+            className={`dd ${formSel.length ? "active" : ""}`}
+            disabled={formOptions.length === 0}
+            onClick={() => setMenu(menu === "form" ? null : "form")}
+          >
+            Form{formSel.length > 0 && <span className="badge">{formSel.length}</span>}
+            <span className="cv">▾</span>
+          </button>
+          {menu === "form" && formOptions.length > 0 && (
+            <div className="dd-menu">
+              {formOptions.map((o) => (
+                <button key={o.key} className="dd-opt check" onClick={() => toggleParam("form", formSel, o.key)}>
+                  <span className={`cb ${formSel.includes(o.key) ? "on" : ""}`} />
+                  {o.label}
+                  <span className="fc">{formFacet[o.key]}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Strength (multi) — options populated from the queried term's products */}
+        <div className="dd-wrap">
+          <button
+            className={`dd ${strengthSel.length ? "active" : ""}`}
+            disabled={strengthOptions.length === 0}
+            onClick={() => setMenu(menu === "strength" ? null : "strength")}
+          >
+            Strength{strengthSel.length > 0 && <span className="badge">{strengthSel.length}</span>}
+            <span className="cv">▾</span>
+          </button>
+          {menu === "strength" && strengthOptions.length > 0 && (
+            <div className="dd-menu">
+              {strengthOptions.map((s) => (
+                <button key={s} className="dd-opt check" onClick={() => toggleParam("strength", strengthSel, s)}>
+                  <span className={`cb ${strengthSel.includes(s) ? "on" : ""}`} />
+                  {s}
+                  <span className="fc">{strengthFacet[s]}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* More filters (gated) */}
         <div className="dd-wrap">
           <button className="dd ghost" onClick={() => setMenu(menu === "more" ? null : "more")}>
@@ -322,7 +409,7 @@ function Results() {
           </button>
           {menu === "more" && (
             <div className="dd-menu wide">
-              <div className="dd-note">Strength · Form · Type need a parsed-field migration — coming next.</div>
+              <div className="dd-note">Supplements (ARTG Listed) are hidden by default. Type filter needs the entity-type backfill — coming next.</div>
               {GATED.map((g) => (
                 <div key={g.label} className="dd-opt gated" aria-disabled>
                   <span className="cb" />
@@ -596,7 +683,8 @@ const CSS = `
 .fbar .dd-wrap{position:relative}
 .fbar .sortw{margin-left:auto}
 .fbar .dd{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border:1px solid var(--border-2);border-radius:10px;background:var(--bg);color:var(--text-2);font-family:inherit;font-size:12.5px;font-weight:600;letter-spacing:-.01em;cursor:pointer;transition:.14s;white-space:nowrap}
-.fbar .dd:hover{border-color:var(--text-4);color:var(--text)}
+.fbar .dd:hover:not(:disabled){border-color:var(--text-4);color:var(--text)}
+.fbar .dd:disabled{opacity:.45;cursor:not-allowed}
 .fbar .dd.active{border-color:var(--green);background:var(--green-bg);color:var(--green-d)}
 .fbar .dd.ghost{border-style:dashed;color:var(--text-3);font-weight:500}
 .fbar .dd .cv{font-size:9px;color:var(--text-4);margin-left:1px}

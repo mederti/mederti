@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import ChatBackdrop from "./ChatBackdrop";
 
 /**
@@ -30,22 +29,6 @@ export default function AuthShell({ children }: { children: ReactNode }) {
         background: "rgba(248, 250, 251, 0.25)",
         pointerEvents: "none",
       }} />
-
-      {/* Corner brand */}
-      <Link
-        href="/"
-        style={{
-          position: "fixed", top: 20, left: 24, zIndex: 2,
-          display: "flex", alignItems: "center", gap: 8,
-          fontSize: 15, fontWeight: 700, color: "var(--app-text)",
-          textDecoration: "none",
-        }}
-      >
-        <div style={{
-          width: 22, height: 22, borderRadius: "50%", background: "#0c1118",
-        }} />
-        mederti
-      </Link>
 
       {/* Card */}
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 420 }}>

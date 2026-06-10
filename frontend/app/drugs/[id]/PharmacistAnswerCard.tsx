@@ -516,7 +516,7 @@ export default function PharmacistAnswerCard({
                         )}%`,
                         height: "100%",
                         background:
-                          "linear-gradient(90deg, var(--teal) 0%, #14b8a6 100%)",
+                          "linear-gradient(90deg, var(--teal) 0%, var(--teal-3, #34d399) 100%)",
                       }}
                     />
                   </div>

@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import MinimalFooter from "@/app/components/minimal-footer";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -133,89 +132,30 @@ export default function ContactPage() {
     <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
       <style>{`
         @media (max-width: 768px) {
-          .contact-layout { grid-template-columns: 1fr !important; gap: 48px !important; padding: 60px 20px !important; }
+          .contact-layout { padding: 60px 20px 0 !important; }
           .contact-form-row { grid-template-columns: 1fr !important; }
-          .contact-footer { padding: 24px 20px !important; flex-direction: column !important; gap: 12px !important; text-align: center !important; }
-          .contact-footer-links { justify-content: center !important; }
         }
       `}</style>
 
       <SiteNav />
 
-      <div className="contact-layout" style={{
-        maxWidth: 1000, margin: "0 auto", padding: "80px 48px",
-        display: "grid", gridTemplateColumns: "2fr 3fr", gap: 80,
-      }}>
-        {/* LEFT — info */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 16 }}>
-            Contact
-          </div>
-          <h1 style={{ fontSize: "clamp(26px,4vw,40px)", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.025em", color: "var(--app-text)", marginBottom: 20, marginTop: 0 }}>
-            Get in touch.
-          </h1>
-          <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.75, marginBottom: 40 }}>
-            Questions about data accuracy, institutional pricing, partnerships, or anything else — we read every message and typically reply within 24 hours.
-          </p>
+      <div className="contact-layout" style={{ maxWidth: 600, margin: "0 auto", padding: "80px 24px 0" }}>
+        <h1 style={{ fontSize: 36, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.1, color: "var(--app-text)", margin: "0 0 16px" }}>
+          Get in touch
+        </h1>
+        <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.7, margin: "0 0 36px" }}>
+          Questions about data accuracy, pricing, partnerships, or a correction to a shortage
+          record — email{" "}
+          <a href="mailto:hello@mederti.com" style={{ color: "var(--teal)", textDecoration: "none" }}>hello@mederti.com</a>{" "}
+          or use the form below. We read every message and typically reply within 24 hours.
+        </p>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {[
-              {
-                icon: "✉",
-                label: "Email",
-                value: "hello@mederti.com",
-                href: "mailto:hello@mederti.com",
-              },
-              {
-                icon: "💼",
-                label: "LinkedIn",
-                value: "linkedin.com/company/mederti",
-                href: "https://linkedin.com/company/mederti",
-              },
-              {
-                icon: "🔒",
-                label: "Privacy enquiries",
-                value: "privacy@mederti.com",
-                href: "mailto:privacy@mederti.com",
-              },
-            ].map((item) => (
-              <div key={item.label} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 16, marginTop: 1, flexShrink: 0 }}>{item.icon}</span>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase" as const, letterSpacing: "0.08em", color: "var(--app-text-4)", marginBottom: 4 }}>
-                    {item.label}
-                  </div>
-                  <a href={item.href} style={{ fontSize: 14, color: "var(--teal)", textDecoration: "none" }}>
-                    {item.value}
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 48, padding: "20px 20px", background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", marginBottom: 6 }}>Data corrections</div>
-            <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.65 }}>
-              Found an incorrect shortage record? Email us with the drug name, source, and correct information. We&apos;ll investigate within 48 hours.
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT — form */}
-        <div>
-          <div style={{
-            background: "#fff", border: "1px solid var(--app-border)",
-            borderRadius: 14, padding: "40px 36px",
-            boxShadow: "0 2px 16px rgba(15,23,42,0.05)",
-          }}>
-            <Suspense fallback={<div style={{ height: 300, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--app-text-4)", fontSize: 14 }}>Loading…</div>}>
-              <ContactForm />
-            </Suspense>
-          </div>
-        </div>
+        <Suspense fallback={<div style={{ height: 300, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--app-text-4)", fontSize: 14 }}>Loading…</div>}>
+          <ContactForm />
+        </Suspense>
       </div>
 
-      <SiteFooter />
+      <MinimalFooter />
     </div>
   );
 }

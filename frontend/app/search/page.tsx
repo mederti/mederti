@@ -396,19 +396,20 @@ function Results() {
                 const eb = monthYear(d.estimated_resolution_date);
                 const ver = timeAgo(d.last_verified_at);
                 const isCat = d.source === "catalogue";
+                // Catalogue rows link to /drugs/[id] too: the drug page has a
+                // catalogue fallback that renders a registration page.
                 const go = () => {
-                  if (isCat) return;
                   addRecentMedicine({ id: String(d.drug_id), name: d.generic_name });
                   router.push(`/drugs/${d.drug_id}`);
                 };
                 return (
                   <tr
                     key={d.drug_id}
-                    className={isCat ? "" : "clickable"}
+                    className="clickable"
                     onClick={go}
-                    role={isCat ? undefined : "link"}
-                    tabIndex={isCat ? undefined : 0}
-                    onKeyDown={isCat ? undefined : (e) => { if (e.key === "Enter") go(); }}
+                    role="link"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") go(); }}
                   >
                     <td>
                       <div className="t-name">{truncateDrugName(d.generic_name)}</div>
@@ -502,9 +503,10 @@ function Results() {
               <span className={`status-pill ${st.cls}`}><span className="d" />{st.label}</span>
             </div>
           );
-          return d.source === "catalogue"
-            ? <div key={d.drug_id}>{inner}</div>
-            : <Link
+          // Both drug and catalogue hits link to /drugs/[id]: the drug page has a
+          // catalogue fallback (drugs/[id]/page.tsx) that renders a registration /
+          // "in supply" page when the id resolves to a drug_catalogue row.
+          return <Link
                 key={d.drug_id}
                 href={`/drugs/${d.drug_id}`}
                 style={{ textDecoration: "none", color: "inherit" }}

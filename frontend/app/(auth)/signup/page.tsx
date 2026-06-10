@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
 import AuthShell from "../AuthShell";
+import OAuthButtons from "../OAuthButtons";
 
 function SignupForm() {
   const router = useRouter();
@@ -97,6 +98,8 @@ function SignupForm() {
       }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-black.png" alt="mederti" style={{ height: 34, width: "auto", display: "block", margin: "0 auto 20px" }} />
           <p style={{ fontSize: 18, fontWeight: 600, color: "var(--app-text)", marginTop: 0, marginBottom: 4 }}>
             {role === "supplier" ? "Sign up as a supplier" : "Create your account"}
           </p>
@@ -106,6 +109,9 @@ function SignupForm() {
               : "Free for individual pharmacists and clinicians"}
           </p>
         </div>
+
+        {/* Google / Apple */}
+        <OAuthButtons next={next} role={role} mode="signup" />
 
         {/* Error */}
         {error && (

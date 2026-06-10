@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import SiteNav from "@/app/components/landing-nav";
+import AppShell from "@/app/components/v1/AppShell";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
-import SiteFooter from "@/app/components/site-footer";
 import ProfileSettings from "./ProfileSettings";
 
 const ROLE_OPTIONS = [
@@ -198,7 +197,7 @@ export default function AccountPage() {
   }
 
   return (
-    <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-inter), sans-serif" }}>
+    <AppShell contentClassName="flush">
       <style>{`
         @media (max-width: 768px) {
           .account-layout { grid-template-columns: 1fr !important; gap: 0 !important; }
@@ -207,8 +206,6 @@ export default function AccountPage() {
           .account-footer { padding: 24px 16px !important; flex-direction: column !important; gap: 10px !important; text-align: center !important; }
         }
       `}</style>
-
-      <SiteNav />
 
       {!user ? (
         <NotSignedIn />
@@ -580,8 +577,6 @@ export default function AccountPage() {
           </main>
         </div>
       )}
-
-      <SiteFooter />
-    </div>
+    </AppShell>
   );
 }

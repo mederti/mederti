@@ -31,7 +31,7 @@ interface FreshnessResponse {
 }
 
 const STATUS_COLOR: Record<SourceFreshness["status"], { fg: string; bg: string; label: string }> = {
-  ok:    { fg: "#0d9488", bg: "#ccfbf1", label: "ok" },
+  ok:    { fg: "#0fa676", bg: "#e8f6f0", label: "ok" },
   stale: { fg: "#dc2626", bg: "#fee2e2", label: "stale" },
   never: { fg: "#b45309", bg: "#fef3c7", label: "never" },
 };
@@ -178,7 +178,7 @@ export default function AdminFreshnessPage() {
               }}
             >
               <SummaryCard label="Active sources"   value={data.summary.active_sources} />
-              <SummaryCard label="Healthy"          value={data.summary.ok}                color="#0d9488" />
+              <SummaryCard label="Healthy"          value={data.summary.ok}                color="#0fa676" />
               <SummaryCard
                 label="Stale"
                 value={data.summary.stale}

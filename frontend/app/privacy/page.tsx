@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import MinimalFooter from "@/app/components/minimal-footer";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Mederti",
@@ -113,7 +113,7 @@ export default function PrivacyPage() {
 
       </div>
 
-      <SiteFooter />
+      <MinimalFooter />
     </div>
   );
 }

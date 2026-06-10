@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import AppShell from "@/app/components/v1/AppShell";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   AMOXICILLIN_ARTICLE,
@@ -171,8 +170,7 @@ export default async function IntelligenceArticlePage({ params }: Props) {
   const catStyle = CATEGORY_STYLE[articleCategory];
 
   return (
-    <div style={{ background: "#fff", minHeight: "100vh" }}>
-      <SiteNav />
+    <AppShell contentClassName="flush">
 
       {/* ─── Article header ─── */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px 0" }}>
@@ -502,8 +500,6 @@ export default async function IntelligenceArticlePage({ params }: Props) {
         </div>
       </div>
 
-      <SiteFooter />
-
       <style>{`
         @media (max-width: 860px) {
           .intel-article-layout {
@@ -517,6 +513,6 @@ export default async function IntelligenceArticlePage({ params }: Props) {
           .intel-newsletter-form input { width: 100% !important; max-width: 320px !important; }
         }
       `}</style>
-    </div>
+    </AppShell>
   );
 }

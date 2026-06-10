@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import AppShell from "@/app/components/v1/AppShell";
 import RegulatoryCalendarClient from "./RegulatoryCalendarClient";
 
 export const metadata: Metadata = {
@@ -10,10 +9,8 @@ export const metadata: Metadata = {
 
 export default function CalendarPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", flexDirection: "column" }}>
-      <SiteNav />
+    <AppShell contentClassName="flush">
       <RegulatoryCalendarClient />
-      <SiteFooter />
-    </div>
+    </AppShell>
   );
 }

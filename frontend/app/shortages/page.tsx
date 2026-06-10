@@ -3,8 +3,7 @@ import { AlertCircle, WifiOff } from "lucide-react";
 import { api, ShortageListResponse } from "@/lib/api";
 import { truncateDrugName } from "@/lib/utils";
 import { cleanBrandNames } from "@/lib/brand";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import AppShell from "@/app/components/v1/AppShell";
 
 interface SearchParams {
   country?: string;
@@ -92,10 +91,7 @@ export default async function ShortagesPage({ searchParams }: Props) {
   const SEVERITIES = SEVERITY_ORDER;
 
   return (
-    <div style={{ background: "var(--app-bg)", minHeight: "100vh", color: "var(--app-text)" }}>
-
-      {/* Nav */}
-      <SiteNav />
+    <AppShell contentClassName="flush">
 
       {/* Hero */}
       <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>
@@ -337,8 +333,6 @@ export default async function ShortagesPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <SiteFooter />
-
       <style>{`
         .shortage-row:hover { background: var(--app-bg) !important; }
         .sh-cards { display: none; }
@@ -353,6 +347,6 @@ export default async function ShortagesPage({ searchParams }: Props) {
           .sh-cards { display: block; }
         }
       `}</style>
-    </div>
+    </AppShell>
   );
 }

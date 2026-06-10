@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
 import AuthShell from "../AuthShell";
+import OAuthButtons from "../OAuthButtons";
 
 type Tab = "password" | "magic";
 
@@ -76,6 +77,8 @@ function LoginForm() {
       }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-black.png" alt="mederti" style={{ height: 34, width: "auto", display: "block", margin: "0 auto 20px" }} />
           <p style={{ fontSize: 18, fontWeight: 600, color: "var(--app-text)", marginTop: 0, marginBottom: 4 }}>
             Sign in to your account
           </p>
@@ -83,6 +86,9 @@ function LoginForm() {
             Access your watchlist, alerts, and personalised feed
           </p>
         </div>
+
+        {/* Google / Apple */}
+        <OAuthButtons next={next} role={null} mode="signin" />
 
         {/* Tabs */}
         <div style={{
@@ -169,17 +175,16 @@ function LoginForm() {
               />
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4, marginTop: -6 }}>
-              <button
-                type="button"
-                onClick={() => { setTab("magic"); setError(null); setMagicSent(false); }}
+              <Link
+                href="/forgot-password"
                 style={{
-                  background: "none", border: "none", padding: 0,
-                  fontSize: 12, color: "var(--teal)", cursor: "pointer",
+                  fontSize: 12, color: "var(--teal)",
                   fontFamily: "var(--font-inter), sans-serif",
+                  textDecoration: "none",
                 }}
               >
                 Forgot password?
-              </button>
+              </Link>
             </div>
             <button
               type="submit"

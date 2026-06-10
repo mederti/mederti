@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import AppShell from "@/app/components/v1/AppShell";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import MarketSidebar from "./MarketSidebar";
 import NewsletterForm from "./NewsletterForm";
@@ -117,8 +116,7 @@ export default async function IntelligencePage() {
   const sideArticles = heroSource.slice(1, 4);
 
   return (
-    <div style={{ background: "#fff", minHeight: "100vh" }}>
-      <SiteNav />
+    <AppShell contentClassName="flush">
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
 
@@ -399,8 +397,6 @@ export default async function IntelligencePage() {
       {/* ─── NEWSLETTER FOOTER ─── */}
       <NewsletterForm />
 
-      <SiteFooter />
-
       <style>{`
         @media (max-width: 1024px) {
           .intel-two-col { flex-direction: column !important; }
@@ -424,6 +420,6 @@ export default async function IntelligencePage() {
           .intel-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
-    </div>
+    </AppShell>
   );
 }

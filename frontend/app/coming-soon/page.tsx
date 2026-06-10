@@ -1,6 +1,6 @@
 import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import MinimalFooter from "@/app/components/minimal-footer";
 import { Compass } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -83,7 +83,7 @@ export default async function ComingSoonPage({ searchParams }: PageProps) {
         </div>
       </main>
 
-      <SiteFooter />
+      <MinimalFooter />
     </div>
   );
 }

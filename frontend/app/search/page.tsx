@@ -581,7 +581,7 @@ const CSS = `
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
 .sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
-.dg-main{flex:1;min-width:0;max-width:900px;padding:32px 40px 80px;width:100%}
+.dg-main{flex:1;min-width:0;max-width:900px;padding:32px 40px 80px;width:100%;background:#eef1f5}
 
 /* ── Search box + results ── */
 .searchbox.v1sb{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:14px;padding:6px 8px 6px 18px;box-shadow:0 12px 36px -22px rgba(10,15,26,.28);transition:.15s}

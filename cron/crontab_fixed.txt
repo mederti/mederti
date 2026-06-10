@@ -110,6 +110,14 @@ SHELL=/bin/bash
 # only when something is actionable (use --force-email to override).
 0   8 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.health.daily_check >> logs/health.log 2>&1
 
+# ─── PBS trade prices (monthly: 1st, 21:00 UTC = 2nd 07:00 AEST) ───
+# The PBS Schedule takes effect on the 1st of each month (AEST); running the
+# evening of the 1st UTC is safely after publication. Populates drug_pricing
+# (AEMP + DPMQ per molecule) — the /api/search trade-price column and the
+# drug-page price card read it directly. Requires migration 055. Public-tier
+# API is rate-limited (~1 req/20s); the importer self-paces, ~6 min per run.
+0  21 1 * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.pbs_pricing_importer >> logs/cron.log 2>&1
+
 # ─── Supply-intelligence layer (quarterly: 1st of Jan/Apr/Jul/Oct, 09:00 UTC) ───
 # Source datasets refresh ~quarterly, so daily runs add no signal. Order matters:
 # fda_dmf populates api_suppliers (FDA Drug Master File Type II = API-manufacturer

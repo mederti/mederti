@@ -242,6 +242,12 @@ def main(keys: list[str] | None = None) -> int:
     log.info(f"Mederti scraper run  started={run_start.isoformat()}  dry_run={dry_run}")
     log.info("=" * 60)
 
+    # Env sanity — a missing service-role key fails every upsert, so say so
+    # up front in the deploy log instead of as 26 identical scraper errors.
+    missing = [k for k in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY") if not os.environ.get(k)]
+    if missing and not dry_run:
+        log.error(f"Missing required env vars: {missing} — all DB writes will fail")
+
     # Determine which scrapers to run
     if keys:
         unknown = [k for k in keys if k not in SCRAPERS]
@@ -361,7 +367,11 @@ def main(keys: list[str] | None = None) -> int:
         except Exception as exc:
             log.error(f"Recall alert dispatcher failed: {exc}")
 
-    return 1 if broken else 0
+    # Exit non-zero only when the whole run failed (every scraper broken).
+    # Partial failures are expected with flaky upstreams and are surfaced via
+    # the ops alert email above; exiting 1 for them made Railway mark every
+    # cron run "Crashed" even when most scrapers succeeded.
+    return 1 if (broken and not successes) else 0
 
 
 if __name__ == "__main__":

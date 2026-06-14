@@ -36,6 +36,165 @@ const FLAG: Record<string, string> = {
 };
 const flagFor = (cc: string): string => FLAG[cc?.toUpperCase()] ?? "🌐";
 
+/** One market's headline price + (optional) live concession, for the drug page. */
+export type MarketPrice = {
+  country: string;
+  label: string;          // human label for the headline price_type
+  value: number | null;   // headline price (pack price preferred, else unit)
+  per: string;            // "pack of 28" | "unit" | …
+  currency: string;
+  source: string | null;
+  effective_date: string | null;
+  concession: number | null;  // live concession price for this market, if any
+};
+export type ConcessionSignal = {
+  country: string;
+  price: number;
+  tariff: number | null;
+  currency: string;
+  pack: string | null;
+  effective_date: string;
+  source: string;
+};
+
+const HEADLINE_PRIORITY = [
+  "drug_tariff", "reimbursement", "pharmacy_purchase", "list",
+  "wholesale", "ex_factory", "amp", "wac", "reference_price",
+];
+const PRICE_TYPE_LABEL: Record<string, string> = {
+  drug_tariff: "Drug Tariff", reimbursement: "Reimbursement",
+  pharmacy_purchase: "Acquisition", list: "List price", wholesale: "Wholesale",
+  ex_factory: "Ex-factory", amp: "AMP", wac: "WAC",
+  reference_price: "Reference price", concession: "Concession",
+};
+// Concessions are granted month-by-month; treat one as "live" only if its
+// effective month is recent (covers the current + prior month given scrape lag).
+const CONCESSION_ACTIVE_MS = 75 * 86400000;
+
+/** Normalised strength token from a product label ("...60mg tablets" → "60mg"),
+ *  used to compare a concession only against a same-strength tariff. */
+function strengthOf(label: string | null | undefined): string | null {
+  const m = (label ?? "").match(/(\d+(?:\.\d+)?)\s?(mg|mcg|microgram|micrograms|g|ml|%|units?|iu)/i);
+  return m ? `${m[1]}${m[2]}`.toLowerCase().replace("micrograms", "mcg").replace("microgram", "mcg") : null;
+}
+
+/**
+ * Reads drug_pricing_history for this molecule and produces (a) one headline
+ * price per market and (b) an active-concession signal for the user's market.
+ * Pure-additive + defensive: any error → empty, the card simply omits prices.
+ */
+async function buildMarketPricing(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  drugId: string,
+  genericName: string | null | undefined,
+  userCountry: string,
+): Promise<{ concession: ConcessionSignal | null; priceMarkets: MarketPrice[] }> {
+  const inn = (genericName ?? "").trim();
+  // Only add the generic_name fallback when the INN is filter-safe (no
+  // PostgREST `or()` metacharacters) so we never break the whole query.
+  const innSafe = inn && /^[a-z0-9 .\-/]+$/i.test(inn) ? inn : "";
+  const orFilter = innSafe ? `drug_id.eq.${drugId},generic_name.ilike.${innSafe}` : `drug_id.eq.${drugId}`;
+
+  let rows: any[] = [];
+  try {
+    const { data } = await supabase
+      .from("drug_pricing_history")
+      .select("country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source")
+      .or(orFilter)
+      .order("effective_date", { ascending: false, nullsFirst: false })
+      .limit(400);
+    rows = data ?? [];
+  } catch {
+    return { concession: null, priceMarkets: [] };
+  }
+  if (rows.length === 0) return { concession: null, priceMarkets: [] };
+
+  // Latest row per (country, price_type) — rows are already date-desc.
+  const latest = new Map<string, any>();
+  for (const r of rows) {
+    if (!r.country || !r.price_type) continue;
+    const k = `${r.country}|${r.price_type}`;
+    if (!latest.has(k)) latest.set(k, r);
+  }
+  const val = (r: any): number | null =>
+    r?.pack_price != null ? Number(r.pack_price) : r?.unit_price != null ? Number(r.unit_price) : null;
+
+  const countries = Array.from(new Set(rows.map((r) => r.country).filter(Boolean)));
+  const priceMarkets: MarketPrice[] = [];
+  for (const country of countries) {
+    const headline = HEADLINE_PRIORITY.map((t) => latest.get(`${country}|${t}`)).find(Boolean);
+    const conc = latest.get(`${country}|concession`);
+    const base = headline ?? conc;
+    if (!base) continue;
+    priceMarkets.push({
+      country,
+      label: PRICE_TYPE_LABEL[base.price_type] ?? base.price_type,
+      value: val(base),
+      per: base.pack_price != null ? (base.pack_description ?? "pack") : "unit",
+      currency: base.currency ?? "",
+      source: base.source ?? null,
+      effective_date: base.effective_date ?? null,
+      concession: conc ? val(conc) : null,
+    });
+  }
+  // User's market first, then by (concession-active, has-value).
+  priceMarkets.sort((a, b) =>
+    (a.country === userCountry ? -1 : b.country === userCountry ? 1 : 0) ||
+    (b.concession != null ? 1 : 0) - (a.concession != null ? 1 : 0),
+  );
+
+  // Active-concession signal for the user's market. Two honesty guards on the
+  // molecule-level rollup: (1) the baseline is the true Drug Tariff = Cat M
+  // (quarterly reimbursement), NOT the VIIIA in-month amendments which are
+  // announcement-derived and often equal the concession; (2) compare only
+  // SAME-STRENGTH rows. No genuine same-strength Cat M baseline → no % delta.
+  const concRow = latest.get(`${userCountry}|concession`);
+  let concession: ConcessionSignal | null = null;
+  if (concRow && concRow.effective_date) {
+    const ageMs = Date.now() - new Date(concRow.effective_date).getTime();
+    if (!Number.isNaN(ageMs) && ageMs < CONCESSION_ACTIVE_MS) {
+      const concStrength = strengthOf(concRow.product_name);
+      const concVal = val(concRow);
+      const catM = concStrength
+        ? rows.find(
+            (r) => r.country === userCountry && r.price_type === "drug_tariff" &&
+              (r.category ?? "").toLowerCase().includes("cat m") &&
+              strengthOf(r.product_name) === concStrength && val(r) != null,
+          )
+        : null;
+      const baseline = catM ? val(catM) : null;
+      const showDelta = baseline != null && concVal != null && concVal > baseline;
+      concession = {
+        country: userCountry,
+        price: concVal ?? 0,
+        tariff: showDelta ? baseline : null,
+        currency: concRow.currency ?? "GBP",
+        pack: [concStrength, concRow.pack_description ? `×${concRow.pack_description}` : null].filter(Boolean).join(" ") || null,
+        effective_date: concRow.effective_date,
+        source: concRow.source ?? "DHSC",
+      };
+      // User-market tiles, like-for-like. With a real Cat M baseline → tariff +
+      // concession side by side; otherwise show the concession price alone
+      // (never an arbitrary-strength or amendment "tariff").
+      const m = priceMarkets.find((p) => p.country === userCountry);
+      if (m) {
+        // The concession is the freshest, most decision-relevant fact → its
+        // date/source head the panel regardless of which tiles we show.
+        m.effective_date = concRow.effective_date;
+        m.source = concRow.source ?? m.source;
+        if (showDelta) {
+          m.value = baseline; m.label = "Drug Tariff (Cat M)";
+          m.per = catM!.pack_description ?? m.per; m.concession = concVal;
+        } else {
+          m.value = concVal; m.label = "Concession";
+          m.per = concRow.pack_description ?? m.per; m.concession = null;
+        }
+      }
+    }
+  }
+  return { concession, priceMarkets };
+}
+
 interface Props {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ as?: string }>;
@@ -614,6 +773,14 @@ export default async function DrugPage({ params, searchParams }: Props) {
           }
         : null;
 
+    // Official multi-market pricing from drug_pricing_history (NHS Drug Tariff,
+    // CMS NADAC, …). Lights up GB/US prices the AU-only `pricing` above can't,
+    // and surfaces an active price concession as an early supply-pressure
+    // signal. Defensive: soft-errors to empty if the table isn't reachable.
+    const { concession, priceMarkets } = await buildMarketPricing(
+      supabase, id, drug.generic_name, userCountry,
+    );
+
     return (
       <V1DrugView
         id={id}
@@ -627,6 +794,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
         approvalFootprint={approvalFootprint}
         eligibility={eligibility}
         pricing={pricing}
+        concession={concession}
+        priceMarkets={priceMarkets}
         products={products}
       />
     );

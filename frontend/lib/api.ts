@@ -50,7 +50,7 @@ export interface DrugHit {
   last_verified_at?: string | null;
   substitution?: { scheme: string; reference: string | null } | null;
   best_alternative?: { name: string; relationship: string | null } | null;
-  trade_price?: { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null } | null;
+  trade_price?: { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null; label?: string; source?: string } | null;
   // Form/Strength (catalogue product rows; migration 054).
   form_bucket?: string | null;
   strength_label?: string | null;

@@ -174,6 +174,106 @@ def send_recall_alert(
         return False
 
 
+def send_concession_alert(
+    to: str,
+    drug_name: str,
+    country_code: str,
+    concession_price: str | None = None,
+    pack: str | None = None,
+    effective_month: str | None = None,
+    short_in_count: int = 0,
+    drug_url: str | None = None,
+) -> bool:
+    """
+    Send a price-concession early-warning alert.
+
+    A concession (a regulator paying above the standard tariff because
+    pharmacies can't source at price) is a supply-pressure signal that often
+    PRECEDES a formal shortage listing — so this is framed as an early warning,
+    not a confirmed shortage. Returns True if sent, False if stubbed/failed.
+    """
+    if _STUBBED:
+        log.info(
+            "RESEND_API_KEY not configured — stubbing concession alert",
+            extra={"to": to, "drug_name": drug_name, "country_code": country_code},
+        )
+        return False
+
+    subject = f"Mederti early warning: {drug_name} under price concession ({country_code})"
+    detail_bits = " · ".join(
+        b for b in (
+            f"{concession_price}" if concession_price else None,
+            pack,
+            effective_month,
+        ) if b
+    )
+    detail_html = (
+        f'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;'
+        f'padding:14px 18px;margin-bottom:20px">'
+        f'<div style="font-size:12px;font-weight:600;text-transform:uppercase;'
+        f'letter-spacing:0.06em;color:#b45309;margin-bottom:4px">Concession price</div>'
+        f'<div style="font-size:15px;font-weight:600;color:#0f172a">{detail_bits or "see details"}</div>'
+        f'</div>'
+    )
+    short_html = ""
+    if short_in_count > 0:
+        short_html = (
+            f'<p style="font-size:13px;color:#64748b;line-height:1.7;margin:0 0 20px">'
+            f'This medicine is already in active shortage in '
+            f'<strong style="color:#0f172a">{short_in_count} other '
+            f'{"market" if short_in_count == 1 else "markets"}</strong> — the price '
+            f'pressure in {country_code} may be the same upstream cause arriving locally.</p>'
+        )
+
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;padding:40px 20px;margin:0">
+  <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:12px;padding:36px 40px;border:1px solid #e2e8f0">
+    <div style="font-size:20px;font-weight:700;color:#0d9488;letter-spacing:-0.02em;margin-bottom:20px">Mederti</div>
+    <div style="background:#f59e0b;color:#422006;border-radius:6px;padding:8px 14px;display:inline-block;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:16px">
+      Early warning — price concession
+    </div>
+    <h1 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">{drug_name}</h1>
+    <p style="font-size:13px;color:#64748b;margin:0 0 20px">
+      Market: <strong>{country_code}</strong> · a regulator is now reimbursing above the standard tariff
+    </p>
+    {detail_html}
+    {short_html}
+    <p style="font-size:13px;color:#64748b;line-height:1.7;margin:0 0 20px">
+      A price concession means pharmacies can't source this medicine at the normal tariff price — an early supply-pressure signal that often precedes a formal shortage listing. It may be worth reviewing stock and alternatives now.
+    </p>
+    {f'<a href="{drug_url}" style="display:inline-block;padding:12px 24px;background:#b45309;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600">View pricing &amp; supply detail →</a>' if drug_url else ''}
+    <div style="margin-top:28px;padding-top:16px;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8">
+      Mederti · You're receiving this because you watched <strong>{drug_name}</strong>.<br>
+      <a href="https://mederti.com/dashboard" style="color:#0d9488">Manage your watchlist →</a>
+    </div>
+  </div>
+</body>
+</html>"""
+
+    try:
+        resp = httpx.post(
+            _API_URL,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={"from": RESEND_FROM, "to": [to], "subject": subject, "html": html},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        log.info("Concession alert sent", extra={"to": to, "drug_name": drug_name})
+        return True
+    except Exception as exc:
+        log.error(
+            "Failed to send concession alert",
+            extra={"error": str(exc), "to": to, "drug_name": drug_name},
+        )
+        return False
+
+
 def send_ops_alert(
     to: str,
     subject: str,

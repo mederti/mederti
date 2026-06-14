@@ -369,6 +369,23 @@ def main(keys: list[str] | None = None) -> int:
         except Exception as exc:
             log.error(f"Recall alert dispatcher failed: {exc}")
 
+        # ── Dispatch price-concession early-warning alerts ─────────────────
+        # Concessions only change when the NHS Drug Tariff scraper runs (weekly),
+        # so gate on it — otherwise this dispatch block (which runs after EVERY
+        # run_all_scrapers invocation) would re-send within the recency window.
+        if "nhs_drug_tariff" in {t[0] for t in targets}:
+            try:
+                from backend.alerts.dispatcher import dispatch_concession_alerts
+                conc_summary = dispatch_concession_alerts()
+                log.info(
+                    f"Concession alerts: processed={conc_summary.get('processed', 0)}  "
+                    f"sent={conc_summary.get('sent', 0)}  "
+                    f"rollover_skipped={conc_summary.get('rollover_skipped', 0)}  "
+                    f"failed={conc_summary.get('failed', 0)}"
+                )
+            except Exception as exc:
+                log.error(f"Concession alert dispatcher failed: {exc}")
+
     # Exit non-zero only when the whole run failed (every scraper broken).
     # Partial failures are expected with flaky upstreams and are surfaced via
     # the ops alert email above; exiting 1 for them made Railway mark every

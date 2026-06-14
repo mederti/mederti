@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import MarketSidebar from "./MarketSidebar";
 import NewsletterForm from "./NewsletterForm";
 import IntelligenceBriefing from "./IntelligenceBriefing";
+import PredictiveSignals from "@/app/components/PredictiveSignals";
 import {
   REPORTS, ARTICLES, DATA_RELEASES, MEDIA,
   CATEGORY_STYLE,
@@ -155,6 +156,10 @@ export default async function IntelligencePage() {
             </Link>
           ))}
         </div>
+
+        {/* ─── LIVE EARLY-WARNING RADAR ─── data-driven; surfaces the peer-set
+            + price-concession signal (market resolved from the country cookie) */}
+        <PredictiveSignals limit={6} />
 
         {/* ─── REGULATORY CALENDAR LINK ─── */}
         <div style={{ marginBottom: 32, padding: 18, background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

@@ -47,16 +47,29 @@ interface Response {
 }
 
 interface PredictiveSignalsProps {
+  /** Explicit market. When omitted, resolves from the `mederti-country` cookie
+   *  (falls back to GB) so the widget is portable across pages. */
   country?: string;
   limit?: number;
   compact?: boolean;
 }
 
-export default function PredictiveSignals({ country = "GB", limit = 8, compact = false }: PredictiveSignalsProps) {
+export default function PredictiveSignals({ country: countryProp, limit = 8, compact = false }: PredictiveSignalsProps) {
+  const [country, setCountry] = useState(countryProp ?? "GB");
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Resolve the market from the cookie when no explicit country is passed.
   useEffect(() => {
+    if (countryProp) return;
+    const m = typeof document !== "undefined"
+      ? document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/)
+      : null;
+    if (m) setCountry(m[1].toUpperCase());
+  }, [countryProp]);
+
+  useEffect(() => {
+    setLoading(true);
     fetch(`/api/predictive-signals?country=${country}&limit=${limit}`)
       .then(r => r.json())
       .then(setData)

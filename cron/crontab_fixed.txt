@@ -128,11 +128,10 @@ SHELL=/bin/bash
 # cron.log had reached 500MB+ unrotated before this existed.
 30 18 * * 0  /Users/findlaysingapore/mederti/cron/rotate_logs.sh >> /Users/findlaysingapore/mederti/logs/cron.log 2>&1
 
-# ─── PBS trade prices (monthly: 1st 21:00 UTC) — reconciled from live crontab 2026-06-13 ───
-# ⚠ backend/importers/pbs_pricing_importer.py is NOT in the repo (never committed
-# from the session that added this job on 2026-06-10) — this job will fail with
-# ModuleNotFoundError until that importer lands. Kept so a wholesale reinstall
-# of this file does not silently drop it.
+# ─── PBS trade prices (monthly: 1st 21:00 UTC) — AEMP + DPMQ into drug_pricing (AU) ───
+# Writes the representative AU trade price per molecule (lowest-AEMP item) so the
+# /api/search trade-price column + drug-page price card light up. dispensed_amount
+# (DPMQ) needs migration 056; the importer degrades to AEMP-only until it's applied.
 0  21 1 * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.pbs_pricing_importer >> logs/cron.log 2>&1
 
 # ─── Pricing connectors (drug_pricing_history — migration 055) ───

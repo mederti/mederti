@@ -94,6 +94,7 @@ RLS is enabled on the previously-unguarded tables (migration 029). `user_profile
 | 8 Shortage (additional) | medsafe, cbg_meb, dkma, fimea, hpra, lakemedelsverket, sukl, ogyei, swissmedic, noma, ages |
 | 9+ New country | anvisa, pmda, mfds, cofepris, sahpra, nafdac, sfda |
 | Recalls | tga_recalls, fda_recalls, health_canada_recalls, ema_recalls, mhra_recalls, fda_medwatch |
+| Pricing (→ `drug_pricing_history`) | nadac (US acquisition cost, weekly), nhs_drug_tariff (GB Cat M + price concessions, weekly) — `backend/scrapers/pricing/`, requires migration 055 |
 
 **Scraper files present but not yet in cron** (38): argentina_anmat, ashp, belgium_famhp, china_nmpa, clinicaltrials, edqm_cep, ema_chmp, eudragmdp, fda_adcomm, fda_inspections, greece_eof, hk_drugoffice, india_cdsco, israel_moh, malaysia_npra, nhs_drug_tariff, poland_mz, portugal_infarmed, turkey_titck, uae_mohap, plus the unscheduled recall counterparts (aemps_recalls, aifa_recalls, ansm_recalls, bfarm_recalls, hsa_recalls, medsafe_recalls, drugs_at_fda) and `recall_linker.py` (recall→shortage causal-link populator).
 

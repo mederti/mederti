@@ -126,4 +126,17 @@ SHELL=/bin/bash
 # ─── Log rotation (weekly: Sun 18:30 UTC, before the 19:00 scraper cycle) ───
 # Rotates cron.log past 50MB, gzips >7-day scraper logs, drops archives >60d.
 # cron.log had reached 500MB+ unrotated before this existed.
-30 18 * * 0  /Users/findlaysingapore/mederti/cron/rotate_logs.sh >> logs/cron.log 2>&1
+30 18 * * 0  /Users/findlaysingapore/mederti/cron/rotate_logs.sh >> /Users/findlaysingapore/mederti/logs/cron.log 2>&1
+
+# ─── PBS trade prices (monthly: 1st 21:00 UTC) — reconciled from live crontab 2026-06-13 ───
+# ⚠ backend/importers/pbs_pricing_importer.py is NOT in the repo (never committed
+# from the session that added this job on 2026-06-10) — this job will fail with
+# ModuleNotFoundError until that importer lands. Kept so a wholesale reinstall
+# of this file does not silently drop it.
+0  21 1 * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.pbs_pricing_importer >> logs/cron.log 2>&1
+
+# ─── Pricing connectors (drug_pricing_history — migration 055) ───
+# NADAC: CMS refreshes Wednesdays → fetch Thursdays. NHS: tariff changes
+# monthly, concessions announced throughout the month → weekly Mondays.
+15  7 * * 4  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nadac           >> logs/cron.log 2>&1
+50  6 * * 1  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nhs_drug_tariff >> logs/cron.log 2>&1

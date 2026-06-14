@@ -138,6 +138,8 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "fda_dmf":               ("backend.scrapers.fda_dmf_scraper",               "FDADMFScraper"),
     "fda_decrs":             ("backend.scrapers.fda_decrs_scraper",             "FDADECRSScraper"),
     "who_pq":                ("backend.scrapers.who_pq_api_scraper",            "WHOPQAPIScraper"),
+    # Official pricing connectors (write to drug_pricing_history — migration 055)
+    "nadac":                 ("backend.scrapers.pricing.nadac_scraper",         "NADACScraper"),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

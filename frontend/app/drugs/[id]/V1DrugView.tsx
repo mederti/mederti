@@ -43,6 +43,8 @@ const FLAG: Record<string, string> = {
   AU: "🇦🇺", NZ: "🇳🇿", GB: "🇬🇧", UK: "🇬🇧", US: "🇺🇸", CA: "🇨🇦", SG: "🇸🇬",
   DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", IE: "🇮🇪", CH: "🇨🇭", NO: "🇳🇴",
   SE: "🇸🇪", FI: "🇫🇮", DK: "🇩🇰", NL: "🇳🇱", JP: "🇯🇵", KR: "🇰🇷",
+  BE: "🇧🇪", AT: "🇦🇹", PL: "🇵🇱", PT: "🇵🇹", GR: "🇬🇷", IN: "🇮🇳",
+  CN: "🇨🇳", BR: "🇧🇷", MX: "🇲🇽", ZA: "🇿🇦",
 };
 const flag = (c: string) => FLAG[(c || "").toUpperCase()] ?? "🌐";
 const SEV: Record<string, number> = { critical: 3, high: 2, medium: 1, low: 0 };
@@ -83,7 +85,7 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, products,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, products,
 }: {
   id: string;
   drug: any;
@@ -114,6 +116,27 @@ export default function V1DrugView({
     price_date: string | null;
     source: string;
   } | null;
+  // Active price-concession in the user's market (early supply-pressure signal).
+  concession?: {
+    country: string;
+    price: number;
+    tariff: number | null;
+    currency: string;
+    pack: string | null;
+    effective_date: string;
+    source: string;
+  } | null;
+  // Headline official price per market (NHS Drug Tariff, CMS NADAC, …).
+  priceMarkets?: {
+    country: string;
+    label: string;
+    value: number | null;
+    per: string;
+    currency: string;
+    source: string | null;
+    effective_date: string | null;
+    concession: number | null;
+  }[] | null;
   // Registered products for this molecule (drug_products + joined sponsor / MA
   // holder). Already fetched in page.tsx; drives the "Full drug record" section.
   products?: any[] | null;
@@ -136,6 +159,20 @@ export default function V1DrugView({
   const sev = (mine?.severity || "").toLowerCase();
   const isCrit = sev === "critical" || sev === "high";
   const anticipated = (mine?.status || "").toLowerCase() === "anticipated";
+
+  // ── Pricing: headline price per market + active-concession signal ──────────
+  const mkts = priceMarkets ?? [];
+  const myMarket = mkts.find((m) => m.country === userCountry) ?? null;
+  const otherMarkets = mkts.filter((m) => m.country !== userCountry).slice(0, 4);
+  // Distinct countries with an active/anticipated shortage — the footprint the
+  // concession signal points at ("under price pressure here AND short in N").
+  const shortCountries = Array.from(
+    new Set(active.map((s) => (s.country_code || "").toUpperCase()).filter(Boolean)),
+  );
+  const concDelta =
+    concession && concession.tariff && concession.tariff > 0
+      ? Math.round(((concession.price - concession.tariff) / concession.tariff) * 100)
+      : null;
 
   // Expected back — sponsor-declared only, else "No estimate provided" (never computed).
   const expected = monthYear(mine?.estimated_resolution_date);
@@ -445,15 +482,45 @@ export default function V1DrugView({
             </div>
           )}
 
-          {/* Trade price — adaptive panel. Renders whatever price tiers exist
-              for this market; degrades to a visible "awaiting ingest" structure
-              so it reads as pending, not broken. Never fabricates a price. */}
+          {/* Price-concession signal — a regulator raising the reimbursement
+              price above tariff means pharmacies can't source at tariff: an
+              early supply-pressure indicator that typically precedes a formal
+              shortage listing. The differentiator; nobody else surfaces it. */}
+          {concession && (
+            <div className="conc-signal">
+              <div className="conc-ic" aria-hidden>⚠</div>
+              <div className="conc-body">
+                <div className="conc-h">Price concession active — {flag(concession.country)} {COUNTRY[concession.country] ?? concession.country} · {monthYear(concession.effective_date)}</div>
+                <div className="conc-d">
+                  Reimbursement{concession.pack ? ` for ${concession.pack}` : ""} set at <b>{fmtPrice(concession.price, concession.currency)}</b>
+                  {concession.tariff != null && concDelta != null ? (
+                    <> — up from the {fmtPrice(concession.tariff, concession.currency)} Cat&nbsp;M tariff <span className="conc-delta">(+{concDelta}%)</span></>
+                  ) : (
+                    <> above the standard Drug Tariff price</>
+                  )}
+                  . Pharmacies can’t source at tariff price — an early supply-pressure signal that often precedes a formal shortage.
+                </div>
+                {shortCountries.length > 0 && (
+                  <div className="conc-foot">
+                    <span className="conc-foot-l">Already short in</span>
+                    <span className="conc-foot-n">{shortCountries.length} {shortCountries.length === 1 ? "country" : "countries"}</span>
+                    <span className="conc-foot-c">{shortCountries.slice(0, 12).map((c) => flag(c)).join(" ")}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Trade price — adaptive panel. AU shows the PBS tiers (AEMP/DPMQ);
+              other markets show their headline official price from
+              drug_pricing_history. Cross-references other markets we hold.
+              Degrades to a visible "awaiting ingest" note. Never fabricates. */}
           <div className="sec">
-            <div className="sec-title">Trade price <span className="help">{pricing ? `${flag(userCountry)} ${pricing.source}${pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}` : `${flag(userCountry)} ${cName} · awaiting price ingest`}</span></div>
+            <div className="sec-title">Trade price <span className="help">{pricing ? `${flag(userCountry)} ${pricing.source}${pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}` : myMarket && myMarket.value != null ? `${flag(userCountry)} ${myMarket.source ?? cName}${myMarket.effective_date ? ` · ${monthYear(myMarket.effective_date)}` : ""}` : `${flag(userCountry)} ${cName} · awaiting price ingest`}</span></div>
             <div className="price-panel">
               <div className="price-top">
                 <div className="market-tabs"><span className="mtab on">{flag(userCountry)} {userCountry}</span></div>
-                {pricing && <span className="reimb">● Trade price on file</span>}
+                {(pricing || (myMarket && myMarket.value != null)) && <span className="reimb">● Official price on file</span>}
               </div>
               {pricing ? (
                 <>
@@ -463,6 +530,14 @@ export default function V1DrugView({
                     <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v sm">{pricing.pack ?? "—"}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</div>
                   </div>
                   <div className="price-foot"><span>Source: {pricing.source}</span><span>{[monthYear(pricing.price_date) ? `Effective ${monthYear(pricing.price_date)}` : null, pricing.currency].filter(Boolean).join(" · ")}</span></div>
+                </>
+              ) : myMarket && myMarket.value != null ? (
+                <>
+                  <div className="price-tiles two">
+                    <div className="ptile"><div className="ptile-l">{myMarket.label}</div><div className="ptile-v">{fmtPrice(myMarket.value, myMarket.currency)}</div><div className="ptile-sub">{myMarket.per}</div></div>
+                    <div className="ptile"><div className="ptile-l">{myMarket.concession != null ? "Concession" : "Pack"}</div>{myMarket.concession != null ? (<><div className="ptile-v" style={{ color: "var(--med)" }}>{fmtPrice(myMarket.concession, myMarket.currency)}</div><div className="ptile-sub">live uplift</div></>) : (<><div className="ptile-v sm">{myMarket.per}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</>)}</div>
+                  </div>
+                  <div className="price-foot"><span>Source: {myMarket.source ?? "official"}</span><span>{[monthYear(myMarket.effective_date) ? `Effective ${monthYear(myMarket.effective_date)}` : null, myMarket.currency].filter(Boolean).join(" · ")}</span></div>
                 </>
               ) : (
                 <>
@@ -475,10 +550,24 @@ export default function V1DrugView({
                     <div className="pe-ic" aria-hidden>$</div>
                     <div>
                       <div className="pe-t">Not yet captured for {cName}</div>
-                      <div className="pe-d">Official trade pricing — ex-manufacturer and dispensed (DPMQ) — isn’t on file for this market yet. PBS (Australia) and NHS Drug Tariff (United Kingdom) feeds are prioritised; this panel populates automatically once the data lands.</div>
+                      <div className="pe-d">Official pricing isn’t on file for this market yet. PBS (Australia), NHS Drug Tariff (United Kingdom) and CMS NADAC (United States) feeds are prioritised; this panel populates automatically once the data lands.</div>
                     </div>
                   </div>
                 </>
+              )}
+              {otherMarkets.length > 0 && (
+                <div className="xmkt-strip">
+                  <div className="xmkt-lbl">Other markets</div>
+                  <div className="xmkt-row">
+                    {otherMarkets.map((m) => (
+                      <div className="xmkt" key={m.country}>
+                        <div className="xmkt-c">{flag(m.country)} {m.country}</div>
+                        <div className="xmkt-v">{m.concession != null ? fmtPrice(m.concession, m.currency) : m.value != null ? fmtPrice(m.value, m.currency) : "—"}</div>
+                        <div className="xmkt-t">{m.concession != null ? "concession" : m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -881,7 +970,27 @@ const CSS = `
 .pe-ic{width:30px;height:30px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;background:var(--bg-3);color:var(--text-4);border:1px solid var(--border);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .pe-t{font-size:13px;font-weight:600;color:var(--text-2)}
 .pe-d{font-size:11.5px;color:var(--text-4);line-height:1.5;margin-top:3px;max-width:560px}
+.price-tiles.two{grid-template-columns:repeat(2,1fr)}
 @media(max-width:560px){.price-tiles{grid-template-columns:repeat(2,1fr)}}
+/* Price-concession signal — amber supply-pressure banner above the price card */
+.conc-signal{display:flex;gap:12px;align-items:flex-start;margin:18px 0 0;padding:14px 16px;border:1px solid var(--med-b);border-radius:14px;background:var(--med-bg)}
+.conc-ic{flex-shrink:0;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--med);background:#fff;border:1px solid var(--med-b)}
+.conc-h{font-size:13.5px;font-weight:700;color:var(--med);letter-spacing:-.01em}
+.conc-d{font-size:12.5px;color:var(--text-2);line-height:1.55;margin-top:4px}
+.conc-d b{font-weight:700;color:var(--ink)}
+.conc-delta{font-weight:700;color:var(--med)}
+.conc-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px}
+.conc-foot-l{font-size:11px;color:var(--text-3)}
+.conc-foot-n{font-size:11px;font-weight:700;color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b);padding:2px 8px;border-radius:99px}
+.conc-foot-c{font-size:12px;letter-spacing:1px}
+/* Cross-reference markets strip inside the price panel */
+.xmkt-strip{border-top:1px solid var(--border);padding:11px 18px;background:var(--bg-2)}
+.xmkt-lbl{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);margin-bottom:8px}
+.xmkt-row{display:flex;gap:8px;flex-wrap:wrap}
+.xmkt{flex:1;min-width:96px;border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:8px 11px}
+.xmkt-c{font-size:11px;font-weight:600;color:var(--text-3)}
+.xmkt-v{font-size:15px;font-weight:700;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace;letter-spacing:-.02em;margin-top:2px}
+.xmkt-t{font-size:10px;color:var(--text-4);margin-top:1px}
 .status-card.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border:1px solid var(--crit-b)}
 .status-card.med{background:linear-gradient(135deg,#fffdf5,#fffbeb);border:1px solid var(--med-b)}
 .status-card.ok{background:linear-gradient(135deg,#f0fdf8,#ecfdf5);border:1px solid var(--ok-b)}

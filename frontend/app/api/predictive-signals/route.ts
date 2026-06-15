@@ -37,6 +37,10 @@ const PEER_GROUPS: Record<string, string[]> = {
 
 const SEV_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
+// A price concession is "live" if granted within this window (covers the
+// current + prior month given monthly publication + scrape lag).
+const CONCESSION_ACTIVE_MS = 75 * 86400000;
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const country = (url.searchParams.get("country") ?? "GB").toUpperCase();
@@ -91,7 +95,30 @@ export async function GET(req: Request) {
     }
   }
 
-  // Filter: drugs in `min_peers` peer countries but NOT in user's country
+  // Live price concessions by drug → which markets. A concession means a
+  // regulator is paying above tariff because pharmacies can't source at price:
+  // a supply-pressure signal that often LEADS the shortage listing. A
+  // concession in the user's own market is the most imminent signal of all —
+  // local price pressure ahead of a local shortage. GB-only today (NHS feed);
+  // defensive so a missing table never breaks the radar.
+  const concCutoff = new Date(Date.now() - CONCESSION_ACTIVE_MS).toISOString().slice(0, 10);
+  const concByDrug = new Map<string, Set<string>>();
+  try {
+    const { data: concRows } = await sb
+      .from("drug_pricing_history")
+      .select("drug_id, country, effective_date")
+      .eq("price_type", "concession")
+      .gte("effective_date", concCutoff)
+      .not("drug_id", "is", null);
+    for (const r of (concRows ?? []) as Array<{ drug_id: string; country: string }>) {
+      if (!concByDrug.has(r.drug_id)) concByDrug.set(r.drug_id, new Set());
+      concByDrug.get(r.drug_id)!.add(r.country);
+    }
+  } catch { /* table not reachable → no concession signal, radar still works */ }
+
+  // Filter: drugs short in `min_peers` peer markets but NOT in the user's —
+  // OR with a live LOCAL concession backed by ≥1 peer shortage (local price
+  // pressure is strong enough to admit a drug below the peer threshold).
   const candidates: Array<{
     drug_id: string;
     peer_count: number;
@@ -99,11 +126,16 @@ export async function GET(req: Request) {
     worst_severity: string;
     oldest_start: string | null;
     days_lead: number | null;
+    concession_local: boolean;
+    concession_markets: string[];
   }> = [];
 
   for (const [drugId, d] of drugMap) {
     if (d.inUserCountry) continue;
-    if (d.peerCountries.size < minPeers) continue;
+    const concMarkets = concByDrug.get(drugId) ?? new Set<string>();
+    const concessionLocal = concMarkets.has(country);
+    const qualifies = d.peerCountries.size >= minPeers || (concessionLocal && d.peerCountries.size >= 1);
+    if (!qualifies) continue;
     const days = d.oldestStart
       ? Math.floor((Date.now() - new Date(d.oldestStart).getTime()) / 86400000)
       : null;
@@ -114,15 +146,21 @@ export async function GET(req: Request) {
       worst_severity: d.worstSev,
       oldest_start: d.oldestStart,
       days_lead: days,
+      concession_local: concessionLocal,
+      concession_markets: [...concMarkets].sort(),
     });
   }
 
-  // Rank by severity, peer count, oldest signal
+  // Composite rank: a live LOCAL concession dominates (most imminent), then
+  // severity, then peer breadth + corroborating concession markets, then age.
+  const score = (c: (typeof candidates)[number]): number =>
+    (c.concession_local ? 1000 : 0) +
+    (SEV_RANK[c.worst_severity] ?? 0) * 100 +
+    c.peer_count * 5 +
+    c.concession_markets.length * 3;
   candidates.sort((a, b) => {
-    const sa = SEV_RANK[a.worst_severity] ?? 0;
-    const sb_ = SEV_RANK[b.worst_severity] ?? 0;
-    if (sa !== sb_) return sb_ - sa;
-    if (a.peer_count !== b.peer_count) return b.peer_count - a.peer_count;
+    const d = score(b) - score(a);
+    if (d !== 0) return d;
     return (b.days_lead ?? 0) - (a.days_lead ?? 0);
   });
 
@@ -154,6 +192,7 @@ export async function GET(req: Request) {
     peer_set: peers,
     min_peers: minPeers,
     total_candidates: candidates.length,
+    concession_candidates: candidates.filter((c) => c.concession_local).length,
     results,
   });
 }

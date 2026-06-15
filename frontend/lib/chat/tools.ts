@@ -2623,6 +2623,25 @@ async function getPredictiveSignals(args: { country: string; min_peers?: number;
     if (ev.start_date && (!d.oldestStart || ev.start_date < d.oldestStart)) d.oldestStart = ev.start_date;
   }
 
+  // Live price concessions by drug → markets. A concession (regulator paying
+  // above tariff because pharmacies can't source at price) is a supply-pressure
+  // signal that often LEADS the shortage listing; one in the user's own market
+  // is the most imminent signal. GB-only today (NHS). Defensive.
+  const concCutoff = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
+  const concByDrug = new Map<string, Set<string>>();
+  try {
+    const { data: concRows } = await sb
+      .from("drug_pricing_history")
+      .select("drug_id,country,effective_date")
+      .eq("price_type", "concession")
+      .gte("effective_date", concCutoff)
+      .not("drug_id", "is", null);
+    for (const r of (concRows ?? []) as Array<{ drug_id: string; country: string }>) {
+      if (!concByDrug.has(r.drug_id)) concByDrug.set(r.drug_id, new Set());
+      concByDrug.get(r.drug_id)!.add(r.country);
+    }
+  } catch { /* no concession signal → radar still works */ }
+
   const candidates: Array<{
     drug_id: string;
     peer_count: number;
@@ -2630,10 +2649,15 @@ async function getPredictiveSignals(args: { country: string; min_peers?: number;
     worst_severity: string;
     oldest_start: string | null;
     days_lead: number | null;
+    concession_local: boolean;
+    concession_markets: string[];
   }> = [];
   for (const [drugId, d] of drugMap) {
     if (d.inUserCountry) continue;
-    if (d.peerCountries.size < minPeers) continue;
+    const concMarkets = concByDrug.get(drugId) ?? new Set<string>();
+    const concessionLocal = concMarkets.has(country);
+    // Qualify on peer breadth, OR a live local concession backed by ≥1 peer.
+    if (!(d.peerCountries.size >= minPeers || (concessionLocal && d.peerCountries.size >= 1))) continue;
     const days = d.oldestStart ? Math.floor((Date.now() - new Date(d.oldestStart).getTime()) / 86400000) : null;
     candidates.push({
       drug_id: drugId,
@@ -2642,13 +2666,19 @@ async function getPredictiveSignals(args: { country: string; min_peers?: number;
       worst_severity: d.worstSev,
       oldest_start: d.oldestStart,
       days_lead: days,
+      concession_local: concessionLocal,
+      concession_markets: [...concMarkets].sort(),
     });
   }
+  // Composite rank: live local concession dominates, then severity, then breadth.
+  const score = (c: (typeof candidates)[number]): number =>
+    (c.concession_local ? 1000 : 0) +
+    (SEV_RANK_STEP5[c.worst_severity] ?? 0) * 100 +
+    c.peer_count * 5 +
+    c.concession_markets.length * 3;
   candidates.sort((a, b) => {
-    const sa = SEV_RANK_STEP5[a.worst_severity] ?? 0;
-    const sb_ = SEV_RANK_STEP5[b.worst_severity] ?? 0;
-    if (sa !== sb_) return sb_ - sa;
-    if (a.peer_count !== b.peer_count) return b.peer_count - a.peer_count;
+    const d = score(b) - score(a);
+    if (d !== 0) return d;
     return (b.days_lead ?? 0) - (a.days_lead ?? 0);
   });
 
@@ -2683,11 +2713,13 @@ async function getPredictiveSignals(args: { country: string; min_peers?: number;
     freshnessDays: 1, // scrape cadence is daily
   });
 
+  const concCount = candidates.filter((c) => c.concession_local).length;
   return {
     country,
     peer_set: peers,
     min_peers: minPeers,
     total_candidates: candidates.length,
+    concession_candidates: concCount,
     results,
     confidence: {
       ...confidence,
@@ -2697,6 +2729,7 @@ async function getPredictiveSignals(args: { country: string; min_peers?: number;
       "Peer-set is a regional default for the focal country; pass peer_set to override.",
       "Lead time = days since the OLDEST of the corroborating peer signals started.",
       "Drugs already declared short in the focal country are filtered out — this is a leading-indicator view.",
+      "concession_local = a live price concession in the focal market: regulator paying above tariff because pharmacies can't source. A supply-pressure signal that often precedes the local shortage listing; these rank highest and can qualify with fewer peer shortages.",
     ],
   };
 }

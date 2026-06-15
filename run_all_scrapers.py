@@ -138,6 +138,8 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "fda_dmf":               ("backend.scrapers.fda_dmf_scraper",               "FDADMFScraper"),
     "fda_decrs":             ("backend.scrapers.fda_decrs_scraper",             "FDADECRSScraper"),
     "who_pq":                ("backend.scrapers.who_pq_api_scraper",            "WHOPQAPIScraper"),
+    # Official pricing connectors (write to drug_pricing_history — migration 055)
+    "nadac":                 ("backend.scrapers.pricing.nadac_scraper",         "NADACScraper"),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -366,6 +368,23 @@ def main(keys: list[str] | None = None) -> int:
             )
         except Exception as exc:
             log.error(f"Recall alert dispatcher failed: {exc}")
+
+        # ── Dispatch price-concession early-warning alerts ─────────────────
+        # Concessions only change when the NHS Drug Tariff scraper runs (weekly),
+        # so gate on it — otherwise this dispatch block (which runs after EVERY
+        # run_all_scrapers invocation) would re-send within the recency window.
+        if "nhs_drug_tariff" in {t[0] for t in targets}:
+            try:
+                from backend.alerts.dispatcher import dispatch_concession_alerts
+                conc_summary = dispatch_concession_alerts()
+                log.info(
+                    f"Concession alerts: processed={conc_summary.get('processed', 0)}  "
+                    f"sent={conc_summary.get('sent', 0)}  "
+                    f"rollover_skipped={conc_summary.get('rollover_skipped', 0)}  "
+                    f"failed={conc_summary.get('failed', 0)}"
+                )
+            except Exception as exc:
+                log.error(f"Concession alert dispatcher failed: {exc}")
 
     # Exit non-zero only when the whole run failed (every scraper broken).
     # Partial failures are expected with flaky upstreams and are surfaced via

@@ -33,6 +33,8 @@ interface Result {
   oldest_start: string | null;
   days_lead: number | null;
   who_essential: boolean;
+  concession_local?: boolean;
+  concession_markets?: string[];
 }
 
 interface Response {
@@ -40,20 +42,34 @@ interface Response {
   peer_set: string[];
   min_peers: number;
   total_candidates: number;
+  concession_candidates?: number;
   results: Result[];
 }
 
 interface PredictiveSignalsProps {
+  /** Explicit market. When omitted, resolves from the `mederti-country` cookie
+   *  (falls back to GB) so the widget is portable across pages. */
   country?: string;
   limit?: number;
   compact?: boolean;
 }
 
-export default function PredictiveSignals({ country = "GB", limit = 8, compact = false }: PredictiveSignalsProps) {
+export default function PredictiveSignals({ country: countryProp, limit = 8, compact = false }: PredictiveSignalsProps) {
+  const [country, setCountry] = useState(countryProp ?? "GB");
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Resolve the market from the cookie when no explicit country is passed.
   useEffect(() => {
+    if (countryProp) return;
+    const m = typeof document !== "undefined"
+      ? document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/)
+      : null;
+    if (m) setCountry(m[1].toUpperCase());
+  }, [countryProp]);
+
+  useEffect(() => {
+    setLoading(true);
     fetch(`/api/predictive-signals?country=${country}&limit=${limit}`)
       .then(r => r.json())
       .then(setData)
@@ -90,7 +106,7 @@ export default function PredictiveSignals({ country = "GB", limit = 8, compact =
           </span>
         </div>
         <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-          {data.total_candidates} drugs flagged
+          {data.total_candidates} drugs flagged{data.concession_candidates ? ` · ${data.concession_candidates} under price concession` : ""}
         </span>
       </div>
 
@@ -132,6 +148,19 @@ export default function PredictiveSignals({ country = "GB", limit = 8, compact =
                 {r.who_essential && (
                   <span title="WHO Essential Medicine" style={{ display: "inline-flex", alignItems: "center", color: "var(--teal)", flexShrink: 0 }}>
                     <Star size={11} fill="currentColor" />
+                  </span>
+                )}
+                {r.concession_local && (
+                  <span
+                    title={`Price concession active in ${countryName} — local supply pressure ahead of any shortage listing`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0,
+                      fontSize: 10, fontWeight: 700, letterSpacing: "0.02em",
+                      padding: "2px 7px", borderRadius: 99,
+                      background: "var(--med-bg)", color: "var(--med)", border: "1px solid var(--med)",
+                    }}
+                  >
+                    <AlertTriangle size={9} /> concession
                   </span>
                 )}
               </div>

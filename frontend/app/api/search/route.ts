@@ -38,7 +38,7 @@ interface SearchHit {
   substitution?: { scheme: string; reference: string | null } | null;
   best_alternative?: { name: string; relationship: string | null } | null;
   // PBS trade price (AU only; null elsewhere or until the PBS ingest lands).
-  trade_price?: { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null } | null;
+  trade_price?: { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null; label?: string; source?: string } | null;
   // ── Form/Strength (catalogue product rows; parsed by migration 054) ──
   form_bucket?: string | null;               // controlled dose-form bucket
   strength_label?: string | null;            // e.g. "500mg"
@@ -264,7 +264,7 @@ export async function GET(req: NextRequest) {
   const otherMarkets: Record<string, Set<string>> = {};                       // distinct OTHER countries short
   const subMap: Record<string, { scheme: string; reference: string | null }> = {}; // active substitution pathway
   const bestAlt: Record<string, { name: string; relationship: string | null }> = {}; // top alternative by similarity
-  const priceMap: Record<string, { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null }> = {}; // PBS trade price (market-scoped)
+  const priceMap: Record<string, { ex_manufacturer: number; dispensed: number | null; currency: string; pack: string | null; label?: string; source?: string }> = {}; // official price, market-scoped (PBS or drug_pricing_history)
   // Phase 3a de-noising: drug_ids tagged reference_document / export_only are
   // dropped from results + facets. Read defensively — if the entity_type column
   // doesn't exist yet (migration 052 not applied), the probe errors and the
@@ -485,6 +485,50 @@ export async function GET(req: NextRequest) {
                 dispensed: row.dispensed_amount != null ? Number(row.dispensed_amount) : null,
                 currency: row.currency ?? "AUD",
                 pack: row.pack_size ?? null,
+                label: "ex-mfr",
+                source: "PBS",
+              };
+            }
+          })
+      );
+
+      // Official price from drug_pricing_history for markets the PBS feed can't
+      // cover (GB NHS Drug Tariff, US CMS NADAC, …). Fills only the drugs PBS
+      // didn't, using the latest non-concession row per drug. Defensive: a probe
+      // error degrades to "no price" rather than 500-ing search.
+      jobs.push(
+        timer
+          .track("db_pricing_history", () =>
+            sb
+              .from("drug_pricing_history")
+              .select("drug_id,price_type,pack_price,unit_price,currency,authority,effective_date")
+              .eq("country", market)
+              .in("drug_id", drugIds)
+              .not("drug_id", "is", null)
+              .order("effective_date", { ascending: false, nullsFirst: false })
+              .then(
+                (r) => r as PgResult<{ drug_id: string; price_type: string; pack_price: number | null; unit_price: number | null; currency: string | null; authority: string | null }>,
+                () => ({ data: null })
+              )
+          )
+          .then((r) => {
+            const LABEL: Record<string, string> = {
+              drug_tariff: "Drug Tariff", reimbursement: "reimb.", pharmacy_purchase: "acquisition",
+              list: "list", wholesale: "wholesale", ex_factory: "ex-factory", amp: "AMP",
+              wac: "WAC", reference_price: "ref. price",
+            };
+            for (const row of r.data ?? []) {
+              if (!row.drug_id || row.price_type === "concession") continue;
+              if (priceMap[row.drug_id]) continue; // PBS or an earlier (later-dated) row already won
+              const v = row.pack_price ?? row.unit_price;
+              if (v == null) continue;
+              priceMap[row.drug_id] = {
+                ex_manufacturer: Number(v),
+                dispensed: null,
+                currency: row.currency ?? "",
+                pack: null,
+                label: LABEL[row.price_type] ?? row.price_type,
+                source: row.authority ?? "official",
               };
             }
           })

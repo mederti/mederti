@@ -286,7 +286,9 @@ function Results() {
   // Only show the Trade price column once at least one result actually has a
   // price — keeps the column hidden (rather than a sea of "—") until the PBS
   // pricing feed is populated.
-  const hasTradePrice = market === "AU" && results.some((d) => !!d.trade_price);
+  // Show the price column whenever any result carries an official price in the
+  // selected market — PBS for AU, NHS Drug Tariff / CMS NADAC for GB / US, etc.
+  const hasTradePrice = results.some((d) => !!d.trade_price);
 
   return (
     <>
@@ -544,8 +546,8 @@ function Results() {
                             <div className="t-price">{fmtPrice(d.trade_price.ex_manufacturer, d.trade_price.currency)}</div>
                             <div className="t-sub2">
                               {d.trade_price.dispensed != null
-                                ? `disp. ${fmtPrice(d.trade_price.dispensed, d.trade_price.currency)} · PBS`
-                                : "ex-mfr · PBS"}
+                                ? `disp. ${fmtPrice(d.trade_price.dispensed, d.trade_price.currency)} · ${d.trade_price.source ?? "PBS"}`
+                                : `${d.trade_price.label ?? "ex-mfr"} · ${d.trade_price.source ?? "PBS"}`}
                             </div>
                           </>
                         ) : (

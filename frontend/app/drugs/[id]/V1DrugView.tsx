@@ -436,6 +436,37 @@ export default function V1DrugView({
             <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
           </div>
 
+          {/* Price-concession signal — promoted into the hero (Option B). A
+              regulator reimbursing above tariff means pharmacies can't source
+              at price: an early supply-pressure indicator that typically
+              precedes a formal shortage. Only renders when a concession is
+              live in the user's market, so non-concession drugs keep a clean
+              hero. The detailed multi-market price panel stays further down. */}
+          {concession && (
+            <div className="conc-signal hero">
+              <div className="conc-ic" aria-hidden>⚠</div>
+              <div className="conc-body">
+                <div className="conc-h">Price concession active — {flag(concession.country)} {COUNTRY[concession.country] ?? concession.country} · {monthYear(concession.effective_date)}</div>
+                <div className="conc-d">
+                  Reimbursement{concession.pack ? ` for ${concession.pack}` : ""} set at <b>{fmtPrice(concession.price, concession.currency)}</b>
+                  {concession.tariff != null && concDelta != null ? (
+                    <> — up from the {fmtPrice(concession.tariff, concession.currency)} Cat&nbsp;M tariff <span className="conc-delta">(+{concDelta}%)</span></>
+                  ) : (
+                    <> above the standard Drug Tariff price</>
+                  )}
+                  . Pharmacies can’t source at tariff price — an early supply-pressure signal that often precedes a formal shortage.
+                </div>
+                {shortCountries.length > 0 && (
+                  <div className="conc-foot">
+                    <span className="conc-foot-l">Already short in</span>
+                    <span className="conc-foot-n">{shortCountries.length} {shortCountries.length === 1 ? "country" : "countries"}</span>
+                    <span className="conc-foot-c">{shortCountries.slice(0, 12).map((c) => flag(c)).join(" ")}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* So-what tiles */}
           <div className="sw-cards">
             <div className="sw-card">
@@ -478,35 +509,6 @@ export default function V1DrugView({
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </div>
-          )}
-
-          {/* Price-concession signal — a regulator raising the reimbursement
-              price above tariff means pharmacies can't source at tariff: an
-              early supply-pressure indicator that typically precedes a formal
-              shortage listing. The differentiator; nobody else surfaces it. */}
-          {concession && (
-            <div className="conc-signal">
-              <div className="conc-ic" aria-hidden>⚠</div>
-              <div className="conc-body">
-                <div className="conc-h">Price concession active — {flag(concession.country)} {COUNTRY[concession.country] ?? concession.country} · {monthYear(concession.effective_date)}</div>
-                <div className="conc-d">
-                  Reimbursement{concession.pack ? ` for ${concession.pack}` : ""} set at <b>{fmtPrice(concession.price, concession.currency)}</b>
-                  {concession.tariff != null && concDelta != null ? (
-                    <> — up from the {fmtPrice(concession.tariff, concession.currency)} Cat&nbsp;M tariff <span className="conc-delta">(+{concDelta}%)</span></>
-                  ) : (
-                    <> above the standard Drug Tariff price</>
-                  )}
-                  . Pharmacies can’t source at tariff price — an early supply-pressure signal that often precedes a formal shortage.
-                </div>
-                {shortCountries.length > 0 && (
-                  <div className="conc-foot">
-                    <span className="conc-foot-l">Already short in</span>
-                    <span className="conc-foot-n">{shortCountries.length} {shortCountries.length === 1 ? "country" : "countries"}</span>
-                    <span className="conc-foot-c">{shortCountries.slice(0, 12).map((c) => flag(c)).join(" ")}</span>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -974,6 +976,7 @@ const CSS = `
 @media(max-width:560px){.price-tiles{grid-template-columns:repeat(2,1fr)}}
 /* Price-concession signal — amber supply-pressure banner above the price card */
 .conc-signal{display:flex;gap:12px;align-items:flex-start;margin:18px 0 0;padding:14px 16px;border:1px solid var(--med-b);border-radius:14px;background:var(--med-bg)}
+.conc-signal.hero{margin-top:12px}
 .conc-ic{flex-shrink:0;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--med);background:#fff;border:1px solid var(--med-b)}
 .conc-h{font-size:13.5px;font-weight:700;color:var(--med);letter-spacing:-.01em}
 .conc-d{font-size:12.5px;color:var(--text-2);line-height:1.55;margin-top:4px}

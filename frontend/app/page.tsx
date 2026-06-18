@@ -170,6 +170,13 @@ export default async function Home() {
         </div>
       </div>
 
+      {/* ── Founder quote ── */}
+      <figure className="founder">
+        <span className="f-mark" aria-hidden>&ldquo;</span>
+        <blockquote>Shortage data is scattered across dozens of regulators in dozens of formats. Our job is to turn it into one honest, cited, real-time picture — for the people deciding at the dispensary counter and in procurement.</blockquote>
+        <figcaption><span className="f-av" aria-hidden /><span className="f-who"><b>Rob Findlay</b><span>Founder, Mederti</span></span></figcaption>
+      </figure>
+
       {/* ── CTA band ── */}
       <div className="cta-band">
         <h2>Built for the dispensary counter.</h2>
@@ -320,6 +327,15 @@ const CSS = `
 .ss-mail{font-size:8px;font-family:var(--font-geist-mono),monospace;color:var(--text-3);background:var(--bg-3);border-radius:5px;padding:3px 6px;text-align:center}
 .prop h3{font-size:17px;font-weight:700;letter-spacing:-.02em;margin-bottom:7px}
 .prop p{font-size:13.5px;color:var(--text-3);line-height:1.6}
+/* Founder quote */
+.founder{max-width:760px;margin:38px auto 0;padding:0 24px;text-align:center;position:relative}
+.founder .f-mark{display:block;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:62px;line-height:.5;color:var(--green);opacity:.18;margin-bottom:10px}
+.founder blockquote{margin:0;font-size:20px;line-height:1.5;letter-spacing:-.02em;font-weight:500;color:var(--ink)}
+.founder figcaption{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:24px}
+.founder .f-av{flex-shrink:0;width:46px;aspect-ratio:200/173.21;background:var(--grad-brand);filter:drop-shadow(0 6px 11px rgba(10,15,26,.2));-webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20200%20173.21'%3E%3Cpath%20d='M%20187.00%2064.09%20Q%20200.00%2086.60%20187.00%20109.12%20L%20163.00%20150.69%20Q%20150.00%20173.21%20124.00%20173.21%20L%2076.00%20173.21%20Q%2050.00%20173.21%2037.00%20150.69%20L%2013.00%20109.12%20Q%200.00%2086.60%2013.00%2064.09%20L%2037.00%2022.52%20Q%2050.00%200.00%2076.00%200.00%20L%20124.00%200.00%20Q%20150.00%200.00%20163.00%2022.52%20Z'%20fill='%23000'/%3E%3C/svg%3E")center/100% 100% no-repeat;mask:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20200%20173.21'%3E%3Cpath%20d='M%20187.00%2064.09%20Q%20200.00%2086.60%20187.00%20109.12%20L%20163.00%20150.69%20Q%20150.00%20173.21%20124.00%20173.21%20L%2076.00%20173.21%20Q%2050.00%20173.21%2037.00%20150.69%20L%2013.00%20109.12%20Q%200.00%2086.60%2013.00%2064.09%20L%2037.00%2022.52%20Q%2050.00%200.00%2076.00%200.00%20L%20124.00%200.00%20Q%20150.00%200.00%20163.00%2022.52%20Z'%20fill='%23000'/%3E%3C/svg%3E")center/100% 100% no-repeat}
+.founder .f-who{display:flex;flex-direction:column;text-align:left}
+.founder .f-who b{font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
+.founder .f-who span{font-size:12.5px;color:var(--text-3);margin-top:1px}
 .stats{max-width:900px;margin:clamp(64px,8vw,96px) auto 0;padding:0 clamp(20px,4vw,40px);display:grid;grid-template-columns:repeat(3,1fr);gap:28px;text-align:center}
 .stat-n{font-size:clamp(36px,4.6vw,54px);font-weight:800;letter-spacing:-.035em;color:var(--ink);line-height:1;font-variant-numeric:tabular-nums}
 .stat-l{font-size:13px;color:var(--text-3);margin-top:8px}
@@ -336,6 +352,6 @@ const CSS = `
 .home-foot{max-width:1040px;margin:64px auto 0;padding:30px 24px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-4)}
 .home-foot a{color:inherit;text-decoration:none}
 .home-foot a:hover{color:var(--green-d)}
-@media(max-width:760px){.hero h1{font-size:50px}.props{grid-template-columns:1fr;margin-top:104px;row-gap:84px}.prop{text-align:center}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}.hero-stats{gap:10px}.hero-stats .stat-n{font-size:21px}.hero-stats .stat-l{font-size:11px}}
+@media(max-width:760px){.hero h1{font-size:50px}.props{grid-template-columns:1fr;margin-top:104px;row-gap:84px}.founder blockquote{font-size:17px}.prop{text-align:center}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}.hero-stats{gap:10px}.hero-stats .stat-n{font-size:21px}.hero-stats .stat-l{font-size:11px}}
 @media(max-width:480px){.home-nav{padding:0 14px}.nav-actions{gap:6px}.v1home .nav-actions .btn{padding:8px 12px}}
 `;

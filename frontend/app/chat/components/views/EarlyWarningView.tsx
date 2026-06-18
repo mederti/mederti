@@ -1,9 +1,160 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function EarlyWarningView() {
   const [range, setRange] = useState<"30d" | "90d" | "6mo">("30d");
+  const [pulse, setPulse] = useState<string | null>(null);
+  const [pulseLoading, setPulseLoading] = useState(true);
+  const [alerted, setAlerted] = useState<Set<string>>(new Set());
+  const [showFull, setShowFull] = useState(false);
+
+  // Analyst read — Claude-written market summary from live shortage data
+  // (reuses the daily briefing's `market_pulse`, cached 6h server-side).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/intelligence/briefing")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        if (d && typeof d.market_pulse === "string") setPulse(d.market_pulse);
+        setPulseLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setPulseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Restore the user's pre-alerts (set client-side, persisted in localStorage).
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("ew-prealerts") || "[]");
+      if (Array.isArray(saved)) setAlerted(new Set(saved as string[]));
+    } catch {}
+  }, []);
+
+  const toggleAlert = (drug: string) => {
+    setAlerted((prev) => {
+      const next = new Set(prev);
+      if (next.has(drug)) next.delete(drug);
+      else next.add(drug);
+      try {
+        localStorage.setItem("ew-prealerts", JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Range = forecast horizon. Each row carries an onset (when the shortage is
+  // forecast to begin); the tab filters the radar to drugs landing within it.
+  const HORIZON_DAYS = { "30d": 30, "90d": 90, "6mo": 182 } as const;
+  const HORIZON_LABEL = {
+    "30d": "next 30 days",
+    "90d": "next 90 days",
+    "6mo": "next 6 months",
+  } as const;
+  // Drugs further down the radar (sub-45% probability), counted by horizon.
+  const BELOW_THRESHOLD = { "30d": 9, "90d": 18, "6mo": 33 } as const;
+
+  const RADAR_ROWS = [
+    { drug: "Cephalexin 500mg", cls: "Antibiotic · J01DB", flag: "🇮🇳", signal: "Hyderabad GMP flag · shared API line w/ amoxicillin", window: "4–6 weeks", onsetDays: 28, prob: 87, conf: 81, tone: "crit" },
+    { drug: "Methotrexate inj", cls: "Oncology · L01BA", flag: "🇨🇳", signal: "Zhejiang precursor export −34% QoQ · sole source", window: "6–9 weeks", onsetDays: 42, prob: 79, conf: 67, tone: "crit" },
+    { drug: "Methylphenidate ER", cls: "CNS · N06BA", flag: "🇮🇳", signal: "Gujarat environmental closure · base API", window: "8–10 weeks", onsetDays: 56, prob: 71, conf: 73, tone: "high" },
+    { drug: "Piperacillin-tazobactam", cls: "Antibiotic · J01CR", flag: "", signal: "Recurring Q3 pattern · 3 of last 4 years short", window: "10–12 weeks", onsetDays: 70, prob: 64, conf: 70, tone: "high" },
+    { drug: "Atorvastatin 40mg", cls: "Statin · C10AA", flag: "", signal: "Sponsor deregistration filed · 1 of 6 brands exiting", window: "12+ weeks", onsetDays: 100, prob: 48, conf: 62, tone: "" },
+  ];
+
+  // Lower-probability forecasts (sub-45%) — revealed by "view full radar".
+  const RADAR_EXTRA = [
+    { drug: "Amoxicillin susp", cls: "Antibiotic · J01CA", flag: "🇮🇳", signal: "Hyderabad cluster · secondary line exposure", window: "4–5 weeks", onsetDays: 24, prob: 43, conf: 58, tone: "" },
+    { drug: "Ondansetron inj", cls: "Antiemetic · A04AA", flag: "", signal: "Two sponsors on allocation · demand climbing", window: "9–11 weeks", onsetDays: 63, prob: 39, conf: 54, tone: "" },
+    { drug: "Hydrocortisone inj", cls: "Cortico · H02AB", flag: "🇨🇳", signal: "Precursor lead time stretching", window: "12–16 weeks", onsetDays: 90, prob: 34, conf: 49, tone: "" },
+    { drug: "Salbutamol MDI", cls: "SABA · R03AC", flag: "", signal: "Propellant transition · capacity dip", window: "18–22 weeks", onsetDays: 130, prob: 28, conf: 46, tone: "" },
+  ];
+
+  const horizonDays = HORIZON_DAYS[range];
+  const visibleRows = RADAR_ROWS.filter((r) => r.onsetDays <= horizonDays);
+  const extraRows = RADAR_EXTRA.filter((r) => r.onsetDays <= horizonDays);
+  const belowThreshold = BELOW_THRESHOLD[range];
+  const highRiskCount = visibleRows.length + belowThreshold;
+
+  const renderRow = (r: (typeof RADAR_ROWS)[number]) => (
+    <div className={r.tone ? `rad-row ${r.tone}` : "rad-row"} key={r.drug}>
+      <div className="rad-drug">
+        {r.drug}
+        <span className="rad-cls">{r.cls}</span>
+      </div>
+      <div className="rad-sig">
+        {r.flag && <span className="sig-flag">{r.flag}</span>}
+        {r.signal}
+      </div>
+      <div className="rad-win">{r.window}</div>
+      <div className="rad-prob">
+        <span className="probbar">
+          <i style={{ width: `${r.prob}%` }}></i>
+        </span>
+        <span className="prob-n">{r.prob}%</span>
+      </div>
+      <div className="rad-conf">
+        {r.conf}
+        <span className="conf-of">/100</span>
+      </div>
+      <div className="rad-act">
+        <button
+          className={alerted.has(r.drug) ? "rad-btn on" : "rad-btn"}
+          onClick={() => toggleAlert(r.drug)}
+        >
+          {alerted.has(r.drug) ? "✓ Alerted" : "Pre-alert"}
+        </button>
+      </div>
+    </div>
+  );
+
+  // Export brief — a markdown snapshot of exactly what's on screen for the
+  // selected horizon. Built client-side; no backend round-trip.
+  const handleExport = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const lines: string[] = [
+      "# Mederti Intelligence — Early-warning brief",
+      "",
+      `Forecast horizon: ${HORIZON_LABEL[range]}`,
+      `Generated: ${today}`,
+      "",
+    ];
+    if (pulse) {
+      lines.push("## Market read", pulse, "");
+    }
+    lines.push(
+      `## High-risk, not yet declared (${highRiskCount})`,
+      "Drugs forecast to go short — ranked by probability × clinical impact. None officially declared yet.",
+      "",
+      "| Drug | Class | Signal driver | Window | Probability | Confidence |",
+      "|---|---|---|---|---|---|",
+      ...visibleRows.map(
+        (r) =>
+          `| ${r.drug} | ${r.cls} | ${r.signal} | ${r.window} | ${r.prob}% | ${r.conf}/100 |`,
+      ),
+      "",
+      `+ ${belowThreshold} more on the radar below 45% probability.`,
+      "",
+      "Source: Mederti early-warning radar — forecasts ahead of official declaration. Not medical advice.",
+    );
+
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/markdown;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mederti-early-warning-${range}-${today}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="ewradar">
@@ -38,11 +189,21 @@ export function EarlyWarningView() {
 
         .ewradar .gov-scroll{padding:18px 28px 32px;background:#f4f5f7}
 
+        /* analyst read */
+        .ewradar .ew-brief{background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 18px;margin-bottom:14px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06)}
+        .ewradar .ew-brief-head{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+        .ewradar .ew-brief-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--teal)}
+        .ewradar .ew-brief-ai{font-size:10px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
+        .ewradar .ew-brief-text{font-size:13.5px;line-height:1.6;color:var(--text-2)}
+        .ewradar .ew-brief-skel{height:12px;border-radius:5px;background:linear-gradient(90deg,var(--bg-2),var(--bg-3),var(--bg-2));background-size:200% 100%;animation:ewsk 1.4s ease-in-out infinite;margin-bottom:8px}
+        .ewradar .ew-brief-skel:last-child{margin-bottom:0}
+        @keyframes ewsk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
         .ewradar .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
         .ewradar .kpi-row.k4{grid-template-columns:repeat(4,1fr)}
         .ewradar .kpi{background:#fff;border:1px solid var(--border);border-radius:11px;padding:15px 16px}
-        .ewradar .kpi.crit{border-color:var(--crit-b);background:linear-gradient(#fff,var(--crit-bg))}
-        .ewradar .kpi.good{border-color:var(--low-b);background:linear-gradient(#fff,var(--low-bg))}
+        .ewradar .kpi.crit{border-color:var(--crit-b)}
+        .ewradar .kpi.good{border-color:var(--low-b)}
         .ewradar .kpi-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-4);margin-bottom:8px;font-weight:600}
         .ewradar .kpi-val{font-size:27px;font-weight:600;letter-spacing:-0.02em;color:var(--text);line-height:1}
         .ewradar .kpi-of{font-size:14px;color:var(--text-4);font-weight:500}
@@ -83,6 +244,8 @@ export function EarlyWarningView() {
         .ewradar .conf-of{font-size:9px;color:var(--text-4)}
         .ewradar .rad-btn{font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;background:#fff;border:1px solid var(--border-2);color:var(--text-2);cursor:pointer;white-space:nowrap}
         .ewradar .rad-btn:hover{border-color:var(--teal);color:var(--teal)}
+        .ewradar .rad-btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
+        .ewradar .rad-btn.on:hover{background:var(--teal-l);border-color:var(--teal-l);color:#fff}
 
         /* feed */
         .ewradar .feed{display:flex;flex-direction:column;gap:0}
@@ -141,16 +304,36 @@ export function EarlyWarningView() {
               6mo
             </span>
           </div>
-          <button className="gov-report-btn">↧ Export brief</button>
+          <button className="gov-report-btn" onClick={handleExport}>
+            ↧ Export brief
+          </button>
         </div>
       </div>
 
       <div className="gov-scroll">
+        {/* ANALYST READ — AI market summary from live data */}
+        {(pulseLoading || pulse) && (
+          <div className="ew-brief">
+            <div className="ew-brief-head">
+              <span className="ew-brief-label">Market read</span>
+              <span className="ew-brief-ai">Mederti AI · live shortage data</span>
+            </div>
+            {pulse ? (
+              <p className="ew-brief-text">{pulse}</p>
+            ) : (
+              <>
+                <div className="ew-brief-skel" style={{ width: "94%" }}></div>
+                <div className="ew-brief-skel" style={{ width: "72%" }}></div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* PREDICTIVE KPI STRIP */}
         <div className="kpi-row k4">
           <div className="kpi crit">
             <div className="kpi-label">High-risk, not yet declared</div>
-            <div className="kpi-val">23</div>
+            <div className="kpi-val">{highRiskCount}</div>
             <div className="kpi-delta up">▲ 5 entered this week</div>
           </div>
           <div className="kpi">
@@ -182,7 +365,7 @@ export function EarlyWarningView() {
             </div>
             <div className="gc-meta">
               drugs forecast to go short — ranked by probability × clinical
-              impact · none officially declared yet
+              impact · none officially declared yet · {HORIZON_LABEL[range]}
             </div>
           </div>
           <div className="radar">
@@ -194,123 +377,26 @@ export function EarlyWarningView() {
               <span>Confidence</span>
               <span></span>
             </div>
-            <div className="rad-row crit">
-              <div className="rad-drug">
-                Cephalexin 500mg
-                <span className="rad-cls">Antibiotic · J01DB</span>
-              </div>
-              <div className="rad-sig">
-                <span className="sig-flag">🇮🇳</span>Hyderabad GMP flag · shared
-                API line w/ amoxicillin
-              </div>
-              <div className="rad-win">4–6 weeks</div>
-              <div className="rad-prob">
-                <span className="probbar">
-                  <i style={{ width: "87%" }}></i>
-                </span>
-                <span className="prob-n">87%</span>
-              </div>
-              <div className="rad-conf">
-                81<span className="conf-of">/100</span>
-              </div>
-              <div className="rad-act">
-                <button className="rad-btn">Pre-alert</button>
-              </div>
-            </div>
-            <div className="rad-row crit">
-              <div className="rad-drug">
-                Methotrexate inj
-                <span className="rad-cls">Oncology · L01BA</span>
-              </div>
-              <div className="rad-sig">
-                <span className="sig-flag">🇨🇳</span>Zhejiang precursor export
-                −34% QoQ · sole source
-              </div>
-              <div className="rad-win">6–9 weeks</div>
-              <div className="rad-prob">
-                <span className="probbar">
-                  <i style={{ width: "79%" }}></i>
-                </span>
-                <span className="prob-n">79%</span>
-              </div>
-              <div className="rad-conf">
-                67<span className="conf-of">/100</span>
-              </div>
-              <div className="rad-act">
-                <button className="rad-btn">Pre-alert</button>
-              </div>
-            </div>
-            <div className="rad-row high">
-              <div className="rad-drug">
-                Methylphenidate ER
-                <span className="rad-cls">CNS · N06BA</span>
-              </div>
-              <div className="rad-sig">
-                <span className="sig-flag">🇮🇳</span>Gujarat environmental
-                closure · base API
-              </div>
-              <div className="rad-win">8–10 weeks</div>
-              <div className="rad-prob">
-                <span className="probbar">
-                  <i style={{ width: "71%" }}></i>
-                </span>
-                <span className="prob-n">71%</span>
-              </div>
-              <div className="rad-conf">
-                73<span className="conf-of">/100</span>
-              </div>
-              <div className="rad-act">
-                <button className="rad-btn">Pre-alert</button>
-              </div>
-            </div>
-            <div className="rad-row high">
-              <div className="rad-drug">
-                Piperacillin-tazobactam
-                <span className="rad-cls">Antibiotic · J01CR</span>
-              </div>
-              <div className="rad-sig">
-                Recurring Q3 pattern · 3 of last 4 years short
-              </div>
-              <div className="rad-win">10–12 weeks</div>
-              <div className="rad-prob">
-                <span className="probbar">
-                  <i style={{ width: "64%" }}></i>
-                </span>
-                <span className="prob-n">64%</span>
-              </div>
-              <div className="rad-conf">
-                70<span className="conf-of">/100</span>
-              </div>
-              <div className="rad-act">
-                <button className="rad-btn">Pre-alert</button>
-              </div>
-            </div>
-            <div className="rad-row">
-              <div className="rad-drug">
-                Atorvastatin 40mg
-                <span className="rad-cls">Statin · C10AA</span>
-              </div>
-              <div className="rad-sig">
-                Sponsor deregistration filed · 1 of 6 brands exiting
-              </div>
-              <div className="rad-win">12+ weeks</div>
-              <div className="rad-prob">
-                <span className="probbar">
-                  <i style={{ width: "48%" }}></i>
-                </span>
-                <span className="prob-n">48%</span>
-              </div>
-              <div className="rad-conf">
-                62<span className="conf-of">/100</span>
-              </div>
-              <div className="rad-act">
-                <button className="rad-btn">Pre-alert</button>
-              </div>
-            </div>
+            {visibleRows.map(renderRow)}
+            {showFull && extraRows.map(renderRow)}
           </div>
           <div className="em-foot">
-            + 18 more on the radar below 45% probability ·{" "}
-            <span className="em-link">view full radar →</span>
+            {showFull ? (
+              <>
+                Showing {extraRows.length} of {belowThreshold} below-45%
+                forecasts ·{" "}
+                <span className="em-link" onClick={() => setShowFull(false)}>
+                  collapse ↑
+                </span>
+              </>
+            ) : (
+              <>
+                + {belowThreshold} more on the radar below 45% probability ·{" "}
+                <span className="em-link" onClick={() => setShowFull(true)}>
+                  view full radar →
+                </span>
+              </>
+            )}
           </div>
         </div>
 

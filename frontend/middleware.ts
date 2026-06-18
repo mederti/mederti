@@ -48,6 +48,7 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/shortages",         // "See all active" target from the trending row
   "/intelligence",      // Pharma Brief and any subroutes
   "/insights",          // public Intelligence / Dashboard reading views (/insights/[kind])
+  "/freshness",         // public source-freshness dashboard (credibility lever)
   "/coming-soon",
   "/admin",             // separately gated by requireAdmin
   "/privacy",
@@ -102,6 +103,8 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   // Public operational reading views (Intelligence / Dashboard) — the grounded
   // chat posts to /api/chat (already public). The full /chat product stays gated.
   "/insights",
+  // Public source-freshness dashboard — credibility lever, no auth required.
+  "/freshness",
   // Static demo / preview HTML in public/
   "/table-preview.html",
   // Public APIs that are safe to expose

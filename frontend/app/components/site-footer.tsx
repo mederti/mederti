@@ -46,6 +46,8 @@ export default function SiteFooter() {
               {!SOFT_LAUNCH && <Link href="/account#alerts" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Alerts</Link>}
               {!SOFT_LAUNCH && <Link href="/supplier-dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Supplier Dashboard</Link>}
               <Link href="/intelligence" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Intelligence</Link>
+              {/* Public credibility lever — visible under soft-launch too. */}
+              <Link href="/freshness" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Data freshness</Link>
             </nav>
           </div>
 

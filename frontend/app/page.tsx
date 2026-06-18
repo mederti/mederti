@@ -13,6 +13,27 @@ function k(n: number): string {
   return `${n}+`;
 }
 
+// Official regulator/standards logos we actually source from daily. Files live in
+// /public/regulator-logos and were hand-picked from Wikimedia Commons — only
+// agencies with a clean, real mark are shown; the rest are honoured in the tail
+// line, never with a placeholder. Rendered grayscale → colour on hover so the
+// visually-disparate marks read as one trust bar.
+const REGULATORS: { f: string; a: string }[] = [
+  { f: "fda.svg", a: "U.S. Food and Drug Administration" },
+  { f: "mhra.jpg", a: "MHRA — United Kingdom" },
+  { f: "health-canada.svg", a: "Health Canada" },
+  { f: "tga.svg", a: "Therapeutic Goods Administration — Australia" },
+  { f: "bfarm.svg", a: "BfArM — Germany" },
+  { f: "ansm.svg", a: "ANSM — France" },
+  { f: "aemps.svg", a: "AEMPS — Spain" },
+  { f: "swissmedic.svg", a: "Swissmedic — Switzerland" },
+  { f: "pmda.svg", a: "PMDA — Japan" },
+  { f: "mfds.svg", a: "MFDS — South Korea" },
+  { f: "anvisa.jpg", a: "ANVISA — Brazil" },
+  { f: "who.svg", a: "World Health Organization" },
+  { f: "nhs.svg", a: "NHS — United Kingdom" },
+];
+
 export default async function Home() {
   let medicines = "—";
   let activeShortages = "—";
@@ -76,12 +97,15 @@ export default async function Home() {
         </div>
         <div className="trust">
           <div className="trust-label">Sourced directly from drug regulators</div>
-          <div className="trust-regs">
-            {["TGA", "FDA", "MHRA", "EMA", "Health Canada", "PMDA", "BfArM", "+ more"].map((r) => (
-              <span key={r} className="trust-reg">{r}</span>
-            ))}
+          <div className="reg-marquee">
+            <div className="reg-track">
+              {[...REGULATORS, ...REGULATORS].map((r, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={`/regulator-logos/${r.f}`} alt={r.a} title={r.a} className="reg-logo" aria-hidden={i >= REGULATORS.length} />
+              ))}
+            </div>
           </div>
-          <div className="trust-line">Official shortage notices from regulators across 20+ countries · updated multiple times daily</div>
+          <div className="trust-line">Plus EMA, AIFA, HSA, Pharmac, SFDA and 25+ more — 40+ official regulators across 40 countries · updated multiple times daily</div>
         </div>
       </div>
 
@@ -253,6 +277,15 @@ const CSS = `
 .trust-regs{display:flex;flex-wrap:wrap;gap:10px 20px;justify-content:center;align-items:center}
 .trust-reg{font-size:13px;font-weight:600;color:var(--text-3);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .trust-line{font-size:12.5px;color:var(--text-4);margin-top:16px}
+/* Regulator logo marquee (hero trust strip) */
+.reg-marquee{position:relative;overflow:hidden;margin:4px 0 2px;-webkit-mask:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);mask:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
+.reg-track{display:flex;align-items:center;gap:54px;width:max-content;animation:reg-scroll 46s linear infinite}
+.reg-marquee:hover .reg-track{animation-play-state:paused}
+@keyframes reg-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.reg-logo{height:30px;width:auto;flex:none;object-fit:contain;filter:grayscale(1);opacity:.5;transition:filter .2s,opacity .2s}
+.reg-logo:hover{filter:none;opacity:1}
+@media(max-width:760px){.reg-track{gap:38px}.reg-logo{height:25px}}
+@media(prefers-reduced-motion:reduce){.reg-track{animation:none;flex-wrap:wrap;justify-content:center;width:auto;gap:24px 44px}.reg-marquee{-webkit-mask:none;mask:none}}
 .product-preview{max-width:920px;margin:clamp(40px,5vw,64px) auto 0;padding:0 clamp(20px,4vw,40px)}
 .pp-head{text-align:center;max-width:620px;margin:0 auto 26px}
 .pp-title{font-size:clamp(24px,3vw,32px);font-weight:700;letter-spacing:-.03em;line-height:1.12;color:var(--ink)}

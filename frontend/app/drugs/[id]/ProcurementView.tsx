@@ -242,7 +242,7 @@ export default function ProcurementView({
             Export
           </button>
           <a
-            href="/alerts"
+            href="/account#alerts"
             style={{ ...buttonPrimary, textDecoration: "none" }}
           >
             <Bell size={13} /> Alert me
@@ -781,7 +781,7 @@ export default function ProcurementView({
               stock.
             </div>
             <a
-              href="/alerts"
+              href="/account#alerts"
               style={{
                 width: "100%",
                 padding: 10,

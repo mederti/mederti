@@ -39,7 +39,10 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/account",           // user can manage their account
   "/search",            // drug search
   "/drugs",             // /drugs/[id]
-  "/watchlist",         // signed-in "My medicines" list (auth-gated below)
+  "/watchlist",         // dead entry: next.config redirects /watchlist→/account
+                        // BEFORE middleware runs, so this is never evaluated.
+                        // Kept as a harmless no-op; "My medicines" now lives at
+                        // /account#watchlist. Safe to drop on the next cleanup.
   "/ask",               // conversational home (logged-in landing; logo target)
   "/chat",              // Claude-led answer surface (asks/prompts route here)
   "/shortages",         // "See all active" target from the trending row

@@ -112,6 +112,22 @@ export default function AccountPage() {
     });
   }, []);
 
+  // Deep-link the tabs via URL hash so nav items can land on a specific section
+  // (e.g. the sidebar's "View all →" → /account#watchlist, /account#alerts).
+  // Alert preferences live inside the watchlist tab (per-drug email toggles),
+  // so #alerts resolves there too. Syncs on mount and on hashchange.
+  useEffect(() => {
+    const applyHash = () => {
+      const h = window.location.hash.replace("#", "").toLowerCase();
+      if (h === "watchlist" || h === "alerts") setActiveTab("watchlist");
+      else if (h === "enquiries") setActiveTab("enquiries");
+      else if (h === "settings") setActiveTab("settings");
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
   async function fetchWatchlist(uid: string) {
     setWatchlistLoading(true);
     const { data } = await supabase

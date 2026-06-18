@@ -41,6 +41,12 @@ export interface PersonaContent {
   ctaHeadline: string;
   ctaButton: string;
   ctaHref: string;
+
+  /* Secondary hero CTA — a low-commitment "experience the product" path so
+     anonymous visitors have a route into live data, not just signup/contact.
+     Defaults to public /search; override per-persona if a better surface fits. */
+  secondaryCtaLabel?: string;
+  secondaryCtaHref?: string;
 }
 
 /* ── Shared page shell ── */
@@ -78,19 +84,36 @@ export default function PersonaPage({ content }: { content: PersonaContent }) {
           }}>
             {c.heroSub}
           </p>
-          <Link href={c.heroCtaHref} style={{
-            display: "inline-flex", alignItems: "center",
-            padding: "14px 36px", borderRadius: 10,
-            fontSize: 15, fontWeight: 600,
-            color: "#fff", textDecoration: "none",
-            background: "var(--teal, #0F172A)",
-            transition: "opacity 0.15s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.88"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
-          >
-            {c.heroCta}
-          </Link>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 18, flexWrap: "wrap",
+          }}>
+            <Link href={c.heroCtaHref} style={{
+              display: "inline-flex", alignItems: "center",
+              padding: "14px 36px", borderRadius: 10,
+              fontSize: 15, fontWeight: 600,
+              color: "#fff", textDecoration: "none",
+              background: "var(--teal, #0F172A)",
+              transition: "opacity 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.88"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+            >
+              {c.heroCta}
+            </Link>
+            {/* Secondary path: let visitors see live data without signing up. */}
+            <Link href={c.secondaryCtaHref ?? "/search"} style={{
+              display: "inline-flex", alignItems: "center",
+              fontSize: 15, fontWeight: 600,
+              color: "var(--app-text-2)", textDecoration: "none",
+              transition: "color 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--app-text)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--app-text-2)"; }}
+            >
+              {(c.secondaryCtaLabel ?? "Explore live shortage data")} {"→"}
+            </Link>
+          </div>
         </div>
       </section>
 

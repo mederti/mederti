@@ -95,7 +95,7 @@ export default function V1Sidebar() {
                   {truncateDrugName(m.name, 28)}
                 </Link>
               ))}
-              <Link href="/watchlist" className="sb-item sb-viewall">View all →</Link>
+              <Link href="/account#watchlist" className="sb-item sb-viewall">View all →</Link>
             </>
           ) : (
             <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>

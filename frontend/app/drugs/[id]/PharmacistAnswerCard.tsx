@@ -689,7 +689,7 @@ export default function PharmacistAnswerCard({
             }}
           >
             <a
-              href="/alerts"
+              href="/account#alerts"
               style={{
                 display: "flex",
                 alignItems: "center",

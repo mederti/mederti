@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd } from "@/lib/seo";
@@ -8,6 +9,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 import SiteNav from "@/app/components/landing-nav";
+import AppShell from "@/app/components/v1/AppShell";
 import { AskMedertiCta } from "./ask-mederti-cta";
 import { buildAiInsightText } from "./build-insight-text";
 import { V4BellButton } from "./bell-button";
@@ -420,6 +422,19 @@ const DOT_COLORS: Record<string, string> = {
   update: "#0F172A",
 };
 
+/**
+ * Auth-aware chrome for the drug page. Signed-in users get the shared logged-in
+ * {@link AppShell} (left V1Sidebar) so navigating search → drug never drops the
+ * sidebar; anonymous visitors keep the marketing {@link SiteNav} + signup funnel
+ * (each render branch carries its own `<SiteNav/>`, gated on `!loggedIn`).
+ * `flush` because the drug views are full-bleed, full-height layouts that bring
+ * their own padding/centering — AppShell must not impose its prose gutter.
+ */
+function DrugShell({ loggedIn, children }: { loggedIn: boolean; children: ReactNode }) {
+  if (loggedIn) return <AppShell contentClassName="flush">{children}</AppShell>;
+  return <>{children}</>;
+}
+
 export default async function DrugPage({ params, searchParams }: Props) {
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
@@ -428,10 +443,12 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // Precedence: ?as= query > signed-in user's role > pharmacist default.
   // Session lookup is best-effort — never block the page on it.
   let sessionRole: string | null = null;
+  let loggedIn = false;
   try {
     const { createServerClient } = await import("@/lib/supabase/server");
     const sb = await createServerClient();
     const { data: { user } } = await sb.auth.getUser();
+    loggedIn = !!user;
     if (user) {
       const admin = getSupabaseAdmin();
       const { data: profile } = await admin
@@ -528,8 +545,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
     const catCountry = catEntry.source_country ?? "AU";
     const catFlag = COUNTRY_NAMES[catCountry] ?? catCountry;
     return (
+      <DrugShell loggedIn={loggedIn}>
       <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
-        <SiteNav />
+        {!loggedIn && <SiteNav />}
         <div style={{ background: "var(--navy)", padding: "8px 24px", display: "flex", alignItems: "center", borderBottom: "1px solid var(--bd)" }}>
           <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>{"\u2190"} Back to search</Link>
         </div>
@@ -610,6 +628,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
           </div>
         </div>
       </div>
+      </DrugShell>
     );
   }
 
@@ -1148,6 +1167,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       : null;
 
     return (
+      <DrugShell loggedIn={loggedIn}>
       <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
@@ -1159,7 +1179,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
           }
         `}</style>
 
-        <SiteNav />
+        {!loggedIn && <SiteNav />}
         {!PHARMACIST_ONLY && <PersonaSwitcher current={persona} drugId={id} />}
 
         <div className="v3-cols" style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
@@ -1221,11 +1241,13 @@ export default async function DrugPage({ params, searchParams }: Props) {
           </div>
         </div>
       </div>
+      </DrugShell>
     );
   }
 
   /* ── Render ── */
   return (
+    <DrugShell loggedIn={loggedIn}>
     <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
       {/* JSON-LD structured data — Drug graph + Breadcrumbs */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
@@ -1263,7 +1285,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         }
       `}</style>
 
-      <SiteNav />
+      {!loggedIn && <SiteNav />}
 
       {/* ═══ PERSONA SWITCHER ═══ */}
       {!PHARMACIST_ONLY && <PersonaSwitcher current={persona} drugId={id} />}
@@ -1802,5 +1824,6 @@ export default async function DrugPage({ params, searchParams }: Props) {
         </div>
       </div>
     </div>
+    </DrugShell>
   );
 }

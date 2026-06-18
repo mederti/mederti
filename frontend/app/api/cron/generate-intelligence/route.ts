@@ -11,7 +11,7 @@ export const maxDuration = 300;
 
 const client = new Anthropic();
 const ROUTE = "/api/cron/generate-intelligence";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 
 interface GeneratedArticle {
   slug: string;

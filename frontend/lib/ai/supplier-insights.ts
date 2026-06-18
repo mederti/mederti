@@ -12,7 +12,7 @@ import { recordAiUsage } from "@/lib/ai/usage-log";
 
 const client = new Anthropic();
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 
 /** Voice + persona shared across all supplier insight prompts.
  *  House style: The Economist Style Guide (2023). */

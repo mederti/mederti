@@ -71,10 +71,10 @@ export function GovDashboardView() {
 .govdash .gov-report-btn{font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:8px;background:var(--teal);color:#fff;border:none;cursor:pointer;white-space:nowrap}
 .govdash .gov-report-btn:hover{background:var(--teal-l)}
 
-.govdash .gov-scroll{flex:1;overflow-y:auto;padding:18px 28px 32px;background:var(--bg-2)}
+.govdash .gov-scroll{flex:1;overflow-y:auto;padding:18px 28px 32px;background:#f4f5f7}
 
 /* AI MARKET READ — analyst commentary band */
-.govdash .gov-read{background:#fff;border:1px solid var(--teal-b);border-radius:12px;padding:14px 17px;margin-bottom:14px}
+.govdash .gov-read{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06)}
 .govdash .gov-read-head{display:flex;align-items:center;gap:7px;margin-bottom:7px}
 .govdash .gov-read-spark{font-size:12px;line-height:1}
 .govdash .gov-read-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--teal-l)}
@@ -84,7 +84,7 @@ export function GovDashboardView() {
 .govdash .gov-read-skel:last-child{width:72%;margin-bottom:0}
 @keyframes govShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
-.govdash .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+.govdash .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:16px}
 .govdash .kpi{background:#fff;border:1px solid var(--border);border-radius:11px;padding:15px 16px}
 .govdash .kpi.crit{border-color:var(--crit-b)}
 .govdash .kpi.good{border-color:var(--low-b)}
@@ -96,7 +96,7 @@ export function GovDashboardView() {
 .govdash .kpi-delta.down{color:var(--low)}
 .govdash .kpi-delta.flat{color:var(--text-4)}
 
-.govdash .gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.govdash .gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .govdash .gov-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06),inset 0 1px 0 rgba(255,255,255,.7)}
 .govdash .gov-card.span2{grid-column:1 / -1}
 .govdash .gc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:13px}

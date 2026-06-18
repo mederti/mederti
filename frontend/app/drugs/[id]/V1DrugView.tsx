@@ -912,7 +912,7 @@ const CSS = `
 .sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
 .drug-grid{display:flex;align-items:flex-start}
-.dg-main{flex:1;min-width:0;max-width:1180px;padding:18px 40px 80px;width:100%;background:#eef1f5}
+.dg-main{flex:1;min-width:0;padding:18px 48px 80px;width:100%;background:#eef1f5}
 .dsearch{display:flex;align-items:center;gap:8px;margin:18px 0 0;background:var(--bg);border:1.5px solid var(--border-2);border-radius:12px;padding:5px 6px 5px 14px;transition:.15s}
 .dsearch:focus-within{border-color:var(--green);box-shadow:0 8px 24px -16px rgba(15,166,118,.4)}
 .dsearch-ic{color:var(--text-4);font-size:16px}

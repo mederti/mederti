@@ -115,7 +115,26 @@ function renderRich(text: string): React.ReactNode {
   return blocks;
 }
 
-export default function V1Chat({ drugName }: { drugName: string }) {
+type V1ChatProps = {
+  /** Drug-page mode: grounds the conversation to a single medicine. */
+  drugName?: string;
+  /** Header title (defaults to "Ask about this medicine"). */
+  title?: string;
+  /** Opening greeting bubble. */
+  intro?: string;
+  /** Suggestion chips shown before the first message. */
+  suggestions?: string[];
+  /** Sentence prepended to the user's first turn to set context. */
+  grounding?: string;
+};
+
+export default function V1Chat({
+  drugName,
+  title = "Ask about this medicine",
+  intro = "Ask me anything about this shortage — substitutes, who's affected, how long it may last.",
+  suggestions: suggestionsProp,
+  grounding,
+}: V1ChatProps) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -135,10 +154,13 @@ export default function V1Chat({ drugName }: { drugName: string }) {
     setBusy(true);
     setStatus("Thinking…");
 
-    // Ground the conversation to this drug on the first turn.
+    // Ground the conversation on the first turn — to a single drug on the
+    // drug page, or to the current search/results context elsewhere.
+    const groundingPrefix =
+      grounding ?? (drugName ? `I'm viewing the Mederti page for ${drugName}.` : "");
     const apiMsgs = next.map((m, i) => ({
       role: m.role,
-      text: m.role === "user" && i === 0 ? `I'm viewing the Mederti page for ${drugName}. ${m.text}` : m.text,
+      text: m.role === "user" && i === 0 && groundingPrefix ? `${groundingPrefix} ${m.text}` : m.text,
     }));
 
     try {
@@ -221,7 +243,7 @@ export default function V1Chat({ drugName }: { drugName: string }) {
     }
   }
 
-  const suggestions = [
+  const suggestions = suggestionsProp ?? [
     `What can I substitute for ${drugName}?`,
     "Which countries are affected?",
     "How long did past shortages last?",
@@ -230,12 +252,12 @@ export default function V1Chat({ drugName }: { drugName: string }) {
   return (
     <div className="chat-panel">
       <div className="chat-head">
-        <div className="chat-h-l"><span className="chat-ic">✦</span><div><div className="chat-title">Ask about this medicine</div><div className="chat-sub"><span className="chat-live-dot" />Grounded in live regulator data</div></div></div>
+        <div className="chat-h-l"><span className="chat-ic">✦</span><div><div className="chat-title">{title}</div><div className="chat-sub"><span className="chat-live-dot" />Grounded in live regulator data</div></div></div>
         <span className="chat-free-tag">FREE</span>
       </div>
 
       <div className="chat-stream" ref={streamRef}>
-        <div className="chat-msg ai"><div className="chat-bubble">Ask me anything about this shortage — substitutes, who&apos;s affected, how long it may last.</div></div>
+        <div className="chat-msg ai"><div className="chat-bubble">{intro}</div></div>
         {msgs.map((m, i) => {
           const body = m.role === "assistant" ? clean(m.text) : m.text;
           // Skip the empty trailing assistant placeholder — the status line below

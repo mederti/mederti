@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import Anthropic from "@anthropic-ai/sdk";
 import { STRATEGIST_PERSONA } from "@/lib/ai/supplier-insights";
 import { recordAiUsage } from "@/lib/ai/usage-log";
 import {
-  DASHBOARD_SNAPSHOT,
-  DASHBOARD_FALLBACK_SUMMARY,
+  type RangeKey,
+  DEFAULT_RANGE,
+  isRangeKey,
+  getSnapshot,
+  buildFallbackSummary,
   snapshotToBrief,
 } from "@/lib/insights/dashboard-snapshot";
 
@@ -29,14 +32,15 @@ Interpret, do not list. The numbers are already on the page below you — your j
 
 Output strictly as JSON: {"summary": "<the 2-3 sentence commentary as one paragraph>"}. No prose outside the JSON.`;
 
-async function generateSummary(): Promise<string> {
-  const brief = snapshotToBrief(DASHBOARD_SNAPSHOT);
+async function generateSummary(range: RangeKey): Promise<string> {
+  const snapshot = getSnapshot(range);
+  const brief = snapshotToBrief(snapshot);
   const t0 = Date.now();
   const response = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 500,
     system: SYSTEM,
-    messages: [{ role: "user", content: `Today's dashboard:\n\n${brief}` }],
+    messages: [{ role: "user", content: `Dashboard (${snapshot.rangeLabel}):\n\n${brief}` }],
   });
   recordAiUsage({ route: "/api/insights/dashboard-summary", model: MODEL, response, latency_ms: Date.now() - t0 });
 
@@ -53,19 +57,24 @@ async function generateSummary(): Promise<string> {
   return trimmed;
 }
 
-// Cache the generated prose so Claude is only called on a miss / after revalidate.
-const getCachedSummary = unstable_cache(generateSummary, ["dashboard-market-read"], {
-  revalidate: REVALIDATE_SECONDS,
-  tags: ["dashboard-market-read"],
-});
+// Cache the generated prose per range so Claude is only called on a miss /
+// after revalidate. Each range keeps its own cached read.
+function getCachedSummary(range: RangeKey): Promise<string> {
+  return unstable_cache(() => generateSummary(range), ["dashboard-market-read", range], {
+    revalidate: REVALIDATE_SECONDS,
+    tags: ["dashboard-market-read"],
+  })();
+}
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const param = req.nextUrl.searchParams.get("range");
+  const range: RangeKey = isRangeKey(param) ? param : DEFAULT_RANGE;
   try {
-    const summary = await getCachedSummary();
-    return NextResponse.json({ summary, source: "ai" });
+    const summary = await getCachedSummary(range);
+    return NextResponse.json({ summary, range, source: "ai" });
   } catch (err) {
     // No API key, model error, or invalid JSON — never leave the band empty.
     console.error("[dashboard-summary] falling back to static read:", err);
-    return NextResponse.json({ summary: DASHBOARD_FALLBACK_SUMMARY, source: "fallback" });
+    return NextResponse.json({ summary: buildFallbackSummary(getSnapshot(range)), range, source: "fallback" });
   }
 }

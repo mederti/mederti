@@ -1,28 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DASHBOARD_FALLBACK_SUMMARY } from "@/lib/insights/dashboard-snapshot";
-
-const RANGE_OPTIONS = ["Today", "Quarter", "YTD", "12mo"];
+import {
+  type RangeKey,
+  RANGE_OPTIONS,
+  DEFAULT_RANGE,
+  getSnapshot,
+  buildFallbackSummary,
+} from "@/lib/insights/dashboard-snapshot";
 
 export function GovDashboardView() {
-  const [activeRange, setActiveRange] = useState("Quarter");
+  const [activeRange, setActiveRange] = useState<RangeKey>(DEFAULT_RANGE);
   const [summary, setSummary] = useState<string | null>(null);
+
+  const snap = getSnapshot(activeRange);
+  const k = snap.kpis;
+  const moreEssential = Math.max(0, k.essentialShort.value - snap.topEssential.length);
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/insights/dashboard-summary")
+    setSummary(null); // show the skeleton while the new range's read loads
+    fetch(`/api/insights/dashboard-summary?range=${activeRange}`)
       .then((r) => r.json())
       .then((d) => {
-        if (alive) setSummary(typeof d?.summary === "string" ? d.summary : DASHBOARD_FALLBACK_SUMMARY);
+        if (alive) setSummary(typeof d?.summary === "string" ? d.summary : buildFallbackSummary(getSnapshot(activeRange)));
       })
       .catch(() => {
-        if (alive) setSummary(DASHBOARD_FALLBACK_SUMMARY);
+        if (alive) setSummary(buildFallbackSummary(getSnapshot(activeRange)));
       });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [activeRange]);
 
   return (
     <div className="govdash">
@@ -65,7 +74,7 @@ export function GovDashboardView() {
 .govdash .gov-scroll{flex:1;overflow-y:auto;padding:18px 28px 32px;background:var(--bg-2)}
 
 /* AI MARKET READ — analyst commentary band */
-.govdash .gov-read{background:linear-gradient(180deg,var(--teal-bg),#fff);border:1px solid var(--teal-b);border-radius:12px;padding:14px 17px;margin-bottom:14px}
+.govdash .gov-read{background:#fff;border:1px solid var(--teal-b);border-radius:12px;padding:14px 17px;margin-bottom:14px}
 .govdash .gov-read-head{display:flex;align-items:center;gap:7px;margin-bottom:7px}
 .govdash .gov-read-spark{font-size:12px;line-height:1}
 .govdash .gov-read-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--teal-l)}
@@ -77,8 +86,8 @@ export function GovDashboardView() {
 
 .govdash .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
 .govdash .kpi{background:#fff;border:1px solid var(--border);border-radius:11px;padding:15px 16px}
-.govdash .kpi.crit{border-color:var(--crit-b);background:linear-gradient(#fff,var(--crit-bg))}
-.govdash .kpi.good{border-color:var(--low-b);background:linear-gradient(#fff,var(--low-bg))}
+.govdash .kpi.crit{border-color:var(--crit-b)}
+.govdash .kpi.good{border-color:var(--low-b)}
 .govdash .kpi-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-4);margin-bottom:8px;font-weight:600}
 .govdash .kpi-val{font-size:27px;font-weight:600;letter-spacing:-0.02em;color:var(--text);line-height:1}
 .govdash .kpi-of{font-size:14px;color:var(--text-4);font-weight:500}
@@ -167,11 +176,11 @@ export function GovDashboardView() {
           <div className="gov-range">
             {RANGE_OPTIONS.map((opt) => (
               <span
-                key={opt}
-                className={`gr-opt${activeRange === opt ? " on" : ""}`}
-                onClick={() => setActiveRange(opt)}
+                key={opt.key}
+                className={`gr-opt${activeRange === opt.key ? " on" : ""}`}
+                onClick={() => setActiveRange(opt.key)}
               >
-                {opt}
+                {opt.label}
               </span>
             ))}
           </div>
@@ -202,28 +211,28 @@ export function GovDashboardView() {
         <div className="kpi-row">
           <div className="kpi crit">
             <div className="kpi-label">Active shortages</div>
-            <div className="kpi-val">312</div>
-            <div className="kpi-delta up">▲ 18 vs last qtr</div>
+            <div className="kpi-val">{k.activeShortages.value}</div>
+            <div className={`kpi-delta ${k.activeShortages.direction}`}>{k.activeShortages.delta}</div>
           </div>
           <div className="kpi">
             <div className="kpi-label">Essential medicines short</div>
-            <div className="kpi-val">38 <span className="kpi-of">/ 204</span></div>
-            <div className="kpi-delta up">▲ 6 WHO EML affected</div>
+            <div className="kpi-val">{k.essentialShort.value} <span className="kpi-of">/ {k.essentialShort.of}</span></div>
+            <div className={`kpi-delta ${k.essentialShort.direction}`}>{k.essentialShort.delta}</div>
           </div>
           <div className="kpi">
             <div className="kpi-label">Single-source nationally</div>
-            <div className="kpi-val">19</div>
-            <div className="kpi-delta flat">— no change</div>
+            <div className="kpi-val">{k.singleSource.value}</div>
+            <div className={`kpi-delta ${k.singleSource.direction}`}>{k.singleSource.delta}</div>
           </div>
           <div className="kpi good">
             <div className="kpi-label">Median resolution</div>
-            <div className="kpi-val">112 <span className="kpi-of">days</span></div>
-            <div className="kpi-delta down">▼ 9 days vs peer median</div>
+            <div className="kpi-val">{k.medianResolutionDays.value} <span className="kpi-of">days</span></div>
+            <div className={`kpi-delta ${k.medianResolutionDays.direction}`}>{k.medianResolutionDays.delta}</div>
           </div>
           <div className="kpi">
             <div className="kpi-label">Upstream alerts</div>
-            <div className="kpi-val">7</div>
-            <div className="kpi-delta up">▲ 3 India/China sites</div>
+            <div className="kpi-val">{k.upstreamAlerts.value}</div>
+            <div className={`kpi-delta ${k.upstreamAlerts.direction}`}>{k.upstreamAlerts.delta}</div>
           </div>
         </div>
 
@@ -233,7 +242,7 @@ export function GovDashboardView() {
           <div className="gov-card span2">
             <div className="gc-head">
               <div className="gc-title">Essential medicines in shortage</div>
-              <div className="gc-meta">38 active · sorted by clinical criticality × duration</div>
+              <div className="gc-meta">{k.essentialShort.value} active · sorted by clinical criticality × duration</div>
             </div>
             <div className="emtable">
               <div className="em-h">
@@ -288,7 +297,7 @@ export function GovDashboardView() {
                 <div className="em-fc">Aug 26</div>
               </div>
             </div>
-            <div className="em-foot">+ 32 more essential medicines affected · <span className="em-link">view full national list →</span></div>
+            <div className="em-foot">+ {moreEssential} more essential medicines affected · <span className="em-link">view full national list →</span></div>
           </div>
 
           {/* Concentration risk */}

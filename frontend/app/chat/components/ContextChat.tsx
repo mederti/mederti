@@ -211,7 +211,7 @@ export function ContextChat({
   const isEmpty = turns.length === 0;
 
   return (
-    <aside className="hidden min-[1080px]:flex flex-col shrink-0 w-[380px] bg-white border-l border-slate-200">
+    <aside className="context-rail hidden min-[1080px]:flex flex-col shrink-0 w-[380px] bg-white border-l border-slate-200">
       <div className="h-14 flex items-center gap-2 px-5 shrink-0 border-b border-slate-100">
         <ChatBubble size={15} className="text-teal-600" />
         <div className="text-[13px] font-semibold text-slate-900">{headerLabel}</div>

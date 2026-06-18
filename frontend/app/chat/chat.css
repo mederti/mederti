@@ -2091,3 +2091,18 @@
   margin-top: 2px;
   line-height: 1.4;
 }
+
+/* ===== Narrow context rail (.context-rail, 380px) =====
+   The rich answer blocks below collapse columns on *viewport* width, which
+   never fires inside a 380px rail on a wide monitor — they'd stay 3–4 columns
+   and squash. Scope them to the container width here. The full-width /chat
+   page has no .context-rail, so it is unaffected. */
+.mederti-chat-root .context-rail .kpi-grid-3,
+.mederti-chat-root .context-rail .kpi-grid-4,
+.mederti-chat-root .context-rail .class-card-kpis,
+.mederti-chat-root .context-rail .pane-snapshot{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Belt-and-braces: nothing in the rail may force a horizontal scrollbar on the
+   whole column — wide tables already scroll inside their own .msg-table-wrap. */
+.mederti-chat-root .context-rail{ min-width: 0; }

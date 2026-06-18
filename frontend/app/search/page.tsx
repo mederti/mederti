@@ -748,7 +748,7 @@ const CSS = `
 .chat-input input::placeholder{color:var(--text-4)}
 .chat-send{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .chat-send:disabled{opacity:.5;cursor:default}
-@media(max-width:1180px){.chat-col{display:none}}
+@media(max-width:1080px){.chat-col{display:none}}
 
 /* ── Search box + results ── */
 .searchbox.v1sb{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:14px;padding:6px 8px 6px 18px;box-shadow:0 12px 36px -22px rgba(10,15,26,.28);transition:.15s}

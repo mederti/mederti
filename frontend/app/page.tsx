@@ -126,9 +126,48 @@ export default async function Home() {
 
       {/* ── Value props ── */}
       <div className="props">
-        <div className="prop"><div className="pi"><ClockIcon /></div><h3>Check the status</h3><p>See whether a drug is in a declared shortage right now — and in which countries — with the regulator and timestamp behind every status.</p></div>
-        <div className="prop"><div className="pi"><SwapIcon /></div><h3>Find &amp; source</h3><p>See same-class alternatives with their own shortage status — and connect with registered suppliers who can supply, including under shortage provisions.</p></div>
-        <div className="prop"><div className="pi"><BellIcon /></div><h3>Get alerted</h3><p>Save a medicine and we&apos;ll email you the moment its shortage status changes or it&apos;s reported back in supply.</p></div>
+        <div className="prop">
+          <div className="hexwrap">
+            <div className="hex">
+              <div className="hex-bg status" />
+              <div className="ss">
+                <div className="ss-row"><span className="ss-flag">🇦🇺 TGA</span><span className="ss-time">3h ago</span></div>
+                <div className="ss-stat"><span className="ss-dot" />In shortage</div>
+                <div className="ss-name">Amoxicillin 500mg</div>
+              </div>
+            </div>
+          </div>
+          <h3>Check the status</h3>
+          <p>See whether a drug is in a declared shortage right now — and in which countries — with the regulator and timestamp behind every status.</p>
+        </div>
+        <div className="prop">
+          <div className="hexwrap">
+            <div className="hex">
+              <div className="hex-bg source" />
+              <div className="ss">
+                <div className="ss-li"><span className="ss-li-n">Cefalexin 500mg</span><span className="ss-pill ok">In stock</span></div>
+                <div className="ss-li"><span className="ss-li-n">Amox 250mg/5ml</span><span className="ss-pill ok">96%</span></div>
+                <div className="ss-src">↯ Source it</div>
+              </div>
+            </div>
+          </div>
+          <h3>Find &amp; source</h3>
+          <p>See same-class alternatives with their own shortage status — and connect with registered suppliers who can supply, including under shortage provisions.</p>
+        </div>
+        <div className="prop">
+          <div className="hexwrap">
+            <div className="hex">
+              <div className="hex-bg alert" />
+              <div className="ss">
+                <div className="ss-row"><span className="ss-bell">🔔</span><span className="ss-toggle"><span className="ss-knob" /></span></div>
+                <div className="ss-name sm">Alert set</div>
+                <div className="ss-mail">you@pharmacy.com</div>
+              </div>
+            </div>
+          </div>
+          <h3>Get alerted</h3>
+          <p>Save a medicine and we&apos;ll email you the moment its shortage status changes or it&apos;s reported back in supply.</p>
+        </div>
       </div>
 
       {/* ── CTA band ── */}
@@ -153,10 +192,6 @@ export default async function Home() {
     </div>
   );
 }
-
-function ClockIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 1.8" /></svg>); }
-function SwapIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9h12" /><path d="M13.5 5.5 17 9l-3.5 3.5" /><path d="M20 15H8" /><path d="M10.5 11.5 7 15l3.5 3.5" /></svg>); }
-function BellIcon() { return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>); }
 
 const CSS = `
 /* Tuned design system: scoped token block mirrors the global tuned palette
@@ -254,11 +289,35 @@ const CSS = `
 .ppf-n{font-size:12.5px;font-weight:700;color:var(--ink)}
 .ppf-s{font-size:11px;color:var(--text-3);margin-top:2px}
 @media(max-width:1100px){.pp-float{display:none}}
-.props{max-width:1040px;margin:80px auto 0;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-.prop{background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:28px;transition:.18s}
+.props{max-width:1040px;margin:124px auto 0;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.prop{position:relative;background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:92px 26px 26px;transition:.18s}
 .prop:hover{transform:translateY(-3px);box-shadow:0 20px 40px -24px rgba(10,15,26,.22);border-color:var(--border-2)}
-.prop .pi{width:42px;height:42px;border-radius:12px;background:var(--grad-brand);display:flex;align-items:center;justify-content:center;margin-bottom:18px;color:#fff}
-.prop .pi svg{width:20px;height:20px}
+.prop:hover .hexwrap{transform:translateX(-50%) translateY(-4px)}
+/* Hexagon screenshot — flat-top, rounded-corner mask matching the mederti logo,
+   floating above the card's top edge */
+.prop .hexwrap{position:absolute;top:-62px;left:50%;transform:translateX(-50%);width:164px;transition:transform .18s}
+.prop .hex{position:relative;width:100%;aspect-ratio:200/173.21;filter:drop-shadow(0 16px 24px rgba(10,15,26,.22));-webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20200%20173.21'%3E%3Cpath%20d='M%20187.00%2064.09%20Q%20200.00%2086.60%20187.00%20109.12%20L%20163.00%20150.69%20Q%20150.00%20173.21%20124.00%20173.21%20L%2076.00%20173.21%20Q%2050.00%20173.21%2037.00%20150.69%20L%2013.00%20109.12%20Q%200.00%2086.60%2013.00%2064.09%20L%2037.00%2022.52%20Q%2050.00%200.00%2076.00%200.00%20L%20124.00%200.00%20Q%20150.00%200.00%20163.00%2022.52%20Z'%20fill='%23000'/%3E%3C/svg%3E")center/100% 100% no-repeat;mask:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20200%20173.21'%3E%3Cpath%20d='M%20187.00%2064.09%20Q%20200.00%2086.60%20187.00%20109.12%20L%20163.00%20150.69%20Q%20150.00%20173.21%20124.00%20173.21%20L%2076.00%20173.21%20Q%2050.00%20173.21%2037.00%20150.69%20L%2013.00%20109.12%20Q%200.00%2086.60%2013.00%2064.09%20L%2037.00%2022.52%20Q%2050.00%200.00%2076.00%200.00%20L%20124.00%200.00%20Q%20150.00%200.00%20163.00%2022.52%20Z'%20fill='%23000'/%3E%3C/svg%3E")center/100% 100% no-repeat}
+.prop .hex-bg{position:absolute;inset:0}
+.prop .hex-bg.status{background:radial-gradient(120% 100% at 50% 0%,#fff6f7,#fbe4ea)}
+.prop .hex-bg.source{background:radial-gradient(120% 100% at 50% 0%,#f1fbf6,#dcf1e8)}
+.prop .hex-bg.alert{background:radial-gradient(120% 100% at 50% 0%,#f1f3ff,#e2e6ff)}
+.prop .hex .ss{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:74%;background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px 9px;box-shadow:0 10px 20px -12px rgba(10,15,26,.45);display:flex;flex-direction:column;gap:5px;transition:transform .18s}
+.ss-row{display:flex;align-items:center;justify-content:space-between}
+.ss-flag{font-size:8px;font-weight:700;font-family:var(--font-geist-mono),monospace;color:var(--text-3);background:var(--bg-3);padding:2px 5px;border-radius:4px;white-space:nowrap}
+.ss-time{font-size:7.5px;color:var(--text-4);font-family:var(--font-geist-mono),monospace}
+.ss-stat{display:flex;align-items:center;gap:4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--crit)}
+.ss-stat .ss-dot{width:5px;height:5px;border-radius:50%;background:currentColor;animation:v1blink 1.6s infinite}
+.ss-name{font-size:10.5px;font-weight:700;letter-spacing:-.02em;color:var(--ink);line-height:1.15}
+.ss-name.sm{font-size:10px}
+.ss-li{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ss-li-n{font-size:9px;font-weight:600;color:var(--text-2);white-space:nowrap}
+.ss-pill{font-size:7px;font-weight:700;padding:2px 5px;border-radius:99px;white-space:nowrap}
+.ss-pill.ok{background:var(--ok-bg);color:var(--green-d);border:1px solid var(--ok-b)}
+.ss-src{font-size:8.5px;font-weight:700;color:#fff;background:var(--grad-brand);border-radius:6px;padding:4px 0;text-align:center;letter-spacing:.02em}
+.ss-bell{font-size:12px;line-height:1}
+.ss-toggle{width:22px;height:13px;border-radius:99px;background:var(--green);position:relative;flex-shrink:0}
+.ss-knob{position:absolute;top:2px;right:2px;width:9px;height:9px;border-radius:50%;background:#fff}
+.ss-mail{font-size:8px;font-family:var(--font-geist-mono),monospace;color:var(--text-3);background:var(--bg-3);border-radius:5px;padding:3px 6px;text-align:center}
 .prop h3{font-size:17px;font-weight:700;letter-spacing:-.02em;margin-bottom:7px}
 .prop p{font-size:13.5px;color:var(--text-3);line-height:1.6}
 .stats{max-width:900px;margin:clamp(64px,8vw,96px) auto 0;padding:0 clamp(20px,4vw,40px);display:grid;grid-template-columns:repeat(3,1fr);gap:28px;text-align:center}
@@ -277,6 +336,6 @@ const CSS = `
 .home-foot{max-width:1040px;margin:64px auto 0;padding:30px 24px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-4)}
 .home-foot a{color:inherit;text-decoration:none}
 .home-foot a:hover{color:var(--green-d)}
-@media(max-width:760px){.hero h1{font-size:50px}.props{grid-template-columns:1fr}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}.hero-stats{gap:10px}.hero-stats .stat-n{font-size:21px}.hero-stats .stat-l{font-size:11px}}
+@media(max-width:760px){.hero h1{font-size:50px}.props{grid-template-columns:1fr;margin-top:104px;row-gap:84px}.prop{text-align:center}.hero{padding-top:52px}.pp-sowhat{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr;gap:30px}.hero-stats{gap:10px}.hero-stats .stat-n{font-size:21px}.hero-stats .stat-l{font-size:11px}}
 @media(max-width:480px){.home-nav{padding:0 14px}.nav-actions{gap:6px}.v1home .nav-actions .btn{padding:8px 12px}}
 `;

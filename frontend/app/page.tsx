@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import V1Search from "@/app/components/v1/V1Search";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
+import V1TrendingShortages from "@/app/components/v1/V1TrendingShortages";
 
 // Live stats are the single source of truth. Honest "—" if a fetch fails —
 // never a stale hardcoded figure on a clinician-facing page.
@@ -11,6 +12,27 @@ function k(n: number): string {
   if (n >= 1000) return `${Math.floor(n / 1000)}K+`;
   return `${n}+`;
 }
+
+// Official regulator/standards logos we actually source from daily. Files live in
+// /public/regulator-logos and were hand-picked from Wikimedia Commons — only
+// agencies with a clean, real mark are shown; the rest are honoured in the tail
+// line, never with a placeholder. Rendered grayscale → colour on hover so the
+// visually-disparate marks read as one trust bar.
+const REGULATORS: { f: string; a: string }[] = [
+  { f: "fda.svg", a: "U.S. Food and Drug Administration" },
+  { f: "mhra.jpg", a: "MHRA — United Kingdom" },
+  { f: "health-canada.svg", a: "Health Canada" },
+  { f: "tga.svg", a: "Therapeutic Goods Administration — Australia" },
+  { f: "bfarm.svg", a: "BfArM — Germany" },
+  { f: "ansm.svg", a: "ANSM — France" },
+  { f: "aemps.svg", a: "AEMPS — Spain" },
+  { f: "swissmedic.svg", a: "Swissmedic — Switzerland" },
+  { f: "pmda.svg", a: "PMDA — Japan" },
+  { f: "mfds.svg", a: "MFDS — South Korea" },
+  { f: "anvisa.jpg", a: "ANVISA — Brazil" },
+  { f: "who.svg", a: "World Health Organization" },
+  { f: "nhs.svg", a: "NHS — United Kingdom" },
+];
 
 export default async function Home() {
   let medicines = "—";
@@ -65,7 +87,7 @@ export default async function Home() {
       <div className="hero">
         <div className="hero-bg" />
         <span className="hero-kicker"><span className="pulse" /> Free for pharmacists &amp; clinicians</span>
-        <h1>Live shortage status<br />for <span className="em">any medicine</span>.</h1>
+        <h1>Live shortage intelligence<br />for <span className="em">any medicine</span>.</h1>
         <p className="sub">Search any prescription medicine to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>
         <V1Search />
         <div className="hero-stats">
@@ -75,14 +97,20 @@ export default async function Home() {
         </div>
         <div className="trust">
           <div className="trust-label">Sourced directly from drug regulators</div>
-          <div className="trust-regs">
-            {["TGA", "FDA", "MHRA", "EMA", "Health Canada", "PMDA", "BfArM", "+ more"].map((r) => (
-              <span key={r} className="trust-reg">{r}</span>
-            ))}
+          <div className="reg-marquee">
+            <div className="reg-track">
+              {[...REGULATORS, ...REGULATORS].map((r, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={`/regulator-logos/${r.f}`} alt={r.a} title={r.a} className="reg-logo" aria-hidden={i >= REGULATORS.length} />
+              ))}
+            </div>
           </div>
-          <div className="trust-line">Official shortage notices from regulators across 20+ countries · updated multiple times daily</div>
+          <div className="trust-line">Plus EMA, AIFA, HSA, Pharmac, SFDA and 25+ more — 40+ official regulators across 40 countries · updated multiple times daily</div>
         </div>
       </div>
+
+      {/* ── Trending shortages (live) ── */}
+      <V1TrendingShortages />
 
       {/* ── Product preview ── */}
       <div className="product-preview">
@@ -327,6 +355,16 @@ const CSS = `
 .ss-mail{font-size:8px;font-family:var(--font-geist-mono),monospace;color:var(--text-3);background:var(--bg-3);border-radius:5px;padding:3px 6px;text-align:center}
 .prop h3{font-size:17px;font-weight:700;letter-spacing:-.02em;margin-bottom:7px}
 .prop p{font-size:13.5px;color:var(--text-3);line-height:1.6}
+/* Regulator logo marquee (hero trust strip) */
+.reg-marquee{position:relative;overflow:hidden;margin:4px 0 2px;-webkit-mask:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);mask:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
+.reg-track{display:flex;align-items:center;gap:54px;width:max-content;animation:reg-scroll 46s linear infinite}
+.reg-marquee:hover .reg-track{animation-play-state:paused}
+@keyframes reg-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.reg-logo{height:30px;width:auto;flex:none;object-fit:contain;filter:grayscale(1);opacity:.5;transition:filter .2s,opacity .2s}
+.reg-logo:hover{filter:none;opacity:1}
+@media(max-width:760px){.reg-track{gap:38px}.reg-logo{height:25px}}
+@media(prefers-reduced-motion:reduce){.reg-track{animation:none;flex-wrap:wrap;justify-content:center;width:auto;gap:24px 44px}.reg-marquee{-webkit-mask:none;mask:none}}
+
 /* Founder quote */
 .founder{max-width:760px;margin:38px auto 0;padding:0 24px;text-align:center;position:relative}
 .founder .f-mark{display:block;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:62px;line-height:.5;color:var(--green);opacity:.18;margin-bottom:10px}

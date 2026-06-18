@@ -13,7 +13,7 @@ export const revalidate = 21600;
 
 const client = new Anthropic();
 const ROUTE = "/api/intelligence/briefing";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const TTL_MS = 6 * 60 * 60 * 1000; // 6h cache for public briefing
 
 // In-memory cache (per server instance)

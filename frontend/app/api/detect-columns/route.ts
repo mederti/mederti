@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       const userMessage = JSON.stringify({ headers, rows: (sampleRows ?? []).slice(0, 2) });
 
       const response = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
         max_tokens: 200,
         system:
           "You are a pharmaceutical data parser. Given spreadsheet headers and sample rows from a hospital procurement or inventory file, identify which column contains: (1) the drug or product name, (2) quantity ordered, (3) quantity backordered or unfulfilled, (4) supplier or vendor name. Respond only in JSON with no preamble or markdown: {\"drugCol\": string, \"qtyCol\": string, \"backorderCol\": string, \"supplierCol\": string}. Use null if a field cannot be identified.",

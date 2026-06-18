@@ -6,7 +6,7 @@ import { recordAiUsage } from "@/lib/ai/usage-log";
 const FALLBACK_QUESTION =
   "How are current geopolitical tensions affecting global pharmaceutical supply chains?";
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const ONE_DAY_SECONDS = 24 * 60 * 60;
 
 async function generateQuestion(): Promise<{ question: string; fallback: boolean; reason?: string }> {

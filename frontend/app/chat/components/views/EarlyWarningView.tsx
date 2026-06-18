@@ -190,7 +190,7 @@ export function EarlyWarningView() {
         .ewradar .gov-scroll{padding:18px 28px 32px;background:#f4f5f7}
 
         /* analyst read */
-        .ewradar .ew-brief{background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 18px;margin-bottom:14px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06)}
+        .ewradar .ew-brief{background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06)}
         .ewradar .ew-brief-head{display:flex;align-items:center;gap:9px;margin-bottom:7px}
         .ewradar .ew-brief-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--teal)}
         .ewradar .ew-brief-ai{font-size:10px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
@@ -199,7 +199,7 @@ export function EarlyWarningView() {
         .ewradar .ew-brief-skel:last-child{margin-bottom:0}
         @keyframes ewsk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
-        .ewradar .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+        .ewradar .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:16px}
         .ewradar .kpi-row.k4{grid-template-columns:repeat(4,1fr)}
         .ewradar .kpi{background:#fff;border:1px solid var(--border);border-radius:11px;padding:15px 16px}
         .ewradar .kpi.crit{border-color:var(--crit-b)}
@@ -212,7 +212,7 @@ export function EarlyWarningView() {
         .ewradar .kpi-delta.down{color:var(--low)}
         .ewradar .kpi-delta.flat{color:var(--text-4)}
 
-        .ewradar .gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .ewradar .gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
         .ewradar .gov-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06),inset 0 1px 0 rgba(255,255,255,.7)}
         .ewradar .gov-card.span2{grid-column:1 / -1}
         .ewradar .moat-card{border-color:var(--ind-b);background:linear-gradient(#fff,#fbfbff)}

@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { recordAiUsage } from "@/lib/ai/usage-log";
 
 const ROUTE = "/api/chip-answer";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 
 /* ── Types ── */
 

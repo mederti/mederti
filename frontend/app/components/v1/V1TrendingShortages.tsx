@@ -119,7 +119,7 @@ const CSS = `
   --high:#c2410c;--high-bg:#fff3ec;--high-b:#fad4bf;
   --med:#b46708;--med-bg:#fdf6e9;--med-b:#f3dcae;
   --low:#0c8a62;--low-bg:#e8f6f0;--low-b:#bce4d4;
-  max-width:920px;margin:clamp(34px,5vw,54px) auto 0;padding:0 clamp(20px,4vw,40px);position:relative;z-index:1}
+  max-width:920px;margin:clamp(40px,5vw,64px) auto 0;padding:0 clamp(20px,4vw,40px);position:relative;z-index:1}
 .ts-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:0 2px}
 .ts-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-4)}
 .ts-link{font-size:12.5px;color:var(--text-3);text-decoration:none;white-space:nowrap;transition:color .15s}

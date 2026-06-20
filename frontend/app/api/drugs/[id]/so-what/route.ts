@@ -7,7 +7,7 @@ import { cleanBrandNames } from "@/lib/brand";
 export const dynamic = "force-dynamic";
 
 const ROUTE = "/api/drugs/[id]/so-what";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const TTL_MS = 12 * 60 * 60 * 1000; // 12h cache
 
 // In-memory cache keyed by drug_id (per server instance)

@@ -174,6 +174,21 @@ export default function V1DrugView({
       ? Math.round(((concession.price - concession.tariff) / concession.tariff) * 100)
       : null;
 
+  // Compact hero price line — the user-market headline price, kept above the
+  // fold for every market we hold data for (AU PBS AEMP/DPMQ, GB Drug Tariff,
+  // US NADAC, …). Suppressed when a concession banner already carries the
+  // price, and never falls back to a (possibly stale) concession-only value.
+  const heroPrice = pricing
+    ? {
+        label: "AEMP",
+        value: pricing.ex_manufacturer,
+        currency: pricing.currency,
+        extra: pricing.dispensed != null ? `DPMQ ${fmtPrice(pricing.dispensed, pricing.currency)}` : null,
+      }
+    : myMarket && myMarket.value != null && myMarket.label !== "Concession"
+    ? { label: myMarket.label, value: myMarket.value, currency: myMarket.currency, extra: null }
+    : null;
+
   // Expected back — sponsor-declared only, else "No estimate provided" (never computed).
   const expected = monthYear(mine?.estimated_resolution_date);
   const expSource = abbr(mine?.data_sources?.name, mine?.data_sources?.abbreviation) || "regulator";
@@ -467,6 +482,18 @@ export default function V1DrugView({
             </div>
           )}
 
+          {/* Compact hero price — always-visible market price when no concession
+              banner already carries it. Full multi-market panel stays below. */}
+          {!concession && heroPrice && (
+            <div className="price-strip">
+              <span className="ps-mkt">{flag(userCountry)} {userCountry}</span>
+              <span className="ps-label">{heroPrice.label}</span>
+              <span className="ps-val">{fmtPrice(heroPrice.value, heroPrice.currency)}</span>
+              {heroPrice.extra && <span className="ps-extra">{heroPrice.extra}</span>}
+              <a href="#trade-price" className="ps-more">details →</a>
+            </div>
+          )}
+
           {/* So-what tiles */}
           <div className="sw-cards">
             <div className="sw-card">
@@ -517,7 +544,7 @@ export default function V1DrugView({
               other markets show their headline official price from
               drug_pricing_history. Cross-references other markets we hold.
               Degrades to a visible "awaiting ingest" note. Never fabricates. */}
-          <div className="sec">
+          <div className="sec" id="trade-price">
             <div className="sec-title">Trade price <span className="help">{pricing ? `${flag(userCountry)} ${pricing.source}${pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}` : myMarket && myMarket.value != null ? `${flag(userCountry)} ${myMarket.source ?? cName}${myMarket.effective_date ? ` · ${monthYear(myMarket.effective_date)}` : ""}` : `${flag(userCountry)} ${cName} · awaiting price ingest`}</span></div>
             <div className="price-panel">
               <div className="price-top">
@@ -977,6 +1004,14 @@ const CSS = `
 /* Price-concession signal — amber supply-pressure banner above the price card */
 .conc-signal{display:flex;gap:12px;align-items:flex-start;margin:18px 0 0;padding:14px 16px;border:1px solid var(--med-b);border-radius:14px;background:var(--med-bg)}
 .conc-signal.hero{margin-top:12px}
+/* Compact hero price line */
+.price-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 0;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-2)}
+.ps-mkt{font-size:12px;font-weight:600;color:var(--text-3)}
+.ps-label{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-4)}
+.ps-val{font-size:18px;font-weight:700;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace;letter-spacing:-.02em}
+.ps-extra{font-size:12px;color:var(--text-3);font-family:var(--font-geist-mono),ui-monospace,monospace}
+.ps-more{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--green-d);text-decoration:none}
+.ps-more:hover{text-decoration:underline}
 .conc-ic{flex-shrink:0;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--med);background:#fff;border:1px solid var(--med-b)}
 .conc-h{font-size:13.5px;font-weight:700;color:var(--med);letter-spacing:-.01em}
 .conc-d{font-size:12.5px;color:var(--text-2);line-height:1.55;margin-top:4px}

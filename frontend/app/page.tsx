@@ -275,6 +275,15 @@ const CSS = `
 .trust-regs{display:flex;flex-wrap:wrap;gap:10px 20px;justify-content:center;align-items:center}
 .trust-reg{font-size:13px;font-weight:600;color:var(--text-3);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .trust-line{font-size:12.5px;color:var(--text-4);margin-top:16px}
+/* Regulator logo marquee (hero trust strip) */
+.reg-marquee{position:relative;overflow:hidden;margin:4px 0 2px;-webkit-mask:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);mask:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
+.reg-track{display:flex;align-items:center;gap:54px;width:max-content;animation:reg-scroll 46s linear infinite}
+.reg-marquee:hover .reg-track{animation-play-state:paused}
+@keyframes reg-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.reg-logo{height:30px;width:auto;flex:none;object-fit:contain;filter:grayscale(1);opacity:.5;transition:filter .2s,opacity .2s}
+.reg-logo:hover{filter:none;opacity:1}
+@media(max-width:760px){.reg-track{gap:38px}.reg-logo{height:25px}}
+@media(prefers-reduced-motion:reduce){.reg-track{animation:none;flex-wrap:wrap;justify-content:center;width:auto;gap:24px 44px}.reg-marquee{-webkit-mask:none;mask:none}}
 .product-preview{max-width:920px;margin:clamp(40px,5vw,64px) auto 0;padding:0 clamp(20px,4vw,40px)}
 .pp-head{text-align:center;max-width:620px;margin:0 auto 26px}
 .pp-title{font-size:clamp(24px,3vw,32px);font-weight:700;letter-spacing:-.03em;line-height:1.12;color:var(--ink)}
@@ -353,16 +362,6 @@ const CSS = `
 .ss-mail{font-size:8px;font-family:var(--font-geist-mono),monospace;color:var(--text-3);background:var(--bg-3);border-radius:5px;padding:3px 6px;text-align:center}
 .prop h3{font-size:17px;font-weight:700;letter-spacing:-.02em;margin-bottom:7px}
 .prop p{font-size:13.5px;color:var(--text-3);line-height:1.6}
-/* Regulator logo marquee (hero trust strip) */
-.reg-marquee{position:relative;overflow:hidden;margin:4px 0 2px;-webkit-mask:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);mask:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
-.reg-track{display:flex;align-items:center;gap:54px;width:max-content;animation:reg-scroll 46s linear infinite}
-.reg-marquee:hover .reg-track{animation-play-state:paused}
-@keyframes reg-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.reg-logo{height:30px;width:auto;flex:none;object-fit:contain;filter:grayscale(1);opacity:.5;transition:filter .2s,opacity .2s}
-.reg-logo:hover{filter:none;opacity:1}
-@media(max-width:760px){.reg-track{gap:38px}.reg-logo{height:25px}}
-@media(prefers-reduced-motion:reduce){.reg-track{animation:none;flex-wrap:wrap;justify-content:center;width:auto;gap:24px 44px}.reg-marquee{-webkit-mask:none;mask:none}}
-
 /* Founder quote */
 .founder{max-width:760px;margin:38px auto 0;padding:0 24px;text-align:center;position:relative}
 .founder .f-mark{display:block;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:62px;line-height:.5;color:var(--green);opacity:.18;margin-bottom:10px}

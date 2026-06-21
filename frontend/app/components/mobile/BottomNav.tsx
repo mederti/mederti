@@ -16,7 +16,7 @@ export function BottomNav() {
       ),
     },
     {
-      href: "/alerts",
+      href: "/account#alerts",
       label: "Alerts",
       icon: (active: boolean) => (
         <svg width="22" height="22" fill="none" stroke={active ? "#0F172A" : "var(--app-text-4)"} strokeWidth="1.5" viewBox="0 0 24 24">

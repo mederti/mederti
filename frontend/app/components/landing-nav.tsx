@@ -21,7 +21,7 @@ const FULL_BASE_APP_LINKS = [
   { href: "/search",       label: "Search",       icon: Search },
   { href: "/dashboard",    label: "Dashboard",    icon: Home },
   { href: "/intelligence", label: "Intelligence", icon: BarChart3 },
-  { href: "/watchlist",    label: "Watchlist",     icon: Bookmark },
+  { href: "/account#watchlist", label: "Watchlist", icon: Bookmark },
 ];
 
 const SOFT_BASE_APP_LINKS = [

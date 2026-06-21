@@ -39,12 +39,16 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/account",           // user can manage their account
   "/search",            // drug search
   "/drugs",             // /drugs/[id]
-  "/watchlist",         // signed-in "My medicines" list (auth-gated below)
+  "/watchlist",         // dead entry: next.config redirects /watchlist→/account
+                        // BEFORE middleware runs, so this is never evaluated.
+                        // Kept as a harmless no-op; "My medicines" now lives at
+                        // /account#watchlist. Safe to drop on the next cleanup.
   "/ask",               // conversational home (logged-in landing; logo target)
   "/chat",              // Claude-led answer surface (asks/prompts route here)
   "/shortages",         // "See all active" target from the trending row
   "/intelligence",      // Pharma Brief and any subroutes
   "/insights",          // public Intelligence / Dashboard reading views (/insights/[kind])
+  "/freshness",         // public source-freshness dashboard (credibility lever)
   "/coming-soon",
   "/admin",             // separately gated by requireAdmin
   "/privacy",
@@ -99,6 +103,8 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   // Public operational reading views (Intelligence / Dashboard) — the grounded
   // chat posts to /api/chat (already public). The full /chat product stays gated.
   "/insights",
+  // Public source-freshness dashboard — credibility lever, no auth required.
+  "/freshness",
   // Static demo / preview HTML in public/
   "/table-preview.html",
   // Public APIs that are safe to expose

@@ -250,7 +250,7 @@ const CSS = `
 .v1home .btn-primary:hover{background:var(--green-d);border-color:var(--green-d)}
 .home-nav{position:sticky;top:0;z-index:50;height:64px;background:transparent;display:flex;align-items:center;justify-content:space-between;padding:0 28px}
 .nav-actions{display:flex;gap:10px;align-items:center}
-.hero{position:relative;max-width:820px;margin:0 auto;padding:84px 24px 0;text-align:center}
+.hero{position:relative;max-width:820px;margin:0 auto;padding:48px 24px 0;text-align:center}
 .hero-bg{position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:100vw;height:620px;z-index:0;pointer-events:none;background:radial-gradient(40% 70% at 50% 0%,rgba(52,211,153,.22),transparent 70%),radial-gradient(32% 60% at 85% 6%,rgba(99,102,241,.14),transparent 70%),radial-gradient(32% 60% at 14% 10%,rgba(16,185,129,.12),transparent 70%)}
 .foot-bg{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100vw;height:620px;z-index:-1;pointer-events:none;background:radial-gradient(40% 70% at 50% 100%,rgba(52,211,153,.22),transparent 70%),radial-gradient(32% 60% at 85% 94%,rgba(99,102,241,.14),transparent 70%),radial-gradient(32% 60% at 14% 90%,rgba(16,185,129,.12),transparent 70%)}
 .hero>:not(.hero-bg){position:relative;z-index:1}

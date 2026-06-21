@@ -67,7 +67,7 @@ export default function V1Sidebar() {
       <div className="sb-scroll">
         <div className="sb-group">
           <Link href="/search" className="sb-item"><Search size={17} strokeWidth={1.9} className="sb-ico" />Search</Link>
-          <Link href="/insights/intelligence" className="sb-item"><TrendingUp size={17} strokeWidth={1.9} className="sb-ico" />Forecast</Link>
+          <Link href="/insights/intelligence" className="sb-item"><TrendingUp size={17} strokeWidth={1.9} className="sb-ico" />Intelligence</Link>
           <Link href="/insights/dashboard" className="sb-item"><LayoutDashboard size={17} strokeWidth={1.9} className="sb-ico" />Dashboard</Link>
         </div>
         <div className="sb-group">
@@ -95,7 +95,7 @@ export default function V1Sidebar() {
                   {truncateDrugName(m.name, 28)}
                 </Link>
               ))}
-              <Link href="/watchlist" className="sb-item sb-viewall">View all →</Link>
+              <Link href="/account#watchlist" className="sb-item sb-viewall">View all →</Link>
             </>
           ) : (
             <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>

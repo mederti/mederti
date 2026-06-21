@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, type DrugHit, type StatusFacets } from "@/lib/api";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
+import V1Chat from "@/app/components/v1/V1Chat";
 import { truncateDrugName } from "@/lib/utils";
 import { cleanBrandNames } from "@/lib/brand";
 import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
@@ -619,6 +620,36 @@ function Results() {
   );
 }
 
+// Right-hand chat column for the search page — grounds V1Chat to the current
+// query/market so the user can interrogate the results they're looking at.
+function SearchChat() {
+  const params = useSearchParams();
+  const q = (params.get("q") ?? "").trim();
+  const market = (params.get("market") || "AU").toUpperCase();
+  const grounding = q
+    ? `I'm on the Mederti search results page for "${q}" in the ${market} market.`
+    : `I'm on the Mederti search page (${market} market).`;
+  const suggestions = q
+    ? [
+        `Summarise the shortage situation for ${q}`,
+        "Which of these can I substitute?",
+        "Which markets are most affected?",
+      ]
+    : [
+        "Which drugs are most short right now?",
+        `What's shortest in ${market}?`,
+        "Show me critical antibiotic shortages",
+      ];
+  return (
+    <V1Chat
+      title="Ask about these results"
+      intro="Ask me about these results — substitutes, which markets are affected, or what's coming back into supply."
+      grounding={grounding}
+      suggestions={suggestions}
+    />
+  );
+}
+
 export default function SearchPage() {
   return (
     <div className="v1home v1search">
@@ -627,7 +658,7 @@ export default function SearchPage() {
         {/* ── Left sidebar (app nav) — shared with the drug page ── */}
         <V1Sidebar />
 
-        {/* ── Center column (no right-hand chat column) ── */}
+        {/* ── Center column (results) ── */}
         <div className="shell-main">
           <div className="dg-main">
             <Suspense fallback={<div style={{ height: 80 }} />}>
@@ -635,6 +666,13 @@ export default function SearchPage() {
             </Suspense>
           </div>
         </div>
+
+        {/* ── Right-hand chat column (mirrors the drug page) ── */}
+        <aside className="chat-col">
+          <Suspense fallback={null}>
+            <SearchChat />
+          </Suspense>
+        </aside>
       </div>
     </div>
   );
@@ -648,6 +686,7 @@ const CSS = `
   --bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
   --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;
   --crit:#dc2647;--crit-bg:#fdeef1;--crit-b:#f8cdd6;--med:#b46708;--med-bg:#fdf6e9;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;
+  --violet:#6366f1;--violet-b:#c7d2fe;--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
   --hi-inset:inset 0 1px 0 rgba(255,255,255,.7);--sh-card:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06);
   background:var(--bg-2);color:var(--text);font-family:var(--font-geist-sans),system-ui,sans-serif;font-size:14px;letter-spacing:-.011em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
@@ -672,7 +711,44 @@ const CSS = `
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
 .sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
-.dg-main{flex:1;min-width:0;max-width:900px;padding:32px 40px 80px;width:100%;background:#eef1f5}
+.dg-main{flex:1;min-width:0;padding:32px 40px 80px;width:100%;background:#eef1f5}
+
+/* ── Right-hand chat column (mirrors V1DrugView) ── */
+.chat-col{width:380px;flex-shrink:0;border-left:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh}
+.chat-panel{display:flex;flex-direction:column;height:100%}
+.chat-head{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fbfcfe,var(--bg))}
+.chat-h-l{display:flex;align-items:center;gap:11px}
+.chat-ic{width:30px;height:30px;border-radius:9px;background:var(--grad-brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;box-shadow:0 5px 14px -5px rgba(15,166,118,.55)}
+.chat-title{font-size:14px;font-weight:700;letter-spacing:-.01em}
+.chat-sub{font-size:11px;color:var(--text-4);display:flex;align-items:center;gap:5px;margin-top:2px}
+.chat-live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0;animation:chat-pulse 2.2s infinite}
+@keyframes chat-pulse{0%{box-shadow:0 0 0 0 rgba(15,166,118,.5)}70%{box-shadow:0 0 0 5px rgba(15,166,118,0)}100%{box-shadow:0 0 0 0 rgba(15,166,118,0)}}
+.chat-free-tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:3px 8px;border-radius:99px;align-self:flex-start}
+.chat-stream{padding:16px;flex:1;overflow-y:auto}
+.chat-bubble{background:var(--bg-2);border:1px solid var(--border);border-radius:4px 13px 13px 13px;padding:11px 13px;font-size:12.5px;color:var(--text-2);line-height:1.5}
+.chat-bubble>*:last-child{margin-bottom:0}
+.chat-bubble strong{font-weight:700;color:var(--text)}
+.chat-bubble .cb-p{margin:0 0 9px}
+.chat-bubble .cb-list{margin:0 0 9px;padding-left:17px;display:flex;flex-direction:column;gap:3px}
+.chat-bubble .cb-list li{line-height:1.45;padding-left:2px}
+.chat-bubble .cb-quote{margin:0 0 9px;padding:9px 11px;background:var(--med-bg);border-left:3px solid var(--med-b);border-radius:0 9px 9px 0;color:var(--text-2)}
+.chat-bubble .cb-table-wrap{margin:0 0 9px;overflow-x:auto;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
+.chat-bubble .cb-table{border-collapse:collapse;width:100%;font-size:11px}
+.chat-bubble .cb-table th{text-align:left;font-weight:700;color:var(--text-3);background:var(--bg-3);padding:6px 9px;white-space:nowrap;border-bottom:1px solid var(--border)}
+.chat-bubble .cb-table td{padding:6px 9px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:top}
+.chat-bubble .cb-table tr:last-child td{border-bottom:none}
+.chat-suggest{display:flex;flex-direction:column;gap:7px;padding:0 16px 14px}
+.chat-q{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;font-size:12px;font-weight:500;color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:10px 13px;text-decoration:none;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s,background .15s,color .15s}
+.chat-q-t{min-width:0}
+.chat-q:hover{border-color:var(--violet-b);background:#f6f6ff;color:var(--violet);box-shadow:0 6px 16px -10px rgba(99,102,241,.6);transform:translateY(-1px)}
+.chat-q-arrow{color:var(--text-4);font-size:13px;flex-shrink:0;opacity:0;transform:translateX(-5px);transition:.15s}
+.chat-q:hover .chat-q-arrow{color:var(--violet);opacity:1;transform:translateX(0)}
+.chat-input{display:flex;align-items:center;gap:8px;margin:0 16px 16px;padding:9px 9px 9px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg);text-decoration:none}
+.chat-input input{flex:1;border:none;background:transparent;outline:none;font-size:13px;font-family:inherit;color:var(--text)}
+.chat-input input::placeholder{color:var(--text-4)}
+.chat-send{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.chat-send:disabled{opacity:.5;cursor:default}
+@media(max-width:1080px){.chat-col{display:none}}
 
 /* ── Search box + results ── */
 .searchbox.v1sb{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:14px;padding:6px 8px 6px 18px;box-shadow:0 12px 36px -22px rgba(10,15,26,.28);transition:.15s}
@@ -731,8 +807,8 @@ const CSS = `
 .sp-part{color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
 .sp-ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-b)}
 
-/* ── Desktop results table (v2 — country-first, everything-a-pharmacist-needs) ── */
-.v1search .dg-main{max-width:1180px}
+/* ── Desktop results table (v2 — country-first, everything-a-pharmacist-needs) ──
+   No max-width cap: the results stretch to meet the right-hand chat column. */
 .res-table-wrap{display:none;margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--sh-card),var(--hi-inset)}
 .res-table{width:100%;border-collapse:collapse;table-layout:fixed}
 .res-table thead th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);padding:13px 16px;background:var(--bg-2);border-bottom:1px solid var(--border);white-space:nowrap}

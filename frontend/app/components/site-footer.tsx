@@ -43,9 +43,11 @@ export default function SiteFooter() {
               <Link href="/search" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Drug Search</Link>
               {!SOFT_LAUNCH && <Link href="/shortages" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Shortages</Link>}
               {!SOFT_LAUNCH && <Link href="/recalls" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Recalls</Link>}
-              {!SOFT_LAUNCH && <Link href="/alerts" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Alerts</Link>}
+              {!SOFT_LAUNCH && <Link href="/account#alerts" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Alerts</Link>}
               {!SOFT_LAUNCH && <Link href="/supplier-dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Supplier Dashboard</Link>}
               <Link href="/intelligence" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Intelligence</Link>
+              {/* Public credibility lever — visible under soft-launch too. */}
+              <Link href="/freshness" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Data freshness</Link>
             </nav>
           </div>
 
@@ -67,7 +69,7 @@ export default function SiteFooter() {
               <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <Link href="/intelligence" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Intelligence</Link>
                 <Link href="/home" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Home Feed</Link>
-                <Link href="/watchlist" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Watchlist</Link>
+                <Link href="/account#watchlist" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Watchlist</Link>
                 <Link href="/dashboard" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Dashboard</Link>
               </nav>
             </div>

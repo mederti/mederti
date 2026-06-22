@@ -43,7 +43,8 @@ export async function GET(req: Request) {
     .limit(limit);
 
   if (error) {
-    return NextResponse.json({ articles: [], error: error.message }, { status: 500 });
+    console.error("intelligence/latest error:", error.message);
+    return NextResponse.json({ articles: [], error: "Internal error" }, { status: 500 });
   }
 
   const articles: ArticleCardOut[] = (data ?? []).map((row) => {

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase/server";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 /* ── Types ── */
 
@@ -113,6 +115,22 @@ function fallback(headers: string[], sampleRows: string[][]): DetectResponse {
 /* ── Route handler ── */
 
 export async function POST(req: NextRequest) {
+  // Require an authenticated session — this route forwards user input into a
+  // billable Anthropic call, so it must not be open to anonymous abuse.
+  try {
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Per-IP throttle on the expensive (AI) tier.
+  const limited = await enforceRateLimit(req, "bulk");
+  if (limited) return limited;
+
   let body: DetectRequest;
   try {
     body = await req.json();
@@ -123,6 +141,10 @@ export async function POST(req: NextRequest) {
   const { headers, sampleRows } = body;
   if (!headers || !Array.isArray(headers) || headers.length === 0) {
     return NextResponse.json({ error: "headers array required" }, { status: 400 });
+  }
+  // Cap the unbounded header list so a caller can't inflate the prompt.
+  if (headers.length > 200) {
+    return NextResponse.json({ error: "too many columns" }, { status: 400 });
   }
 
   /* ── Try AI detection ── */

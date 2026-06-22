@@ -29,6 +29,24 @@ export function canonicalUrl(path: string): string {
   return `${base}${p}`;
 }
 
+/**
+ * Serialise an object for safe injection into a <script type="application/ld+json">
+ * via dangerouslySetInnerHTML.
+ *
+ * JSON.stringify does NOT escape `<`, `>` or `&`, so any user/registry-sourced
+ * string containing `</script>` would break out of the script element and the
+ * remainder would parse as live HTML — a stored-XSS vector. Escaping these three
+ * characters to their \uXXXX form keeps the JSON semantically identical while
+ * making `</script>` and HTML-entity breakouts impossible. Use this at EVERY
+ * JSON-LD sink instead of bare JSON.stringify.
+ */
+export function jsonLdSafe(obj: unknown): string {
+  return JSON.stringify(obj)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
 // ─── JSON-LD generators ─────────────────────────────────────────────────────
 
 interface DrugForJsonLd {

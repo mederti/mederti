@@ -54,7 +54,8 @@ export async function GET() {
     .order("country_code", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("freshness error:", error.message);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 
   const STALE_HOURS = 168; // matches frontend/lib/chat/tools.ts

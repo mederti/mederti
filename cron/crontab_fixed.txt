@@ -139,3 +139,5 @@ SHELL=/bin/bash
 # monthly, concessions announced throughout the month → weekly Mondays.
 15  7 * * 4  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nadac           >> logs/cron.log 2>&1
 50  6 * * 1  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nhs_drug_tariff >> logs/cron.log 2>&1
+# BDPM: ANSM refreshes the public medicines DB ~weekly → fetch Tuesdays.
+30  6 * * 2  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py france_bdpm    >> logs/cron.log 2>&1

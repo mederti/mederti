@@ -54,6 +54,12 @@ const COUNTRY: Record<string, string> = {
   ES: "Spain", IE: "Ireland", CH: "Switzerland", NO: "Norway", SE: "Sweden",
   FI: "Finland", DK: "Denmark", NL: "Netherlands", JP: "Japan", KR: "South Korea", SG: "Singapore",
 };
+// National product-registry code system per market. ATC is the global molecule
+// code; this is the LOCAL, manufacturer-specific registration number.
+const CODE_LABEL: Record<string, string> = {
+  AU: "ARTG", US: "NDC", GB: "PL", UK: "PL", FR: "CIP", IT: "AIC", ES: "CN",
+  CA: "DIN", DE: "PZN", IE: "PA", CH: "Swissmedic", NL: "RVG", SG: "SIN",
+};
 
 function abbr(name?: string, a?: string | null) {
   if (a) return a;
@@ -322,6 +328,23 @@ export default function V1DrugView({
   // Distinct MA holders (sponsors) — a quick top-line even when the table is long.
   const maHolders = [...new Set(regRows.map((r) => r.sponsor).filter(Boolean))] as string[];
 
+  // Header sub-line: the LOCAL registration in the user's own market — the
+  // national product code (ARTG / NDC / CIP …) + manufacturer that sits beneath
+  // the global ATC. Country-scoped on purpose: a molecule has many local codes,
+  // so we only assert the one for the market this page is framed around.
+  const localReg = (() => {
+    const p = (products ?? []).find(
+      (x) => (x.country || "").toUpperCase() === userCountry && x.registry_id,
+    );
+    if (!p) return null;
+    const code = String(p.registry_id);
+    // Many national codes already self-identify with a text prefix ("AUST R",
+    // "PL", "RVG"); only prepend the system label for bare numeric codes
+    // (NDC, CIP, AIC, DIN, …) where it adds meaning.
+    const label = /^[A-Za-z]/.test(code) ? null : CODE_LABEL[userCountry] ?? "Reg.";
+    return { country: userCountry, label, code, sponsor: p.sponsors?.name || null };
+  })();
+
   // Report identity (drives the export/print header).
   const generatedLabel = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
   const marketLabel = `${cName} market`;
@@ -396,6 +419,12 @@ export default function V1DrugView({
                   <div className="d-generic">
                     {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
                   </div>
+                  {localReg && (
+                    <div className="d-localcode">
+                      {flag(localReg.country)} {[localReg.label, localReg.code].filter(Boolean).join(" ")}
+                      {localReg.sponsor ? <> · {localReg.sponsor}</> : null}
+                    </div>
+                  )}
                 </div>
                 <span className={`status-pill ${statusPill.cls}`}><span className="d" />{statusPill.txt}</span>
               </div>
@@ -974,6 +1003,7 @@ const CSS = `
 @media(max-width:640px){.d-img{width:96px;height:96px;border-radius:13px}}
 .d-name{font-size:30px;font-weight:700;letter-spacing:-.032em;line-height:1.1}
 .d-generic{font-size:13px;color:var(--text-3);margin-top:5px;font-family:var(--font-geist-mono),ui-monospace,monospace}
+.d-localcode{font-size:12px;color:var(--text-3);margin-top:3px;font-family:var(--font-geist-mono),ui-monospace,monospace}
 .d-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .d-tag{font-size:11px;font-weight:500;padding:4px 9px;border-radius:7px;background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
 .d-eml{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b);text-decoration:none;width:fit-content}

@@ -142,4 +142,6 @@ SHELL=/bin/bash
 # BDPM: ANSM refreshes the public medicines DB ~weekly → fetch Tuesdays.
 30  6 * * 2  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py france_bdpm    >> logs/cron.log 2>&1
 # AIFA: transparency lists refresh ~monthly → weekly Wednesday.
-45  6 * * 3  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py aifa           >> logs/cron.log 2>&1
+45  6 * * 3  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py aifa_pricing   >> logs/cron.log 2>&1
+# Nomenclator ES: Sanidad refreshes monthly (~25th) → weekly Thursday.
+55  6 * * 4  set -a && source .env && set +a && python3 run_all_scrapers.py spain_nomenclator >> logs/cron.log 2>&1

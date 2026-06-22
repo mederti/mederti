@@ -83,3 +83,12 @@ data/reference/
 # Dependencies (accidentally committed via #67 — untracked in this change)
 node_modules/
 /node_modules/
+
+# Local working artifacts — not source (slide decks, generated report + its
+# builder, html preview). Kept on disk, out of the repo.
+/.sitemap-deck/
+/Mederti-Site-Map-Templates.pptx
+/Mederti-Site-Pages.pptx
+/Mederti_Data_Sources_Report.pdf
+/build_data_sources_report.py
+/trade-price-preview.html

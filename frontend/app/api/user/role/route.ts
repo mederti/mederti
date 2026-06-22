@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
+import { isValidProfileRole } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
-
-const VALID_ROLES = ["pharmacist", "hospital", "supplier", "government", "default"];
 
 /** POST: set role for the logged-in user */
 export async function POST(req: Request) {
@@ -19,7 +18,7 @@ export async function POST(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { role } = await req.json();
-  if (!role || !VALID_ROLES.includes(role)) {
+  if (!isValidProfileRole(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { isValidProfileRole } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
-
-const VALID_ROLES = ["pharmacist", "hospital", "supplier", "government", "default"];
 
 function safeNext(raw: string | null): string {
   if (!raw) return "/home";
@@ -42,7 +41,7 @@ export async function GET(req: Request) {
 
   // Persist role if provided (and valid). OAuth doesn't carry our role
   // through the provider, so it's passed via the callback query string.
-  if (role && VALID_ROLES.includes(role) && data.user?.id) {
+  if (role && isValidProfileRole(role) && data.user?.id) {
     try {
       const admin = getSupabaseAdmin();
       await admin

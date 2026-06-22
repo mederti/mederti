@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 // Shared market conventions (mirrors PredictiveSignals.tsx so the radar reads
 // the same across surfaces).
@@ -210,7 +211,9 @@ export function EarlyWarningView() {
       <div className={tone ? `rad-row ${tone}` : "rad-row"} key={r.drug_id}>
         <div className="rad-drug">
           <span className="rad-drug-name">
-            {r.drug_name}
+            <Link href={`/drugs/${r.drug_id}`} className="rad-drug-link">
+              {r.drug_name}
+            </Link>
             {r.who_essential && (
               <span className="who-star" title="WHO essential medicine">
                 ★
@@ -368,7 +371,9 @@ export function EarlyWarningView() {
         .ewradar .rad-row.crit{background:var(--crit-bg)}
         .ewradar .rad-row.high{background:var(--high-bg)}
         .ewradar .rad-drug{font-weight:600;color:var(--text);display:flex;flex-direction:column;gap:2px;min-width:0}
-        .ewradar .rad-drug-name{display:flex;align-items:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ewradar .rad-drug-name{display:flex;align-items:center;min-width:0}
+        .ewradar .rad-drug-link{color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+        .ewradar .rad-drug-link:hover{color:var(--teal);text-decoration:underline}
         .ewradar .who-star{color:var(--teal);font-size:11px;margin-left:5px;flex-shrink:0}
         .ewradar .rad-cls{font-weight:500;font-size:10px;color:var(--med);font-family:var(--font-geist-mono),ui-monospace,monospace}
         .ewradar .rad-flags{font-size:14px;letter-spacing:1px;line-height:1.2}

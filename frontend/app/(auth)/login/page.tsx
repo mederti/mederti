@@ -9,10 +9,21 @@ import OAuthButtons from "../OAuthButtons";
 
 type Tab = "password" | "magic";
 
+/**
+ * Only allow same-origin relative redirects. Rejects scheme-bearing
+ * (`https://evil`), protocol-relative (`//evil`) and back-slash variants so a
+ * crafted `?next=` cannot bounce a freshly-authenticated user off-site.
+ */
+function safeNext(raw: string | null): string {
+  if (!raw) return "/home";
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return "/home";
+  return raw;
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/home";
+  const next = safeNext(searchParams.get("next"));
 
   const [tab, setTab] = useState<Tab>("password");
   const [email, setEmail] = useState("");
@@ -56,9 +67,13 @@ function LoginForm() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    // Route the magic link through /auth/callback so the PKCE code is exchanged
+    // for a session server-side before redirecting to `next`. Linking straight
+    // to the destination leaves the user unauthenticated under the PKCE flow.
+    const callbackNext = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}${next}` },
+      options: { emailRedirectTo: callbackNext },
     });
     setLoading(false);
     if (error) {

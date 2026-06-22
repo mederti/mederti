@@ -7,12 +7,23 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import AuthShell from "../AuthShell";
 import OAuthButtons from "../OAuthButtons";
 
+/**
+ * Only allow same-origin relative redirects. Rejects scheme-bearing
+ * (`https://evil`), protocol-relative (`//evil`) and back-slash variants so a
+ * crafted `?next=` cannot bounce a freshly-confirmed user off-site.
+ */
+function safeNext(raw: string | null): string {
+  if (!raw) return "/onboarding";
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return "/onboarding";
+  return raw;
+}
+
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // After email confirm, send users to onboarding so we can profile them
   // before they land in the product. Caller can override with ?next=/whatever.
-  const next = searchParams.get("next") ?? "/onboarding";
+  const next = safeNext(searchParams.get("next"));
   const role = searchParams.get("role"); // e.g. "supplier"
 
   const [email, setEmail] = useState("");
@@ -38,11 +49,18 @@ function SignupForm() {
     }
 
     setLoading(true);
+    // The confirmation email must land on /auth/callback so the PKCE code is
+    // exchanged for a session server-side; only then does `next` apply. Linking
+    // straight to the destination leaves the user unauthenticated. Role rides
+    // along so the callback can persist it once the session exists.
+    const callbackNext = `/auth/callback?next=${encodeURIComponent(next)}${
+      role ? `&role=${encodeURIComponent(role)}` : ""
+    }`;
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}${next}`,
+        emailRedirectTo: `${window.location.origin}${callbackNext}`,
         data: role ? { role } : undefined,
       },
     });

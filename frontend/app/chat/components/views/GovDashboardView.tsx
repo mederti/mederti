@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   type RangeKey,
   RANGE_OPTIONS,
@@ -8,14 +9,71 @@ import {
   getSnapshot,
   buildFallbackSummary,
 } from "@/lib/insights/dashboard-snapshot";
+import { generateDashboardPdf } from "@/lib/insights/dashboard-pdf";
+
+// Generic search terms for the essential-medicines rows — resolved to a real
+// drug/product page via /api/drug-autocomplete so each name links only when a
+// page actually exists.
+const TABLE_DRUG_QUERIES = ["amoxicillin", "methotrexate", "salbutamol", "methylphenidate", "insulin glargine", "phenytoin"];
 
 export function GovDashboardView() {
   const [activeRange, setActiveRange] = useState<RangeKey>(DEFAULT_RANGE);
   const [summary, setSummary] = useState<string | null>(null);
+  const [drugLinks, setDrugLinks] = useState<Record<string, string>>({});
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const snap = getSnapshot(activeRange);
   const k = snap.kpis;
   const moreEssential = Math.max(0, k.essentialShort.value - snap.topEssential.length);
+
+  // Resolve which table drugs have a product page, once on mount.
+  useEffect(() => {
+    let alive = true;
+    Promise.all(
+      TABLE_DRUG_QUERIES.map(async (q) => {
+        try {
+          const r = await fetch(`/api/drug-autocomplete?q=${encodeURIComponent(q)}`);
+          const d = await r.json();
+          const item = Array.isArray(d?.items) ? d.items.find((it: { href?: string }) => it?.href) : null;
+          return [q, item?.href ?? null] as const;
+        } catch {
+          return [q, null] as const;
+        }
+      }),
+    ).then((pairs) => {
+      if (!alive) return;
+      const map: Record<string, string> = {};
+      for (const [q, href] of pairs) if (href) map[q] = href;
+      setDrugLinks(map);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Render a drug name as a link to its product page when one exists.
+  const drugCell = (label: string, q: string) => {
+    const href = drugLinks[q];
+    return href ? (
+      <Link href={href} className="em-drug-link">
+        {label}
+      </Link>
+    ) : (
+      label
+    );
+  };
+
+  const downloadReport = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      await generateDashboardPdf(snap, summary ?? buildFallbackSummary(snap));
+    } catch (err) {
+      console.error("[dashboard] PDF generation failed:", err);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -70,6 +128,7 @@ export function GovDashboardView() {
 .govdash .gr-opt.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
 .govdash .gov-report-btn{font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:8px;background:var(--teal);color:#fff;border:none;cursor:pointer;white-space:nowrap}
 .govdash .gov-report-btn:hover{background:var(--teal-l)}
+.govdash .gov-report-btn:disabled{opacity:0.6;cursor:default}
 
 .govdash .gov-scroll{flex:1;overflow-y:auto;padding:18px 28px 32px;background:#f4f5f7}
 
@@ -112,6 +171,8 @@ export function GovDashboardView() {
 .govdash .em-row.crit{background:var(--crit-bg)}
 .govdash .em-row.high{background:var(--high-bg)}
 .govdash .em-drug{font-weight:600;color:var(--text)}
+.govdash .em-drug-link{color:inherit;text-decoration:none}
+.govdash .em-drug-link:hover{color:var(--teal-l);text-decoration:underline}
 .govdash .em-tag{font-size:9px;font-weight:600;padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle}
 .govdash .em-tag.who{background:var(--ind-bg);color:var(--indigo);border:1px solid var(--ind-b)}
 .govdash .em-tag.onc{background:var(--crit-bg);color:var(--crit);border:1px solid var(--crit-b)}
@@ -184,7 +245,9 @@ export function GovDashboardView() {
               </span>
             ))}
           </div>
-          <button className="gov-report-btn">↧ Minister&apos;s report</button>
+          <button className="gov-report-btn" onClick={downloadReport} disabled={pdfBusy}>
+            ↧ {pdfBusy ? "Preparing…" : "Download Report"}
+          </button>
         </div>
       </div>
 
@@ -249,7 +312,7 @@ export function GovDashboardView() {
                 <span>Drug</span><span>Class</span><span>Suppliers</span><span>Duration</span><span>Risk</span><span>Forecast</span>
               </div>
               <div className="em-row crit">
-                <div className="em-drug">Amoxicillin 500mg <span className="em-tag who">WHO EML</span></div>
+                <div className="em-drug">{drugCell("Amoxicillin 500mg", "amoxicillin")} <span className="em-tag who">WHO EML</span></div>
                 <div className="em-class">Antibiotic · J01CA</div>
                 <div className="em-sup"><span className="ss-bad">1 of 4 active</span></div>
                 <div className="em-dur">42 days</div>
@@ -257,7 +320,7 @@ export function GovDashboardView() {
                 <div className="em-fc">Aug–Oct 26</div>
               </div>
               <div className="em-row crit">
-                <div className="em-drug">Methotrexate inj <span className="em-tag onc">Oncology</span></div>
+                <div className="em-drug">{drugCell("Methotrexate inj", "methotrexate")} <span className="em-tag onc">Oncology</span></div>
                 <div className="em-class">Antineoplastic · L01BA</div>
                 <div className="em-sup"><span className="ss-bad sole">Sole supplier</span></div>
                 <div className="em-dur">96 days</div>
@@ -265,7 +328,7 @@ export function GovDashboardView() {
                 <div className="em-fc">Q1 27</div>
               </div>
               <div className="em-row high">
-                <div className="em-drug">Salbutamol CFC-free <span className="em-tag who">WHO EML</span></div>
+                <div className="em-drug">{drugCell("Salbutamol CFC-free", "salbutamol")} <span className="em-tag who">WHO EML</span></div>
                 <div className="em-class">Bronchodilator · R03AC</div>
                 <div className="em-sup">2 of 5 active</div>
                 <div className="em-dur">28 days</div>
@@ -273,7 +336,7 @@ export function GovDashboardView() {
                 <div className="em-fc">Jul 26</div>
               </div>
               <div className="em-row high">
-                <div className="em-drug">Methylphenidate ER 36mg <span className="em-tag pae">Paediatric</span></div>
+                <div className="em-drug">{drugCell("Methylphenidate ER 36mg", "methylphenidate")} <span className="em-tag pae">Paediatric</span></div>
                 <div className="em-class">CNS stimulant · N06BA</div>
                 <div className="em-sup">2 of 3 active</div>
                 <div className="em-dur">61 days</div>
@@ -281,7 +344,7 @@ export function GovDashboardView() {
                 <div className="em-fc">Sep 26</div>
               </div>
               <div className="em-row">
-                <div className="em-drug">Insulin glargine <span className="em-tag who">WHO EML</span></div>
+                <div className="em-drug">{drugCell("Insulin glargine", "insulin glargine")} <span className="em-tag who">WHO EML</span></div>
                 <div className="em-class">Antidiabetic · A10AE</div>
                 <div className="em-sup">3 of 4 active</div>
                 <div className="em-dur">14 days</div>
@@ -289,7 +352,7 @@ export function GovDashboardView() {
                 <div className="em-fc">Jun 26</div>
               </div>
               <div className="em-row">
-                <div className="em-drug">Phenytoin 100mg</div>
+                <div className="em-drug">{drugCell("Phenytoin 100mg", "phenytoin")}</div>
                 <div className="em-class">Anticonvulsant · N03AB</div>
                 <div className="em-sup"><span className="ss-bad sole">Sole supplier</span></div>
                 <div className="em-dur">73 days</div>

@@ -148,6 +148,33 @@ class PricingScraper(BaseScraper):
 
         return _resolve
 
+    def _canonical_id(self, drug_id: str | None) -> str | None:
+        """Follow drugs.canonical_drug_id (migration 050 molecule rollup) so a
+        resolved variant row maps to its canonical INN head. Cached per run;
+        falls back to the original id if there's no canonical head or on error."""
+        if not drug_id:
+            return None
+        cache = getattr(self, "_canon_cache", None)
+        if cache is None:
+            cache = self._canon_cache = {}
+        if drug_id in cache:
+            return cache[drug_id]
+        canon = drug_id
+        try:
+            r = (
+                self.db.table("drugs")
+                .select("canonical_drug_id")
+                .eq("id", drug_id)
+                .limit(1)
+                .execute()
+            )
+            if r.data and r.data[0].get("canonical_drug_id"):
+                canon = r.data[0]["canonical_drug_id"]
+        except Exception:
+            pass
+        cache[drug_id] = canon
+        return canon
+
     # ── Dedup hash ───────────────────────────────────────────────────────────
 
     def _dedup_hash(self, row: dict) -> str:
@@ -180,7 +207,12 @@ class PricingScraper(BaseScraper):
                 key = lookup.strip().lower()
                 if key not in name_cache:
                     drug = resolver(lookup)
-                    name_cache[key] = drug["id"] if drug else None
+                    # Attach the price to the CANONICAL molecule row (migration
+                    # 050 canonical_drug_id) when the resolver matched a salt /
+                    # spelling / language variant — so a FR "Atorvastatine" or a
+                    # "Ceftriaxone-Sodium" price lands on the same row that
+                    # carries the shortages, instead of a fragmented variant.
+                    name_cache[key] = self._canonical_id(drug["id"]) if drug else None
                     if drug and drug.get("generic_name"):
                         # Canonicalise inn to the matched molecule
                         name_cache[key + "::inn"] = drug["generic_name"]

@@ -141,6 +141,7 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     # Official pricing connectors (write to drug_pricing_history — migration 055)
     "nadac":                 ("backend.scrapers.pricing.nadac_scraper",         "NADACScraper"),
     "france_bdpm":           ("backend.scrapers.pricing.france_bdpm_scraper",   "FranceBDPMScraper"),
+    "aifa":                  ("backend.scrapers.pricing.aifa_scraper",          "AIFAScraper"),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

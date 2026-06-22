@@ -16,7 +16,11 @@ import {
 /**
  * Shared left app-shell sidebar used by the search results page and the drug
  * detail page so both columns stay identical: country picker, Browse links,
- * live Search history + My medicines (from localStorage), and the log-in row.
+ * live Search history + My medicines, and the log-in row.
+ *
+ * "My medicines" shows the signed-in user's real saved watchlist
+ * (`user_watchlists`); anonymous visitors fall back to the recently-viewed
+ * list backed by localStorage.
  *
  * Relies on the `.sb*` CSS that each host page already defines in its scoped
  * `.v1home` style block (including `.sb-sub` for the recent-item rows).
@@ -28,6 +32,10 @@ export default function V1Sidebar() {
   // else lands on the public marketing page. Resolved client-side, so the
   // logo defaults to "/" until the session check returns.
   const [signedIn, setSignedIn] = useState(false);
+  // The signed-in user's real watchlist. `null` = not loaded yet (or anon);
+  // an array (possibly empty) = loaded, so we can distinguish "loading" from
+  // "watchlist is genuinely empty".
+  const [watchedMedicines, setWatchedMedicines] = useState<RecentMedicine[] | null>(null);
 
   useEffect(() => {
     const refresh = () => {
@@ -41,14 +49,40 @@ export default function V1Sidebar() {
 
   useEffect(() => {
     const supabase = createBrowserClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSignedIn(!!session?.user);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setSignedIn(!!session?.user);
-    });
+
+    async function loadWatchlist(uid: string) {
+      const { data } = await supabase
+        .from("user_watchlists")
+        .select("drug_id, drugs(generic_name)")
+        .eq("user_id", uid)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      const meds = (data ?? [])
+        .map((r: { drug_id: string; drugs: { generic_name?: string } | { generic_name?: string }[] | null }) => {
+          const drug = Array.isArray(r.drugs) ? r.drugs[0] : r.drugs;
+          return { id: r.drug_id, name: drug?.generic_name ?? "" };
+        })
+        .filter((m) => m.id && m.name);
+      setWatchedMedicines(meds);
+    }
+
+    const sync = (uid: string | undefined) => {
+      setSignedIn(!!uid);
+      if (uid) loadWatchlist(uid);
+      else setWatchedMedicines(null);
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => sync(session?.user?.id));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => sync(session?.user?.id));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Signed-in + watchlist loaded → show the real saved watchlist (even if empty,
+  // so we render the honest "nothing saved" state). Otherwise (anon, or still
+  // loading) fall back to the recently-viewed localStorage list.
+  const showWatchlist = signedIn && watchedMedicines !== null;
+  const myMedicines = showWatchlist ? watchedMedicines : recentMedicines;
 
   return (
     <aside className="sb">
@@ -88,15 +122,21 @@ export default function V1Sidebar() {
         </div>
         <div className="sb-group">
           <div className="sb-glabel">My medicines</div>
-          {recentMedicines.length > 0 ? (
+          {myMedicines.length > 0 ? (
             <>
-              {recentMedicines.map((m) => (
+              {myMedicines.map((m) => (
                 <Link key={m.id} href={`/drugs/${m.id}`} className="sb-item sb-sub">
                   {truncateDrugName(m.name, 28)}
                 </Link>
               ))}
-              <Link href="/account#watchlist" className="sb-item sb-viewall">View all →</Link>
+              {showWatchlist && (
+                <Link href="/account#watchlist" className="sb-item sb-viewall">View all →</Link>
+              )}
             </>
+          ) : showWatchlist ? (
+            <Link href="/search" className="sb-item sb-empty">No saved medicines yet</Link>
+          ) : signedIn ? (
+            <div className="sb-item sb-empty">Loading…</div>
           ) : (
             <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
           )}

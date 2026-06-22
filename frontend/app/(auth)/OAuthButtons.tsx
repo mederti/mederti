@@ -5,6 +5,13 @@ import { createBrowserClient } from "@/lib/supabase/client";
 
 type Provider = "google" | "apple";
 
+// Google/Apple providers must be enabled in the Supabase dashboard before these
+// buttons work — otherwise signInWithOAuth returns "provider is not enabled".
+// Keep the buttons hidden until the env flag is flipped on (set
+// NEXT_PUBLIC_OAUTH_ENABLED=true once the providers are configured).
+const OAUTH_ENABLED =
+  (process.env.NEXT_PUBLIC_OAUTH_ENABLED ?? "").toLowerCase() === "true";
+
 export default function OAuthButtons({
   next,
   role,
@@ -17,6 +24,10 @@ export default function OAuthButtons({
   const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const supabase = createBrowserClient();
+
+  // Until the providers are enabled server-side, render nothing (no broken
+  // buttons, no dangling "or" divider). The email/password form stands alone.
+  if (!OAUTH_ENABLED) return null;
 
   async function handleOAuth(provider: Provider) {
     setError(null);

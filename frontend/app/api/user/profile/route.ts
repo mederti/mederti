@@ -1,21 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
+import { isValidProfileRole } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
-
-// Mirrors the CHECK constraints in migration 025_user_profile_onboarding.sql.
-const VALID_ROLES = [
-  "hospital_pharmacist",
-  "community_pharmacist",
-  "hospital_procurement",
-  "wholesaler",
-  "manufacturer",
-  "government",
-  "researcher",
-  // back-compat
-  "pharmacist", "hospital", "supplier", "default", "other",
-];
 
 const VALID_USE_CASES = [
   "find_alternative",
@@ -127,7 +115,7 @@ export async function POST(req: Request) {
   const update: Record<string, unknown> = { user_id: userId };
 
   if (body.role !== undefined) {
-    if (!VALID_ROLES.includes(body.role)) {
+    if (!isValidProfileRole(body.role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
     update.role = body.role;

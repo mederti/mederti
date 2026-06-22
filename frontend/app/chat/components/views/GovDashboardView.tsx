@@ -85,13 +85,13 @@ export function GovDashboardView() {
 @keyframes govShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 .govdash .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:16px}
-.govdash .kpi{background:#fff;border:1px solid var(--border);border-radius:11px;padding:15px 16px}
+.govdash .kpi{background:#fff;border:1px solid var(--border);border-radius:11px;padding:15px 16px;display:flex;flex-direction:column}
 .govdash .kpi.crit{border-color:var(--crit-b)}
 .govdash .kpi.good{border-color:var(--low-b)}
-.govdash .kpi-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-4);margin-bottom:8px;font-weight:600}
-.govdash .kpi-val{font-size:27px;font-weight:600;letter-spacing:-0.02em;color:var(--text);line-height:1}
+.govdash .kpi-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-4);margin-bottom:0;font-weight:600;order:2}
+.govdash .kpi-val{font-size:27px;font-weight:600;letter-spacing:-0.02em;color:var(--text);line-height:1;margin-bottom:8px;order:1}
 .govdash .kpi-of{font-size:14px;color:var(--text-4);font-weight:500}
-.govdash .kpi-delta{font-size:10.5px;margin-top:7px;font-family:var(--font-geist-mono),ui-monospace,monospace}
+.govdash .kpi-delta{font-size:10.5px;margin-top:7px;font-family:var(--font-geist-mono),ui-monospace,monospace;order:3}
 .govdash .kpi-delta.up{color:var(--crit)}
 .govdash .kpi-delta.down{color:var(--low)}
 .govdash .kpi-delta.flat{color:var(--text-4)}

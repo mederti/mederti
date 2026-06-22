@@ -71,8 +71,10 @@ function softLaunchAllowed(pathname: string): boolean {
  * Routes that DO NOT require authentication.
  * Everything else (the actual product) requires a signed-in user.
  *
- * Marketing / persona pages stay public for SEO and acquisition.
- * Auth pages stay public so users can log in / sign up.
+ * Only marketing / acquisition pages and the auth scaffolding stay public.
+ * ALL product / data surfaces — search, drug detail, chat, intelligence,
+ * insights, freshness, shortages — are gated: a user must be signed up and
+ * logged in to see any drug information.
  */
 const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/",                    // landing
@@ -86,25 +88,13 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/auth",                // any auth callback paths
   "/forgot-password",
   "/reset-password",
-  // Drug search + detail are public for SEO and first-time visitors.
-  // (Login is required only for chat history, watchlist, and alerts.)
-  "/search",              // drug shortage search
-  "/drugs",               // /drugs/[id] detail pages
-  // Persona / marketing pages
+  // Persona / marketing pages (acquisition funnel, no drug data)
   "/pharmacists",
   "/hospitals",
   "/doctors",
   "/government",
   "/governments",
-  "/suppliers",           // and /suppliers/directory, /suppliers/[slug] (public discovery)
-  // Chat is the public Claude-led answer surface. Public to maximise first-touch
-  // and SEO; auth happens later via lead capture / signup CTAs inside the chat.
-  "/chat",
-  // Public operational reading views (Intelligence / Dashboard) — the grounded
-  // chat posts to /api/chat (already public). The full /chat product stays gated.
-  "/insights",
-  // Public source-freshness dashboard — credibility lever, no auth required.
-  "/freshness",
+  "/suppliers",           // supplier acquisition / discovery landing
   // Static demo / preview HTML in public/
   "/table-preview.html",
   // Public APIs that are safe to expose

@@ -513,7 +513,8 @@ export async function GET(req: NextRequest) {
           )
           .then((r) => {
             const LABEL: Record<string, string> = {
-              drug_tariff: "Drug Tariff", reimbursement: "reimb.", pharmacy_purchase: "acquisition",
+              drug_tariff: "Drug Tariff", reimbursement: "reimb.", retail_public: "retail",
+              pharmacy_purchase: "acquisition",
               list: "list", wholesale: "wholesale", ex_factory: "ex-factory", amp: "AMP",
               wac: "WAC", reference_price: "ref. price",
             };

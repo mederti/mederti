@@ -60,12 +60,13 @@ export type ConcessionSignal = {
 };
 
 const HEADLINE_PRIORITY = [
-  "drug_tariff", "reimbursement", "pharmacy_purchase", "list",
+  "drug_tariff", "reimbursement", "retail_public", "pharmacy_purchase", "list",
   "wholesale", "ex_factory", "amp", "wac", "reference_price",
 ];
 const PRICE_TYPE_LABEL: Record<string, string> = {
   drug_tariff: "Drug Tariff", reimbursement: "Reimbursement",
-  pharmacy_purchase: "Acquisition", list: "List price", wholesale: "Wholesale",
+  retail_public: "Retail price", pharmacy_purchase: "Acquisition",
+  list: "List price", wholesale: "Wholesale",
   ex_factory: "Ex-factory", amp: "AMP", wac: "WAC",
   reference_price: "Reference price", concession: "Concession",
 };

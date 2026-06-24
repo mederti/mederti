@@ -5,6 +5,7 @@ import V1Chat from "@/app/components/v1/V1Chat";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
 import V1ReportActions from "./V1ReportActions";
+import { FindSupplier } from "./find-supplier";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -450,6 +451,10 @@ export default function V1DrugView({
 
             <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
           </div>
+
+          {/* Find a supplier — universal CTA routing to the Mederti sourcing team */}
+          <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+
 
           {/* Price-concession signal — promoted into the hero (Option B). A
               regulator reimbursing above tariff means pharmacies can't source
@@ -1038,6 +1043,10 @@ const CSS = `
 .sc-title{font-size:24px;font-weight:700;letter-spacing:-.028em;margin-bottom:5px}
 .sc-sub{font-size:13px;color:var(--text-3)}
 .sc-asof{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px}
+.find-supplier-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--green);background:var(--green);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
+.find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+.find-supplier-hint{font-size:12px;color:var(--text-4)}
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block;box-shadow:var(--sh-card),var(--hi-inset);}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}

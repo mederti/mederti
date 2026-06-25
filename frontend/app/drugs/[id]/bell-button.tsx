@@ -83,6 +83,12 @@ export function V4BellButton({ drugId, hasShortage = true }: V4BellButtonProps) 
         .single();
       if (data) setWatchlistId(data.id);
       setIsWatching(true);
+      // Fire-and-forget demand signal (watchlist_add) — recorded server-side.
+      fetch("/api/demand/watchlist-add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ drug_id: drugId }),
+      }).catch(() => {});
     }
 
     setToggling(false);

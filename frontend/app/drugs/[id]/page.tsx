@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd, jsonLdSafe } from "@/lib/seo";
-import { cookies } from "next/headers";
+import { recordDemandSignal } from "@/lib/demand-signal";
+import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 import SiteNav from "@/app/components/landing-nav";
@@ -445,11 +446,13 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // Session lookup is best-effort — never block the page on it.
   let sessionRole: string | null = null;
   let loggedIn = false;
+  let userId: string | null = null;
   try {
     const { createServerClient } = await import("@/lib/supabase/server");
     const sb = await createServerClient();
     const { data: { user } } = await sb.auth.getUser();
     loggedIn = !!user;
+    userId = user?.id ?? null;
     if (user) {
       const admin = getSupabaseAdmin();
       const { data: profile } = await admin
@@ -511,6 +514,21 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let availability: any[] = [];
   if (drug) {
+    // Demand-signal instrumentation — the actual product-page view. Previously
+    // only chat previews (/api/drug/[id]) recorded drug_view; the server-
+    // rendered page read Supabase directly and never logged a view. Fire-and-
+    // forget; identifier = user_id when signed in, else client IP (both hashed
+    // downstream). country_code left null — the page doesn't reliably know the
+    // user's home market server-side, and reading profile.countries here risks
+    // the migration-025 drift that would break persona resolution.
+    const fwd = (await headers()).get("x-forwarded-for") ?? "";
+    const ip = fwd.split(",")[0]?.trim() || null;
+    recordDemandSignal({
+      signal_type: "drug_view",
+      drug_id: drug.id,
+      identifier: userId ?? ip,
+    });
+
     const { data: prodData } = await supabase
       .from("drug_products")
       .select("id, registry_id, product_name, trade_name, strength, dosage_form, route, country, registry_status, sponsors(name)")

@@ -53,15 +53,23 @@ export async function GET(req: Request) {
 
 async function handle(req: Request) {
   const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const auth = req.headers.get("authorization") ?? "";
-    const url = new URL(req.url);
-    const querySecret = url.searchParams.get("secret");
-    const bearerOk = auth === `Bearer ${expected}`;
-    const querySecretOk = querySecret === expected;
-    if (!bearerOk && !querySecretOk) {
-      return NextResponse.json({ error: "unauthorised" }, { status: 401 });
-    }
+  // Fail CLOSED: if no secret is configured, refuse to run rather than
+  // skipping auth. An unset CRON_SECRET previously left this endpoint fully
+  // open — anonymous callers could trigger service-role DB writes and a
+  // billable Anthropic call, loopable for unbounded cost.
+  if (!expected) {
+    return NextResponse.json(
+      { error: "CRON_SECRET not configured; endpoint disabled" },
+      { status: 503 },
+    );
+  }
+  const auth = req.headers.get("authorization") ?? "";
+  const url = new URL(req.url);
+  const querySecret = url.searchParams.get("secret");
+  const bearerOk = auth === `Bearer ${expected}`;
+  const querySecretOk = querySecret === expected;
+  if (!bearerOk && !querySecretOk) {
+    return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   }
 
   const sb = getSupabaseAdmin();

@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd, jsonLdSafe } from "@/lib/seo";
 import { recordDemandSignal } from "@/lib/demand-signal";
@@ -549,7 +549,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   if (!drug) {
     const { data: catEntry } = await supabase
       .from("drug_catalogue")
-      .select("id, generic_name, brand_name, strength, dosage_form, route, source_name, source_country, registration_number, registration_status, sponsor")
+      .select("id, drug_id, generic_name, brand_name, strength, dosage_form, route, source_name, source_country, registration_number, registration_status, sponsor")
       .eq("id", id)
       .single();
 
@@ -558,6 +558,19 @@ export default async function DrugPage({ params, searchParams }: Props) {
       // saying "Drug not found", which Google would index as a real page.
       // notFound() throws past the layout and serves Next's actual 404.
       notFound();
+    }
+
+    // A catalogue product linked to a canonical molecule (drug_id, populated by
+    // backend/importers/catalogue_inn_backfill) must NOT render its own thin
+    // registration page — that fragments the experience and duplicates the
+    // molecule. Bounce to the canonical drug page, which carries the real
+    // shortage / alternative / pricing data. Search promotes these rows already,
+    // so this catches direct / stale links. Permanent (308) so it's cached and
+    // consolidates link equity if drug pages are ever exposed to crawlers (today
+    // /drugs/* is login-gated in middleware, so this fires for signed-in users).
+    // The self-guard avoids a loop if a row's drug_id were ever set to its own id.
+    if (catEntry.drug_id && catEntry.drug_id !== id) {
+      permanentRedirect(`/drugs/${catEntry.drug_id}`);
     }
 
     /* Render a minimal stable-supply page for catalogue-only drugs */
@@ -701,11 +714,46 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // is the primary-source manufacturing-concentration signal — the headline
     // feature of the Johns Hopkins supply-chain dashboard, sourced directly.
     const inn = (drug.generic_name ?? "").toLowerCase();
-    const { data: apiSupplierRows } = await supabase
-      .from("api_suppliers")
-      .select("manufacturer_name, country, source, who_pq")
-      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
-      .limit(300);
+    // These five reads are mutually independent — fetch them concurrently so the
+    // page waits on the slowest one, not the sum. (Was a 5-deep await waterfall:
+    // api_suppliers → drug_approvals → regulatory_eligibility → drug_pricing →
+    // buildMarketPricing, ~5 serial round-trips before first paint.) supabase-js
+    // resolves (not rejects) on a query error, so a missing table still soft-fails
+    // to null without taking down the batch.
+    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing] = await Promise.all([
+      supabase
+        .from("api_suppliers")
+        .select("manufacturer_name, country, source, who_pq")
+        .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+        .limit(300),
+      supabase
+        .from("drug_approvals")
+        .select("authority, application_type, approval_date, brand_name")
+        .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+        .order("approval_date", { ascending: false })
+        .limit(200),
+      supabase
+        .from("regulatory_eligibility")
+        .select(
+          "scheme, status, scheme_reference, description, brand_name, listed_at, expires_at, source_url, source_name, country_code",
+        )
+        .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+        .eq("status", "active")
+        .limit(50),
+      supabase
+        .from("drug_pricing")
+        .select("price_amount, dispensed_amount, currency, pack_size, price_date, source")
+        .eq("drug_id", id)
+        .eq("country_code", userCountry)
+        .order("price_date", { ascending: false, nullsFirst: false })
+        .limit(1),
+      buildMarketPricing(supabase, id, drug.generic_name, userCountry),
+    ]);
+    const apiSupplierRows = apiSupplierRes.data;
+    const approvalRows = approvalRes.data;
+    const eligRows = eligRes.data;
+    const priceRows = priceRes.data;
+    const { concession, priceMarkets } = marketPricing;
     const supplierRows = (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null; who_pq: boolean | null }[];
     const makerSet = new Map<string, string>();
     const whoPqMakers = new Set<string>();
@@ -740,12 +788,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
 
     // FDA approval footprint — NDA (brand/innovator) vs ANDA (generic) is a
     // market-depth signal: more approved generics = a more resilient supply.
-    const { data: approvalRows } = await supabase
-      .from("drug_approvals")
-      .select("authority, application_type, approval_date, brand_name")
-      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
-      .order("approval_date", { ascending: false })
-      .limit(200);
+    // (Fetched above in the parallel batch.)
     const approvals = (approvalRows ?? []) as { application_type: string | null; approval_date: string | null; brand_name: string | null }[];
     const approvalFootprint =
       approvals.length > 0
@@ -764,14 +807,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // replacing the brittle string-match on shortage notes. If the migration
     // isn't applied yet the query errors softly (data → null) and the view
     // falls back to notes-parsing, so this is safe to ship ahead of the DDL.
-    const { data: eligRows } = await supabase
-      .from("regulatory_eligibility")
-      .select(
-        "scheme, status, scheme_reference, description, brand_name, listed_at, expires_at, source_url, source_name, country_code",
-      )
-      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
-      .eq("status", "active")
-      .limit(50);
+    // (Fetched above in the parallel batch.)
     const eligibility = (eligRows ?? []) as {
       scheme: string;
       status: string;
@@ -789,13 +825,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // market, from drug_pricing (populated by the PBS ingest). Defensive: if the
     // dispensed_amount column / rows aren't there yet the query errors softly
     // (data → null) and the view simply omits the price block. AU-only today.
-    const { data: priceRows } = await supabase
-      .from("drug_pricing")
-      .select("price_amount, dispensed_amount, currency, pack_size, price_date, source")
-      .eq("drug_id", id)
-      .eq("country_code", userCountry)
-      .order("price_date", { ascending: false, nullsFirst: false })
-      .limit(1);
+    // (Fetched above in the parallel batch.)
     const pr = (priceRows ?? [])[0] as
       | { price_amount: number | null; dispensed_amount: number | null; currency: string | null; pack_size: string | null; price_date: string | null; source: string | null }
       | undefined;
@@ -815,9 +845,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // CMS NADAC, …). Lights up GB/US prices the AU-only `pricing` above can't,
     // and surfaces an active price concession as an early supply-pressure
     // signal. Defensive: soft-errors to empty if the table isn't reachable.
-    const { concession, priceMarkets } = await buildMarketPricing(
-      supabase, id, drug.generic_name, userCountry,
-    );
+    // (concession + priceMarkets fetched above in the parallel batch.)
 
     return (
       <V1DrugView

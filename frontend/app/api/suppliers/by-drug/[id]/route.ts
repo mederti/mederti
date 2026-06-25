@@ -71,5 +71,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
     });
 
-  return NextResponse.json({ suppliers, total: suppliers.length });
+  // Supplier inventory is drug-keyed (not user-specific) and changes on the
+  // order of hours, so this can be shared-cached. Was uncached → cold DB hit
+  // on every drug view.
+  return NextResponse.json(
+    { suppliers, total: suppliers.length },
+    { headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=900" } },
+  );
 }

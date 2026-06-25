@@ -50,19 +50,49 @@ export async function GET(req: Request) {
   const peers = PEER_GROUPS[country] ?? PEER_GROUPS.GB;
   const sb = getSupabaseAdmin();
 
-  // Pull all active shortages (paginated) — we need every event, not first 1000.
-  const allEvents: Array<{ drug_id: string; country_code: string; severity: string; start_date: string | null }> = [];
-  let offset = 0;
-  while (true) {
-    const { data } = await sb
-      .from("shortage_events")
-      .select("drug_id, country_code, severity, start_date")
-      .eq("status", "active")
-      .range(offset, offset + 999);
-    if (!data || data.length === 0) break;
-    allEvents.push(...(data as Array<{ drug_id: string; country_code: string; severity: string; start_date: string | null }>));
-    if (data.length < 1000) break;
-    offset += 1000;
+  // Pull all active shortages — we need every event (worst-severity and oldest
+  // start are computed across all markets, not just peers). PostgREST caps a
+  // single response at 1000 rows, so we page; but a HEAD count tells us the page
+  // count up front and we fire the pages concurrently instead of walking them
+  // serially (was ~30 sequential round-trips on a 30k-row table → now one count
+  // + one parallel fan-out). Closes part of audit FINDING-P5-01.
+  type Ev = { drug_id: string; country_code: string; severity: string; start_date: string | null };
+  const PAGE = 1000;
+  const allEvents: Ev[] = [];
+  const { count } = await sb
+    .from("shortage_events")
+    .select("drug_id", { count: "exact", head: true })
+    .eq("status", "active");
+
+  if (count != null) {
+    const reqs = [];
+    for (let off = 0; off < count; off += PAGE) {
+      reqs.push(
+        sb
+          .from("shortage_events")
+          .select("drug_id, country_code, severity, start_date")
+          .eq("status", "active")
+          .range(off, off + PAGE - 1),
+      );
+    }
+    for (const p of await Promise.all(reqs)) {
+      if (p.data) allEvents.push(...(p.data as Ev[]));
+    }
+  } else {
+    // Count unavailable (e.g. transient error) → fall back to a serial drain so
+    // the radar still populates rather than rendering empty.
+    let offset = 0;
+    while (true) {
+      const { data } = await sb
+        .from("shortage_events")
+        .select("drug_id, country_code, severity, start_date")
+        .eq("status", "active")
+        .range(offset, offset + PAGE - 1);
+      if (!data || data.length === 0) break;
+      allEvents.push(...(data as Ev[]));
+      if (data.length < PAGE) break;
+      offset += PAGE;
+    }
   }
 
   // Group by drug

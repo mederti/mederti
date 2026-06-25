@@ -35,20 +35,30 @@ export function SupplierDrawer({
   );
   const [organisation, setOrganisation] = useState(userOrganisation ?? "");
   const [message, setMessage] = useState("");
-  // Email is only collected when we don't already know it from the session.
-  // The reply-to address Mederti needs to come back to the buyer.
-  const [email, setEmail] = useState("");
+  // Contact details Mederti needs to come back to the buyer. Email is always
+  // collected (pre-filled from the session when known, still editable so a
+  // buyer can give a different reply-to); phone is optional.
+  const [email, setEmail] = useState(userEmail ?? "");
+  const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  useEffect(() => { if (isOpen) { setSubmitted(false); setError(""); } }, [isOpen]);
-
-  const needsEmail = !userEmail;
+  // Re-sync prefills on open. The session loads asynchronously in the parent,
+  // so userEmail/userOrganisation may arrive after first mount — only fill
+  // fields the buyer hasn't already typed into.
+  useEffect(() => {
+    if (isOpen) {
+      setSubmitted(false);
+      setError("");
+      setEmail(prev => prev || userEmail || "");
+      setOrganisation(prev => prev || userOrganisation || "");
+    }
+  }, [isOpen, userEmail, userOrganisation]);
 
   async function handleSubmit() {
-    if (needsEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError("Please enter a valid email so we can get back to you.");
       return;
     }
@@ -63,7 +73,8 @@ export function SupplierDrawer({
           organisation, message,
           country: userCountry,
           userId,
-          userEmail: userEmail ?? email.trim(),
+          userEmail: email.trim(),
+          userPhone: phone.trim(),
         }),
       });
       if (res.ok) {
@@ -169,7 +180,7 @@ export function SupplierDrawer({
               {broker
                 ? `Mederti will look into sourcing ${drugName} and respond within ${partner.responseTime}.`
                 : `${partner.name} will respond within ${partner.responseTime}.`}
-              {(userEmail || email.trim()) && <><br />A confirmation has been sent to your email.</>}
+              {email.trim() && <><br />A confirmation has been sent to your email.</>}
             </div>
             <button onClick={onClose} style={{
               marginTop: 24, padding: "10px 24px", borderRadius: 8,
@@ -250,25 +261,43 @@ export function SupplierDrawer({
                 />
               </div>
 
-              {/* Email — only when we don't already know it from the session */}
-              {needsEmail && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "var(--app-text-3)", marginBottom: 4 }}>Your email</div>
-                  <input
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    type="email"
-                    placeholder="you@pharmacy.com"
-                    style={{
-                      width: "100%", padding: "8px 10px", borderRadius: 8,
-                      border: "1px solid var(--app-border)", fontSize: 12,
-                      color: "var(--app-text)", background: "var(--app-bg)",
-                      fontFamily: "var(--font-inter), sans-serif", outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                  />
+              {/* Email — always collected so Mederti has a reply-to address */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 500, color: "var(--app-text-3)", marginBottom: 4 }}>Your email</div>
+                <input
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  type="email"
+                  placeholder="you@pharmacy.com"
+                  style={{
+                    width: "100%", padding: "8px 10px", borderRadius: 8,
+                    border: "1px solid var(--app-border)", fontSize: 12,
+                    color: "var(--app-text)", background: "var(--app-bg)",
+                    fontFamily: "var(--font-inter), sans-serif", outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {/* Phone — optional, lets the sourcing team call for urgent requests */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 500, color: "var(--app-text-3)", marginBottom: 4 }}>
+                  Phone <span style={{ color: "var(--app-text-4)", fontWeight: 400 }}>(optional)</span>
                 </div>
-              )}
+                <input
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  type="tel"
+                  placeholder="+44 7700 900000"
+                  style={{
+                    width: "100%", padding: "8px 10px", borderRadius: 8,
+                    border: "1px solid var(--app-border)", fontSize: 12,
+                    color: "var(--app-text)", background: "var(--app-bg)",
+                    fontFamily: "var(--font-inter), sans-serif", outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
 
               {/* Message */}
               <div>

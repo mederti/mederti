@@ -23,7 +23,28 @@ export function checkRateLimit(ip: string): { ok: boolean; remaining: number; re
 }
 
 export function getClientIp(req: Request): string {
+  // SECURITY: do NOT trust the leftmost X-Forwarded-For token — on Vercel
+  // (and most proxies) the client can prepend an arbitrary value, landing
+  // each request in a fresh rate-limit bucket and defeating the limiter.
+  // Prefer headers set by the Vercel edge, which the client cannot forge:
+  //   • x-real-ip               — single trustworthy client IP
+  //   • x-vercel-forwarded-for  — Vercel's own forwarded chain
+  // Fall back to the LAST token of x-forwarded-for (Vercel appends the real
+  // connecting IP), never the first.
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp) return realIp.trim();
+
+  const vercelFwd = req.headers.get("x-vercel-forwarded-for");
+  if (vercelFwd) {
+    const parts = vercelFwd.split(",");
+    return parts[parts.length - 1].trim();
+  }
+
   const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return req.headers.get("x-real-ip") || "unknown";
+  if (xff) {
+    const parts = xff.split(",");
+    return parts[parts.length - 1].trim();
+  }
+
+  return "unknown";
 }

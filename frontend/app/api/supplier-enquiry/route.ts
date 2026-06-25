@@ -11,6 +11,11 @@ const resend =
     ? new Resend(process.env.RESEND_API_KEY)
     : null;
 
+// The Mederti sourcing team is always notified of an enquiry — they coordinate
+// sourcing on the buyer's behalf, especially in markets with no local wholesale
+// partner (every country outside AU/GB). Overridable via env.
+const MEDERTI_INBOX = process.env.MEDERTI_SOURCING_EMAIL ?? "hello@mederti.com";
+
 /**
  * POST /api/supplier-enquiry
  *
@@ -129,6 +134,20 @@ export async function POST(req: NextRequest) {
 
   // ── 4. Send emails ──
   if (resend) {
+    // 4a-0. Always notify the Mederti sourcing team. This is the primary
+    // recipient for the universal "Find a supplier" CTA on the drug page.
+    try {
+      await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL ?? "intelligence@mederti.com",
+        to: MEDERTI_INBOX,
+        replyTo: contactEmail ?? undefined,
+        subject: `[Mederti sourcing] ${urgency.toUpperCase()} request — ${drugName} (${country})`,
+        html: leadEmailHtml({ drugName, urgency, quantity, organisation, userEmail: contactEmail, message, country, supplierName: "Mederti sourcing" }),
+      });
+    } catch (e) {
+      console.error("[supplier-enquiry] Mederti inbox email failed:", e);
+    }
+
     // 4a. Email legacy partner (backward compatible)
     if (partner) {
       const EMAIL_OVERRIDES: Record<string, string | undefined> = {
@@ -172,19 +191,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4c. Confirmation to buyer
+    // 4c. Confirmation to buyer. Framed around the Mederti sourcing team (who
+    // are always notified); mentions matched suppliers only when some exist.
     if (contactEmail) {
       const supplierCount = targetSuppliers.length + (partner ? 1 : 0);
       try {
         await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL ?? "intelligence@mederti.com",
           to: contactEmail,
-          subject: `Your enquiry for ${drugName} has been sent to ${supplierCount} supplier${supplierCount === 1 ? "" : "s"}`,
+          subject: `We've received your request for ${drugName}`,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px;">
-              <h2 style="color: #0F172A;">Enquiry sent to ${supplierCount} supplier${supplierCount === 1 ? "" : "s"}</h2>
-              <p>Your enquiry for <strong>${drugName}</strong> has been forwarded to ${supplierCount} supplier${supplierCount === 1 ? "" : "s"} serving ${country}.</p>
-              <p>You should receive quotes within 24-48 hours via email.</p>
+              <h2 style="color: #0F172A;">Request received</h2>
+              <p>Thanks — the Mederti sourcing team has received your request for <strong>${drugName}</strong> and will look into whether it can be sourced for you.</p>
+              ${supplierCount > 0
+                ? `<p>We've also forwarded it to ${supplierCount} supplier${supplierCount === 1 ? "" : "s"} serving ${country}, so you may receive quotes directly within 24–48 hours.</p>`
+                : `<p>We'll get back to you by email, typically within one business day.</p>`}
               <table cellpadding="6" style="margin: 16px 0;">
                 <tr><td>Urgency:</td><td><strong>${urgency}</strong></td></tr>
                 <tr><td>Quantity:</td><td>${quantity || "not specified"}</td></tr>

@@ -11,13 +11,14 @@
  *   4. ATC universal classification (drugs.atc_code + atc_codes if applied)
  *   5. RxNorm canonical (US)        (drug_rxnorm if applied)
  *
- * Public route under /admin/* but does no auth check — this is intended
- * for demos and team debugging. Lock down with a middleware check if
- * we ever surface PII through it.
+ * Admin-gated (server-side requireAdmin) — surfaces internal naming-graph
+ * and catalogue data via the service-role client.
  */
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,8 @@ const FLAGS: Record<string, string> = {
 const flag = (cc: string | null | undefined) => (cc ? (FLAGS[cc] ?? "🏳️") : "🏳️");
 
 export default async function NamingGraphPage({ searchParams }: Props) {
+  if (!(await requireAdmin())) notFound();
+
   const sp = await searchParams;
   const query = (sp.drug ?? "").trim();
   const sb = getSupabaseAdmin();

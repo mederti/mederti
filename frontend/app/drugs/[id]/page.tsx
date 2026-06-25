@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd } from "@/lib/seo";
+import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd, jsonLdSafe } from "@/lib/seo";
 import { recordDemandSignal } from "@/lib/demand-signal";
 import { cookies, headers } from "next/headers";
 import Link from "next/link";
@@ -531,7 +531,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
 
     const { data: prodData } = await supabase
       .from("drug_products")
-      .select("id, product_name, trade_name, strength, dosage_form, route, country, registry_status, sponsors(name)")
+      .select("id, registry_id, product_name, trade_name, strength, dosage_form, route, country, registry_status, sponsors(name)")
       .ilike("product_name", `%${drug.generic_name}%`)
       .limit(30);
     products = prodData ?? [];
@@ -1188,8 +1188,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
     return (
       <DrugShell loggedIn={loggedIn}>
       <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbLd) }} />
 
         <style>{`
           @media (max-width: 900px) {
@@ -1269,8 +1269,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
     <DrugShell loggedIn={loggedIn}>
     <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
       {/* JSON-LD structured data — Drug graph + Breadcrumbs */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbLd) }} />
       {/* AI-readable summary — visually hidden but crawlable */}
       <div style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}>
         <p>

@@ -5,6 +5,7 @@ import V1Chat from "@/app/components/v1/V1Chat";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
 import V1ReportActions from "./V1ReportActions";
+import { FindSupplier } from "./find-supplier";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -53,6 +54,12 @@ const COUNTRY: Record<string, string> = {
   US: "United States", CA: "Canada", DE: "Germany", FR: "France", IT: "Italy",
   ES: "Spain", IE: "Ireland", CH: "Switzerland", NO: "Norway", SE: "Sweden",
   FI: "Finland", DK: "Denmark", NL: "Netherlands", JP: "Japan", KR: "South Korea", SG: "Singapore",
+};
+// National product-registry code system per market. ATC is the global molecule
+// code; this is the LOCAL, manufacturer-specific registration number.
+const CODE_LABEL: Record<string, string> = {
+  AU: "ARTG", US: "NDC", GB: "PL", UK: "PL", FR: "CIP", IT: "AIC", ES: "CN",
+  CA: "DIN", DE: "PZN", IE: "PA", CH: "Swissmedic", NL: "RVG", SG: "SIN",
 };
 
 function abbr(name?: string, a?: string | null) {
@@ -322,6 +329,23 @@ export default function V1DrugView({
   // Distinct MA holders (sponsors) — a quick top-line even when the table is long.
   const maHolders = [...new Set(regRows.map((r) => r.sponsor).filter(Boolean))] as string[];
 
+  // Header sub-line: the LOCAL registration in the user's own market — the
+  // national product code (ARTG / NDC / CIP …) + manufacturer that sits beneath
+  // the global ATC. Country-scoped on purpose: a molecule has many local codes,
+  // so we only assert the one for the market this page is framed around.
+  const localReg = (() => {
+    const p = (products ?? []).find(
+      (x) => (x.country || "").toUpperCase() === userCountry && x.registry_id,
+    );
+    if (!p) return null;
+    const code = String(p.registry_id);
+    // Many national codes already self-identify with a text prefix ("AUST R",
+    // "PL", "RVG"); only prepend the system label for bare numeric codes
+    // (NDC, CIP, AIC, DIN, …) where it adds meaning.
+    const label = /^[A-Za-z]/.test(code) ? null : CODE_LABEL[userCountry] ?? "Reg.";
+    return { country: userCountry, label, code, sponsor: p.sponsors?.name || null };
+  })();
+
   // Report identity (drives the export/print header).
   const generatedLabel = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
   const marketLabel = `${cName} market`;
@@ -396,6 +420,12 @@ export default function V1DrugView({
                   <div className="d-generic">
                     {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
                   </div>
+                  {localReg && (
+                    <div className="d-localcode">
+                      {flag(localReg.country)} {[localReg.label, localReg.code].filter(Boolean).join(" ")}
+                      {localReg.sponsor ? <> · {localReg.sponsor}</> : null}
+                    </div>
+                  )}
                 </div>
                 <span className={`status-pill ${statusPill.cls}`}><span className="d" />{statusPill.txt}</span>
               </div>
@@ -450,6 +480,10 @@ export default function V1DrugView({
 
             <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
           </div>
+
+          {/* Find a supplier — universal CTA routing to the Mederti sourcing team */}
+          <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+
 
           {/* Price-concession signal — promoted into the hero (Option B). A
               regulator reimbursing above tariff means pharmacies can't source
@@ -974,6 +1008,7 @@ const CSS = `
 @media(max-width:640px){.d-img{width:96px;height:96px;border-radius:13px}}
 .d-name{font-size:30px;font-weight:700;letter-spacing:-.032em;line-height:1.1}
 .d-generic{font-size:13px;color:var(--text-3);margin-top:5px;font-family:var(--font-geist-mono),ui-monospace,monospace}
+.d-localcode{font-size:12px;color:var(--text-3);margin-top:3px;font-family:var(--font-geist-mono),ui-monospace,monospace}
 .d-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .d-tag{font-size:11px;font-weight:500;padding:4px 9px;border-radius:7px;background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
 .d-eml{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b);text-decoration:none;width:fit-content}
@@ -1038,6 +1073,10 @@ const CSS = `
 .sc-title{font-size:24px;font-weight:700;letter-spacing:-.028em;margin-bottom:5px}
 .sc-sub{font-size:13px;color:var(--text-3)}
 .sc-asof{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px}
+.find-supplier-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--green);background:var(--green);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
+.find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+.find-supplier-hint{font-size:12px;color:var(--text-4)}
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block;box-shadow:var(--sh-card),var(--hi-inset);}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}

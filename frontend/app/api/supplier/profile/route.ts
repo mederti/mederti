@@ -41,7 +41,12 @@ export async function POST(req: Request) {
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const company_name = (body.company_name || "").trim();
+  // Defense-in-depth: strip angle brackets from free-text fields so supplier
+  // input can never carry stored HTML (these surface on the public profile
+  // page and in JSON-LD). The JSON-LD sink also escapes via jsonLdSafe().
+  const clean = (v: unknown): string =>
+    typeof v === "string" ? v.replace(/[<>]/g, "").trim() : "";
+  const company_name = clean(body.company_name);
   if (!company_name) {
     return NextResponse.json({ error: "company_name required" }, { status: 400 });
   }
@@ -50,11 +55,11 @@ export async function POST(req: Request) {
   const payload = {
     user_id: auth.id,
     company_name,
-    contact_email: body.contact_email || auth.email || "",
-    contact_phone: body.contact_phone || null,
-    website: body.website || null,
+    contact_email: clean(body.contact_email) || auth.email || "",
+    contact_phone: clean(body.contact_phone) || null,
+    website: clean(body.website) || null,
     countries_served: Array.isArray(body.countries_served) ? body.countries_served : [],
-    description: body.description || null,
+    description: clean(body.description) || null,
   };
 
   const { data, error } = await admin

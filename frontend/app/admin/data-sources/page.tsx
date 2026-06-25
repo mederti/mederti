@@ -9,9 +9,11 @@
  * Server-rendered. All queries gracefully degrade if a table is
  * missing (e.g. before its migration has been applied).
  */
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +79,10 @@ const TONE_COLORS: Record<"good" | "warn" | "stale" | "unknown", { c: string; bg
 
 
 export default async function DataSourcesPage() {
+  // This page renders internal scraper/ops data via the service-role client,
+  // so it must be admin-gated server-side (middleware only checks auth, not is_admin).
+  if (!(await requireAdmin())) notFound();
+
   const sb = getSupabaseAdmin();
 
   // ── 1. Regulator feed scrapers (the existing shortage / recall side) ──

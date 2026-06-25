@@ -126,17 +126,6 @@ const kpiLabelBase: React.CSSProperties = {
   marginBottom: 10,
 };
 
-const buttonSecondary: React.CSSProperties = {
-  padding: "8px 14px",
-  background: "transparent",
-  border: "1px solid var(--app-border)",
-  borderRadius: 7,
-  color: "var(--app-text-3)",
-  fontSize: 12,
-  fontWeight: 500,
-  fontFamily: "var(--font-inter), sans-serif",
-  cursor: "pointer",
-};
 
 const buttonPrimary: React.CSSProperties = {
   padding: "8px 14px",
@@ -233,14 +222,6 @@ export default function ProcurementView({
           )}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {/* TODO: wire up Compare action */}
-          <button type="button" style={buttonSecondary}>
-            Compare
-          </button>
-          {/* TODO: wire up Export action */}
-          <button type="button" style={buttonSecondary}>
-            Export
-          </button>
           <a
             href="/account#alerts"
             style={{ ...buttonPrimary, textDecoration: "none" }}

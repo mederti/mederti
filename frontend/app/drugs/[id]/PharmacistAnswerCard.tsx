@@ -10,8 +10,6 @@ import {
   ChevronDown,
   ChevronUp,
   Bell,
-  FileText,
-  MoreHorizontal,
 } from "lucide-react";
 
 interface TopAlternative {
@@ -272,68 +270,6 @@ export default function PharmacistAnswerCard({
                 {topAlternative.clinicalReasoning}
               </div>
 
-              {/* Actions */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  marginTop: 18,
-                  flexWrap: "wrap",
-                }}
-              >
-                {/* TODO: wire up Draft prescriber note handler */}
-                <button
-                  type="button"
-                  style={{
-                    padding: "11px 18px",
-                    background: "var(--app-text)",
-                    border: 0,
-                    borderRadius: 9,
-                    color: "#fff",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    fontFamily: "var(--font-inter), sans-serif",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <FileText size={13} /> Draft prescriber note
-                </button>
-                <button
-                  type="button"
-                  style={{
-                    padding: "11px 16px",
-                    background: "var(--app-bg-2)",
-                    border: "1px solid var(--app-border)",
-                    borderRadius: 9,
-                    color: "var(--app-text-2)",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    fontFamily: "var(--font-inter), sans-serif",
-                    cursor: "pointer",
-                  }}
-                >
-                  Compare 4 alternatives
-                </button>
-                <button
-                  type="button"
-                  aria-label="More options"
-                  style={{
-                    padding: "11px 14px",
-                    background: "var(--app-bg-2)",
-                    border: "1px solid var(--app-border)",
-                    borderRadius: 9,
-                    color: "var(--app-text-2)",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                  }}
-                >
-                  <MoreHorizontal size={14} />
-                </button>
-              </div>
             </div>
           )}
 

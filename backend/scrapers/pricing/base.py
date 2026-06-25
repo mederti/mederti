@@ -139,12 +139,48 @@ class PricingScraper(BaseScraper):
 
         resolve = make_resolver(phrase_index, max_words)
 
+        # UNII fallback — for EU-language INN spellings the catalogue resolver
+        # can't match directly (Spanish "OMEPRAZOL", Italian "Atorvastatina",
+        # French "Diclofénac Sodique"), translate the name to the canonical
+        # English INN via the offline UNII reference, then re-resolve THAT to a
+        # real drug entity. Double-gated (high confidence AND a real catalogue
+        # hit) so it can never fabricate an attachment, and it never mutates the
+        # drugs table. Defensive: if the UNII reference can't load, skip it.
+        rv = None
+        try:
+            from backend.importers.inn_bulk_resolver import unii_reference, Resolver
+            rv = Resolver(unii_reference.load())
+            self.log.info("UNII fallback resolver loaded for EU-spelling pricing names")
+        except Exception as exc:
+            self.log.warning("UNII fallback unavailable — EU spellings may not resolve",
+                             extra={"error": str(exc)})
+
+        # The double-resolve (UNII INN → must hit a real catalogue entity) is the
+        # real safety net, so a moderate bar is fine: correct EU morph matches
+        # (atorvastatina→atorvastatin, diclofenaco→diclofenac) land at ~0.86.
+        UNII_MIN_CONF = 0.85
+
         def _resolve(name: str):
             if not name:
                 return None
             cleaned = normalise(name).query or name
             drug, _reason = resolve(cleaned)
-            return drug
+            if drug:
+                return drug
+            # Fallback: foreign/variant spelling → canonical INN → entity.
+            if rv is not None:
+                try:
+                    res = rv.resolve(name)
+                    if (res.get("status") == "resolved"
+                            and (res.get("confidence") or 0) >= UNII_MIN_CONF
+                            and res.get("inn")):
+                        inn = res["inn"]
+                        drug2, _r2 = resolve(normalise(inn).query or inn)
+                        if drug2:
+                            return drug2
+                except Exception:
+                    pass
+            return None
 
         return _resolve
 

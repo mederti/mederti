@@ -14,6 +14,10 @@ interface Props {
   userId?: string;
   userEmail?: string;
   userOrganisation?: string;
+  // Broker mode: the request is routed to the Mederti sourcing team rather than
+  // a named wholesale partner. Tweaks copy so it reads as "Mederti will source
+  // this for you" rather than partner-direct enquiry semantics.
+  broker?: boolean;
 }
 
 const COUNTRY_LABELS: Record<string, string> = {
@@ -23,7 +27,7 @@ const COUNTRY_LABELS: Record<string, string> = {
 
 export function SupplierDrawer({
   isOpen, onClose, drugName, drugId, severity,
-  partner, userCountry, userId, userEmail, userOrganisation,
+  partner, userCountry, userId, userEmail, userOrganisation, broker,
 }: Props) {
   const [quantity, setQuantity] = useState("");
   const [urgency, setUrgency] = useState(
@@ -31,6 +35,9 @@ export function SupplierDrawer({
   );
   const [organisation, setOrganisation] = useState(userOrganisation ?? "");
   const [message, setMessage] = useState("");
+  // Email is only collected when we don't already know it from the session.
+  // The reply-to address Mederti needs to come back to the buyer.
+  const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
@@ -38,7 +45,13 @@ export function SupplierDrawer({
   useEffect(() => setMounted(true), []);
   useEffect(() => { if (isOpen) { setSubmitted(false); setError(""); } }, [isOpen]);
 
+  const needsEmail = !userEmail;
+
   async function handleSubmit() {
+    if (needsEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Please enter a valid email so we can get back to you.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -50,7 +63,7 @@ export function SupplierDrawer({
           organisation, message,
           country: userCountry,
           userId,
-          userEmail,
+          userEmail: userEmail ?? email.trim(),
         }),
       });
       if (res.ok) {
@@ -125,7 +138,7 @@ export function SupplierDrawer({
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)", marginBottom: 2 }}>{partner.name}</div>
-              <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>{countryLabel} · {partner.type}</div>
+              <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>{broker ? `${partner.type} · sources on your behalf` : `${countryLabel} · ${partner.type}`}</div>
               {partner.verified && (
                 <div style={{ fontSize: 10, color: "var(--low)", marginTop: 3, display: "flex", alignItems: "center", gap: 3 }}>
                   <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -151,10 +164,12 @@ export function SupplierDrawer({
                 <path d="M3 8l4 4 6-7" />
               </svg>
             </div>
-            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text)", marginBottom: 8 }}>Enquiry sent</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text)", marginBottom: 8 }}>{broker ? "Request sent" : "Enquiry sent"}</div>
             <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.6 }}>
-              {partner.name} will respond within {partner.responseTime}.
-              {userEmail && <><br />A confirmation has been sent to your email.</>}
+              {broker
+                ? `Mederti will look into sourcing ${drugName} and respond within ${partner.responseTime}.`
+                : `${partner.name} will respond within ${partner.responseTime}.`}
+              {(userEmail || email.trim()) && <><br />A confirmation has been sent to your email.</>}
             </div>
             <button onClick={onClose} style={{
               marginTop: 24, padding: "10px 24px", borderRadius: 8,
@@ -235,6 +250,26 @@ export function SupplierDrawer({
                 />
               </div>
 
+              {/* Email — only when we don't already know it from the session */}
+              {needsEmail && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: "var(--app-text-3)", marginBottom: 4 }}>Your email</div>
+                  <input
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    type="email"
+                    placeholder="you@pharmacy.com"
+                    style={{
+                      width: "100%", padding: "8px 10px", borderRadius: 8,
+                      border: "1px solid var(--app-border)", fontSize: 12,
+                      color: "var(--app-text)", background: "var(--app-bg)",
+                      fontFamily: "var(--font-inter), sans-serif", outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Message */}
               <div>
                 <div style={{ fontSize: 11, fontWeight: 500, color: "var(--app-text-3)", marginBottom: 4 }}>
@@ -271,10 +306,12 @@ export function SupplierDrawer({
                   fontFamily: "var(--font-inter), sans-serif", marginBottom: 8,
                 }}
               >
-                {submitting ? "Sending..." : `Send enquiry to ${partner.name}`}
+                {submitting ? "Sending..." : broker ? "Send request to Mederti" : `Send enquiry to ${partner.name}`}
               </button>
               <div style={{ fontSize: 10, color: "var(--app-text-4)", textAlign: "center", lineHeight: 1.5 }}>
-                {partner.name} will respond within {partner.responseTime} · Your details are shared only with this supplier
+                {broker
+                  ? `Mederti will look into sourcing this for you and reply within ${partner.responseTime}`
+                  : `${partner.name} will respond within ${partner.responseTime} · Your details are shared only with this supplier`}
               </div>
             </div>
           </>

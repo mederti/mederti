@@ -46,6 +46,7 @@ export function FindSupplier({ drugId, drugName, userCountry, severity }: Props)
 
   return (
     <div className="find-supplier-row">
+      <span className="find-supplier-hint">Ask Mederti to source this on your behalf</span>
       <button type="button" className="find-supplier-btn" onClick={() => setOpen(true)}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M2 3h10l-1 6H3L2 3z" />
@@ -54,7 +55,6 @@ export function FindSupplier({ drugId, drugName, userCountry, severity }: Props)
         </svg>
         Find a supplier
       </button>
-      <span className="find-supplier-hint">Ask Mederti to source this on your behalf</span>
 
       <SupplierDrawer
         isOpen={open}

@@ -45,21 +45,12 @@ function LoginForm() {
       return;
     }
 
-    // If the user hasn't finished the profiling questions yet, send them
-    // through onboarding before they hit the product.
-    let target = next;
-    if (next === "/home") {
-      try {
-        const r = await fetch("/api/user/profile");
-        if (r.ok) {
-          const d = await r.json();
-          if (!d?.profile?.onboarding_done) target = "/onboarding";
-        }
-      } catch {
-        /* non-blocking */
-      }
-    }
-    router.push(target);
+    // Don't probe onboarding status here — middleware already redirects users
+    // who haven't finished onboarding (or have no profile row yet) to
+    // /onboarding on the next navigation. The old /api/user/profile fetch added
+    // ~0.6s to every default login for no behavioural gain. Single source of
+    // truth = middleware.
+    router.push(next);
     router.refresh();
   }
 

@@ -89,7 +89,10 @@ export async function GET(
         products,
         tradePrice,
       } satisfies DrugDetailBundle,
-      { headers: { "Cache-Control": "private, max-age=15" } }
+      // Shortage/supplier data refreshes on a 4h+ scraper cadence, so a 15s
+      // window forced this 7-query bundle to re-run almost every request. 2 min
+      // + stale-while-revalidate keeps it fresh enough while absorbing repeat hits.
+      { headers: { "Cache-Control": "private, max-age=120, stale-while-revalidate=600" } }
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

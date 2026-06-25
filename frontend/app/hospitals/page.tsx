@@ -53,7 +53,7 @@ const content: PersonaContent = {
   ],
 
   previewTitle: "Your formulary, scored in seconds.",
-  previewUrl: "mederti.vercel.app/dashboard",
+  previewUrl: "mederti.com/dashboard",
   previewRows: [
     { label: "Cisplatin 1mg/ml", badge: "Critical \u00B7 Score 82", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },
     { label: "Amoxicillin 500mg", badge: "Critical \u00B7 Score 78", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },

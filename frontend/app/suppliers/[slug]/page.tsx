@@ -5,7 +5,7 @@ import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import { ShieldCheck, Globe, Package, ExternalLink, Mail, Phone, ArrowLeft } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { jsonLdSafe } from "@/lib/seo";
+import { jsonLdSafe, canonicalUrl } from "@/lib/seo";
 
 const FLAGS: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", CA: "🇨🇦", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹",
@@ -41,8 +41,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: `https://mederti.vercel.app/suppliers/${slug}` },
-    openGraph: { title, description, url: `https://mederti.vercel.app/suppliers/${slug}`, type: "website" },
+    alternates: { canonical: canonicalUrl(`/suppliers/${slug}`) },
+    openGraph: { title, description, url: canonicalUrl(`/suppliers/${slug}`), type: "website" },
   };
 }
 
@@ -127,7 +127,7 @@ export default async function SupplierPublicProfilePage({ params }: Props) {
     "@type": "Organization",
     name: s.company_name,
     description: s.description ?? undefined,
-    url: `https://mederti.vercel.app/suppliers/${s.slug}`,
+    url: canonicalUrl(`/suppliers/${s.slug}`),
     email: s.contact_email,
     telephone: s.contact_phone ?? undefined,
     sameAs: s.website ? [s.website] : undefined,

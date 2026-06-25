@@ -41,7 +41,7 @@ const content: PersonaContent = {
   ],
 
   previewTitle: "See it in action.",
-  previewUrl: "mederti.vercel.app/drugs/amoxicillin",
+  previewUrl: "mederti.com/drugs/amoxicillin",
   previewRows: [
     { label: "Amoxicillin 500mg \u2014 AU", badge: "In shortage", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },
     { label: "Amoxicillin 500mg \u2014 GB", badge: "In shortage", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },

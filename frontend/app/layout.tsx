@@ -4,9 +4,14 @@ import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { PostHogProvider } from "@/lib/analytics/posthog-provider";
+import { siteUrl } from "@/lib/seo";
 import "./globals.css";
 
-const SITE_URL = "https://mederti.vercel.app";
+// Canonical origin, env-driven. Set NEXT_PUBLIC_SITE_URL in prod to the final
+// domain (e.g. https://mederti.com); falls back to the Vercel URL then the
+// production default. Never hardcode the preview host here — it leaks into
+// metadataBase, OG and Twitter card URLs site-wide.
+const SITE_URL = siteUrl();
 
 export const metadata: Metadata = {
   title: {

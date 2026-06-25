@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { captureEvent } from "@/lib/analytics/events";
 import AuthShell from "../AuthShell";
 import OAuthButtons from "../OAuthButtons";
 
@@ -81,6 +82,10 @@ function SignupForm() {
           // non-blocking
         }
       }
+      // Top-of-funnel conversion event. Autocapture can't see this — signUp is
+      // a programmatic call, not a tracked DOM submit. role is a non-sensitive
+      // cohort trait; no email/PII is sent.
+      captureEvent("signup_submitted", role ? { role } : undefined);
       setDone(true);
     }
   }

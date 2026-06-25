@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { serverError } from "@/lib/security/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -134,10 +135,7 @@ export async function GET(
   }
 
   if (cataRes.error) {
-    return NextResponse.json(
-      { error: cataRes.error.message },
-      { status: 500 }
-    );
+    return serverError(cataRes.error, "drug availability catalogue query");
   }
 
   const rows = (cataRes.data ?? []) as CatalogueRow[];

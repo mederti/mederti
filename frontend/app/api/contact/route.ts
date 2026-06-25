@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 const resend =
   process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== "re_placeholder"
@@ -7,6 +8,10 @@ const resend =
     : null;
 
 export async function POST(req: NextRequest) {
+  // Public, unauthenticated, sends email — throttle per IP to stop spam loops.
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
   const { name, email, subject, message } = await req.json();
 
   if (!name?.trim() || !email?.trim() || !message?.trim()) {

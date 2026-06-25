@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 let _supabase: SupabaseClient | null = null;
 function getSupabase() {
@@ -53,6 +54,10 @@ function welcomeEmailHtml(email: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Public, unauthenticated, writes a DB row + sends a welcome email — throttle.
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
   const { email, source = "landing_page" } = await req.json();
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

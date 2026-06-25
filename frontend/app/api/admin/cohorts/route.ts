@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/security/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin-auth";
 
@@ -52,7 +53,7 @@ export async function GET() {
       )
       .range(page * pageSize, page * pageSize + pageSize - 1);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return serverError(error);
     }
     profiles.push(...((data ?? []) as Profile[]));
     if (!data || data.length < pageSize) break;

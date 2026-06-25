@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/security/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin-auth";
 
@@ -66,7 +67,7 @@ export async function GET() {
     .order("abbreviation");
 
   if (srcErr) {
-    return NextResponse.json({ error: srcErr.message }, { status: 500 });
+    return serverError(srcErr);
   }
 
   const enriched: SourceFreshness[] = (sources as SourceRow[] | null ?? []).map(

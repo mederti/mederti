@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 import { cookies } from "next/headers";
@@ -531,7 +531,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   if (!drug) {
     const { data: catEntry } = await supabase
       .from("drug_catalogue")
-      .select("id, generic_name, brand_name, strength, dosage_form, route, source_name, source_country, registration_number, registration_status, sponsor")
+      .select("id, drug_id, generic_name, brand_name, strength, dosage_form, route, source_name, source_country, registration_number, registration_status, sponsor")
       .eq("id", id)
       .single();
 
@@ -540,6 +540,19 @@ export default async function DrugPage({ params, searchParams }: Props) {
       // saying "Drug not found", which Google would index as a real page.
       // notFound() throws past the layout and serves Next's actual 404.
       notFound();
+    }
+
+    // A catalogue product linked to a canonical molecule (drug_id, populated by
+    // backend/importers/catalogue_inn_backfill) must NOT render its own thin
+    // registration page — that fragments the experience and duplicates the
+    // molecule. Bounce to the canonical drug page, which carries the real
+    // shortage / alternative / pricing data. Search promotes these rows already,
+    // so this catches direct / stale links. Permanent (308) so it's cached and
+    // consolidates link equity if drug pages are ever exposed to crawlers (today
+    // /drugs/* is login-gated in middleware, so this fires for signed-in users).
+    // The self-guard avoids a loop if a row's drug_id were ever set to its own id.
+    if (catEntry.drug_id && catEntry.drug_id !== id) {
+      permanentRedirect(`/drugs/${catEntry.drug_id}`);
     }
 
     /* Render a minimal stable-supply page for catalogue-only drugs */

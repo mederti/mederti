@@ -31,8 +31,10 @@ import os
 import re
 import sys
 import json
+import time
 import urllib.request
 import urllib.parse
+import urllib.error
 from collections import Counter, defaultdict
 
 URL = os.environ["SUPABASE_URL"].rstrip("/")
@@ -51,9 +53,23 @@ def _req(method, path, body=None, extra=None):
     if extra:
         headers.update(extra)
     req = urllib.request.Request(URL + "/rest/v1/" + path, data=data, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=120) as r:
-        raw = r.read()
-        return json.loads(raw) if raw else None
+    # Supabase occasionally resets the TLS connection mid-scan (Errno 54) on the
+    # large paginated reads. Retry transient transport errors with backoff so a
+    # single dropped page doesn't abort the whole run. Safe for the PATCH too:
+    # it is guarded with drug_id=is.null, so a re-sent write is idempotent.
+    last_err = None
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                raw = r.read()
+                return json.loads(raw) if raw else None
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+            # Don't retry real HTTP errors (4xx/5xx carry a code) — only transport-level resets.
+            if isinstance(e, urllib.error.HTTPError):
+                raise
+            last_err = e
+            time.sleep(2 * (attempt + 1))
+    raise last_err
 
 
 def _get_all(path_no_paging, page=1000):
@@ -159,6 +175,37 @@ DENY = {
 # Includes " - " which separates homeopathic mixture ingredient lists.
 COMBO_NAME = re.compile(r"[,/;+]|\b and \b|\bwith\b|\s[-–]\s")
 
+# A "/" is also extremely common in single-ingredient INJECTABLE/EMULSION names,
+# where it is NOT an ingredient separator:
+#   • a dose ratio        — "propofol 500mg/50mL", "insulin 100 units/mL"
+#   • the lipid vehicle   — "MCT/LCT emulsion"
+#   • a route/form pair   — "injection/infusion", "powder/solvent"
+#   • a concentration spec — "0.9% w/v"
+# Reading those as combinations refused every "X mg/Y mL" injectable (propofol,
+# insulins, heparin, …), leaving them unlinked and surfacing as thin per-product
+# pages. Strip these patterns BEFORE the combo check so genuine ingredient
+# slashes ("amoxicillin/clavulanic acid") still trip it. The denominator after a
+# dose "/" REQUIRES a unit, so "amoxicillin 875mg/clavulanic acid" is never eaten.
+_UNIT = r"(?:mg|mcg|microgram(?:s)?|nanogram(?:s)?|g|kg|ml|l|units?|iu|%)"
+DOSE = re.compile(
+    r"\d+(?:\.\d+)?\s*" + _UNIT + r"(?:\s*/\s*(?:\d+(?:\.\d+)?\s*)?" + _UNIT + r")?",
+    re.I,
+)
+NON_ACTIVE_SLASH = re.compile(
+    r"\bMCT\s*/\s*LCT\b"
+    r"|\b(?:injection|infusion|inhalation|solution|suspension|powder|solvent)\s*/\s*"
+    r"(?:injection|infusion|inhalation|solution|suspension|powder|solvent)\b"
+    r"|\bw\s*/\s*[vw]\b",
+    re.I,
+)
+
+
+def _combo_signal(name):
+    """True only when `name` carries a genuine multi-active separator, after
+    neutralising dose-ratio / vehicle / route slashes."""
+    cleaned = NON_ACTIVE_SLASH.sub(" ", DOSE.sub(" ", name))
+    return bool(COMBO_NAME.search(cleaned))
+
 
 def make_resolver(phrase_index, max_words):
     def resolve(product_name):
@@ -181,14 +228,14 @@ def make_resolver(phrase_index, max_words):
                 i += 1
         real_ids = {d["id"] for d in real}
         # Combination product whose ingredients we only partly recognise -> refuse.
-        if COMBO_NAME.search(name) and len(real_ids) <= 1:
+        if _combo_signal(name) and len(real_ids) <= 1:
             return None, "combo-name"
         if len(real_ids) == 1:
             return real[0], "resolved"
         if len(real_ids) >= 2:
             return None, "ambiguous"
         salt_ids = {d["id"] for d in salt_only}
-        if len(salt_ids) == 1 and not COMBO_NAME.search(name):
+        if len(salt_ids) == 1 and not _combo_signal(name):
             return salt_only[0], "resolved-salt"
         return None, "no-inn"
     return resolve

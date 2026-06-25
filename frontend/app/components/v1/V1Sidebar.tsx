@@ -87,6 +87,12 @@ export default function V1Sidebar() {
   const showWatchlist = signedIn && watchedMedicines !== null;
   const myMedicines = showWatchlist ? watchedMedicines : recentMedicines;
 
+  async function handleLogout() {
+    await createBrowserClient().auth.signOut();
+    // Hard nav so server components + middleware re-evaluate as anonymous.
+    window.location.href = "/";
+  }
+
   return (
     <aside className="sb">
       {/* Self-contained styling so this shared sidebar renders identically on
@@ -147,9 +153,12 @@ export default function V1Sidebar() {
       </div>
       <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)" }}><V1CountryPicker /></div>
       {signedIn ? (
-        <Link href="/account" className="sb-profile" title={email ?? "My account"}>
-          {email && email.length > 24 ? email.slice(0, 22) + "…" : email ?? "My account"} →
-        </Link>
+        <div className="sb-account">
+          <Link href="/account" className="sb-profile" title={email ?? "My account"}>
+            {email && email.length > 24 ? email.slice(0, 22) + "…" : email ?? "My account"}
+          </Link>
+          <button type="button" onClick={handleLogout} className="sb-logout">Log out</button>
+        </div>
       ) : (
         <Link href="/login" className="sb-profile">Log in →</Link>
       )}
@@ -194,4 +203,8 @@ const SIDEBAR_CSS = `
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;
   color:var(--text-2);text-decoration:none}
 .sb-profile:hover{color:var(--green-d)}
+.sb-account{display:flex;align-items:center;border-top:1px solid var(--border)}
+.sb-account .sb-profile{border-top:none;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.sb-logout{flex:none;background:none;border:none;cursor:pointer;padding:16px;font-family:inherit;font-size:12px;font-weight:500;color:var(--text-4)}
+.sb-logout:hover{color:var(--green-d)}
 `;

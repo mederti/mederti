@@ -513,7 +513,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   if (drug) {
     const { data: prodData } = await supabase
       .from("drug_products")
-      .select("id, product_name, trade_name, strength, dosage_form, route, country, registry_status, sponsors(name)")
+      .select("id, registry_id, product_name, trade_name, strength, dosage_form, route, country, registry_status, sponsors(name)")
       .ilike("product_name", `%${drug.generic_name}%`)
       .limit(30);
     products = prodData ?? [];

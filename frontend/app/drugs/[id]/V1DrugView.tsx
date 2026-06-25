@@ -1079,7 +1079,7 @@ const CSS = `
 .sc-footer .sc-asof{margin-top:0}
 .sc-footer .find-supplier-row{margin-top:0;justify-content:flex-end}
 .find-supplier-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
-.find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--green);background:var(--green);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
+.find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
 .find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
 .find-supplier-hint{font-size:12px;color:var(--text-4)}
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}

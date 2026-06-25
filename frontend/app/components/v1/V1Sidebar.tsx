@@ -32,6 +32,8 @@ export default function V1Sidebar() {
   // else lands on the public marketing page. Resolved client-side, so the
   // logo defaults to "/" until the session check returns.
   const [signedIn, setSignedIn] = useState(false);
+  // Signed-in user's email, shown in the footer account row (null = anon).
+  const [email, setEmail] = useState<string | null>(null);
   // The signed-in user's real watchlist. `null` = not loaded yet (or anon);
   // an array (possibly empty) = loaded, so we can distinguish "loading" from
   // "watchlist is genuinely empty".
@@ -67,14 +69,15 @@ export default function V1Sidebar() {
       setWatchedMedicines(meds);
     }
 
-    const sync = (uid: string | undefined) => {
-      setSignedIn(!!uid);
-      if (uid) loadWatchlist(uid);
+    const sync = (user: { id: string; email?: string } | null | undefined) => {
+      setSignedIn(!!user);
+      setEmail(user?.email ?? null);
+      if (user?.id) loadWatchlist(user.id);
       else setWatchedMedicines(null);
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => sync(session?.user?.id));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => sync(session?.user?.id));
+    supabase.auth.getSession().then(({ data: { session } }) => sync(session?.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => sync(session?.user));
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -143,7 +146,13 @@ export default function V1Sidebar() {
         </div>
       </div>
       <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)" }}><V1CountryPicker /></div>
-      <Link href="/login" className="sb-profile">Log in →</Link>
+      {signedIn ? (
+        <Link href="/account" className="sb-profile" title={email ?? "My account"}>
+          {email && email.length > 24 ? email.slice(0, 22) + "…" : email ?? "My account"} →
+        </Link>
+      ) : (
+        <Link href="/login" className="sb-profile">Log in →</Link>
+      )}
     </aside>
   );
 }

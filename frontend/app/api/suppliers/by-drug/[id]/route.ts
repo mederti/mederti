@@ -32,7 +32,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (error) {
     console.error("suppliers/by-drug error:", error);
-    return NextResponse.json({ suppliers: [], error: error.message }, { status: 500 });
+    return NextResponse.json({ suppliers: [], error: "Internal error" }, { status: 500 });
   }
 
   // Sort: verified + pro/enterprise first, then by recency

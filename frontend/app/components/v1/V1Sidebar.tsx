@@ -32,6 +32,8 @@ export default function V1Sidebar() {
   // else lands on the public marketing page. Resolved client-side, so the
   // logo defaults to "/" until the session check returns.
   const [signedIn, setSignedIn] = useState(false);
+  // Signed-in user's email, shown in the footer account row (null = anon).
+  const [email, setEmail] = useState<string | null>(null);
   // The signed-in user's real watchlist. `null` = not loaded yet (or anon);
   // an array (possibly empty) = loaded, so we can distinguish "loading" from
   // "watchlist is genuinely empty".
@@ -67,14 +69,15 @@ export default function V1Sidebar() {
       setWatchedMedicines(meds);
     }
 
-    const sync = (uid: string | undefined) => {
-      setSignedIn(!!uid);
-      if (uid) loadWatchlist(uid);
+    const sync = (user: { id: string; email?: string } | null | undefined) => {
+      setSignedIn(!!user);
+      setEmail(user?.email ?? null);
+      if (user?.id) loadWatchlist(user.id);
       else setWatchedMedicines(null);
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => sync(session?.user?.id));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => sync(session?.user?.id));
+    supabase.auth.getSession().then(({ data: { session } }) => sync(session?.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => sync(session?.user));
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -83,6 +86,12 @@ export default function V1Sidebar() {
   // loading) fall back to the recently-viewed localStorage list.
   const showWatchlist = signedIn && watchedMedicines !== null;
   const myMedicines = showWatchlist ? watchedMedicines : recentMedicines;
+
+  async function handleLogout() {
+    await createBrowserClient().auth.signOut();
+    // Hard nav so server components + middleware re-evaluate as anonymous.
+    window.location.href = "/";
+  }
 
   return (
     <aside className="sb">
@@ -143,7 +152,16 @@ export default function V1Sidebar() {
         </div>
       </div>
       <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)" }}><V1CountryPicker /></div>
-      <Link href="/login" className="sb-profile">Log in →</Link>
+      {signedIn ? (
+        <div className="sb-account">
+          <Link href="/account" className="sb-profile" title={email ?? "My account"}>
+            {email && email.length > 24 ? email.slice(0, 22) + "…" : email ?? "My account"}
+          </Link>
+          <button type="button" onClick={handleLogout} className="sb-logout">Log out</button>
+        </div>
+      ) : (
+        <Link href="/login" className="sb-profile">Log in →</Link>
+      )}
     </aside>
   );
 }
@@ -185,4 +203,8 @@ const SIDEBAR_CSS = `
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;
   color:var(--text-2);text-decoration:none}
 .sb-profile:hover{color:var(--green-d)}
+.sb-account{display:flex;align-items:center;border-top:1px solid var(--border)}
+.sb-account .sb-profile{border-top:none;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.sb-logout{flex:none;background:none;border:none;cursor:pointer;padding:16px;font-family:inherit;font-size:12px;font-weight:500;color:var(--text-4)}
+.sb-logout:hover{color:var(--green-d)}
 `;

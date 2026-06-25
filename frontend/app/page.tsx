@@ -12,6 +12,17 @@ function k(n: number): string {
   return `${n}+`;
 }
 
+// Hero search chips = the most-reported drugs among current active shortages,
+// windowed by week so the set rotates every 7 days but stays put within a week.
+// Computed server-side (below) so the live set is in the first paint — no
+// fallback flash, no client round-trip. Mirrors the old client logic exactly.
+function weeklyPick(pool: string[]): string[] {
+  if (pool.length <= 4) return pool;
+  const week = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
+  const start = (week * 4) % pool.length;
+  return Array.from({ length: 4 }, (_, i) => pool[(start + i) % pool.length]);
+}
+
 // Official regulator/standards logos we actually source from daily. Files live in
 // /public/regulator-logos and were hand-picked from Wikimedia Commons — only
 // agencies with a clean, real mark are shown; the rest are honoured in the tail
@@ -37,9 +48,10 @@ export default async function Home() {
   let medicines = "—";
   let activeShortages = "—";
   let countries = "—";
+  let trendingSamples: string[] = [];
   try {
     const admin = getSupabaseAdmin();
-    const [catRes, activeRes, ctyRes] = await Promise.all([
+    const [catRes, activeRes, ctyRes, trendRes] = await Promise.all([
       // "Medicines tracked globally": planner-estimate count, not exact. An
       // unfiltered exact count is a full scan of ~160k rows that intermittently
       // hit Postgres's statement_timeout under Vercel's pooler → null count →
@@ -49,6 +61,14 @@ export default async function Home() {
       // Countries & official regulators we monitor (the data_sources we scrape),
       // not just countries with active shortages this month. Exact count, no "+".
       admin.from("data_sources").select("country_code"),
+      // Trending pool: the 100 most-recent active shortages. We count generic-name
+      // frequency below — most-reported = the drugs most short of supply right now.
+      admin
+        .from("shortage_events")
+        .select("drugs(generic_name)")
+        .eq("status", "active")
+        .order("start_date", { ascending: false })
+        .limit(100),
     ]);
     if (catRes.error) console.error("[home] drug_catalogue count failed:", catRes.error.message);
     if (catRes.count) medicines = k(catRes.count);
@@ -60,6 +80,18 @@ export default async function Home() {
           .filter((c: string) => c && c !== "ZZ")
       ).size;
       if (n) countries = `${n}`;
+    }
+    if (trendRes.data) {
+      const counts = new Map<string, number>();
+      // The drugs join can come back as an object or a single-element array
+      // depending on the typed/untyped client — normalise to the row.
+      for (const r of trendRes.data as unknown as { drugs: { generic_name: string | null } | { generic_name: string | null }[] | null }[]) {
+        const drug = Array.isArray(r.drugs) ? r.drugs[0] : r.drugs;
+        const name = drug?.generic_name?.trim();
+        if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+      const pool = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+      trendingSamples = weeklyPick(pool);
     }
   } catch {
     /* honest "—" fallbacks */
@@ -87,7 +119,7 @@ export default async function Home() {
         <span className="hero-kicker"><span className="pulse" /> Free for pharmacists &amp; clinicians</span>
         <h1>Live shortage intelligence<br />for <span className="em">any medicine</span>.</h1>
         <p className="sub">Search any prescription medicine to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>
-        <V1Search />
+        <V1Search initialSamples={trendingSamples} />
         <div className="hero-stats">
           <div className="stat"><div className="stat-n">{medicines}</div><div className="stat-l">Medicines tracked globally</div></div>
           <div className="stat"><div className="stat-n">{activeShortages}</div><div className="stat-l">Active shortages right now</div></div>

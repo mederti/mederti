@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import ChatBackdrop from "./ChatBackdrop";
+import AuthClose from "./AuthClose";
 
 /**
  * Full-viewport shell for the auth pages. Renders a blurred mock of the /chat
@@ -29,6 +30,9 @@ export default function AuthShell({ children }: { children: ReactNode }) {
         background: "rgba(248, 250, 251, 0.25)",
         pointerEvents: "none",
       }} />
+
+      {/* Close (X) + Escape-to-close */}
+      <AuthClose />
 
       {/* Card */}
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 420 }}>

@@ -5,6 +5,7 @@ import SiteNav from "@/app/components/landing-nav";
 import SiteFooter from "@/app/components/site-footer";
 import { ShieldCheck, Globe, Package, ExternalLink, Mail, Phone, ArrowLeft } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { jsonLdSafe } from "@/lib/seo";
 
 const FLAGS: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", CA: "🇨🇦", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹",
@@ -136,7 +137,7 @@ export default async function SupplierPublicProfilePage({ params }: Props) {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--app-bg)", display: "flex", flexDirection: "column" }}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }} />
       <SiteNav />
 
       {/* Back link */}

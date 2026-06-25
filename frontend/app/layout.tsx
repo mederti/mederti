@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { PostHogProvider } from "@/lib/analytics/posthog-provider";
 import "./globals.css";
 
 const SITE_URL = "https://mederti.vercel.app";
@@ -48,7 +49,7 @@ export default function RootLayout({
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head />
       <body className="antialiased">
-        {children}
+        <PostHogProvider>{children}</PostHogProvider>
         <Analytics />
         <SpeedInsights />
       </body>

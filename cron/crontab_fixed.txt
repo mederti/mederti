@@ -145,3 +145,9 @@ SHELL=/bin/bash
 45  6 * * 3  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py aifa_pricing   >> logs/cron.log 2>&1
 # Nomenclator ES: Sanidad refreshes monthly (~25th) → weekly Thursday.
 55  6 * * 4  set -a && source .env && set +a && python3 run_all_scrapers.py spain_nomenclator >> logs/cron.log 2>&1
+
+# ─── Data hygiene: mark stale shortages (daily 07:00 UTC, after scraper window) ───
+# Calls mark_stale_shortages() so a shortage the regulator has *removed* flips
+# active/anticipated → stale after 7 days without re-confirmation. Without this,
+# truly-gone shortages stay 'active' forever and the site over-reports. Idempotent.
+0   7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 cron/run_mark_stale.py >> logs/cron.log 2>&1

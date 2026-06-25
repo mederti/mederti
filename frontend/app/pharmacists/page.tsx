@@ -54,7 +54,7 @@ const content: PersonaContent = {
   ],
 
   previewTitle: "See it in action.",
-  previewUrl: "mederti.vercel.app/search",
+  previewUrl: "mederti.com/search",
   previewRows: [
     { label: "Amoxicillin 500mg", badge: "Critical", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },
     { label: "Paracetamol IV 10mg/ml", badge: "Critical", badgeColor: "var(--crit)", badgeBg: "var(--crit-bg)" },

@@ -50,73 +50,11 @@ interface MarketSignal {
   note: string;
 }
 
-/* ── Static fallbacks (kept identical to the prior design-review mock) ── */
-const FALLBACK_BRIEFING: BriefingPayload = {
-  market_pulse:
-    "Geopolitical disruption (Strait of Hormuz) is compounding existing API concentration risk. Short-term shortage pressure elevated across injectable antibiotics and oncology agents.",
-  insights: [
-    {
-      signal_strength: "high",
-      body: "Strait of Hormuz disruption is adding 3–6 week delays to API shipments on India → EU/AU routes. Amoxicillin and Pip/Taz most exposed.",
-    },
-    {
-      signal_strength: "high",
-      body: "Cisplatin sole-source risk elevated: FDA issued warning letter to sole remaining US manufacturer. Stock depletion expected within 8–12 weeks.",
-    },
-    {
-      signal_strength: "medium",
-      body: "India monsoon season (Jul–Sep) will constrain Hyderabad API cluster output. Beta-lactam antibiotics at highest seasonal risk.",
-    },
-    {
-      signal_strength: "low",
-      body: "EMA CHMP reviewing 14 biosimilar applications in June. Insulin glargine biosimilar approval expected — may ease current critical shortage.",
-    },
-  ],
-  watch_list: ["Cisplatin", "Piperacillin-Tazobactam", "Morphine (injectable)", "Amoxicillin"],
-};
-
-const FALLBACK_ARTICLES: ArticleCard[] = [
-  {
-    slug: "strait-of-hormuz-closure",
-    category: "Supply Chain",
-    title: "Strait of Hormuz Closure: Pharmaceutical Supply Chain Impact",
-    summary:
-      "Iran's temporary closure is disrupting API shipment routes from India to Europe and Australia, with delays of 3–6 weeks reported by logistics firms.",
-    date: new Date(Date.now() - 1 * 86400000).toISOString(),
-    read_time: "6 min read",
-    tag: "High impact",
-    tag_tone: "high",
-  },
-  {
-    slug: "ema-chmp-june-agenda",
-    category: "Regulatory",
-    title: "EMA CHMP June Agenda: 14 Biosimilar Applications Under Review",
-    summary:
-      "The June CHMP meeting will consider biosimilar applications for insulin glargine and trastuzumab — both drugs with active critical shortages.",
-    date: new Date(Date.now() - 3 * 86400000).toISOString(),
-    read_time: "4 min read",
-    tag: "Regulatory",
-    tag_tone: "regulatory",
-  },
-  {
-    slug: "india-monsoon-2026",
-    category: "Manufacturing",
-    title: "India Monsoon 2026: API Production Risk Outlook",
-    summary:
-      "Above-average monsoon forecast raises flood risk for Hyderabad and Visakhapatnam clusters supplying ~40% of global beta-lactam antibiotics.",
-    date: new Date(Date.now() - 5 * 86400000).toISOString(),
-    read_time: "5 min read",
-    tag: "Seasonal risk",
-    tag_tone: "seasonal",
-  },
-];
-
-const FALLBACK_CALENDAR: CalendarEvent[] = [
-  { event_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),  event_type: "CHMP meeting",      source_country: "EU",  generic_name: null, description: "biosimilar pipeline review" },
-  { event_date: new Date(Date.now() + 16 * 86400000).toISOString().slice(0, 10), event_type: "PDUFA",             source_country: "US",  generic_name: "adalimumab biosimilar", description: "Sandoz" },
-  { event_date: new Date(Date.now() + 22 * 86400000).toISOString().slice(0, 10), event_type: "Advisory Committee", source_country: "AU",  generic_name: null, description: "Advisory Committee on Medicines" },
-  { event_date: new Date(Date.now() + 29 * 86400000).toISOString().slice(0, 10), event_type: "Expert Committee",   source_country: "WHO", generic_name: null, description: "WHO Expert Committee on Drug Dependence" },
-];
+// No fabricated fallbacks. Every panel below is driven solely by live API
+// data; when an endpoint returns nothing we render an honest empty state
+// rather than invented briefings/articles/calendar entries. Showing made-up
+// supply intelligence to clinicians and procurement teams is a credibility
+// risk we will not take.
 
 const STRENGTH_DOT: Record<string, string> = {
   high: "bg-red-500",
@@ -181,13 +119,8 @@ interface MarketDataResp {
 }
 
 function mapMarketSignals(m: MarketDataResp | null): MarketSignal[] {
-  if (!m) {
-    return [
-      { label: "Baltic Dry Index", value: "1,847", delta: "+3.2%", up: true,  note: "Freight cost indicator" },
-      { label: "INR / USD",        value: "83.42", delta: "−0.4%", up: false, note: "India API cost proxy" },
-      { label: "CNY / USD",        value: "7.24",  delta: "+0.1%", up: true,  note: "China API cost proxy" },
-    ];
-  }
+  // No live data → no signals. We never show invented index values / deltas.
+  if (!m) return [];
   const signals: MarketSignal[] = [];
   if (m.freight && typeof m.freight.index === "number") {
     const pct = m.freight.changePercent ?? 0;
@@ -235,10 +168,11 @@ export function IntelligenceView({
   // layout (middle column + grounded chat on the right).
   onOpenView?: (kind: "dashboard" | "early-warning") => void;
 }) {
-  const [briefing, setBriefing] = useState<BriefingPayload>(FALLBACK_BRIEFING);
-  const [articles, setArticles] = useState<ArticleCard[]>(FALLBACK_ARTICLES);
-  const [calendar, setCalendar] = useState<CalendarEvent[]>(FALLBACK_CALENDAR);
-  const [signals, setSignals] = useState<MarketSignal[]>(mapMarketSignals(null));
+  const [briefing, setBriefing] = useState<BriefingPayload>({});
+  const [articles, setArticles] = useState<ArticleCard[]>([]);
+  const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
+  const [signals, setSignals] = useState<MarketSignal[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,13 +192,15 @@ export function IntelligenceView({
         setCalendar(cal.events.slice(0, 4));
       }
       if (market) setSignals(mapMarketSignals(market));
+      setLoaded(true);
     });
 
     return () => { cancelled = true; };
   }, []);
 
-  const watchDrugs = (briefing.watch_list ?? FALLBACK_BRIEFING.watch_list ?? []).slice(0, 6);
-  const briefingItems = (briefing.insights ?? FALLBACK_BRIEFING.insights ?? []).slice(0, 4);
+  const watchDrugs = (briefing.watch_list ?? []).slice(0, 6);
+  const briefingItems = (briefing.insights ?? []).slice(0, 4);
+  const hasBriefing = Boolean(briefing.market_pulse) || briefingItems.length > 0;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -341,6 +277,15 @@ export function IntelligenceView({
             </button>
           </div>
 
+          {/* Empty / loading state — no fabricated briefing is ever shown */}
+          {!hasBriefing && (
+            <p className="text-[13px] text-slate-500 leading-relaxed py-2">
+              {loaded
+                ? "Today's briefing hasn't been generated yet. Ask the AI for a live update, or check back shortly."
+                : "Loading today's briefing…"}
+            </p>
+          )}
+
           {/* Market pulse */}
           {briefing.market_pulse && (
             <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3 mb-4">
@@ -395,6 +340,11 @@ export function IntelligenceView({
         {/* Latest articles */}
         <div className="mb-8">
           <h2 className="text-[14px] font-semibold text-slate-900 mb-3">Latest Intelligence</h2>
+          {articles.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-5 text-[13px] text-slate-500 shadow-sm">
+              {loaded ? "No published intelligence yet — new briefings appear here as they're generated." : "Loading…"}
+            </div>
+          ) : (
           <div className="grid grid-cols-3 gap-4">
             {articles.map((a) => (
               <div
@@ -434,6 +384,7 @@ export function IntelligenceView({
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Bottom row: calendar + market signals */}
@@ -442,6 +393,11 @@ export function IntelligenceView({
           {/* Regulatory Calendar */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
             <h2 className="text-[14px] font-semibold text-slate-900 mb-3">Regulatory Calendar</h2>
+            {calendar.length === 0 ? (
+              <p className="text-[12.5px] text-slate-500 py-1">
+                {loaded ? "No upcoming regulatory events on record." : "Loading…"}
+              </p>
+            ) : (
             <div className="divide-y divide-slate-100">
               {calendar.map((c, i) => (
                 <div
@@ -458,11 +414,17 @@ export function IntelligenceView({
                 </div>
               ))}
             </div>
+            )}
           </div>
 
           {/* Market Signals */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
             <h2 className="text-[14px] font-semibold text-slate-900 mb-3">Market Signals</h2>
+            {signals.length === 0 ? (
+              <p className="text-[12.5px] text-slate-500 py-1">
+                {loaded ? "Live market signals unavailable." : "Loading…"}
+              </p>
+            ) : (
             <div className="divide-y divide-slate-100">
               {signals.map((s) => (
                 <div
@@ -486,6 +448,7 @@ export function IntelligenceView({
                 </div>
               ))}
             </div>
+            )}
           </div>
 
         </div>

@@ -3339,7 +3339,7 @@ function authRequired(ctx: ToolContext): { status: "unanswerable"; reason: strin
     return {
       status: "unanswerable",
       reason: "auth_required",
-      hint: "This tool needs a signed-in user. Sign in at mederti.vercel.app/login to set up a watchlist or supplier portfolio, then re-ask.",
+      hint: "This tool needs a signed-in user. Sign in at mederti.com/login to set up a watchlist or supplier portfolio, then re-ask.",
     };
   }
   return null;

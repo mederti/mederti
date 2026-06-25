@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import { recordDemandSignal } from "@/lib/demand-signal";
 import { getClientIp } from "@/lib/chat/rate-limit";
+import { siteUrl } from "@/lib/seo";
 
 const resend =
   process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== "re_placeholder"
@@ -267,7 +268,7 @@ function leadEmailHtml(p: {
         </table>
         ${p.message ? `<div style="margin-top: 16px; padding: 12px; background: white; border-radius: 6px; font-size: 13px; color: #475569; border-left: 3px solid #0D9488;">${p.message}</div>` : ""}
         <div style="margin-top: 24px; text-align: center;">
-          <a href="https://mederti.vercel.app/supplier-dashboard/inbox" style="display: inline-block; padding: 12px 24px; background: #0D9488; color: white; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          <a href="${siteUrl()}/supplier-dashboard/inbox" style="display: inline-block; padding: 12px 24px; background: #0D9488; color: white; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
             View enquiry & submit quote
           </a>
         </div>

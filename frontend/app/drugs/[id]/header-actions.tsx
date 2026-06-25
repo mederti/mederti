@@ -41,7 +41,6 @@ export function HeaderActions({ drugId, drugName, userCountry, severity }: Heade
       setUserEmail(session.user.email ?? undefined);
 
       const meta = session.user.user_metadata;
-      console.log("user metadata:", meta);
       setUserOrganisation(
         meta?.organisation ?? meta?.company ?? meta?.business_name ?? ""
       );

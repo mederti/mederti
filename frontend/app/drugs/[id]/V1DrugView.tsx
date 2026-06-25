@@ -478,11 +478,13 @@ export default function V1DrugView({
             {/* AI commentary — embedded under the heading, above the as-of line */}
             <V1AiSummary id={id} embedded />
 
-            <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
+            {/* Card footer: source line anchored bottom-left, the universal
+                "Find a supplier" CTA anchored bottom-right. */}
+            <div className="sc-footer">
+              <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
+              <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+            </div>
           </div>
-
-          {/* Find a supplier — universal CTA routing to the Mederti sourcing team */}
-          <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
 
 
           {/* Price-concession signal — promoted into the hero (Option B). A
@@ -1073,6 +1075,9 @@ const CSS = `
 .sc-title{font-size:24px;font-weight:700;letter-spacing:-.028em;margin-bottom:5px}
 .sc-sub{font-size:13px;color:var(--text-3)}
 .sc-asof{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px}
+.sc-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid rgba(12,17,24,.07)}
+.sc-footer .sc-asof{margin-top:0}
+.sc-footer .find-supplier-row{margin-top:0;justify-content:flex-end}
 .find-supplier-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
 .find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--green);background:var(--green);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
 .find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}

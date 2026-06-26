@@ -103,8 +103,8 @@ function landingPathFor(role: Role | null, useCase: UseCase | null): string {
     if (role === "government" || role === "researcher" || useCase === "analyse_market") {
       return "/intelligence";
     }
-    // Everyone else lands in Search since /home and /supplier-dashboard are hidden.
-    return "/search";
+    // Everyone else lands on /chat — the signed-in home (Claude-led answer surface).
+    return "/chat";
   }
   if (role === "manufacturer" || role === "wholesaler" || useCase === "sell_or_source") {
     return "/supplier-dashboard";

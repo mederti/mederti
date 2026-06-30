@@ -4,6 +4,6 @@ nixpacksConfigPath = "railway/shortage_cron_daily/nixpacks.toml"
 rootDirectory = "/"
 
 [deploy]
-startCommand = "python3 railway/shortage_cron_daily/run.py"
+startCommand = "/opt/venv/bin/python railway/shortage_cron_daily/run.py"
 restartPolicyType = "never"
 cronSchedule = "0 2 * * *"

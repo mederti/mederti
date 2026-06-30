@@ -1,2 +1,15 @@
+# Explicit Python build — the cron services were not auto-detected as Python,
+# so the deploy image had no interpreter ("python3: command not found").
+# Install Python 3.11 + deps into a venv and launch with its absolute path.
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = [
+  "python3 -m venv /opt/venv",
+  "/opt/venv/bin/pip install --upgrade pip",
+  "/opt/venv/bin/pip install -r requirements.txt",
+]
+
 [start]
-cmd = "python3 railway/recall_cron/run.py"
+cmd = "/opt/venv/bin/python railway/recall_cron/run.py"

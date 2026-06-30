@@ -9,6 +9,14 @@ import OAuthButtons from "../OAuthButtons";
 
 type Tab = "password" | "magic";
 
+// Magic-link login depends on email delivery (Supabase SMTP) + a correct Site
+// URL + a valid cert on the redirect domain — all currently unreliable, which
+// produces "link never arrived" / "link said invalid". Hidden until those are
+// fixed; password login is reliable. Flip NEXT_PUBLIC_MAGIC_LINK_ENABLED=true
+// to bring the tab back.
+const MAGIC_LINK_ENABLED =
+  (process.env.NEXT_PUBLIC_MAGIC_LINK_ENABLED ?? "").toLowerCase() === "true";
+
 /**
  * Only allow same-origin relative redirects. Rejects scheme-bearing
  * (`https://evil`), protocol-relative (`//evil`) and back-slash variants so a
@@ -96,7 +104,8 @@ function LoginForm() {
         {/* Google / Apple */}
         <OAuthButtons next={next} role={null} mode="signin" />
 
-        {/* Tabs */}
+        {/* Tabs — only shown when magic-link login is enabled. */}
+        {MAGIC_LINK_ENABLED && (
         <div style={{
           display: "flex", borderBottom: "1px solid var(--app-border)",
           marginBottom: 24,
@@ -118,6 +127,7 @@ function LoginForm() {
             </button>
           ))}
         </div>
+        )}
 
         {/* Error */}
         {error && (

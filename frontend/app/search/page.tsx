@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, type DrugHit, type StatusFacets } from "@/lib/api";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
-import V1Chat from "@/app/components/v1/V1Chat";
+import { ContextChat } from "@/app/chat/components/ContextChat";
+import "@/app/chat/chat.css";
 import { truncateDrugName } from "@/lib/utils";
 import { cleanBrandNames } from "@/lib/brand";
 import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
@@ -620,16 +621,17 @@ function Results() {
   );
 }
 
-// Right-hand chat column for the search page — grounds V1Chat to the current
-// query/market so the user can interrogate the results they're looking at.
+// Middle-column grounded chat for the search page — ContextChat grounded to the
+// current query/market so the user can interrogate the results they're looking
+// at. Product names in answers are clickable through to the drug page.
 function SearchChat() {
   const params = useSearchParams();
   const q = (params.get("q") ?? "").trim();
   const market = (params.get("market") || "AU").toUpperCase();
-  const grounding = q
-    ? `I'm on the Mederti search results page for "${q}" in the ${market} market.`
-    : `I'm on the Mederti search page (${market} market).`;
-  const suggestions = q
+  const bodyText = q
+    ? `The user is on the Mederti search results for "${q}" in the ${market} market. Answer about these medicines — substitutes, which markets are affected, and what's coming back into supply.`
+    : `The user is on the Mederti search page (${market} market).`;
+  const starters = q
     ? [
         `Summarise the shortage situation for ${q}`,
         "Which of these can I substitute?",
@@ -641,11 +643,16 @@ function SearchChat() {
         "Show me critical antibiotic shortages",
       ];
   return (
-    <V1Chat
-      title="Ask about these results"
-      intro="Ask me about these results — substitutes, which markets are affected, or what's coming back into supply."
-      grounding={grounding}
-      suggestions={suggestions}
+    <ContextChat
+      key={q || "search"}
+      contextKey={q || "search"}
+      title={q ? `Search: ${q}` : "Search"}
+      category="Search"
+      bodyText={bodyText}
+      headerLabel="Ask about these results"
+      placement="left"
+      emptyLead="Ask me about these results — substitutes, which markets are affected, or what's coming back into supply."
+      starters={starters}
     />
   );
 }
@@ -658,7 +665,13 @@ export default function SearchPage() {
         {/* ── Left sidebar (app nav) — shared with the drug page ── */}
         <V1Sidebar />
 
-        {/* ── Center column (results) ── */}
+        {/* ── Middle column: grounded chat. New template — chat drives,
+             reading left-to-right as nav → conversation → detail. ── */}
+        <aside className="chat-col mederti-chat-root">
+          <SearchChat />
+        </aside>
+
+        {/* ── Right column: results, the full-width detail panel ── */}
         <div className="shell-main">
           <div className="dg-main">
             <Suspense fallback={<div style={{ height: 80 }} />}>
@@ -666,13 +679,6 @@ export default function SearchPage() {
             </Suspense>
           </div>
         </div>
-
-        {/* ── Right-hand chat column (mirrors the drug page) ── */}
-        <aside className="chat-col">
-          <Suspense fallback={null}>
-            <SearchChat />
-          </Suspense>
-        </aside>
       </div>
     </div>
   );
@@ -714,7 +720,7 @@ const CSS = `
 .dg-main{flex:1;min-width:0;padding:32px 40px 80px;width:100%;background:#eef1f5}
 
 /* ── Right-hand chat column (mirrors V1DrugView) ── */
-.chat-col{width:380px;flex-shrink:0;border-left:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh}
+.chat-col{width:380px;flex-shrink:0;display:flex;background:var(--bg);position:sticky;top:0;height:100vh}
 .chat-panel{display:flex;flex-direction:column;height:100%}
 .chat-head{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fbfcfe,var(--bg))}
 .chat-h-l{display:flex;align-items:center;gap:11px}

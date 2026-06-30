@@ -117,7 +117,24 @@ export default async function IntelligencePage() {
   const sideArticles = heroSource.slice(1, 4);
 
   return (
-    <AppShell contentClassName="flush">
+    <AppShell
+      contentClassName="flush"
+      chat={{
+        contextKey: "intelligence",
+        title: "Pharma Brief",
+        category: "Intelligence",
+        bodyText:
+          "The user is viewing the Mederti pharma intelligence brief. Answer about supply intelligence, upstream signals, and emerging shortage risks using live Mederti data.",
+        headerLabel: "Ask about this brief",
+        emptyLead:
+          "Ask me about this intelligence — emerging risks, the signals behind them, and what to watch.",
+        starters: [
+          "What are the biggest emerging risks?",
+          "Summarise this week's signals",
+          "Which drugs should I watch?",
+        ],
+      }}
+    >
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
 

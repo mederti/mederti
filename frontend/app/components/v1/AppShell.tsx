@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
+import { ContextChat, type ContextChatProps } from "@/app/chat/components/ContextChat";
+import "@/app/chat/chat.css";
 import "./app-shell.css";
 
 /**
@@ -21,11 +23,33 @@ export default function AppShell({
   children,
   contentClassName = "",
   className = "",
+  chat,
 }: {
   children: ReactNode;
   contentClassName?: string;
   className?: string;
+  /**
+   * When provided, AppShell renders the 3-column template — left {@link V1Sidebar}
+   * → grounded {@link ContextChat} (middle) → full-width content (right), in a
+   * fixed-height layout so the chat composer stays pinned while content scrolls.
+   * Omit it for the plain 2-column shell. Product names in chat answers click
+   * through to their drug pages.
+   */
+  chat?: Omit<ContextChatProps, "placement">;
 }) {
+  if (chat) {
+    return (
+      <div className={`v1app mederti-chat-root ${className}`.trim()}>
+        <div className="shell shell--chat">
+          <V1Sidebar />
+          <ContextChat {...chat} placement="left" />
+          <div className="shell-main shell-main--scroll">
+            <div className={`dg-main ${contentClassName}`.trim()}>{children}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`v1app ${className}`.trim()}>
       <div className="shell">

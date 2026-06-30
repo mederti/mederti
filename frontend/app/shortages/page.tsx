@@ -91,7 +91,24 @@ export default async function ShortagesPage({ searchParams }: Props) {
   const SEVERITIES = SEVERITY_ORDER;
 
   return (
-    <AppShell contentClassName="flush">
+    <AppShell
+      contentClassName="flush"
+      chat={{
+        contextKey: "shortages",
+        title: "Active shortages",
+        category: "Shortages list",
+        bodyText:
+          "The user is viewing the Mederti global active drug shortages list. Answer about current shortages — which drugs, which markets, severity, and what can be substituted — using live Mederti data.",
+        headerLabel: "Ask about shortages",
+        emptyLead:
+          "Ask me about these shortages — which are most severe, which markets are affected, or what can be substituted.",
+        starters: [
+          "Which shortages are most severe right now?",
+          "Show me antibiotic shortages",
+          "Which markets are worst affected?",
+        ],
+      }}
+    >
 
       {/* Hero */}
       <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>

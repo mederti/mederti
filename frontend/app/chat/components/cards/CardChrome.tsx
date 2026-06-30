@@ -3,15 +3,12 @@
 import { useContext } from "react";
 import type { DrugDetail, Persona } from "@/lib/chat/types";
 import { cleanBrandNames } from "@/lib/brand";
-import { PersonaToggle } from "../PersonaToggle";
 import { PaneContext } from "../PaneContext";
 import { SEV_TAG_CLASS, isDrugAvailable, pickPrimary } from "../cardUtils";
 
 // Shared header: name + WHO badge + status tag + persona toggle (top-right).
 export function CardHeader({
   drug,
-  persona,
-  onPersonaChange,
   showATCLine = true,
   showBrands = true,
 }: {
@@ -44,7 +41,6 @@ export function CardHeader({
           {drug.critical_medicine_eu ? <span className="tag-who" style={{ background: "var(--crit-bg)", color: "var(--crit)", borderColor: "var(--crit-b)" }}>EU CRITICAL</span> : null}
         </div>
         <div className="card-head-right">
-          <PersonaToggle value={persona} onChange={onPersonaChange} disabled={available ? ["supplier"] : []} />
           <span className={statusClass}>{statusLabel}</span>
         </div>
       </div>

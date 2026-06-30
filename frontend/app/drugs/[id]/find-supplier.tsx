@@ -46,15 +46,16 @@ export function FindSupplier({ drugId, drugName, userCountry, severity }: Props)
 
   return (
     <div className="find-supplier-row">
+      <span className="find-supplier-hint">Ask Mederti to source this on your behalf</span>
       <button type="button" className="find-supplier-btn" onClick={() => setOpen(true)}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M2 3h10l-1 6H3L2 3z" />
-          <circle cx="5" cy="11.5" r=".8" fill="currentColor" stroke="none" />
-          <circle cx="9" cy="11.5" r=".8" fill="currentColor" stroke="none" />
+        {/* mederti logo mark — rounded hexagonal nut, drawn in white. The thick
+            round-joined stroke leaves a hexagonal hole that shows the black
+            button through, matching the brand mark. */}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinejoin="round" aria-hidden>
+          <path d="M12 3.5 L19.36 7.75 L19.36 16.25 L12 20.5 L4.64 16.25 L4.64 7.75 Z" />
         </svg>
         Find a supplier
       </button>
-      <span className="find-supplier-hint">Ask Mederti to source this on your behalf</span>
 
       <SupplierDrawer
         isOpen={open}

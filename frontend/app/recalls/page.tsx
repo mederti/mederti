@@ -96,7 +96,24 @@ export default async function RecallsPage({ searchParams }: Props) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <AppShell contentClassName="flush">
+    <AppShell
+      contentClassName="flush"
+      chat={{
+        contextKey: "recalls",
+        title: "Recalls",
+        category: "Recalls list",
+        bodyText:
+          "The user is viewing the Mederti drug recalls list. Answer about recent recalls — which products, which regulators, the reasons, and risk classification — using live Mederti data.",
+        headerLabel: "Ask about recalls",
+        emptyLead:
+          "Ask me about these recalls — what was recalled, why, and which markets are affected.",
+        starters: [
+          "What was recently recalled?",
+          "Which recalls are highest risk?",
+          "Show me sterility-related recalls",
+        ],
+      }}
+    >
 
       {/* Hero */}
       <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)" }}>

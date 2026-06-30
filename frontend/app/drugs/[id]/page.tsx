@@ -201,7 +201,15 @@ async function buildMarketPricing(
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ as?: string }>;
+  searchParams?: Promise<{
+    as?: string;
+    // brand=1 keeps a linked catalogue brand page from redirecting to its
+    // molecule, so it renders as a brand-distinct SKU view.
+    brand?: string;
+    // brand_hint=<catalogueId> is set by /search when a brand query rolled up
+    // to this molecule; drives the "you searched X" provenance banner.
+    brand_hint?: string;
+  }>;
 }
 
 type Persona = "pharmacist" | "procurement" | "supplier";
@@ -233,8 +241,9 @@ function resolvePersona(as: string | undefined, sessionRole: string | null): Per
 }
 
 /* ── SEO: dynamic metadata ── */
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { id } = await params;
+  const sp = searchParams ? await searchParams : {};
   const supabase = getSupabaseAdmin();
 
   const [drugRes, shortagesRes, catalogueCountryRes] = await Promise.all([
@@ -269,15 +278,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // Try catalogue fallback
     const { data: cat } = await supabase
       .from("drug_catalogue")
-      .select("generic_name")
+      .select("generic_name, brand_name, drug_id")
       .eq("id", id)
       .single();
-    const name = cat?.generic_name ?? "Drug";
+    // Brand SKU view (?brand=1 on a molecule-linked catalogue row): lead the
+    // title with the brand, canonicalise to the parent molecule so we never
+    // fragment crawl equity across brand variants, and noindex it (a logged-in
+    // sourcing surface, not a search-landing page).
+    const brandMode = sp.brand === "1" && !!cat?.drug_id;
+    const name = (brandMode && cat?.brand_name) ? cat.brand_name : (cat?.generic_name ?? "Drug");
     return {
       title: pageTitle({ generic_name: name }),
       description: pageDescription({ generic_name: name }, [], 20),
-      alternates: { canonical: canonicalUrl(`/drugs/${id}`) },
-      robots: { index: true, follow: true },
+      alternates: { canonical: brandMode ? canonicalUrl(`/drugs/${cat!.drug_id}`) : canonicalUrl(`/drugs/${id}`) },
+      robots: brandMode ? { index: false, follow: true } : { index: true, follow: true },
     };
   }
 
@@ -569,8 +583,23 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // consolidates link equity if drug pages are ever exposed to crawlers (today
     // /drugs/* is login-gated in middleware, so this fires for signed-in users).
     // The self-guard avoids a loop if a row's drug_id were ever set to its own id.
-    if (catEntry.drug_id && catEntry.drug_id !== id) {
+    // ?brand=1 is the explicit escape hatch: a sourcing user wants THIS brand as
+    // a distinct SKU (e.g. Fresofol, not Propofol), so skip the rollup redirect
+    // and render the brand page below with a breadcrumb back to the molecule.
+    const wantBrand = sp.brand === "1";
+    if (catEntry.drug_id && catEntry.drug_id !== id && !wantBrand) {
       permanentRedirect(`/drugs/${catEntry.drug_id}`);
+    }
+
+    // In brand mode, pull the parent molecule for the "Brand of …" breadcrumb.
+    let parentMolecule: { id: string; generic_name: string } | null = null;
+    if (wantBrand && catEntry.drug_id && catEntry.drug_id !== id) {
+      const { data: mol } = await supabase
+        .from("drugs")
+        .select("id, generic_name")
+        .eq("id", catEntry.drug_id)
+        .single();
+      if (mol) parentMolecule = mol as { id: string; generic_name: string };
     }
 
     /* Render a minimal stable-supply page for catalogue-only drugs */
@@ -584,13 +613,29 @@ export default async function DrugPage({ params, searchParams }: Props) {
           <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>{"\u2190"} Back to search</Link>
         </div>
         <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px" }}>
+          {/* Brand-mode breadcrumb back to the canonical molecule */}
+          {parentMolecule && (
+            <div style={{ fontSize: 12, color: "var(--app-text-3)", marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              <span>Brand of</span>
+              <Link href={`/drugs/${parentMolecule.id}`} style={{ color: "var(--teal-l)", textDecoration: "none", fontWeight: 600 }}>
+                {parentMolecule.generic_name}
+              </Link>
+              <span style={{ color: "var(--app-border)" }}>·</span>
+              <Link href={`/drugs/${parentMolecule.id}`} style={{ color: "var(--app-text-4)", textDecoration: "none" }}>
+                View molecule (shortages, alternatives, pricing) {"→"}
+              </Link>
+            </div>
+          )}
           {/* Drug header */}
           <div style={{ marginBottom: 24 }}>
             <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em", margin: 0 }}>
-              {catEntry.generic_name}
+              {parentMolecule && catEntry.brand_name ? catEntry.brand_name : catEntry.generic_name}
               {catEntry.strength && <span style={{ fontWeight: 400, color: "var(--app-text-3)", fontSize: 18, marginLeft: 8 }}>{catEntry.strength}</span>}
             </h1>
-            {catEntry.brand_name && catEntry.brand_name !== catEntry.generic_name && (
+            {parentMolecule && catEntry.brand_name && (
+              <div style={{ fontSize: 13, color: "var(--app-text-3)", marginTop: 4 }}>{catEntry.generic_name}</div>
+            )}
+            {!parentMolecule && catEntry.brand_name && catEntry.brand_name !== catEntry.generic_name && (
               <div style={{ fontSize: 13, color: "var(--app-text-3)", marginTop: 4 }}>{catEntry.brand_name}</div>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
@@ -847,6 +892,53 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // signal. Defensive: soft-errors to empty if the table isn't reachable.
     // (concession + priceMarkets fetched above in the parallel batch.)
 
+    // ── Brand SKUs + search provenance ───────────────────────────────────
+    // Brands are catalogue rows that roll up to this molecule. Surface them as
+    // clickable chips (→ /drugs/{catId}?brand=1, the brand-distinct sourcing
+    // view) and, when the user arrived from a brand search, a "you searched X"
+    // hint. One light read; soft-fails to empty so the page never blocks on it.
+    const brandSkus: { brand: string; catId: string; country: string }[] = [];
+    let brandHint: { brand: string; country: string; catId: string } | null = null;
+    {
+      const { data: catBrands } = await supabase
+        .from("drug_catalogue")
+        .select("id, brand_name, source_country")
+        .eq("drug_id", id)
+        .not("brand_name", "is", null)
+        .limit(400);
+      // One SKU per cleaned brand; prefer the user-market registration for the
+      // chip's link so the brand page opens on the SKU that matters to them.
+      const bySku = new Map<string, { brand: string; catId: string; country: string }>();
+      for (const r of (catBrands ?? []) as { id: string; brand_name: string | null; source_country: string | null }[]) {
+        const clean = cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0];
+        if (!clean) continue;
+        const key = clean.toLowerCase();
+        const country = (r.source_country ?? "").toUpperCase();
+        const existing = bySku.get(key);
+        if (!existing || (country === userCountry && existing.country !== userCountry)) {
+          bySku.set(key, { brand: clean, catId: r.id, country });
+        }
+      }
+      brandSkus.push(...bySku.values());
+
+      const hintId = sp.brand_hint;
+      if (hintId) {
+        const fromList = brandSkus.find((b) => b.catId === hintId);
+        if (fromList) {
+          brandHint = { brand: fromList.brand, country: fromList.country, catId: fromList.catId };
+        } else {
+          const { data: hintRow } = await supabase
+            .from("drug_catalogue")
+            .select("id, brand_name, source_country")
+            .eq("id", hintId)
+            .single();
+          const hr = hintRow as { id: string; brand_name: string | null; source_country: string | null } | null;
+          const clean = hr ? (cleanBrandNames([hr.brand_name ?? ""], drug.generic_name)[0] ?? hr.brand_name) : null;
+          if (hr && clean) brandHint = { brand: clean, country: (hr.source_country ?? "").toUpperCase(), catId: hr.id };
+        }
+      }
+    }
+
     return (
       <V1DrugView
         id={id}
@@ -863,6 +955,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
         concession={concession}
         priceMarkets={priceMarkets}
         products={products}
+        brandSkus={brandSkus}
+        brandHint={brandHint}
       />
     );
   }

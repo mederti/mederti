@@ -47,7 +47,7 @@
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:8px auto 24px;">
                 <tr>
                   <td align="center" bgcolor="#0F172A" style="border-radius:10px;">
-                    <a href="{{ .ConfirmationURL }}"
+                    <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/onboarding"
                        style="display:inline-block; padding:13px 32px; font-size:14.5px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:10px;">
                       Accept invitation
                     </a>
@@ -57,7 +57,7 @@
 
               <p style="margin:24px 0 6px; font-size:12.5px; color:#64748b;">Or paste this link into your browser:</p>
               <p style="margin:0 0 6px; font-family:'SF Mono',Menlo,Consolas,monospace; font-size:11.5px; color:#0f172a; word-break:break-all; background:#f1f5f9; padding:10px 12px; border-radius:6px;">
-                {{ .ConfirmationURL }}
+                {{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/onboarding
               </p>
             </td>
           </tr>

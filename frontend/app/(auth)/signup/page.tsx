@@ -32,7 +32,6 @@ function SignupForm() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
 
   const supabase = createBrowserClient();
 
@@ -50,66 +49,36 @@ function SignupForm() {
     }
 
     setLoading(true);
-    // The confirmation email must land on /auth/callback so the PKCE code is
-    // exchanged for a session server-side; only then does `next` apply. Linking
-    // straight to the destination leaves the user unauthenticated. Role rides
-    // along so the callback can persist it once the session exists.
-    const callbackNext = `/auth/callback?next=${encodeURIComponent(next)}${
-      role ? `&role=${encodeURIComponent(role)}` : ""
-    }`;
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}${callbackNext}`,
-        data: role ? { role } : undefined,
-      },
-    });
-    setLoading(false);
-
-    if (error) {
-      setError(error.message);
-    } else {
-      // Save role to user_profiles immediately if provided (so it's set even before email confirm)
-      if (role && data.user?.id) {
-        try {
-          await fetch("/api/user/role", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role }),
-          });
-        } catch {
-          // non-blocking
-        }
+    // Create the account already-confirmed (no email round-trip) via the admin
+    // route, then sign in with the password to establish the session. Email is
+    // off the critical path, so signup no longer depends on SMTP, the Supabase
+    // Site URL, or the redirect domain's TLS cert.
+    try {
+      const r = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, role }),
+      });
+      const d = await r.json().catch(() => ({} as { error?: string }));
+      if (!r.ok) {
+        setLoading(false);
+        setError(d?.error || "Could not create your account. Please try again.");
+        return;
       }
-      // Top-of-funnel conversion event. Autocapture can't see this — signUp is
-      // a programmatic call, not a tracked DOM submit. role is a non-sensitive
-      // cohort trait; no email/PII is sent.
+      // Account exists + confirmed — sign in (a normal, reliable password login).
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      setLoading(false);
+      if (signInError) {
+        setError(signInError.message);
+        return;
+      }
       captureEvent("signup_submitted", role ? { role } : undefined);
-      setDone(true);
+      router.push(next);
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Something went wrong. Please try again.");
     }
-  }
-
-  if (done) {
-    return (
-      <AuthShell>
-        <div style={{
-          background: "#fff", border: "1px solid var(--app-border)",
-          borderRadius: 14, padding: "36px 40px", textAlign: "center",
-          boxShadow: "0 20px 60px rgba(15,23,42,0.10)",
-        }}>
-          <div style={{ fontSize: 36, marginBottom: 14 }}>✓</div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--app-text)", marginBottom: 8 }}>
-            Check your inbox
-          </h2>
-          <p style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.65 }}>
-            We sent a confirmation link to <strong>{email}</strong>.
-            Click it to activate your account, then{" "}
-            <Link href="/login" style={{ color: "var(--teal)" }}>sign in</Link>.
-          </p>
-        </div>
-      </AuthShell>
-    );
   }
 
   return (

@@ -1,2 +1,2 @@
 [start]
-cmd = "python railway/recall_cron/run.py"
+cmd = "python3 railway/recall_cron/run.py"

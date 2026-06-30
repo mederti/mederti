@@ -4,6 +4,6 @@ nixpacksConfigPath = "railway/tga_audit_cron/nixpacks.toml"
 rootDirectory = "/"
 
 [deploy]
-startCommand = "python railway/tga_audit_cron/run.py"
+startCommand = "python3 railway/tga_audit_cron/run.py"
 restartPolicyType = "never"
 cronSchedule = "0 8 * * *"

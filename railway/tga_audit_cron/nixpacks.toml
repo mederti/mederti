@@ -1,2 +1,2 @@
 [start]
-cmd = "python railway/tga_audit_cron/run.py"
+cmd = "python3 railway/tga_audit_cron/run.py"

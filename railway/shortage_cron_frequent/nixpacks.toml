@@ -1,2 +1,2 @@
 [start]
-cmd = "python railway/shortage_cron_frequent/run.py"
+cmd = "python3 railway/shortage_cron_frequent/run.py"

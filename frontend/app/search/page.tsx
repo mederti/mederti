@@ -9,6 +9,8 @@ import V1Chat from "@/app/components/v1/V1Chat";
 import { truncateDrugName } from "@/lib/utils";
 import { cleanBrandNames } from "@/lib/brand";
 import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
+import Chat2Client from "@/app/chat/Chat2Client";
+import { classifyQuery, looksLikeQuestion, type QueryIntent } from "@/lib/search/classify";
 
 function statusOf(d: DrugHit): { cls: string; label: string } {
   if (d.source === "catalogue") return { cls: "sp-ok", label: "Registered product" };
@@ -650,7 +652,9 @@ function SearchChat() {
   );
 }
 
-export default function SearchPage() {
+// Product/drug lookup → the 3-column results layout (sidebar · results · grounded
+// chat). This is the original /search experience, now one branch of the surface.
+function ResultsShell() {
   return (
     <div className="v1home v1search">
       <style>{CSS}</style>
@@ -661,20 +665,57 @@ export default function SearchPage() {
         {/* ── Center column (results) ── */}
         <div className="shell-main">
           <div className="dg-main">
-            <Suspense fallback={<div style={{ height: 80 }} />}>
-              <Results />
-            </Suspense>
+            <Results />
           </div>
         </div>
 
         {/* ── Right-hand chat column (mirrors the drug page) ── */}
         <aside className="chat-col">
-          <Suspense fallback={null}>
-            <SearchChat />
-          </Suspense>
+          <SearchChat />
         </aside>
       </div>
     </div>
+  );
+}
+
+// The unified surface. One classifier decides what the middle column shows:
+//   • empty query  → the conversational home (prompts + trending + composer)
+//   • open question → a conversational answer (both reuse the chat engine)
+//   • drug name     → the 3-column product results layout above
+// Both branches render the shared V1Sidebar, so switching is seamless.
+function UnifiedSearch() {
+  const params = useSearchParams();
+  const q = (params.get("q") ?? "").trim();
+  const market = (params.get("market") || "AU").toUpperCase();
+
+  // First guess is synchronous so the common cases never flash a loader; the
+  // async confirm only matters for short non-question inputs (drug vs unknown).
+  const [intent, setIntent] = useState<QueryIntent>(
+    !q ? "empty" : looksLikeQuestion(q) ? "open" : "drug"
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!q) { setIntent("empty"); return; }
+    if (looksLikeQuestion(q)) { setIntent("open"); return; }
+    // Short, name-like input: optimistically show results (almost always a
+    // drug), then confirm — flipping to the answer engine only if it's unknown.
+    setIntent("drug");
+    classifyQuery(q, market).then((res) => { if (!cancelled) setIntent(res); });
+    return () => { cancelled = true; };
+  }, [q, market]);
+
+  if (intent === "drug") return <ResultsShell />;
+  // Empty home and open-question answer are both the chat experience. A drug
+  // typed into its composer routes back here as /search?q=… (see Chat2Client).
+  return <Chat2Client chatId={null} />;
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <UnifiedSearch />
+    </Suspense>
   );
 }
 

@@ -268,6 +268,158 @@ export function ChatMain({
 
   const isEmpty = turns.length === 0;
 
+  // The composer (search bar) is shared between two placements: lifted directly
+  // under the hero heading on the empty /chat home, and pinned to the bottom of
+  // the column once a conversation is underway. Extracted so both stay in sync.
+  const composerBox = (
+    <div
+      // Frame matched to the /search bar (.searchbox.v1sb) for a consistent
+      // look across surfaces: 1.5px border, 14px radius, soft drop shadow, and
+      // a brand-green focus border + green glow.
+      className={`bg-white border-[1.5px] rounded-[14px] shadow-[0_12px_36px_-22px_rgba(10,15,26,0.28)] focus-within:border-[#0fa676] focus-within:shadow-[0_12px_36px_-18px_rgba(16,185,129,0.4)] transition-all overflow-hidden relative ${
+        isDragging
+          ? "border-[#0fa676] ring-2 ring-emerald-100"
+          : "border-[#dde3e9]"
+      }`}
+      onDragEnter={(e) => {
+        if (e.dataTransfer?.types?.includes("Files")) {
+          e.preventDefault();
+          dragDepthRef.current += 1;
+          setIsDragging(true);
+        }
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer?.types?.includes("Files")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.dataTransfer?.types?.includes("Files")) {
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) setIsDragging(false);
+        }
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          e.preventDefault();
+          dragDepthRef.current = 0;
+          setIsDragging(false);
+          onFilesPicked(e.dataTransfer.files);
+        }
+      }}
+    >
+      {attachedFiles.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 px-3 pt-2.5 pb-1 border-b border-slate-100">
+          {attachedFiles.map((f) => (
+            <div
+              key={f.id}
+              className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md bg-slate-50 border border-slate-200 text-[12px] text-slate-700"
+            >
+              {f.preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={f.preview} alt="" className="w-4 h-4 rounded-sm object-cover" />
+              ) : (
+                <span className="text-slate-400">{chipIcon(f.type, f.name)}</span>
+              )}
+              <span className="max-w-[160px] truncate">{f.name}</span>
+              <button
+                type="button"
+                onClick={() => onRemoveAttachment(f.id)}
+                className="p-0.5 text-slate-400 hover:text-slate-700"
+                aria-label={`Remove ${f.name}`}
+              >
+                <Close size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="flex items-end gap-1 pl-2 pr-1.5 py-1.5">
+        <button
+          type="button"
+          onClick={() => setAttachModalOpen(true)}
+          disabled={pending}
+          title="Attach files (CSV, Excel, PDF, images)"
+          aria-label="Attach files"
+          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-[#0fa676] hover:bg-slate-50 transition-colors shrink-0"
+        >
+          <Paperclip size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={pending}
+          title="Scan barcode or take photo of product"
+          aria-label="Scan barcode or take photo"
+          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-[#0fa676] hover:bg-slate-50 transition-colors shrink-0"
+        >
+          <ScanBarcode size={16} />
+        </button>
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          onChange={(e) => onDraftChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              onSend(draft);
+            }
+          }}
+          placeholder="Ask anything, upload a spreadsheet, or scan a barcode…"
+          rows={1}
+          disabled={pending}
+          className="flex-1 border-0 outline-none bg-transparent text-[14px] text-slate-900 placeholder:text-slate-400 px-2 py-2.5 resize-none leading-snug max-h-[200px] min-h-[24px]"
+        />
+        <button
+          type="button"
+          onClick={() => onSend(draft)}
+          disabled={pending || draft.trim().length === 0}
+          className="w-9 h-9 inline-flex items-center justify-center rounded-xl bg-[#0fa676] text-white hover:bg-[#0c8a62] disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors shrink-0"
+          aria-label="Send"
+        >
+          <Send size={14} />
+        </button>
+      </div>
+    </div>
+  );
+
+  // Hidden file inputs (attach + camera) and the disclaimer line travel with the
+  // composer so exactly one copy is mounted regardless of which placement renders.
+  const composerExtras = (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".csv,.tsv,.xlsx,.xls,.pdf,image/*"
+        className="hidden"
+        onChange={(e) => {
+          const fl = e.target.files;
+          onFilesPicked(fl);
+          e.target.value = "";
+          if (fl && fl.length > 0) setAttachModalOpen(false);
+        }}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          onFilesPicked(e.target.files);
+          e.target.value = "";
+        }}
+      />
+
+      <div className="text-center text-[11px] text-slate-400 mt-2.5">
+        AI-powered · regulatory sources worldwide · Not medical advice
+      </div>
+    </>
+  );
+
   return (
     <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
       {activeView === "dashboard" ? (
@@ -290,15 +442,22 @@ export function ChatMain({
             <div className="pt-12 pb-6">
               <div className="text-center mb-8">
                 <h1 className="text-[28px] font-semibold tracking-tight text-slate-900 mb-2.5">
-                  What do you need to know?
+                  What Drug Are You Looking For
                 </h1>
                 <p className="text-[14px] text-slate-500 max-w-[480px] mx-auto">
                   Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what's not covered.
                 </p>
               </div>
+              {/* Search bar lifted directly under the heading + subheading on the
+                  empty /chat home. The bottom-pinned footer composer is suppressed
+                  in this state (see below) so there's only one input on screen. */}
+              <div className="max-w-[720px] mx-auto mb-10">
+                {composerBox}
+                {composerExtras}
+              </div>
               {/* Shared conversational-home content (suggested prompts +
                   trending shortages). The ask box is hidden here because the
-                  chat composer already lives at the bottom of this column. */}
+                  hero composer above already serves as the input. */}
               <ConversationalHome onAsk={onSend} showHeroAsk={false} />
             </div>
           ) : (
@@ -366,147 +525,17 @@ export function ChatMain({
         </div>
       </div>
 
-      <div className="shrink-0 px-8 pt-3 pb-4 bg-white">
-        <div className="max-w-[900px] mx-auto">
-          <div
-            className={`bg-white border rounded-2xl shadow-sm focus-within:border-slate-300 focus-within:shadow-md transition-all overflow-hidden relative ${
-              isDragging
-                ? "border-teal-400 ring-2 ring-teal-100"
-                : "border-slate-200"
-            }`}
-            onDragEnter={(e) => {
-              if (e.dataTransfer?.types?.includes("Files")) {
-                e.preventDefault();
-                dragDepthRef.current += 1;
-                setIsDragging(true);
-              }
-            }}
-            onDragOver={(e) => {
-              if (e.dataTransfer?.types?.includes("Files")) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "copy";
-              }
-            }}
-            onDragLeave={(e) => {
-              if (e.dataTransfer?.types?.includes("Files")) {
-                dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-                if (dragDepthRef.current === 0) setIsDragging(false);
-              }
-            }}
-            onDrop={(e) => {
-              if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-                e.preventDefault();
-                dragDepthRef.current = 0;
-                setIsDragging(false);
-                onFilesPicked(e.dataTransfer.files);
-              }
-            }}
-          >
-            {attachedFiles.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 px-3 pt-2.5 pb-1 border-b border-slate-100">
-                {attachedFiles.map((f) => (
-                  <div
-                    key={f.id}
-                    className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md bg-slate-50 border border-slate-200 text-[12px] text-slate-700"
-                  >
-                    {f.preview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={f.preview} alt="" className="w-4 h-4 rounded-sm object-cover" />
-                    ) : (
-                      <span className="text-slate-400">{chipIcon(f.type, f.name)}</span>
-                    )}
-                    <span className="max-w-[160px] truncate">{f.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveAttachment(f.id)}
-                      className="p-0.5 text-slate-400 hover:text-slate-700"
-                      aria-label={`Remove ${f.name}`}
-                    >
-                      <Close size={11} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="flex items-end gap-1 pl-2 pr-1.5 py-1.5">
-              <button
-                type="button"
-                onClick={() => setAttachModalOpen(true)}
-                disabled={pending}
-                title="Attach files (CSV, Excel, PDF, images)"
-                aria-label="Attach files"
-                className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-teal-600 hover:bg-slate-50 transition-colors shrink-0"
-              >
-                <Paperclip size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                disabled={pending}
-                title="Scan barcode or take photo of product"
-                aria-label="Scan barcode or take photo"
-                className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-teal-600 hover:bg-slate-50 transition-colors shrink-0"
-              >
-                <ScanBarcode size={16} />
-              </button>
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={(e) => onDraftChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    onSend(draft);
-                  }
-                }}
-                placeholder="Ask anything, upload a spreadsheet, or scan a barcode…"
-                rows={1}
-                disabled={pending}
-                className="flex-1 border-0 outline-none bg-transparent text-[14px] text-slate-900 placeholder:text-slate-400 px-2 py-2.5 resize-none leading-snug max-h-[200px] min-h-[24px]"
-              />
-              <button
-                type="button"
-                onClick={() => onSend(draft)}
-                disabled={pending || draft.trim().length === 0}
-                className="w-9 h-9 inline-flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-100 disabled:hover:text-slate-500 transition-colors shrink-0"
-                aria-label="Send"
-              >
-                <Send size={14} />
-              </button>
-            </div>
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".csv,.tsv,.xlsx,.xls,.pdf,image/*"
-            className="hidden"
-            onChange={(e) => {
-              const fl = e.target.files;
-              onFilesPicked(fl);
-              e.target.value = "";
-              if (fl && fl.length > 0) setAttachModalOpen(false);
-            }}
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              onFilesPicked(e.target.files);
-              e.target.value = "";
-            }}
-          />
-
-          <div className="text-center text-[11px] text-slate-400 mt-2.5">
-            AI-powered · regulatory sources worldwide · Not medical advice
+      {/* Bottom-pinned composer for an active conversation. On the empty /chat
+          home the same composer is lifted under the hero heading instead, so
+          this footer is suppressed to avoid a duplicate input. */}
+      {!isEmpty && (
+        <div className="shrink-0 px-8 pt-3 pb-4 bg-white">
+          <div className="max-w-[900px] mx-auto">
+            {composerBox}
+            {composerExtras}
           </div>
         </div>
-      </div>
+      )}
 
       {attachModalOpen ? (
         <div

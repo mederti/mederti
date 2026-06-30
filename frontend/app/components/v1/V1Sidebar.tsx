@@ -28,9 +28,9 @@ import {
 export default function V1Sidebar() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recentMedicines, setRecentMedicines] = useState<RecentMedicine[]>([]);
-  // Signed-in users get the 3-column /chat home from the logo; everyone
-  // else lands on the public marketing page. Resolved client-side, so the
-  // logo defaults to "/" until the session check returns.
+  // Signed-in users get the unified 3-column /search home from the logo;
+  // everyone else lands on the public marketing page. Resolved client-side, so
+  // the logo defaults to "/" until the session check returns.
   const [signedIn, setSignedIn] = useState(false);
   // Signed-in user's email, shown in the footer account row (null = anon).
   const [email, setEmail] = useState<string | null>(null);
@@ -102,7 +102,7 @@ export default function V1Sidebar() {
           rule is scoped under .sb, so nothing leaks into the host page. */}
       <style>{SIDEBAR_CSS}</style>
       <div className="sb-top">
-        <Link href={signedIn ? "/chat" : "/"} className="brand" aria-label="Mederti home">
+        <Link href={signedIn ? "/search" : "/"} className="brand" aria-label="Mederti home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-black.png" alt="mederti" className="logo-img" />
         </Link>

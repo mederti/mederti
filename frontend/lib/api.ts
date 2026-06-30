@@ -54,6 +54,13 @@ export interface DrugHit {
   // Form/Strength (catalogue product rows; migration 054).
   form_bucket?: string | null;
   strength_label?: string | null;
+  // Brand provenance: when a query matched via a brand that only lives in the
+  // catalogue (e.g. "Fresofol" → Propofol), the row is rolled up to its
+  // canonical molecule but carries the matched brand + its catalogue id, so the
+  // UI can show a "you searched X" hint and deep-link to the brand SKU view
+  // (/drugs/{matched_catalogue_id}?brand=1).
+  matched_brand?: string | null;
+  matched_catalogue_id?: string | null;
 }
 
 export interface StatusFacets {

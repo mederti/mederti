@@ -1,11 +1,15 @@
 import Link from "next/link";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
-import V1Chat from "@/app/components/v1/V1Chat";
+import { ContextChat } from "@/app/chat/components/ContextChat";
+import "@/app/chat/chat.css";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
 import V1ReportActions from "./V1ReportActions";
 import { FindSupplier } from "./find-supplier";
+import { ParallelTradeSourcing } from "./parallel-trade-sourcing";
+import { ParallelTradeArbitrage } from "./parallel-trade-arbitrage";
+import { ParallelTradePanel } from "./parallel-trade-panel";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -92,7 +96,7 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, products,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, products, brandSkus, brandHint,
 }: {
   id: string;
   drug: any;
@@ -147,7 +151,15 @@ export default function V1DrugView({
   // Registered products for this molecule (drug_products + joined sponsor / MA
   // holder). Already fetched in page.tsx; drives the "Full drug record" section.
   products?: any[] | null;
+  // Brand SKUs that roll up to this molecule — makes the brand chips clickable
+  // to the brand-distinct sourcing view (/drugs/{catId}?brand=1).
+  brandSkus?: { brand: string; catId: string; country: string }[];
+  // Set when the user arrived from a brand search (e.g. "Fresofol" → Propofol);
+  // drives the "you searched X" provenance banner.
+  brandHint?: { brand: string; country: string; catId: string } | null;
 }) {
+  // brand (lowercased) → SKU, for turning chips into links.
+  const skuByBrand = new Map((brandSkus ?? []).map((s) => [s.brand.toLowerCase(), s]));
   const CONC_LABEL: Record<string, string> = {
     very_high: "Very high", high: "High", medium: "Moderate", low: "Low",
   };
@@ -162,6 +174,23 @@ export default function V1DrugView({
   const mine = active.find((s) => (s.country_code || "").toUpperCase() === userCountry) || null;
   const elsewhere = active.filter((s) => (s.country_code || "").toUpperCase() !== userCountry);
   const elsewhereCount = new Set(elsewhere.map((s) => (s.country_code || "").toUpperCase())).size;
+
+  // Cross-border footprint — answers "is this a local or a global problem?" at a
+  // glance. Distinct OTHER markets with an active/anticipated shortage, worst
+  // severity per market, with major markets (US/EU/UK/…) surfaced first so a
+  // global pattern is obvious from the hero card rather than buried in the
+  // regulator table further down.
+  const MAJOR_MARKETS = new Set(["US", "GB", "UK", "DE", "FR", "IT", "ES", "CA", "JP", "EU"]);
+  const elsewhereSev = new Map<string, number>();
+  for (const s of elsewhere) {
+    const cc = (s.country_code || "").toUpperCase();
+    if (!cc) continue;
+    elsewhereSev.set(cc, Math.max(elsewhereSev.get(cc) ?? -1, SEV[(s.severity || "").toLowerCase()] ?? 0));
+  }
+  const footprint = [...elsewhereSev.entries()]
+    .map(([cc, r]) => ({ cc, sev: r, major: MAJOR_MARKETS.has(cc) }))
+    .sort((a, b) => Number(b.major) - Number(a.major) || b.sev - a.sev || a.cc.localeCompare(b.cc));
+
   const localShortage = !!mine;
   const sev = (mine?.severity || "").toLowerCase();
   const isCrit = sev === "critical" || sev === "high";
@@ -408,9 +437,59 @@ export default function V1DrugView({
         {/* ── Center + right ── */}
         <div className="shell-main">
           <div className="drug-grid">
-            {/* ── Main ── */}
+            {/* ── Middle column: grounded chat (new template). ContextChat is
+                 the standard chat surface — clicking a product in an answer
+                 opens its detail. ── */}
+            <aside className="chat-col mederti-chat-root">
+              <ContextChat
+                key={drug.generic_name}
+                contextKey={drug.generic_name}
+                title={drug.generic_name}
+                category="Drug record"
+                bodyText={`The user is viewing the Mederti drug record for ${drug.generic_name}. Answer about this medicine — its shortages, substitutes, suppliers, and regulatory status.`}
+                headerLabel="Ask about this medicine"
+                placement="left"
+                emptyLead={
+                  <>
+                    Ask me anything about{" "}
+                    <span className="font-medium text-slate-700">{drug.generic_name}</span> —
+                    substitutes, who&apos;s affected, or how long it may last.
+                  </>
+                }
+                starters={[
+                  `What can I substitute for ${drug.generic_name}?`,
+                  "Which countries are affected?",
+                  "How long did past shortages last?",
+                ]}
+              />
+            </aside>
+
+            {/* ── Right column: the drug record, full-width detail panel ── */}
             <div className="dg-main">
           <V1DrugSearch initial={drug.generic_name} />
+
+          {brandHint && (
+            <div
+              style={{
+                display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8,
+                padding: "10px 14px", marginBottom: 14, borderRadius: 10,
+                background: "var(--ind-bg, rgba(99,102,241,0.08))",
+                border: "1px solid var(--ind-b, rgba(99,102,241,0.25))",
+                fontSize: 13, color: "var(--app-text-2)",
+              }}
+            >
+              <span>
+                You searched <strong>{brandHint.brand}</strong> — a brand of {drug.generic_name}
+                {brandHint.country ? ` (${brandHint.country})` : ""}.
+              </span>
+              <a
+                href={`/drugs/${brandHint.catId}?brand=1`}
+                style={{ color: "var(--teal-l)", textDecoration: "none", fontWeight: 600 }}
+              >
+                View {brandHint.brand} registrations {"→"}
+              </a>
+            </div>
+          )}
 
           <div className="product-card">
             <div className="pc-body">
@@ -459,7 +538,22 @@ export default function V1DrugView({
                 const rest = brands.length - shown.length;
                 return (
                   <div className="d-tags">
-                    {shown.map((b) => <span key={b} className="d-tag">{b}</span>)}
+                    {shown.map((b) => {
+                      const sku = skuByBrand.get(b.toLowerCase());
+                      return sku ? (
+                        <a
+                          key={b}
+                          className="d-tag"
+                          href={`/drugs/${sku.catId}?brand=1`}
+                          title={`View ${b}${sku.country ? ` (${sku.country})` : ""} — registrations & sourcing`}
+                          style={{ textDecoration: "none", cursor: "pointer" }}
+                        >
+                          {b}
+                        </a>
+                      ) : (
+                        <span key={b} className="d-tag">{b}</span>
+                      );
+                    })}
                     {rest > 0 && <span className="d-tag" title={brands.slice(5).join(", ")}>+{rest} more</span>}
                   </div>
                 );
@@ -469,10 +563,34 @@ export default function V1DrugView({
 
           {/* Status card */}
           <div className={`status-card ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
-            <div className="sc-label"><span className="d" />{localShortage ? (anticipated ? `Anticipated · ${cName}` : `In declared shortage · ${cName}`) : `In supply · ${cName}`}</div>
+            {/* Status eyebrow: user-market status, then the OTHER markets that
+                are also short, inline as flag chips — "Australia & 🇨🇦 🇩🇪 …".
+                Lets a user tell global-from-local at a glance. Critical/high
+                markets render red; major markets (US/EU/UK) sort first. */}
+            <div className="sc-label">
+              <span className="d" />
+              <span className="sc-label-t">
+                {localShortage ? (anticipated ? "Anticipated · " : "In declared shortage · ") : "In supply · "}
+                {flag(userCountry)} {cName}
+                {elsewhereCount > 0 ? (localShortage ? " & also short in" : " · short in") : ""}
+              </span>
+              {elsewhereCount > 0 && (
+                <span className="sc-foot-flags">
+                  {footprint.slice(0, 8).map((f) => (
+                    <span
+                      key={f.cc}
+                      className={`scs-c${f.major ? " major" : ""}${f.sev >= 2 ? " crit" : ""}`}
+                      title={`${COUNTRY[f.cc] ?? f.cc}${f.sev >= 2 ? " · critical/high severity" : ""}`}
+                    >
+                      {flag(f.cc)} {f.cc}
+                    </span>
+                  ))}
+                  {footprint.length > 8 && <span className="scs-more">+{footprint.length - 8}</span>}
+                </span>
+              )}
+            </div>
             <div className="sc-title">{localShortage ? (anticipated ? "Anticipated shortage" : isCrit ? "Critical shortage" : "Limited supply") : `In supply in ${cName}`}</div>
             {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
-            {!localShortage && elsewhereCount > 0 && <div className="sc-sub">⚠ In shortage in {elsewhereCount} other market{elsewhereCount !== 1 ? "s" : ""} — see regulator status below.</div>}
             {!localShortage && elsewhereCount === 0 && <div className="sc-sub">No active shortage reported.</div>}
 
             {/* AI commentary — embedded under the heading, above the as-of line */}
@@ -636,6 +754,18 @@ export default function V1DrugView({
               )}
             </div>
           </div>
+
+          {/* Parallel Trade Intelligence — three self-gating surfaces, in
+              value order. Each renders nothing until it has real data
+              (migration 060 + matches), so most drug pages show none.
+              1. Sourcing routes — appears when the drug is short in the user's
+                 market and import lanes can supply it (procurement value).
+              2. Arbitrage map — appears when price spreads are computable
+                 (importer value).
+              3. Raw licence list — reference fallback (all matched licences). */}
+          <ParallelTradeSourcing drugId={id} userCountry={userCountry} />
+          <ParallelTradeArbitrage drugId={id} destination={userCountry} />
+          <ParallelTradePanel drugId={id} />
 
           {/* Substitution pathways (AU only) */}
           {userCountry === "AU" && (
@@ -928,11 +1058,6 @@ export default function V1DrugView({
 
           <div className="sec"><ClinicalDisclaimer /></div>
         </div>
-
-        {/* ── Chat column ── */}
-        <aside className="chat-col">
-          <V1Chat drugName={drug.generic_name} />
-        </aside>
           </div>
         </div>
       </div>
@@ -1058,6 +1183,14 @@ const CSS = `
 .conc-foot-l{font-size:11px;color:var(--text-3)}
 .conc-foot-n{font-size:11px;font-weight:700;color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b);padding:2px 8px;border-radius:99px}
 .conc-foot-c{font-size:12px;letter-spacing:1px}
+/* Cross-border footprint — affected OTHER markets inline on the status eyebrow */
+.sc-label{flex-wrap:wrap;row-gap:7px}
+.sc-label-t{display:inline-flex;align-items:center;gap:6px}
+.sc-foot-flags{display:inline-flex;gap:5px;flex-wrap:wrap;align-items:center;margin-left:2px}
+.scs-c{font-size:11px;font-weight:700;color:var(--text-3);background:var(--bg);border:1px solid var(--border);padding:2px 7px;border-radius:7px;white-space:nowrap;text-transform:none;letter-spacing:0}
+.scs-c.major{color:var(--text);border-color:var(--border-2)}
+.scs-c.crit{color:var(--crit);border-color:var(--crit-b);background:var(--crit-bg)}
+.scs-more{font-size:11px;font-weight:700;color:var(--text-4);text-transform:none;letter-spacing:0}
 /* Cross-reference markets strip inside the price panel */
 .xmkt-strip{border-top:1px solid var(--border);padding:11px 18px;background:var(--bg-2)}
 .xmkt-lbl{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);margin-bottom:8px}
@@ -1079,7 +1212,7 @@ const CSS = `
 .sc-footer .sc-asof{margin-top:0}
 .sc-footer .find-supplier-row{margin-top:0;justify-content:flex-end}
 .find-supplier-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
-.find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--green);background:var(--green);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
+.find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
 .find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
 .find-supplier-hint{font-size:12px;color:var(--text-4)}
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
@@ -1165,7 +1298,7 @@ const CSS = `
 .sp-crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
 .sp-part{color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
 .sp-ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-b)}
-.chat-col{width:380px;flex-shrink:0;border-left:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh}
+.chat-col{width:380px;flex-shrink:0;display:flex;background:var(--bg);position:sticky;top:0;height:100vh}
 .chat-panel{display:flex;flex-direction:column;height:100%}
 .chat-head{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fbfcfe,var(--bg))}
 .chat-h-l{display:flex;align-items:center;gap:11px}

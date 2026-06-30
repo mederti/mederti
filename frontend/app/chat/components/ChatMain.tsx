@@ -273,10 +273,13 @@ export function ChatMain({
   // the column once a conversation is underway. Extracted so both stay in sync.
   const composerBox = (
     <div
-      className={`bg-white border rounded-2xl shadow-sm focus-within:border-slate-300 focus-within:shadow-md transition-all overflow-hidden relative ${
+      // Frame matched to the /search bar (.searchbox.v1sb) for a consistent
+      // look across surfaces: 1.5px border, 14px radius, soft drop shadow, and
+      // a brand-green focus border + green glow.
+      className={`bg-white border-[1.5px] rounded-[14px] shadow-[0_12px_36px_-22px_rgba(10,15,26,0.28)] focus-within:border-[#0fa676] focus-within:shadow-[0_12px_36px_-18px_rgba(16,185,129,0.4)] transition-all overflow-hidden relative ${
         isDragging
-          ? "border-teal-400 ring-2 ring-teal-100"
-          : "border-slate-200"
+          ? "border-[#0fa676] ring-2 ring-emerald-100"
+          : "border-[#dde3e9]"
       }`}
       onDragEnter={(e) => {
         if (e.dataTransfer?.types?.includes("Files")) {
@@ -340,7 +343,7 @@ export function ChatMain({
           disabled={pending}
           title="Attach files (CSV, Excel, PDF, images)"
           aria-label="Attach files"
-          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-teal-600 hover:bg-slate-50 transition-colors shrink-0"
+          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-[#0fa676] hover:bg-slate-50 transition-colors shrink-0"
         >
           <Paperclip size={16} />
         </button>
@@ -350,7 +353,7 @@ export function ChatMain({
           disabled={pending}
           title="Scan barcode or take photo of product"
           aria-label="Scan barcode or take photo"
-          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-teal-600 hover:bg-slate-50 transition-colors shrink-0"
+          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-[#0fa676] hover:bg-slate-50 transition-colors shrink-0"
         >
           <ScanBarcode size={16} />
         </button>
@@ -373,7 +376,7 @@ export function ChatMain({
           type="button"
           onClick={() => onSend(draft)}
           disabled={pending || draft.trim().length === 0}
-          className="w-9 h-9 inline-flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-100 disabled:hover:text-slate-500 transition-colors shrink-0"
+          className="w-9 h-9 inline-flex items-center justify-center rounded-xl bg-[#0fa676] text-white hover:bg-[#0c8a62] disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors shrink-0"
           aria-label="Send"
         >
           <Send size={14} />

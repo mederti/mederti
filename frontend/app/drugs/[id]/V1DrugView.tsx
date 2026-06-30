@@ -1372,7 +1372,9 @@ const CSS = `
 .reg-foot{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:10px}
 @media(max-width:620px){.spec-grid{grid-template-columns:1fr}}
 @media(max-width:1080px){.chat-col{display:none}.dg-main{margin:0 auto}}
-@media(max-width:820px){.sb{display:none}}
+/* Mobile/tablet: collapse to a single full-width content column. The bare
+   .sb hide was being out-specified, so scope + force it; stack the grid. */
+@media(max-width:1023px){.v1drug .sb{display:none!important}.v1drug .drug-grid{display:block}.v1drug .dg-main{width:100%}}
 @media(max-width:620px){.sw-cards{grid-template-columns:repeat(2,1fr)}.d-name{font-size:24px}}
 @media(max-width:480px){.sw-cards{grid-template-columns:1fr}.dg-main{padding:16px 16px 64px}}
 /* Print / Export PDF — strip the app chrome and lay the report out as a clean

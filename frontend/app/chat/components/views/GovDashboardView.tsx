@@ -211,6 +211,14 @@ export function GovDashboardView() {
 
 /* upstream */
 .govdash .up-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+/* Mobile: stack every multi-column block into a single column. */
+@media(max-width:768px){
+  .govdash .kpi-row{grid-template-columns:1fr}
+  .govdash .gov-grid{grid-template-columns:1fr}
+  .govdash .up-grid{grid-template-columns:1fr}
+  .govdash .gov-head{flex-direction:column;align-items:flex-start;gap:12px}
+  .govdash .gov-head-r{flex-wrap:wrap}
+}
 .govdash .up-card{border:1px solid var(--border);border-radius:10px;padding:13px;background:var(--bg-2)}
 .govdash .up-card.crit{border-color:var(--crit-b);background:var(--crit-bg)}
 .govdash .up-card.high{border-color:var(--high-b);background:var(--high-bg)}

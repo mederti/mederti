@@ -2106,3 +2106,29 @@
 /* Belt-and-braces: nothing in the rail may force a horizontal scrollbar on the
    whole column — wide tables already scroll inside their own .msg-table-wrap. */
 .mederti-chat-root .context-rail{ min-width: 0; }
+
+/* ===== Mobile stopgap: collapse the 3-column template to one column =====
+   The nav · chat · content template can't sit side-by-side on a phone, so
+   below 1024px the sidebar and side chat hide and the content column fills the
+   width. This replaces the old "best on desktop" splash so nothing is blocked
+   on mobile. A proper mobile pattern (a bottom tab bar for nav + chat) is the
+   next phase. */
+@media (max-width: 1023px) {
+  .mederti-chat-root .sb { display: none; }
+  .mederti-chat-root .context-rail { display: none; }
+}
+
+/* Phone: stack every multi-column card/KPI grid one under the other so nothing
+   overflows the single content column. */
+@media (max-width: 768px) {
+  .mederti-chat-root .kpi-grid-2,
+  .mederti-chat-root .kpi-grid-3,
+  .mederti-chat-root .kpi-grid-4,
+  .mederti-chat-root .class-card-kpis,
+  .mederti-chat-root .pane-snapshot,
+  .mederti-chat-root .pane-history-stats,
+  .mederti-chat-root .card-b-grid,
+  .mederti-chat-root .card-c-hero-row {
+    grid-template-columns: 1fr;
+  }
+}

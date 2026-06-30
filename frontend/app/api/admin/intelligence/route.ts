@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { serverError } from "@/lib/security/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin-auth";
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, count, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError(error);
   return NextResponse.json({ articles: data ?? [], total: count ?? 0, page, pageSize });
 }
 
@@ -73,6 +74,6 @@ export async function PATCH(req: NextRequest) {
     .update(updates)
     .eq("id", id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError(error);
   return NextResponse.json({ ok: true });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/security/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 
@@ -66,7 +67,7 @@ export async function GET() {
   const { data: enquiries, error } = await query;
   if (error) {
     console.error("supplier/inbox error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverError(error);
   }
 
   // Get supplier's existing quotes for these enquiries

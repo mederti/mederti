@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import { recordDemandSignal } from "@/lib/demand-signal";
 import { getClientIp } from "@/lib/chat/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { siteUrl } from "@/lib/seo";
 
 const resend =
@@ -28,6 +29,10 @@ const MEDERTI_INBOX = process.env.MEDERTI_SOURCING_EMAIL ?? "hello@mederti.com";
  *  5. Email confirmation to buyer
  */
 export async function POST(req: NextRequest) {
+  // Public, unauthenticated, fans out emails to partners + sourcing — throttle.
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
   // SECURITY: `userId` is NEVER read from the request body — it would be
   // spoofable, allowing an attacker to plant enquiries under another user's
   // account (which the `Users can view own enquiries` RLS policy would then

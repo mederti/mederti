@@ -16,6 +16,7 @@ export const VALID_PROFILE_ROLES = [
   "manufacturer",
   "government",
   "researcher",
+  "patient",
   // Legacy values kept for back-compat with rows already in the table
   "pharmacist",
   "hospital",

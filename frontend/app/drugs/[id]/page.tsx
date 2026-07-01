@@ -223,6 +223,9 @@ function personaFromRole(role: string | null | undefined): Persona | null {
   // "shortage alerts before you prescribe". Pharmacist view is the
   // closest fit for clinical decision-makers.
   if (role === "doctor") return "pharmacist";
+  // Patients / carers get the radically-simplified answer+actions view, same
+  // as clinicians — not the procurement/supplier market-scan layouts.
+  if (role === "patient") return "pharmacist";
   if (role === "hospital" || role === "government") return "procurement";
   if (role === "supplier") return "supplier";
   return null; // 'default' or unknown

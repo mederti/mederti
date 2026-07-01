@@ -16,9 +16,9 @@ import {
 /**
  * Shared left app-shell sidebar used by the search results page and the drug
  * detail page so both columns stay identical: country picker, Browse links,
- * live Search history + My medicines, and the log-in row.
+ * live Search history + Watchlist, and the log-in row.
  *
- * "My medicines" shows the signed-in user's real saved watchlist
+ * "Watchlist" shows the signed-in user's real saved watchlist
  * (`user_watchlists`); anonymous visitors fall back to the recently-viewed
  * list backed by localStorage.
  *
@@ -78,7 +78,20 @@ export default function V1Sidebar() {
 
     supabase.auth.getSession().then(({ data: { session } }) => sync(session?.user));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => sync(session?.user));
-    return () => sub.subscription.unsubscribe();
+
+    // Re-fetch when a drug page toggles the watchlist, so this list stays in
+    // sync without a page reload (WatchButton dispatches `watchlist:changed`).
+    const onWatchlistChange = () => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.id) loadWatchlist(session.user.id);
+      });
+    };
+    window.addEventListener("watchlist:changed", onWatchlistChange);
+
+    return () => {
+      sub.subscription.unsubscribe();
+      window.removeEventListener("watchlist:changed", onWatchlistChange);
+    };
   }, []);
 
   // Signed-in + watchlist loaded → show the real saved watchlist (even if empty,
@@ -130,7 +143,7 @@ export default function V1Sidebar() {
           )}
         </div>
         <div className="sb-group">
-          <div className="sb-glabel">My medicines</div>
+          <div className="sb-glabel">Watchlist</div>
           {myMedicines.length > 0 ? (
             <>
               {myMedicines.map((m) => (
@@ -143,11 +156,11 @@ export default function V1Sidebar() {
               )}
             </>
           ) : showWatchlist ? (
-            <Link href="/search" className="sb-item sb-empty">No saved medicines yet</Link>
+            <Link href="/search" className="sb-item sb-empty">Nothing watched yet</Link>
           ) : signedIn ? (
             <div className="sb-item sb-empty">Loading…</div>
           ) : (
-            <Link href="/login" className="sb-item sb-empty">Sign in to save medicines</Link>
+            <Link href="/login" className="sb-item sb-empty">Sign in to build a watchlist</Link>
           )}
         </div>
       </div>

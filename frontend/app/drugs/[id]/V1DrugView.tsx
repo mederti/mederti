@@ -8,6 +8,7 @@ import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import V1AiSummary from "./V1AiSummary";
 import V1ReportActions from "./V1ReportActions";
 import { FindSupplier } from "./find-supplier";
+import { WatchButton } from "./watch-button";
 import { ParallelTradeSourcing } from "./parallel-trade-sourcing";
 import { ParallelTradeArbitrage } from "./parallel-trade-arbitrage";
 import { ParallelTradePanel } from "./parallel-trade-panel";
@@ -601,7 +602,10 @@ export default function V1DrugView({
                 "Find a supplier" CTA anchored bottom-right. */}
             <div className="sc-footer">
               <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
-              <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+              <div className="sc-actions">
+                <WatchButton drugId={id} />
+                <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+              </div>
             </div>
           </div>
 
@@ -1213,6 +1217,12 @@ const CSS = `
 .sc-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid rgba(12,17,24,.07)}
 .sc-footer .sc-asof{margin-top:0}
 .sc-footer .find-supplier-row{margin-top:0;justify-content:flex-end}
+.sc-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.sc-actions .find-supplier-row{margin-top:0}
+.watch-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text-2);font-family:inherit;transition:border-color .15s,background .15s,color .15s;box-shadow:var(--sh-card)}
+.watch-btn:hover:not(:disabled){border-color:var(--green);background:var(--green-bg);color:var(--green-d)}
+.watch-btn.on{border-color:var(--green-b);background:var(--green-bg);color:var(--green-d)}
+.watch-btn:disabled{opacity:.55;cursor:not-allowed}
 .find-supplier-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
 .find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
 .find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}

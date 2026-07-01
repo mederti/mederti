@@ -352,6 +352,13 @@ export function EarlyWarningView() {
         .ewradar .kpi-delta{font-size:10.5px;margin-top:7px;color:var(--text-4)}
 
         .ewradar .gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        /* Mobile: stack every multi-column block into a single column. */
+        @media(max-width:768px){
+          .ewradar .kpi-row{grid-template-columns:1fr}
+          .ewradar .gov-grid{grid-template-columns:1fr}
+          .ewradar .gov-head{flex-direction:column;align-items:flex-start;gap:12px}
+          .ewradar .gov-head-r{flex-wrap:wrap}
+        }
         .ewradar .gov-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06),inset 0 1px 0 rgba(255,255,255,.7)}
         .ewradar .gov-card.span2{grid-column:1 / -1}
         .ewradar .moat-card{border-color:var(--ind-b);background:linear-gradient(#fff,#fbfbff)}

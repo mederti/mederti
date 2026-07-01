@@ -12,6 +12,7 @@ import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import { EarlyWarningView } from "@/app/chat/components/views/EarlyWarningView";
 import { GovDashboardView } from "@/app/chat/components/views/GovDashboardView";
 import { ContextChat } from "@/app/chat/components/ContextChat";
+import MobileTabBar from "@/app/components/v1/MobileTabBar";
 // Scoped chat.css powers ContextChat's rich answer rendering under
 // .mederti-chat-root (same wrapper /chat uses).
 import "@/app/chat/chat.css";
@@ -73,7 +74,27 @@ export default function InsightsClient({ kind }: { kind: InsightKind }) {
         {/* ── Left sidebar (shared app shell, identical to /chat, /search, /drugs) ── */}
         <V1Sidebar />
 
-        {/* ── Center: the operational view ── */}
+        {/* ── Middle: grounded chat (new template — chat drives, reading
+             left-to-right as nav → conversation → detail) ── */}
+        <ContextChat
+          key={`insight:${kind}`}
+          contextKey={kind}
+          title={cfg.title}
+          category={cfg.category}
+          bodyText={cfg.bodyText}
+          headerLabel={cfg.headerLabel}
+          placement="left"
+          emptyLead={
+            <>
+              You&apos;re viewing{" "}
+              <span className="font-medium text-slate-700">{cfg.title}</span>. Ask me anything
+              about it — I&apos;ll use live Mederti data for specifics.
+            </>
+          }
+          starters={cfg.starters}
+        />
+
+        {/* ── Right: the operational view, full-width detail panel ── */}
         <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
           <div className="h-14 flex items-center px-6 gap-3 shrink-0 border-b border-slate-100">
             <Link
@@ -92,23 +113,7 @@ export default function InsightsClient({ kind }: { kind: InsightKind }) {
           </div>
         </main>
 
-        {/* ── Right: grounded chat ── */}
-        <ContextChat
-          key={`insight:${kind}`}
-          contextKey={kind}
-          title={cfg.title}
-          category={cfg.category}
-          bodyText={cfg.bodyText}
-          headerLabel={cfg.headerLabel}
-          emptyLead={
-            <>
-              You&apos;re viewing{" "}
-              <span className="font-medium text-slate-700">{cfg.title}</span>. Ask me anything
-              about it — I&apos;ll use live Mederti data for specifics.
-            </>
-          }
-          starters={cfg.starters}
-        />
+        <MobileTabBar />
       </div>
     </DesktopOnly>
   );

@@ -42,6 +42,9 @@ interface SearchHit {
   // ── Form/Strength (catalogue product rows; parsed by migration 054) ──
   form_bucket?: string | null;               // controlled dose-form bucket
   strength_label?: string | null;            // e.g. "500mg"
+  // ── Brand provenance (set only on rows promoted from a catalogue brand hit) ──
+  matched_brand?: string | null;             // the brand the user typed (e.g. "Fresofol")
+  matched_catalogue_id?: string | null;      // catalogue row id → brand SKU view
 }
 
 // PostgrestSingleResponse-shaped value we can ignore the full type of.
@@ -118,6 +121,10 @@ export async function GET(req: NextRequest) {
 
   let drugRows: Record<string, unknown>[] = [];
   let catRows: Record<string, unknown>[] = [];
+  // drug_id → the catalogue brand that promoted it (brand the user typed + its
+  // catalogue id). Populated in the promote step; read when building the rows so
+  // a rolled-up brand hit can carry "you searched X" provenance.
+  const promoteMeta = new Map<string, { brand: string; catId: string }>();
   // The term itself matched nothing in either table (not merely filtered out
   // downstream). This is the signal for the "Did you mean…" fuzzy fallback.
   let termMatchedNothing = false;
@@ -199,13 +206,27 @@ export async function GET(req: NextRequest) {
     // shortages" product row. e.g. searching the AU brand "LORSTAT" (only in
     // the ARTG catalogue) now resolves to Atorvastatin and its live shortages.
     const drugIdSet = new Set(drugRows.map((r) => r.id as string));
-    const promoteIds = [
-      ...new Set(
-        catRows
-          .map((r) => r.drug_id as string | null)
-          .filter((id): id is string => !!id && !drugIdSet.has(id))
-      ),
-    ];
+    // Remember WHICH catalogue brand promoted each molecule, so the rolled-up
+    // result can carry "you searched Fresofol" provenance + a brand SKU link.
+    // When several brand rows point at the same molecule, prefer the one whose
+    // brand actually contains the query term (that's the brand the user typed).
+    const qLower = (q ?? "").toLowerCase();
+    for (const r of catRows) {
+      const did = r.drug_id as string | null;
+      if (!did || drugIdSet.has(did)) continue;
+      const brand = ((r.brand_name as string) ?? "").trim();
+      const catId = r.id as string;
+      const existing = promoteMeta.get(did);
+      if (!existing) {
+        promoteMeta.set(did, { brand, catId });
+      } else {
+        const better = !!brand && !!qLower && brand.toLowerCase().includes(qLower);
+        const existingMatches =
+          !!existing.brand && !!qLower && existing.brand.toLowerCase().includes(qLower);
+        if (better && !existingMatches) promoteMeta.set(did, { brand, catId });
+      }
+    }
+    const promoteIds = [...promoteMeta.keys()];
     if (promoteIds.length > 0) {
       const promoted = await timer.track("db_promote_canonical", () =>
         sb.from("drugs")
@@ -587,6 +608,10 @@ export async function GET(req: NextRequest) {
         substitution: subMap[id] ?? null,
         best_alternative: bestAlt[id] ?? null,
         trade_price: priceMap[id] ?? null,
+        // Brand provenance — set only when this molecule was rolled up from a
+        // catalogue brand the user typed (e.g. "Fresofol" → Propofol).
+        matched_brand: promoteMeta.get(id)?.brand || null,
+        matched_catalogue_id: promoteMeta.get(id)?.catId || null,
         _res: a?.minRes ?? null,
         _sev: a?.maxSev ?? 0,
       };

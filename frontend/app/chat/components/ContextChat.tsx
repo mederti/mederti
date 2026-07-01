@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { ToolSteps, type ToolStep, type Turn } from "./ChatMain";
 import { parseAgentResponse, RenderedResponse } from "./parser2";
+import { PaneContext, type PaneCtx } from "./PaneContext";
 import { Send, ChatBubble } from "./icons";
 
 // Distil a short label from a tool-input object for the step rows.
@@ -32,6 +34,10 @@ export interface ContextChatProps {
   emptyLead?: React.ReactNode;
   // Suggested starter questions.
   starters?: string[];
+  // Which side of the chat column the hairline divider sits on. "right" (default)
+  // = right rail with a left border; "left" = middle column (chat sits left of the
+  // content panel) with a right border.
+  placement?: "left" | "right";
 }
 
 const DEFAULT_STARTERS = [
@@ -55,12 +61,42 @@ export function ContextChat({
   headerLabel = "Ask about this",
   emptyLead,
   starters = DEFAULT_STARTERS,
+  placement = "right",
 }: ContextChatProps) {
+  const router = useRouter();
+  const hostPane = useContext(PaneContext);
+  // "Click a product to see more": use the host's in-place pane when present
+  // (e.g. /chat's PreviewPane), otherwise navigate to the full drug page. This
+  // makes product names + drug cards in answers open detail on every surface
+  // that hosts ContextChat — not just /chat.
+  const pane = useMemo<PaneCtx>(
+    () =>
+      hostPane ?? {
+        open: (id: string) => router.push(`/drugs/${id}`),
+        close: () => {},
+        back: () => {},
+        current: null,
+        previousId: null,
+      },
+    [hostPane, router]
+  );
+
   const [turns, setTurns] = useState<Turn[]>([]);
   const [drugsMap, setDrugsMap] = useState<Record<string, DrugDetail>>({});
   const [subsMap, setSubsMap] = useState<Record<string, SubstituteRow>>({});
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
+  // Name → drug_id map so product names mentioned in an answer render as
+  // clickable links (the "click to see more" affordance). Derived from the
+  // cards the model surfaced this turn; without it inline names stay plain.
+  const drugIdByName = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const d of Object.values(drugsMap)) {
+      if (d.name) m[d.name] = d.drug_id;
+      if (d.generic_name) m[d.generic_name] = d.drug_id;
+    }
+    return m;
+  }, [drugsMap]);
   const idRef = useRef(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -211,7 +247,8 @@ export function ContextChat({
   const isEmpty = turns.length === 0;
 
   return (
-    <aside className="context-rail hidden min-[1080px]:flex flex-col shrink-0 w-[380px] bg-white border-l border-slate-200">
+    <PaneContext.Provider value={pane}>
+    <aside className={`context-rail hidden min-[1080px]:flex flex-col shrink-0 w-[380px] bg-white ${placement === "left" ? "border-r" : "border-l"} border-slate-200`}>
       <div className="h-14 flex items-center gap-2 px-5 shrink-0 border-b border-slate-100">
         <ChatBubble size={15} className="text-teal-600" />
         <div className="text-[13px] font-semibold text-slate-900">{headerLabel}</div>
@@ -265,7 +302,7 @@ export function ContextChat({
                       parts={parseAgentResponse(t.text)}
                       drugs={drugsMap}
                       subs={subsMap}
-                      drugIdByName={{}}
+                      drugIdByName={drugIdByName}
                       onFollowup={send}
                     />
                   )}
@@ -315,5 +352,6 @@ export function ContextChat({
         </div>
       </div>
     </aside>
+    </PaneContext.Provider>
   );
 }

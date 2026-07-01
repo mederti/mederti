@@ -27,6 +27,12 @@
 
 .v1app .shell { display: flex; align-items: flex-start; min-height: 100vh; }
 .v1app .shell-main { flex: 1; min-width: 0; }
+
+/* 3-column chat template (AppShell `chat` prop): fixed-height columns so the
+   grounded chat's composer stays pinned and each column scrolls on its own.
+   align-items:stretch lets the ContextChat rail fill the viewport height. */
+.v1app .shell--chat { height: 100vh; min-height: 0; overflow: hidden; align-items: stretch; }
+.v1app .shell-main--scroll { height: 100vh; overflow-y: auto; }
 .v1app .dg-main {
   flex: 1;
   min-width: 0;

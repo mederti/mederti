@@ -352,17 +352,34 @@ function lookupDrugId(name: string, map?: Record<string, string>): string | null
 
 function DrugLink({ name, drugId, asCell }: { name: string; drugId: string; asCell?: boolean }) {
   const ctx = useContext(PaneContext);
-  const cls = asCell
-    ? "font-semibold text-teal-700 hover:text-teal-800 hover:underline underline-offset-2 cursor-pointer text-left"
-    : "font-semibold text-teal-700 hover:text-teal-800 hover:underline underline-offset-2 cursor-pointer";
+  // Clear "click to see more" affordance: a persistent dotted underline marks
+  // it as a link (not just hover), and a trailing up-right arrow signals it
+  // opens the full detail. Tooltip spells it out.
   return (
     <button
       type="button"
-      className={cls}
+      className={
+        "group/dl font-medium text-teal-700 hover:text-teal-800 underline decoration-dotted decoration-teal-400/70 hover:decoration-solid underline-offset-2 cursor-pointer inline-flex items-baseline gap-0.5" +
+        (asCell ? " text-left" : "")
+      }
       onClick={() => ctx?.open(drugId)}
-      title="Open drug detail"
+      title={`Open ${name} — see full detail`}
     >
       {name}
+      <svg
+        viewBox="0 0 24 24"
+        width="11"
+        height="11"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="self-center text-teal-500 opacity-70 group-hover/dl:opacity-100"
+        aria-hidden="true"
+      >
+        <path d="M7 17 17 7M9 7h8v8" />
+      </svg>
     </button>
   );
 }

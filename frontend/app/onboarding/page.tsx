@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 // ─── Question definitions ────────────────────────────────────────────────────
 
@@ -130,6 +131,8 @@ export default function OnboardingPage() {
   const [useCase, setUseCase]         = useState<UseCase | null>(null);
   const [orgSize, setOrgSize]         = useState<OrgSize | null>(null);
   const [therapyAreas, setTherapyAreas] = useState<string[]>([]);
+  const [name, setName] = useState("");
+  const supabase = createBrowserClient();
   // Phase of the final-step submit so we can show better copy than "Saving…"
   // once the API call has returned and we're waiting on the destination
   // page to render.
@@ -204,6 +207,16 @@ export default function OnboardingPage() {
     if (step === 2 && countries.length === 0) { setErr("Pick at least one market."); return; }
     if (step === 3 && !useCase) { setErr("Pick what fits best."); return; }
     setErr(null);
+
+    // Save the display name to user_metadata (what the nav reads) when leaving
+    // step 1. Optional — falls back to the email if left blank.
+    if (step === 1 && name.trim()) {
+      try {
+        await supabase.auth.updateUser({ data: { full_name: name.trim() } });
+      } catch {
+        /* non-blocking — display just falls back to email */
+      }
+    }
 
     if (step < TOTAL_STEPS) {
       // Save and move forward
@@ -336,9 +349,26 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 1 — Role */}
+          {/* Step 1 — Name + Role */}
           {step === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ marginBottom: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--app-text-3)", display: "block", marginBottom: 6 }}>
+                  Your name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="First name"
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: 8,
+                    border: "1px solid var(--app-border)", fontSize: 14,
+                    fontFamily: "var(--font-inter), sans-serif",
+                    outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
               {ROLES.map((r) => (
                 <RadioCard
                   key={r.value}

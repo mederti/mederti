@@ -23,6 +23,7 @@ import {
   useWatchlists,
   type WatchlistStatus,
 } from "../watchlistStore";
+import { cleanBrandNames } from "@/lib/brand";
 
 const FLAG_BY_CC: Record<string, string> = {
   AU: "🇦🇺", US: "🇺🇸", GB: "🇬🇧", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹",
@@ -393,10 +394,18 @@ export function PreviewPane({
           <div className="text-[13px] text-slate-500">No data.</div>
         ) : (
           <>
-            {/* Identity */}
-            <div className="text-[20px] font-semibold tracking-tight text-slate-900 leading-tight mb-1">
+            {/* Identity — the title links straight to the full drug page. */}
+            <Link
+              href={`/drugs/${bundle.drug.drug_id}`}
+              className="group/title inline-flex items-baseline gap-1 text-[20px] font-semibold tracking-tight text-slate-900 leading-tight mb-1 hover:text-teal-700 transition-colors"
+              title={`Open the full ${bundle.drug.name} page`}
+            >
               {bundle.drug.name}
-            </div>
+              <ChevronRight
+                size={15}
+                className="self-center text-slate-300 group-hover/title:text-teal-500 transition-colors"
+              />
+            </Link>
             <div className="text-[12px] text-slate-500 mb-1.5">
               {[bundle.drug.generic_name, bundle.drug.dosage_forms?.[0], bundle.drug.strengths?.[0]]
                 .filter(Boolean)
@@ -408,6 +417,23 @@ export function PreviewPane({
                 {bundle.drug.drug_class || bundle.drug.atc_description}
               </div>
             ) : null}
+            {(() => {
+              const brands = cleanBrandNames(bundle.drug.brand_names, bundle.drug.generic_name);
+              if (!brands.length) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                  <span className="text-[11px] text-slate-400">Brands</span>
+                  {brands.slice(0, 4).map((b) => (
+                    <span key={b} className="text-[11px] font-medium text-slate-600 bg-slate-100 rounded px-1.5 py-0.5">
+                      {b}
+                    </span>
+                  ))}
+                  {brands.length > 4 ? (
+                    <span className="text-[11px] text-slate-400">+{brands.length - 4} more</span>
+                  ) : null}
+                </div>
+              );
+            })()}
             <div className="flex flex-wrap gap-1.5 mb-4">
               {bundle.drug.therapeutic_category ? <Tag>{bundle.drug.therapeutic_category}</Tag> : null}
               {bundle.drug.dosage_forms?.[0] ? <Tag>{bundle.drug.dosage_forms[0]}</Tag> : null}
@@ -417,6 +443,16 @@ export function PreviewPane({
                 <Tag>{bundle.drug.atc_code}</Tag>
               ) : null}
             </div>
+
+            {/* Explicit path to the full drug page — the ⤢ header icon alone
+                was too easy to miss. */}
+            <Link
+              href={`/drugs/${bundle.drug.drug_id}`}
+              className="w-full inline-flex items-center justify-between px-3.5 py-2.5 mb-4 rounded-lg border border-slate-200 bg-white text-[12.5px] font-medium text-slate-700 hover:border-teal-400 hover:text-teal-700 hover:bg-teal-50 transition-colors"
+            >
+              <span>View full drug page</span>
+              <ChevronRight size={15} />
+            </Link>
 
             {/* Status */}
             <StatusCard bundle={bundle} />

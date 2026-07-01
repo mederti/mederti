@@ -14,50 +14,7 @@
 
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
-import { DrugCard } from "@/app/chat/components/DrugCard";
 import { PaneContext } from "@/app/chat/components/PaneContext";
-
-// Lazy fallback: when a <drug_card> tag references a UUID not yet in
-// drugsMap (mid-stream flash, or a chat turn persisted before the
-// server populated `done.drugs`), fetch the drug from /api/drug/[id]
-// instead of showing a red "Missing drug data" error. Falls back to
-// the error only after the fetch actually fails or returns 404.
-function LazyDrugCard({ id }: { id: string }) {
-  const [drug, setDrug] = useState<DrugDetail | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/drug/${id}?country=AU`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((bundle) => {
-        if (cancelled) return;
-        if (bundle?.drug) setDrug(bundle.drug as DrugDetail);
-        else setFailed(true);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  if (drug) return <DrugCard drug={drug} />;
-  if (failed) {
-    return (
-      <div className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 my-2">
-        Missing drug data for <code>{id}</code>.
-      </div>
-    );
-  }
-  return (
-    <div className="my-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 animate-pulse">
-      <div className="h-4 w-32 bg-slate-200 rounded mb-2" />
-      <div className="h-3 w-48 bg-slate-200 rounded" />
-    </div>
-  );
-}
 
 export type KpiTile = { value: string; label: string };
 export type SourceChip = {
@@ -339,6 +296,42 @@ export function Chat2SubRow({
   );
 }
 
+// A drug referenced in an answer renders as a compact LINK, not a card. The
+// rich detail lives in the right-hand content / preview panel, so the chat
+// column stays scannable (prose, tables, links) and never duplicates what's
+// already on screen. Clicking opens the drug in the preview pane (or navigates)
+// via the shared PaneContext. Fetches the drug name only if it wasn't supplied.
+function DrugRefLink({ id, name }: { id: string; name?: string }) {
+  const ctx = useContext(PaneContext);
+  const [label, setLabel] = useState(name ?? "");
+  useEffect(() => {
+    if (name || !id) return;
+    let cancelled = false;
+    fetch(`/api/drug/${id}?country=AU`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (!cancelled && b?.drug?.name) setLabel(b.drug.name as string);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [id, name]);
+  return (
+    <button
+      type="button"
+      onClick={() => ctx?.open(id)}
+      className="group my-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-[13.5px] font-medium text-slate-800 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-700 transition-colors"
+      title={label ? `View ${label}` : "View drug"}
+    >
+      <span>{label || "View drug"}</span>
+      <span className="text-slate-300 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all">
+        →
+      </span>
+    </button>
+  );
+}
+
 function lookupDrugId(name: string, map?: Record<string, string>): string | null {
   if (!map) return null;
   const trimmed = name.trim();
@@ -542,17 +535,10 @@ export function RenderedResponse({ parts, drugs, subs, onFollowup, drugIdByName 
 
   parts.forEach((p, i) => {
     if (p.kind === "drug") {
-      const d = drugs[p.id];
-      if (!d) {
-        // Mid-stream or stale-localStorage case — fetch the drug on
-        // the client instead of showing the alarming red error.
-        out.push(<LazyDrugCard key={i} id={p.id} />);
-      } else {
-        // Full rich card (PharmacistCard / ProcurementCard / SupplierCard)
-        // — clicking the drug name inside still opens the right preview pane
-        // via the shared PaneContext provided by Chat2Client.
-        out.push(<DrugCard key={i} drug={d} />);
-      }
+      // Render a compact link, not a card — the rich detail is in the content /
+      // preview panel, so the chat never duplicates it. `name` may be undefined
+      // mid-stream; DrugRefLink fetches it when so.
+      out.push(<DrugRefLink key={i} id={p.id} name={drugs[p.id]?.name} />);
       return;
     }
     if (p.kind === "text") {

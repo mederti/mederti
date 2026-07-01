@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, type DrugHit, type StatusFacets } from "@/lib/api";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
+import MobileTabBar from "@/app/components/v1/MobileTabBar";
 import { ContextChat } from "@/app/chat/components/ContextChat";
 import "@/app/chat/chat.css";
 import { truncateDrugName } from "@/lib/utils";
@@ -680,6 +681,7 @@ export default function SearchPage() {
           </div>
         </div>
       </div>
+      <MobileTabBar />
     </div>
   );
 }

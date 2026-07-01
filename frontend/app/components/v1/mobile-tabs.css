@@ -1,0 +1,72 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Mobile bottom tab bar. On phones/tablets (<1024px) the 3-column template
+   (nav · chat · content) can't sit side-by-side, so this bar switches which
+   pane is on screen: Page (content, the default) / Ask (chat) / Menu (nav).
+
+   Nav + chat become full-screen overlays above the content, toggled by the
+   `data-mtab` attribute the bar sets on <html>. The `html[...]` prefix keeps
+   these rules specific enough to beat the per-page `.sb` / `.context-rail`
+   display rules (some of which use !important).
+   Desktop (≥1024px) ignores all of this — the bar is hidden and the columns
+   render normally.
+   ───────────────────────────────────────────────────────────────────────── */
+.mtabbar { display: none; }
+
+@media (max-width: 1023px) {
+  .mtabbar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: stretch;
+    height: 56px;
+    background: #ffffff;
+    border-top: 1px solid #e8ecf0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -1px 8px rgba(12, 17, 24, 0.05);
+  }
+  .mtab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border: 0;
+    background: transparent;
+    color: #6a7280;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .mtab svg { width: 20px; height: 20px; }
+  .mtab-on { color: #0c8a62; }
+
+  /* Nav + chat → full-screen overlays that sit above content, hidden until
+     their tab is active. `.context-rail` is ContextChat's own column (insights,
+     AppShell pages); `.chat-col` is the wrapper used on /drugs and /search. */
+  html[data-mtab] .sb,
+  html[data-mtab] .context-rail,
+  html[data-mtab] .chat-col {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 56px !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    z-index: 1000;
+    border: 0 !important;
+    display: none !important;
+  }
+  html[data-mtab="nav"] .sb { display: flex !important; }
+  html[data-mtab="chat"] .context-rail,
+  html[data-mtab="chat"] .chat-col { display: flex !important; }
+
+  /* Keep the content clear of the fixed bar. */
+  .dg-main,
+  .shell-main--scroll,
+  .mederti-chat-root main { padding-bottom: 76px !important; }
+}

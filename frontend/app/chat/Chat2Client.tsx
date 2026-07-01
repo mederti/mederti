@@ -20,6 +20,7 @@ import { GovDashboardView } from "./components/views/GovDashboardView";
 import { EarlyWarningView } from "./components/views/EarlyWarningView";
 import { ChevronLeft } from "./components/icons";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
+import MobileTabBar from "@/app/components/v1/MobileTabBar";
 import {
   deriveTitle,
   getChat,
@@ -1029,6 +1030,10 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
                 {toast}
               </div>
             ) : null}
+
+            {/* Mobile: chat is the content in the default view, so only offer
+                the Ask tab when a reading article/view opens a separate rail. */}
+            <MobileTabBar hasChat={!!(readingArticle || readingView)} />
           </div>
           </DesktopOnly>
         </LeadContext.Provider>

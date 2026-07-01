@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import { ContextChat, type ContextChatProps } from "@/app/chat/components/ContextChat";
+import MobileTabBar from "@/app/components/v1/MobileTabBar";
 import "@/app/chat/chat.css";
 import "./app-shell.css";
 
@@ -47,6 +48,7 @@ export default function AppShell({
             <div className={`dg-main ${contentClassName}`.trim()}>{children}</div>
           </div>
         </div>
+        <MobileTabBar />
       </div>
     );
   }

@@ -12,6 +12,7 @@ import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import { EarlyWarningView } from "@/app/chat/components/views/EarlyWarningView";
 import { GovDashboardView } from "@/app/chat/components/views/GovDashboardView";
 import { ContextChat } from "@/app/chat/components/ContextChat";
+import MobileTabBar from "@/app/components/v1/MobileTabBar";
 // Scoped chat.css powers ContextChat's rich answer rendering under
 // .mederti-chat-root (same wrapper /chat uses).
 import "@/app/chat/chat.css";
@@ -111,6 +112,8 @@ export default function InsightsClient({ kind }: { kind: InsightKind }) {
             <ViewComp />
           </div>
         </main>
+
+        <MobileTabBar />
       </div>
     </DesktopOnly>
   );

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
+import MobileTabBar from "@/app/components/v1/MobileTabBar";
 import { ContextChat } from "@/app/chat/components/ContextChat";
 import "@/app/chat/chat.css";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
@@ -1061,6 +1062,7 @@ export default function V1DrugView({
           </div>
         </div>
       </div>
+      <MobileTabBar />
     </div>
   );
 }

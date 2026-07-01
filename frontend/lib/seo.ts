@@ -16,11 +16,15 @@ export function siteUrl(): string {
       window.location.origin
     );
   }
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
-    "https://mederti.com"
-  );
+  // In production, ALWAYS anchor to the canonical domain — never the
+  // per-deployment VERCEL_URL (e.g. mederti-abc123-...vercel.app), which
+  // would leak into canonical/OG/sitemap URLs and wreck SEO + link sharing.
+  // NEXT_PUBLIC_SITE_URL still wins if set; VERCEL_URL is only used for
+  // preview/branch deploys so their metadata self-references correctly.
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  if (process.env.VERCEL_ENV === "production") return "https://mederti.com";
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "https://mederti.com";
 }
 
 export function canonicalUrl(path: string): string {

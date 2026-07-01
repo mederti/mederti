@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { serverError } from "@/lib/security/errors";
 
 /**
  * GET /api/admin/intelligence/[id]
@@ -22,7 +23,10 @@ export async function GET(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: error.code === "PGRST116" ? 404 : 500 });
+    if (error.code === "PGRST116") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return serverError(error, "load intelligence article");
   }
   return NextResponse.json(data);
 }

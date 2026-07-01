@@ -5,6 +5,8 @@ import { Resend } from "resend";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import { recordDemandSignal } from "@/lib/demand-signal";
 import { getClientIp } from "@/lib/chat/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { siteUrl } from "@/lib/seo";
 
 const resend =
   process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== "re_placeholder"
@@ -27,13 +29,17 @@ const MEDERTI_INBOX = process.env.MEDERTI_SOURCING_EMAIL ?? "hello@mederti.com";
  *  5. Email confirmation to buyer
  */
 export async function POST(req: NextRequest) {
+  // Public, unauthenticated, fans out emails to partners + sourcing — throttle.
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
   // SECURITY: `userId` is NEVER read from the request body — it would be
   // spoofable, allowing an attacker to plant enquiries under another user's
   // account (which the `Users can view own enquiries` RLS policy would then
   // expose to the spoofed owner). We resolve the caller from the session
-  // cookie below. `userEmail` from the body is treated only as a fallback
-  // contact address for anonymous enquiries.
-  const { drugName, drugId, quantity, urgency, organisation, message, country, userEmail: bodyContactEmail } =
+  // cookie below. `userEmail`/`userPhone` from the body are only contact
+  // strings (reply-to address / callback number) — not identity.
+  const { drugName, drugId, quantity, urgency, organisation, message, country, userEmail: bodyContactEmail, userPhone: bodyContactPhone } =
     await req.json();
 
   if (!drugName || !urgency || !country) {
@@ -65,32 +71,59 @@ export async function POST(req: NextRequest) {
     // Anonymous enquiry — leave both null.
   }
 
-  // Contact email: prefer the verified session email; fall back to the
-  // body-provided one only for anonymous submissions.
-  const contactEmail: string | null = sessionUserEmail ?? bodyContactEmail ?? null;
+  // Contact email: the form now always submits one (pre-filled from the
+  // session, but editable so a buyer can give a different reply-to), so prefer
+  // a valid body value and fall back to the session email. Identity is still
+  // taken from the session above — this is only the reply-to address.
+  const trimmedBodyEmail =
+    typeof bodyContactEmail === "string" ? bodyContactEmail.trim() : "";
+  const contactEmail: string | null =
+    (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedBodyEmail) ? trimmedBodyEmail : null) ??
+    sessionUserEmail ??
+    null;
+  const contactPhone: string | null =
+    typeof bodyContactPhone === "string" && bodyContactPhone.trim()
+      ? bodyContactPhone.trim()
+      : null;
 
   const partner = getPartnerForCountry(country);
   // Note: partner is now optional — marketplace suppliers may exist instead
   const sb = getSupabaseAdmin();
 
   // ── 1. Save to DB ──
-  const { data: enquiry, error: dbError } = await sb
+  // `user_phone` (migration 061) may not yet exist in every environment given
+  // prod migration drift — if the insert is rejected for the unknown column we
+  // retry without it so the enquiry (and the email notifications below) still
+  // go through. Phone is always carried into the emails regardless.
+  const basePayload = {
+    drug_id: drugId ?? null,
+    drug_name: drugName,
+    quantity,
+    urgency,
+    organisation,
+    message,
+    country,
+    partner_id: partner?.id ?? "marketplace",
+    user_email: contactEmail,
+    user_id: sessionUserId,
+    status: "sent",
+  };
+
+  let enquiry;
+  let dbError;
+  ({ data: enquiry, error: dbError } = await sb
     .from("supplier_enquiries")
-    .insert({
-      drug_id: drugId ?? null,
-      drug_name: drugName,
-      quantity,
-      urgency,
-      organisation,
-      message,
-      country,
-      partner_id: partner?.id ?? "marketplace",
-      user_email: contactEmail,
-      user_id: sessionUserId,
-      status: "sent",
-    })
+    .insert({ ...basePayload, user_phone: contactPhone })
     .select()
-    .single();
+    .single());
+
+  if (dbError && /user_phone|column/i.test(dbError.message ?? "")) {
+    ({ data: enquiry, error: dbError } = await sb
+      .from("supplier_enquiries")
+      .insert(basePayload)
+      .select()
+      .single());
+  }
 
   if (dbError || !enquiry) {
     console.error("[supplier-enquiry] DB insert failed:", dbError?.message);
@@ -142,7 +175,7 @@ export async function POST(req: NextRequest) {
         to: MEDERTI_INBOX,
         replyTo: contactEmail ?? undefined,
         subject: `[Mederti sourcing] ${urgency.toUpperCase()} request — ${drugName} (${country})`,
-        html: leadEmailHtml({ drugName, urgency, quantity, organisation, userEmail: contactEmail, message, country, supplierName: "Mederti sourcing" }),
+        html: leadEmailHtml({ drugName, urgency, quantity, organisation, userEmail: contactEmail, userPhone: contactPhone, message, country, supplierName: "Mederti sourcing" }),
       });
     } catch (e) {
       console.error("[supplier-enquiry] Mederti inbox email failed:", e);
@@ -160,7 +193,7 @@ export async function POST(req: NextRequest) {
           from: process.env.RESEND_FROM_EMAIL ?? "intelligence@mederti.com",
           to: partnerEmail,
           subject: `[Mederti] ${urgency.toUpperCase()} enquiry — ${drugName}`,
-          html: leadEmailHtml({ drugName, urgency, quantity, organisation, userEmail: contactEmail, message, country, supplierName: partner.name }),
+          html: leadEmailHtml({ drugName, urgency, quantity, organisation, userEmail: contactEmail, userPhone: contactPhone, message, country, supplierName: partner.name }),
         });
       } catch (e) {
         console.error("[supplier-enquiry] Partner email failed:", e);
@@ -181,6 +214,7 @@ export async function POST(req: NextRequest) {
             quantity,
             organisation,
             userEmail: contactEmail,
+            userPhone: contactPhone,
             message,
             country,
             supplierName: s.company_name,
@@ -236,6 +270,7 @@ function leadEmailHtml(p: {
   quantity: string | null;
   organisation: string | null;
   userEmail: string | null;
+  userPhone: string | null;
   message: string | null;
   country: string;
   supplierName: string;
@@ -264,10 +299,11 @@ function leadEmailHtml(p: {
           ${p.quantity ? `<tr style="border-bottom: 1px solid #E2E8F0;"><td style="color: #64748B;">Quantity needed</td><td style="color: #0F172A;">${p.quantity}</td></tr>` : ""}
           ${p.organisation ? `<tr style="border-bottom: 1px solid #E2E8F0;"><td style="color: #64748B;">Organisation</td><td style="color: #0F172A;">${p.organisation}</td></tr>` : ""}
           ${p.userEmail ? `<tr style="border-bottom: 1px solid #E2E8F0;"><td style="color: #64748B;">Contact email</td><td><a href="mailto:${p.userEmail}" style="color: #0D9488;">${p.userEmail}</a></td></tr>` : ""}
+          ${p.userPhone ? `<tr style="border-bottom: 1px solid #E2E8F0;"><td style="color: #64748B;">Contact phone</td><td><a href="tel:${p.userPhone}" style="color: #0D9488;">${p.userPhone}</a></td></tr>` : ""}
         </table>
         ${p.message ? `<div style="margin-top: 16px; padding: 12px; background: white; border-radius: 6px; font-size: 13px; color: #475569; border-left: 3px solid #0D9488;">${p.message}</div>` : ""}
         <div style="margin-top: 24px; text-align: center;">
-          <a href="https://mederti.vercel.app/supplier-dashboard/inbox" style="display: inline-block; padding: 12px 24px; background: #0D9488; color: white; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          <a href="${siteUrl()}/supplier-dashboard/inbox" style="display: inline-block; padding: 12px 24px; background: #0D9488; color: white; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
             View enquiry & submit quote
           </a>
         </div>

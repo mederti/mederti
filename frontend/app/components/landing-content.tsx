@@ -289,7 +289,7 @@ export default function LandingContent({ countryCount, platformStats }: { countr
               borderRadius: 5, padding: "4px 12px", fontSize: 12, color: "rgba(255,255,255,0.4)",
               fontFamily: "var(--font-dm-mono), monospace", maxWidth: 280,
             }}>
-              mederti.vercel.app/dashboard
+              mederti.com/dashboard
             </span>
           </div>
 

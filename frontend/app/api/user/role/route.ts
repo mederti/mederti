@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/security/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 import { isValidProfileRole } from "@/lib/roles";
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error("user/role POST error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverError(error);
   }
   return NextResponse.json({ success: true, role });
 }

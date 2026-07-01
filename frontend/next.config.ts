@@ -75,6 +75,14 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  // Pin the workspace root to this app dir. The repo root has its own
+  // package-lock.json (for the `docx` tooling dep), so Next 16 otherwise warns
+  // it "inferred your workspace root, but it may not be correct" and can pick
+  // the wrong root for file tracing. Anchoring it here silences that and keeps
+  // the output trace correct.
+  turbopack: {
+    root: __dirname,
+  },
   // Closes audit FINDING-P5-05. lucide-react is imported in 51 files; the
   // default Next bundler pulls in the full barrel re-export tree on the
   // first import, then tree-shakes — slow at dev-server compile time and

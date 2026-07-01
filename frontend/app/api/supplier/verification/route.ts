@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { siteUrl } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,7 @@ export async function POST(req: Request) {
           <ul>
             ${documents.map((d: { document_type: string; document_name: string }) => `<li>${d.document_type}: ${d.document_name}</li>`).join("")}
           </ul>
-          <p><a href="https://mederti.vercel.app/admin/verifications">Review request →</a></p>
+          <p><a href="${siteUrl()}/admin/verifications">Review request →</a></p>
         `,
       });
     } catch (e) {

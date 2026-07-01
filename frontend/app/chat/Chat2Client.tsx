@@ -40,6 +40,7 @@ import { LeadContext } from "@/app/chat/components/LeadContext";
 // wrapping <div className="mederti-chat-root"> below scopes them.
 import "@/app/chat/chat.css";
 import { DesktopOnly } from "@/app/components/DesktopOnly";
+import { classifyQuery } from "@/lib/search/classify";
 
 // /chat2 is intentionally public during layout iteration — no auth gate. The
 // chat backend handles its own rate limiting; flip back on when promoting.
@@ -283,6 +284,18 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     async (text: string) => {
       const q = text.trim();
       if (!q || pending) return;
+
+      // On a fresh search (the home / new chat), a product-name query belongs in
+      // the 3-column results layout — not an inline chat answer. Open questions
+      // stay here and get answered. Mid-conversation follow-ups always stay in
+      // the chat (so "amoxicillin" as a follow-up keeps its context).
+      if (turns.length === 0) {
+        const intent = await classifyQuery(q);
+        if (intent === "drug") {
+          router.push(`/search?q=${encodeURIComponent(q)}`);
+          return;
+        }
+      }
 
       // Mint an id on first send if we don't have one yet, and replace the
       // URL so refresh / share works. We use the ref (not state) so the
@@ -617,7 +630,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         setPending(false);
       }
     },
-    [pending, turns, drugsMap, subsMap, drugIdByName, persist]
+    [pending, turns, drugsMap, subsMap, drugIdByName, persist, router]
   );
 
   const openDrug = useCallback(

@@ -4,6 +4,6 @@ nixpacksConfigPath = "railway/recall_cron/nixpacks.toml"
 rootDirectory = "/"
 
 [deploy]
-startCommand = "python railway/recall_cron/run.py"
+startCommand = "/opt/venv/bin/python railway/recall_cron/run.py"
 restartPolicyType = "never"
 cronSchedule = "0 */6 * * *"

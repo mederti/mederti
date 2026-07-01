@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/security/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
@@ -52,7 +53,7 @@ export async function GET() {
 
   if (error) {
     console.error("supplier/quotes GET:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverError(error);
   }
 
   return NextResponse.json({ quotes: data ?? [] });
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error("supplier/quotes POST:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverError(error);
   }
 
   // Track analytics
@@ -197,7 +198,7 @@ export async function PATCH(req: Request) {
 
   if (error) {
     console.error("supplier/quotes PATCH:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverError(error);
   }
 
   if (body.pipeline_stage === "won") {

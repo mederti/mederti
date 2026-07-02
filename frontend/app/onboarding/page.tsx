@@ -16,6 +16,7 @@ type Role =
   | "manufacturer"
   | "government"
   | "researcher"
+  | "patient"
   | "other";
 
 type UseCase =
@@ -41,6 +42,7 @@ const ROLES: Array<{ value: Role; label: string; sub: string }> = [
   { value: "manufacturer",         label: "Pharma manufacturer or supplier",         sub: "I make or supply medicines and want to find buyers" },
   { value: "government",           label: "Government, regulator or health system",  sub: "I plan, regulate or oversee medicines policy" },
   { value: "researcher",           label: "Researcher, journalist or analyst",       sub: "I write about or study the industry" },
+  { value: "patient",              label: "Patient or carer",                        sub: "I'm looking after my own or someone else's medicines" },
   { value: "other",                label: "Something else",                          sub: "" },
 ];
 
@@ -113,7 +115,9 @@ function landingPathFor(role: Role | null, useCase: UseCase | null): string {
   if (role === "government" || role === "researcher" || useCase === "analyse_market") {
     return "/intelligence";
   }
-  if (useCase === "find_alternative") return "/search";
+  // Patients / carers want the "is my medicine short, what else can I get?"
+  // answer — /search (the unified conversational home) is the right landing.
+  if (role === "patient" || useCase === "find_alternative") return "/search";
   return "/home";
 }
 

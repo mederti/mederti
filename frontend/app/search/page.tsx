@@ -696,7 +696,9 @@ function ResultsShell() {
 function UnifiedSearch() {
   const params = useSearchParams();
   const q = (params.get("q") ?? "").trim();
-  const market = (params.get("market") || "AU").toUpperCase();
+  // Note: the selected market is deliberately NOT read here — intent
+  // classification (drug vs open question) is market-independent. See the
+  // classify effect below for why market must not influence routing.
 
   // First guess is synchronous so the common cases never flash a loader; the
   // async confirm only matters for short non-question inputs (drug vs unknown).
@@ -711,9 +713,16 @@ function UnifiedSearch() {
     // Short, name-like input: optimistically show results (almost always a
     // drug), then confirm — flipping to the answer engine only if it's unknown.
     setIntent("drug");
-    classifyQuery(q, market).then((res) => { if (!cancelled) setIntent(res); });
+    // Classify against ALL markets, and DON'T depend on `market`: whether a term
+    // is a drug is market-independent (aspirin is a drug even if Japan has no
+    // data). Scoping this to the selected market meant switching to a market with
+    // no rows for the drug (JP/CH/DE/FR/IT/FI/NZ) returned zero hits → "open" →
+    // the whole surface bounced back to the chat home. Market changes must only
+    // re-filter the results table (which has its own "no results here" state),
+    // never re-route. So market is intentionally excluded from the deps below.
+    classifyQuery(q, "ALL").then((res) => { if (!cancelled) setIntent(res); });
     return () => { cancelled = true; };
-  }, [q, market]);
+  }, [q]);
 
   if (intent === "drug") return <ResultsShell />;
   // Empty home and open-question answer are both the chat experience. A drug

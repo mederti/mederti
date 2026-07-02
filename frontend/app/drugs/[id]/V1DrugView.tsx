@@ -12,6 +12,7 @@ import { WatchButton } from "./watch-button";
 import { ParallelTradeSourcing } from "./parallel-trade-sourcing";
 import { ParallelTradeArbitrage } from "./parallel-trade-arbitrage";
 import { ParallelTradePanel } from "./parallel-trade-panel";
+import { PriceTrendChart } from "./PriceTrendChart";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -759,6 +760,18 @@ export default function V1DrugView({
               )}
             </div>
           </div>
+
+          {/* Price trend + forecast — self-gating: renders nothing when the
+              market has no price history, history-only when the series can't
+              be forecast, and a Holt projection only when it clears a backtest.
+              (concession + drug_tariff history from drug_pricing_history.) */}
+          {(myMarket || otherMarkets.length > 0) && (
+            <div className="sec">
+              <div className="price-panel" style={{ padding: "18px 20px" }}>
+                <PriceTrendChart drugId={id} country={userCountry} />
+              </div>
+            </div>
+          )}
 
           {/* Parallel Trade Intelligence — three self-gating surfaces, in
               value order. Each renders nothing until it has real data

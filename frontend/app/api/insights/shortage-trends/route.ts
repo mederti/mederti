@@ -34,6 +34,15 @@ type Ev = {
   anticipated_start_date: string | null;
 };
 
+// One row per month from the shortage_trends_monthly() Postgres function.
+type RpcRow = {
+  month: string; // date (YYYY-MM-DD, first of month)
+  onsets: number;
+  resolved: number;
+  active: number;
+  anticipated: number;
+};
+
 interface MonthBucket {
   month: string; // YYYY-MM
   label: string; // e.g. "Aug" / "Jan '26"
@@ -68,48 +77,8 @@ export async function GET(req: Request) {
 
   const sb = getSupabaseAdmin();
 
-  // Pull the events once, then bucket in JS. Two hard constraints shape how we
-  // read shortage_events (see the disk-IO / index-drift incident notes):
-  //
-  //  1. NEVER filter by country_code — it is not usefully indexed, so a
-  //     WHERE country_code = … forces a full sequential scan that hits the
-  //     Postgres statement timeout (57014). We drain UNFILTERED (which rides
-  //     the PK) and filter by country in JS instead.
-  //  2. The table is large and occasionally slow, so we page defensively and
-  //     tolerate a mid-drain error: partial data still renders, and a drain
-  //     that yields nothing degrades gracefully rather than showing a
-  //     misleading all-zero history.
-  const PAGE = 1000;
-  const MAX_PAGES = 60; // safety cap (60k rows) — well above the ~30k table
-  const events: Ev[] = [];
-  const cols = "country_code, status, start_date, end_date, anticipated_start_date";
-  let drainError = false;
-
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const { data, error } = await sb
-      .from("shortage_events")
-      .select(cols)
-      .range(page * PAGE, page * PAGE + PAGE - 1);
-    if (error) {
-      drainError = true;
-      break; // keep whatever we already have; partial history still charts
-    }
-    if (!data || data.length === 0) break;
-    events.push(...(data as Ev[]));
-    if (data.length < PAGE) break;
-  }
-
-  // The shortage layer is temporarily unreachable (statement timeouts) — tell
-  // the client so it shows an "unavailable" state instead of an empty chart
-  // that reads as "no shortages ever".
-  if (events.length === 0 && drainError) {
-    return NextResponse.json(
-      { country, degraded: true, months: [], generated: new Date().toISOString().slice(0, 10) },
-      { status: 200 },
-    );
-  }
-
-  // Build the month axis: `months` past-through-current, then `forward` future.
+  // Build the month axis first: `months` past-through-current, then `forward`
+  // future. Both the fast (in-DB) and fallback (drain) paths fill these buckets.
   const now = new Date();
   const curY = now.getUTCFullYear();
   const curM = now.getUTCMonth();
@@ -145,6 +114,73 @@ export async function GET(req: Request) {
       active: null,
       anticipated: 0,
     });
+  }
+
+  const jsonMeta = {
+    country,
+    all_markets: allMarkets,
+    generated: now.toISOString().slice(0, 10),
+    window: { past_months: months, forward_months: forward },
+  };
+  const fromDate = `${buckets[0].month}-01`;
+  const [ly, lm] = buckets[buckets.length - 1].month.split("-").map(Number);
+  const toDate = lastDayOfMonth(ly, lm - 1);
+
+  // ── Fast path: aggregate in Postgres via the shortage_trends_monthly RPC ──
+  // One indexed scan returns ~18 rows instead of shipping ~30k to Node. Falls
+  // through to the drain below if the function isn't applied yet (migration
+  // 065) or errors.
+  const rpc = await sb.rpc("shortage_trends_monthly", {
+    p_country: allMarkets ? "ALL" : country,
+    p_from: fromDate,
+    p_to: toDate,
+  });
+  if (!rpc.error && Array.isArray(rpc.data)) {
+    const byMonth = new Map<string, RpcRow>(
+      (rpc.data as RpcRow[]).map((r) => [String(r.month).slice(0, 7), r]),
+    );
+    for (const b of buckets) {
+      const r = byMonth.get(b.month);
+      if (b.future) {
+        b.anticipated = r ? Number(r.anticipated) : 0;
+      } else {
+        b.onsets = r ? Number(r.onsets) : 0;
+        b.resolved = r ? Number(r.resolved) : 0;
+        b.active = r ? Number(r.active) : 0;
+      }
+    }
+    return NextResponse.json({ ...jsonMeta, degraded: false, partial: false, source: "rpc", months: buckets });
+  }
+
+  // ── Fallback: drain the table and aggregate in JS ──
+  // Used until the RPC is applied. Two constraints (see the disk-IO / index-
+  // drift incident notes): (1) NEVER filter by country_code — it is not
+  // usefully indexed, so a WHERE country_code = … forces a full seq scan that
+  // hits the statement timeout (57014); we drain UNFILTERED and filter in JS.
+  // (2) Tolerate a mid-drain timeout: partial data still charts, and a drain
+  // that yields nothing degrades gracefully rather than showing false zeros.
+  const PAGE = 1000;
+  const MAX_PAGES = 60; // safety cap (60k rows) — well above the ~30k table
+  const events: Ev[] = [];
+  const cols = "country_code, status, start_date, end_date, anticipated_start_date";
+  let drainError = false;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { data, error } = await sb
+      .from("shortage_events")
+      .select(cols)
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) {
+      drainError = true;
+      break; // keep whatever we already have; partial history still charts
+    }
+    if (!data || data.length === 0) break;
+    events.push(...(data as Ev[]));
+    if (data.length < PAGE) break;
+  }
+
+  if (events.length === 0 && drainError) {
+    return NextResponse.json({ ...jsonMeta, degraded: true, months: [] }, { status: 200 });
   }
 
   // Precompute each past month-end cutoff for the active-stock reconstruction.
@@ -197,13 +233,11 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({
-    country,
-    all_markets: allMarkets,
+    ...jsonMeta,
     degraded: false,
     partial: drainError, // some pages timed out; series is built from what drained
-    generated: now.toISOString().slice(0, 10),
+    source: "drain",
     months: buckets,
-    window: { past_months: months, forward_months: forward },
   });
 }
 

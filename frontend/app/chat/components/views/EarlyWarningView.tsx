@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ShortageTrendChart } from "./ShortageTrendChart";
 
 // Shared market conventions (mirrors PredictiveSignals.tsx so the radar reads
 // the same across surfaces).
@@ -494,6 +495,17 @@ export function EarlyWarningView() {
             <div className="kpi-val">{signalsLoading ? "—" : concessionCount}</div>
             <div className="kpi-delta">local price pressure already</div>
           </div>
+        </div>
+
+        {/* SHORTAGE TREND — local market history + anticipated ahead */}
+        <div className="gov-card span2" style={{ marginBottom: 16 }}>
+          <div className="gc-head">
+            <div className="gc-title">
+              {countryName.replace(/^the /, "")} shortage trend
+            </div>
+            <div className="gc-meta">new &amp; active shortages over time · anticipated onsets ahead</div>
+          </div>
+          <ShortageTrendChart country={country} />
         </div>
 
         {/* EARLY-WARNING RADAR (the moat) */}

@@ -110,6 +110,22 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "malaysia_npra":   ("backend.scrapers.malaysia_npra_scraper",        "MalaysiaNPRAScraper"),
     # South America — additional countries
     "argentina_anmat": ("backend.scrapers.argentina_anmat_scraper",      "ArgentinaANMATScraper"),
+    # Country-coverage expansion batch (2026-07-02) — see memory
+    # `project_country_coverage_expansion_survey` for the research trail.
+    "slovenia_jazmp":    ("backend.scrapers.slovenia_jazmp_scraper",       "SloveniaJAZMPScraper"),
+    "iceland_lyfjastofnun": ("backend.scrapers.iceland_lyfjastofnun_scraper", "IcelandLyfjastofnunScraper"),
+    "bosnia_almbih":     ("backend.scrapers.bosnia_almbih_scraper",       "BosniaALMBIHScraper"),
+    "thailand_fda":      ("backend.scrapers.thailand_fda_scraper",        "ThailandFDAScraper"),
+    "colombia_invima":   ("backend.scrapers.colombia_invima_scraper",     "ColombiaINVIMAScraper"),
+    "croatia_halmed":    ("backend.scrapers.croatia_halmed_scraper",      "CroatiaHALMEDScraper"),
+    "latvia_zva":        ("backend.scrapers.latvia_zva_scraper",          "LatviaZVAScraper"),
+    "romania_anmdmr":    ("backend.scrapers.romania_anmdmr_scraper",      "RomaniaANMDMRScraper"),
+    "lithuania_vvkt":    ("backend.scrapers.lithuania_vvkt_scraper",      "LithuaniaVVKTScraper"),
+    "estonia_ravimiamet":("backend.scrapers.estonia_ravimiamet_scraper",  "EstoniaRavimiametScraper"),
+    "peru_digemid":      ("backend.scrapers.peru_digemid_scraper",        "PeruDIGEMIDScraper"),
+    "senegal_arp":       ("backend.scrapers.senegal_arp_scraper",         "SenegalARPScraper"),
+    "taiwan_tfda":       ("backend.scrapers.taiwan_tfda_scraper",         "TaiwanTFDAScraper"),
+    "srilanka_nmra":     ("backend.scrapers.srilanka_nmra_scraper",       "SriLankaNMRAScraper"),
     # Licensed supplement scrapers (require API keys)
     "ashp":            ("backend.scrapers.ashp_scraper",                 "ASHPScraper"),
     "tga_recalls":     ("backend.scrapers.tga_recalls_scraper",          "TgaRecallsScraper"),

@@ -10,6 +10,8 @@ import { ContextChat } from "@/app/chat/components/ContextChat";
 import "@/app/chat/chat.css";
 import { truncateDrugName } from "@/lib/utils";
 import { cleanBrandNames } from "@/lib/brand";
+import { relationshipLabel } from "@/lib/alternatives";
+import { SCHEME_COPY, FALLBACK_SCHEME_COPY } from "@/lib/substitution";
 import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
 import Chat2Client from "@/app/chat/Chat2Client";
 import { classifyQuery, looksLikeQuestion, type QueryIntent } from "@/lib/search/classify";
@@ -23,11 +25,6 @@ function statusOf(d: DrugHit): { cls: string; label: string } {
 }
 
 // ── Table-view display helpers ──────────────────────────────────────────
-const SCHEME_SHORT: Record<string, string> = {
-  tga_s19a: "S19A", mhra_ssp: "SSP", dhsc_msn: "MSN",
-  fda_503b: "503B", fda_shortage: "FDA list", eu_art_5_2: "Art 5(2)",
-};
-
 function monthYear(iso?: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -488,6 +485,12 @@ function Results() {
                 const ms = marketStatus(d, market, isGlobalMarket);
                 const bn = cleanBrandNames(d.brand_names, d.generic_name);
                 const eb = monthYear(d.estimated_resolution_date);
+                // Scheme-specific plain-language copy — "Yes" only when the
+                // pathway itself authorises substitute supply.
+                const sub = d.substitution
+                  ? { ...(SCHEME_COPY[d.substitution.scheme] ?? FALLBACK_SCHEME_COPY), reference: d.substitution.reference }
+                  : null;
+                const inShortage = (d.active_shortage_count ?? 0) > 0;
                 const ver = timeAgo(d.last_verified_at);
                 const isCat = d.source === "catalogue";
                 // Catalogue rows link to /drugs/[id] too: the drug page has a
@@ -515,17 +518,27 @@ function Results() {
                       {ms.sub && <div className={`t-mktsub ${ms.warn ? "warn" : ""}`}>{ms.sub}</div>}
                     </td>
                     <td>
-                      {d.substitution ? (
+                      {sub ? (
                         <>
-                          <span className="t-subyes">✓ Yes — {SCHEME_SHORT[d.substitution.scheme] ?? "pathway"}</span>
-                          {d.substitution.reference && <div className="t-sub2">{d.substitution.reference}</div>}
+                          <span className={sub.permission ? "t-subyes" : "t-norm"}>{sub.permission ? "✓ " : ""}{sub.headline}</span>
+                          {/* References are shown only when they look like an
+                              instrument/approval number — long machine slugs
+                              blow up the cell (full ref is on the drug page). */}
+                          <div className="t-sub2">{sub.detail}{sub.reference && sub.reference.length <= 24 ? ` · ${sub.reference}` : ""}</div>
                         </>
                       ) : isCat ? (
                         <span className="t-muted">—</span>
+                      ) : inShortage ? (
+                        // Absence of a pathway is stated as absence — never
+                        // inverted into "substitution allowed".
+                        <>
+                          <div className="t-norm">No substitution pathway on record</div>
+                          <div className="t-sub2">prescriber decision required</div>
+                        </>
                       ) : (
                         <>
-                          <div className="t-norm">Standard substitution</div>
-                          <div className="t-sub2">no shortage approval needed</div>
+                          <div className="t-norm">In supply</div>
+                          <div className="t-sub2">no shortage substitution needed</div>
                         </>
                       )}
                     </td>
@@ -535,7 +548,7 @@ function Results() {
                       {d.best_alternative ? (
                         <>
                           <div className="t-alt">{d.best_alternative.name}</div>
-                          {d.best_alternative.relationship && <div className="t-sub2">{d.best_alternative.relationship}</div>}
+                          <div className="t-sub2">{relationshipLabel(d.best_alternative.relationship)}</div>
                         </>
                       ) : (
                         <span className="t-muted">—</span>
@@ -560,10 +573,13 @@ function Results() {
                         )}
                       </td>
                     )}
-                    <td>
+                    {/* The date is the EARLIEST sponsor estimate across every product
+                        (brand) of this ingredient in the market — a specific
+                        contracted brand may return later, so say so. */}
+                    <td title={eb ? `Earliest sponsor-declared return date across all products containing this ingredient${isGlobalMarket ? "" : ` in ${mk.name}`}. A specific brand may return later.` : undefined}>
                       {eb ? (
-                        <><div className="t-eb">{eb}</div><div className="t-sub2">Sponsor est.</div></>
-                      ) : (d.active_shortage_count ?? 0) > 0 ? (
+                        <><div className="t-eb">{eb}</div><div className="t-sub2">earliest sponsor est. — brands may differ</div></>
+                      ) : inShortage ? (
                         <div className="t-eb none">No estimate</div>
                       ) : (
                         <span className="t-muted">—</span>
@@ -872,7 +888,7 @@ const CSS = `
 .res-table-wrap{display:none;margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--sh-card),var(--hi-inset)}
 .res-table{width:100%;border-collapse:collapse;table-layout:fixed}
 .res-table thead th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-4);padding:13px 16px;background:var(--bg-2);border-bottom:1px solid var(--border);white-space:nowrap}
-.res-table th.c-med{width:20%}.res-table th.c-mkt{width:15%}.res-table th.c-sub{width:13%}.res-table th.c-alt{width:14%}.res-table th.c-n{width:6%;text-align:center}.res-table th.c-price{width:11%}.res-table th.c-eb{width:11%}.res-table th.c-ver{width:10%}
+.res-table th.c-med{width:18%}.res-table th.c-mkt{width:14%}.res-table th.c-sub{width:17%}.res-table th.c-alt{width:15%}.res-table th.c-n{width:5%;text-align:center}.res-table th.c-price{width:10%}.res-table th.c-eb{width:11%}.res-table th.c-ver{width:10%}
 .t-price{font-size:13px;font-weight:700;color:var(--ink);font-family:var(--font-geist-mono),ui-monospace,monospace}
 .res-table tbody td{padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:top}
 .res-table tbody tr:last-child td{border-bottom:none}

@@ -14,7 +14,7 @@ import { ParallelTradeArbitrage } from "./parallel-trade-arbitrage";
 import { ParallelTradePanel } from "./parallel-trade-panel";
 import { PriceTrendChart } from "./PriceTrendChart";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
-import { affinity } from "@/lib/alternatives";
+import { affinity, relationshipLabel } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -263,7 +263,7 @@ export default function V1DrugView({
   const alts = (alternatives || []).slice(0, 5).map((a) => ({
     id: a.alternative_drug_id ?? a.drugs?.id ?? null,
     name: a.drugs?.generic_name ?? "Therapeutic alternative",
-    rel: a.relationship_type ? String(a.relationship_type).replace(/_/g, " ") : "same class",
+    rel: relationshipLabel(a.relationship_type),
     pct: a.similarity_score != null ? Math.round(a.similarity_score * 100) : null,
     note: a.dose_conversion_notes ?? a.availability_note ?? null,
   }));
@@ -657,9 +657,11 @@ export default function V1DrugView({
           {/* So-what tiles */}
           <div className="sw-cards">
             <div className="sw-card">
-              <div className="sw-h"><span className="sw-ic ok">✓</span> Can I substitute?</div>
-              <div className="sw-v">{s19aTileDetail ? "Yes — under S19A" : "Per normal rules"}</div>
-              <div className="sw-d">{s19aTileDetail ?? "Confirm with prescriber"}</div>
+              {/* "Yes" only when a real pathway is on file; absence of data is
+                  stated as absence, never inverted into permission. */}
+              <div className="sw-h"><span className={`sw-ic ${s19aTileDetail || !mine ? "ok" : "neutral"}`}>{s19aTileDetail || !mine ? "✓" : "•"}</span> Can I substitute?</div>
+              <div className="sw-v">{s19aTileDetail ? "Yes — approved substitute available" : mine ? "No pathway on record" : "In supply"}</div>
+              <div className="sw-d">{s19aTileDetail ?? (mine ? "prescriber decision required" : "no shortage substitution needed")}</div>
             </div>
             {topAlt?.id != null ? (
               <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
@@ -677,7 +679,9 @@ export default function V1DrugView({
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
               <div className="sw-v">{expected ?? "No estimate"}</div>
-              <div className="sw-d">{expected ? `Sponsor est. via ${expSource}` : "No estimate provided"}</div>
+              {/* Ingredient-level date — the event may cover a different brand
+                  than the one the user stocks. */}
+              <div className="sw-d">{expected ? `Sponsor est. via ${expSource} — may differ by brand` : "No estimate provided"}</div>
             </div>
           </div>
 

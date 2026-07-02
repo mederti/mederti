@@ -29,6 +29,12 @@ beautifulsoup4>=4.12.0,<5.0.0
 lxml>=5.0.0,<6.0.0
 openpyxl>=3.1.0,<4.0.0
 
+# ── PDF parsing ───────────────────────────────────────────────────────────────
+# Used by scrapers whose upstream source only publishes PDF bulletins
+# (CDSCO India, and the country-expansion batch: Colombia, Croatia, Romania,
+# Peru, Senegal). Was previously installed ad hoc but undeclared here.
+pdfplumber>=0.11.0,<1.0.0
+
 # ── API ───────────────────────────────────────────────────────────────────────
 fastapi>=0.110.0,<1.0.0
 uvicorn[standard]>=0.29.0,<1.0.0

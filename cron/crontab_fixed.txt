@@ -82,6 +82,40 @@ SHELL=/bin/bash
 50  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py poland_mz         >> logs/cron.log 2>&1
 55  5 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py uae_mohap         >> logs/cron.log 2>&1
 
+# ─── Phase 11: Country-coverage expansion batch (staggered 10 min from 10:00 UTC) ───
+# See memory `project_country_coverage_expansion_survey` (2026-07-02) for the
+# research trail. Confidence/record-count notes below are from each scraper's
+# live dry run at build time, not guesses.
+# Scraper               UTC time   Notes
+# slovenia_jazmp         10:00     2,238 events (Excel workbook)
+# iceland_lyfjastofnun   10:10     2,855 events — high confidence
+# bosnia_almbih          10:20     100/181 records (page 1 only — ASP.NET postback pagination unsolved)
+# thailand_fda           10:30     160 events across 11 PDF bulletins
+# colombia_invima        10:40     1,619 events — high confidence, ~90s PDF parse
+# croatia_halmed         10:50     277 events — high confidence
+# latvia_zva             11:00     1,063 events via discovered JSON API (lang=en)
+# romania_anmdmr         11:10     769 events — better than expected, actively updated
+# lithuania_vvkt         11:20     Cloudflare-blocked (0 records) — documented stub, cheap to leave scheduled
+# estonia_ravimiamet     11:30     3 events only — narrow coverage, see follow-up headless-browser task
+# peru_digemid           11:40     2,675 events — high confidence
+# senegal_arp            11:50     Low volume (~2 events) — scanned-image PDFs, title-only parsing
+# taiwan_tfda            12:00     10 events/7 drugs — hand-maintained bulletin ID list, needs periodic upkeep
+# srilanka_nmra          12:10     1 genuine event — correctly filters 145 unrelated announcements
+0  10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py slovenia_jazmp       >> logs/cron.log 2>&1
+10 10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py iceland_lyfjastofnun >> logs/cron.log 2>&1
+20 10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py bosnia_almbih       >> logs/cron.log 2>&1
+30 10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py thailand_fda        >> logs/cron.log 2>&1
+40 10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py colombia_invima     >> logs/cron.log 2>&1
+50 10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py croatia_halmed      >> logs/cron.log 2>&1
+0  11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py latvia_zva          >> logs/cron.log 2>&1
+10 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py romania_anmdmr      >> logs/cron.log 2>&1
+20 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py lithuania_vvkt      >> logs/cron.log 2>&1
+30 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py estonia_ravimiamet  >> logs/cron.log 2>&1
+40 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py peru_digemid        >> logs/cron.log 2>&1
+50 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py senegal_arp         >> logs/cron.log 2>&1
+0  12 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py taiwan_tfda         >> logs/cron.log 2>&1
+10 12 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py srilanka_nmra       >> logs/cron.log 2>&1
+
 # ─── Recall scrapers (daily at 06:00-07:15 UTC) ───
 0   6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py tga_recalls        >> logs/cron.log 2>&1
 10  6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_recalls        >> logs/cron.log 2>&1

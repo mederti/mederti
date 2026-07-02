@@ -10,6 +10,7 @@ import {
   buildFallbackSummary,
 } from "@/lib/insights/dashboard-snapshot";
 import { generateDashboardPdf } from "@/lib/insights/dashboard-pdf";
+import { ShortageTrendChart } from "./ShortageTrendChart";
 
 // Generic search terms for the essential-medicines rows — resolved to a real
 // drug/product page via /api/drug-autocomplete so each name links only when a
@@ -305,6 +306,15 @@ export function GovDashboardView() {
             <div className="kpi-val">{k.upstreamAlerts.value}</div>
             <div className={`kpi-delta ${k.upstreamAlerts.direction}`}>{k.upstreamAlerts.delta}</div>
           </div>
+        </div>
+
+        {/* SHORTAGE TREND — past changes + anticipated ahead */}
+        <div className="gov-card span2" style={{ marginBottom: 16 }}>
+          <div className="gc-head">
+            <div className="gc-title">Shortage trend</div>
+            <div className="gc-meta">new &amp; active shortages over time · anticipated onsets ahead</div>
+          </div>
+          <ShortageTrendChart country="AU" />
         </div>
 
         {/* TWO-COLUMN: watch table + side panels */}

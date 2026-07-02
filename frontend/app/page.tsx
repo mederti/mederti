@@ -72,7 +72,9 @@ export default async function Home() {
     ]);
     if (catRes.error) console.error("[home] drug_catalogue count failed:", catRes.error.message);
     if (catRes.count) medicines = k(catRes.count);
+    if (activeRes.error) console.error("[home] shortage_events active count failed:", activeRes.error.message);
     if (activeRes.count) activeShortages = activeRes.count.toLocaleString();
+    if (ctyRes.error) console.error("[home] data_sources country count failed:", ctyRes.error.message);
     if (ctyRes.data) {
       const n = new Set(
         ctyRes.data

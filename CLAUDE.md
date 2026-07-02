@@ -53,7 +53,7 @@ mederti/
 ├── supabase/
 │   └── migrations/               # 32 migrations (001 → 032)
 ├── cron/
-│   ├── crontab_fixed.txt         # Current Mac cron (28 jobs, staggered 19:00–06:45 UTC)
+│   ├── crontab_fixed.txt         # Current Mac cron (~74 jobs incl. 51-country shortage coverage, staggered 19:00–12:10 UTC)
 │   ├── run_shortage_scrapers.py
 │   ├── run_recall_scrapers.py
 │   ├── setup_cron.sh
@@ -84,19 +84,25 @@ RLS is enabled on the previously-unguarded tables (migration 029). `user_profile
 
 ---
 
-## Scraper Coverage — 28 active cron jobs + 38 additional scraper files
+## Scraper Coverage — 51 countries live, ~74 scheduled jobs
 
-**Active in cron (`cron/crontab_fixed.txt`), all daily UTC:**
+> **2026-07-02 correction:** the previous version of this section (28 jobs / "38 additional files not yet in cron") was stale — most of those "not yet in cron" scrapers (argentina_anmat, belgium_famhp, china_nmpa, greece_eof, hk_drugoffice, malaysia_npra, poland_mz, portugal_infarmed, turkey_titck, uae_mohap) were wired up since and are live. Verified against `cron/crontab_fixed.txt` directly, not this doc.
+>
+> **2026-07-02, same day, later:** ran a 4-region research survey of every remaining country (memory `project_country_coverage_expansion_survey`) then built and wired all 14 candidates it identified (Tier 1 + Tier 2). 13 came back with real live data; Lithuania is Cloudflare-blocked and shipped as a documented, honest 0-record stub rather than skipped. See `run_all_scrapers.py`'s "Country-coverage expansion batch" section and `cron/crontab_fixed.txt`'s "Phase 11" block.
 
-| Phase | Scrapers (cron-scheduled) |
+**51 distinct countries/territories** now have an active national shortage-signal scraper with confirmed live data in cron (daily UTC): the prior 38 (AU, US, CA, GB, DE, FR, IT, ES, SG, NZ ×2, NL, DK, FI, IE, SE, CZ, SK, HU, CH, NO, AT, BR, JP, KR, MX, ZA, NG, SA, TR, CN, HK, BE, GR, PT, AR, MY, PL, AE) plus 13 new: **Slovenia** (2,238 events), **Iceland** (2,855), **Bosnia & Herzegovina** (100/181 — page 1 only, ASP.NET pagination unsolved), **Thailand** (160), **Colombia** (1,619), **Croatia** (277), **Latvia** (1,063, via a discovered JSON API), **Romania** (769, better than the research pass expected), **Estonia** (3 — narrow, only "newsworthy" picks; full register needs a headless browser, follow-up task spawned), **Peru** (2,675), **Senegal** (~2, scanned-PDF-limited), **Taiwan** (10/7 drugs, hand-maintained bulletin list), **Sri Lanka** (1, correctly filtered from 145 unrelated announcements) — plus EMA as an EU-bloc aggregate. **Lithuania** is scheduled but Cloudflare-blocks every request (0 records) — a real attempt, not yet a working source. India (`india_cdsco`) and Israel (`israel_moh`) remain built-but-dormant, not in cron.
+
+Against ~195 UN-recognized countries, that's **~26% direct national coverage** (higher effective reach in the EU, where the bloc-wide EMA feed backstops the EU member states without a dedicated scraper). Per the survey, this is close to the realistic ceiling — most of the remaining ~140 countries have no public shortage source to scrape at all, not an engineering gap.
+
+| Category | Scrapers (cron-scheduled) |
 |---|---|
-| 1–7 Shortage (core) | tga, fda, health_canada, mhra, ema, bfarm, ansm, aifa, aemps, fda_enforcement, hsa, pharmac |
-| 8 Shortage (additional) | medsafe, cbg_meb, dkma, fimea, hpra, lakemedelsverket, sukl, ogyei, swissmedic, noma, ages |
-| 9+ New country | anvisa, pmda, mfds, cofepris, sahpra, nafdac, sfda |
-| Recalls | tga_recalls, fda_recalls, health_canada_recalls, ema_recalls, mhra_recalls, fda_medwatch |
-| Pricing (→ `drug_pricing_history`) | nadac (US acquisition cost, weekly), nhs_drug_tariff (GB Cat M + price concessions, weekly), france_bdpm (FR public retail price TTC per CIP13, weekly), aifa (IT public retail + SSN reference price per AIC, weekly), spain_nomenclator (ES PVP con IVA per Código Nacional, weekly — needs migration 059) — `backend/scrapers/pricing/`, requires migration 055 |
+| Shortage (national) | tga, fda, health_canada, mhra, ema, bfarm, ansm, aifa, aemps, hsa, pharmac, medsafe, cbg_meb, dkma, fimea, hpra, lakemedelsverket, sukl, slovakia_sukl, ogyei, swissmedic, noma, ages, anvisa, pmda, mfds, cofepris, sahpra, nafdac, sfda, turkey_titck, china_nmpa, hk_drugoffice, belgium_famhp, greece_eof, portugal_infarmed, argentina_anmat, malaysia_npra, poland_mz, uae_mohap |
+| Shortage (country-coverage expansion batch, added 2026-07-02) | slovenia_jazmp, iceland_lyfjastofnun, bosnia_almbih, thailand_fda, colombia_invima, croatia_halmed, latvia_zva, romania_anmdmr, lithuania_vvkt (blocked), estonia_ravimiamet, peru_digemid, senegal_arp, taiwan_tfda, srilanka_nmra |
+| Recalls | tga_recalls, fda_recalls, fda_medwatch, health_canada_recalls, ema_recalls, mhra_recalls, aifa_recalls, ansm_recalls, medsafe_recalls, aemps_recalls, bfarm_recalls |
+| Pricing (→ `drug_pricing_history`) | nadac (US, weekly), nhs_drug_tariff (GB, weekly), france_bdpm (FR, weekly), aifa_pricing (IT, weekly), spain_nomenclator (ES, weekly) |
+| Quarterly (API supply-chain) | fda_dmf, who_pq, fda_decrs, fda_inspections |
 
-**Scraper files present but not yet in cron** (38): argentina_anmat, ashp, belgium_famhp, china_nmpa, clinicaltrials, edqm_cep, ema_chmp, eudragmdp, fda_adcomm, fda_inspections, greece_eof, hk_drugoffice, india_cdsco, israel_moh, malaysia_npra, nhs_drug_tariff, poland_mz, portugal_infarmed, turkey_titck, uae_mohap, plus the unscheduled recall counterparts (aemps_recalls, aifa_recalls, ansm_recalls, bfarm_recalls, hsa_recalls, medsafe_recalls, drugs_at_fda) and `recall_linker.py` (recall→shortage causal-link populator).
+**Dark scraper files present but NOT in cron** (verify before relying on any of these): `india_cdsco` (was briefly wired 2026-06-03 per memory, silently dropped by a later "reconcile crontab with live" pass — never actually ran on the Mac), `israel_moh`, `hsa_recalls`, plus non-country signal scrapers `ashp`, `clinicaltrials`, `edqm_cep`, `ema_chmp`, `eudragmdp`, `fda_adcomm`, `drugs_at_fda`, and the utility `recall_linker.py` (recall→shortage causal-link populator, unclear if wired into the pipeline).
 
 **Cadence:** 30-min stagger on the core phase, 15-min stagger on phases 8–9+. All scrapers dedupe via MD5 `shortage_id` so repeated runs are idempotent.
 
@@ -175,8 +181,8 @@ ls supabase/migrations/                          # 001 → 032
 | Scrapers still on Mac cron (laptop sleep = downtime) | **High** | `cron/RAILWAY_SERVICES.md` documents the migration plan; uncertain whether deployed. Verify with Railway dashboard before assuming. |
 | `cron.log` unrotated (~500MB and growing) | Medium | Set up logrotate or move to structured logging in Railway. |
 | `last_scraped_at` on `data_sources` not updated by scrapers | Medium | No per-source freshness signal visible to users. Wire this up + expose as a public freshness dashboard. |
-| Some recall scraper files exist but aren't in cron (aemps_recalls, aifa_recalls, ansm_recalls, bfarm_recalls, hsa_recalls, medsafe_recalls) | Medium | Add to `crontab_fixed.txt` once tested. |
-| Major scraper files exist but never wired to cron (china_nmpa, india_cdsco, israel_moh, malaysia_npra, poland_mz, portugal_infarmed, turkey_titck, uae_mohap, greece_eof, belgium_famhp, hk_drugoffice, argentina_anmat) | High | Each is a meaningful coverage gain — pharma market size, geopolitical relevance. |
+| `hsa_recalls` scraper file exists but isn't in cron (aemps_recalls, aifa_recalls, ansm_recalls, bfarm_recalls, medsafe_recalls were wired since — confirmed live in `crontab_fixed.txt`) | Low | Add to `crontab_fixed.txt` once tested. |
+| `india_cdsco` and `israel_moh` scraper files exist but aren't in cron — india_cdsco was briefly wired (2026-06-03) then silently dropped by a later crontab reconcile pass, so it never actually ran on the Mac | Medium | Re-verify india_cdsco still works against the live `publicNsqDrugTable` endpoint, then re-add both to `crontab_fixed.txt`. china_nmpa, malaysia_npra, poland_mz, portugal_infarmed, turkey_titck, uae_mohap, greece_eof, belgium_famhp, hk_drugoffice, argentina_anmat were all wired since and are live — see [Scraper Coverage](#scraper-coverage--38-countries-live-60-scheduled-jobs). |
 | `recall_linker.py` exists; unclear if it's wired into the pipeline | Medium | Causal recall→shortage links are a strong differentiator if populated. |
 | Chat fallback (when `ANTHROPIC_API_KEY` is unset) is rule-based pattern matching | Medium | Degraded experience; verify Vercel env var is set. See `frontend/app/api/chat/route.ts`. |
 | No public methodology page or freshness dashboard | Medium | Credibility lever for "world's leading source" positioning. |

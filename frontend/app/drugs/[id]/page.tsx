@@ -94,22 +94,37 @@ async function buildMarketPricing(
   userCountry: string,
 ): Promise<{ concession: ConcessionSignal | null; priceMarkets: MarketPrice[] }> {
   const inn = (genericName ?? "").trim();
-  // Only add the generic_name fallback when the INN is filter-safe (no
-  // PostgREST `or()` metacharacters) so we never break the whole query.
+  // Only use the generic_name fallback when the INN is filter-safe (no
+  // PostgREST metacharacters) so we never break the whole query.
   const innSafe = inn && /^[a-z0-9 .\-/]+$/i.test(inn) ? inn : "";
-  const orFilter = innSafe ? `drug_id.eq.${drugId},generic_name.ilike.${innSafe}` : `drug_id.eq.${drugId}`;
 
+  // Two-step fetch (NOT a single or() filter): once drug_pricing_history got
+  // large (post NADAC backfill, ~500k US rows) the or(drug_id, generic_name
+  // ilike) shape can't use any index and dies on the statement timeout —
+  // which supabase-js reports as a soft `error`, not a throw, so the panel
+  // silently vanished. Query by indexed drug_id first; only when it finds
+  // nothing, best-effort the name fallback (unlinked-variant case), tolerating
+  // a timeout as empty. Migration 066 (trigram idx) makes the fallback fast.
+  const PRICE_COLS = "country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source";
   let rows: any[] = [];
-  try {
-    const { data } = await supabase
+  {
+    const { data, error } = await supabase
       .from("drug_pricing_history")
-      .select("country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source")
-      .or(orFilter)
+      .select(PRICE_COLS)
+      .eq("drug_id", drugId)
       .order("effective_date", { ascending: false, nullsFirst: false })
       .limit(400);
+    if (error) return { concession: null, priceMarkets: [] };
     rows = data ?? [];
-  } catch {
-    return { concession: null, priceMarkets: [] };
+  }
+  if (rows.length === 0 && innSafe) {
+    const { data } = await supabase
+      .from("drug_pricing_history")
+      .select(PRICE_COLS)
+      .ilike("generic_name", innSafe)
+      .order("effective_date", { ascending: false, nullsFirst: false })
+      .limit(400);
+    rows = data ?? []; // timeout here → just no fallback rows
   }
   if (rows.length === 0) return { concession: null, priceMarkets: [] };
 

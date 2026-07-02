@@ -101,21 +101,40 @@ export async function GET(req: Request) {
     genericName = (data?.generic_name ?? "").trim();
   } catch { /* no drug row — drug_id-only filter still works */ }
   const innSafe = genericName && /^[a-z0-9 .\-/]+$/i.test(genericName) ? genericName : "";
-  const orFilter = innSafe ? `drug_id.eq.${drugId},generic_name.ilike.${innSafe}` : `drug_id.eq.${drugId}`;
 
+  // Two-step fetch. A single `or(drug_id.eq…, generic_name.ilike…)` filter
+  // can't use any index once the table is large (post NADAC backfill: ~500k
+  // US rows) and dies on the Postgres statement timeout (57014) — which
+  // supabase-js surfaces as a soft `error`, NOT a throw, so it silently reads
+  // as "no rows". So: (1) query by drug_id (indexed) and treat an error as
+  // unreachable-not-empty; (2) only when that finds nothing, best-effort name
+  // fallback for rows that never resolved to a drug_id (unlinked-variant
+  // case), tolerating a timeout as "no extra rows". Migration 066 (trigram
+  // index on generic_name) makes the fallback fast once applied.
+  const COLS = "country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source";
   let rows: Row[] = [];
-  try {
-    const { data } = await sb
+  {
+    const { data, error } = await sb
       .from("drug_pricing_history")
-      .select("country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source")
-      .or(orFilter)
+      .select(COLS)
+      .eq("drug_id", drugId)
       .eq("country", country)
       .not("effective_date", "is", null)
       .order("effective_date", { ascending: true })
       .limit(4000);
+    if (error) return empty("pricing layer unreachable");
     rows = (data ?? []) as Row[];
-  } catch {
-    return empty("pricing layer unreachable");
+  }
+  if (rows.length === 0 && innSafe) {
+    const { data } = await sb
+      .from("drug_pricing_history")
+      .select(COLS)
+      .ilike("generic_name", innSafe)
+      .eq("country", country)
+      .not("effective_date", "is", null)
+      .order("effective_date", { ascending: true })
+      .limit(4000);
+    rows = (data ?? []) as Row[]; // error here (likely 57014) → just no fallback rows
   }
   if (rows.length === 0) return empty("no price history for this market");
 

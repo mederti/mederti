@@ -65,6 +65,11 @@ SHELL=/bin/bash
 35  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py turkey_titck   >> logs/cron.log 2>&1
 45  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py china_nmpa     >> logs/cron.log 2>&1
 55  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py hk_drugoffice  >> logs/cron.log 2>&1
+# india_cdsco: revived again 2026-07-03. Old opencms page went to a JS shell;
+# fetch() rewritten to the cdscoonline publicNsqDrugTable JSON endpoint
+# (157 raw NSQ records live, tier-3 upstream signal). Was silently dropped from
+# a prior crontab-reconcile pass despite the June-03 revival.
+5   6 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py india_cdsco    >> logs/cron.log 2>&1
 
 # ─── Phase 10: New country shortage scrapers (staggered 15 min from 04:45 UTC) ───
 # Scraper            UTC time

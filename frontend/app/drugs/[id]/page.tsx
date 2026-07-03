@@ -20,6 +20,7 @@ import { MobileDrugPage } from "@/app/components/mobile/MobileDrugPage";
 import { truncateDrugName } from "@/lib/utils";
 import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
+import { extractEventBrand } from "@/lib/event-brand";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import AvailableSuppliers from "./AvailableSuppliers";
 import SoWhatInsight from "./SoWhatInsight";
@@ -499,7 +500,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .select("id, generic_name, brand_names, atc_code, atc_description, drug_class, dosage_forms, strengths, routes_of_administration, therapeutic_category, is_controlled_substance, who_essential_medicine, who_eml_section, who_eml_year")
         .eq("id", id).single(),
       supabase.from("shortage_events")
-        .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, data_sources(name, abbreviation, country_code)")
+        .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, raw_data, data_source_id, data_sources(name, abbreviation, country_code)")
         .eq("drug_id", id).order("updated_at", { ascending: false }),
       supabase.from("shortage_status_log")
         .select("id, shortage_event_id, drug_id, old_status, new_status, old_severity, new_severity, changed_at")
@@ -518,7 +519,14 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const drug = drugRes.status === "fulfilled" ? (drugRes.value as any).data : null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const shortages = shortagesRes.status === "fulfilled" ? ((shortagesRes.value as any).data ?? []) : [];
+  const shortagesRaw = shortagesRes.status === "fulfilled" ? ((shortagesRes.value as any).data ?? []) : [];
+  // Per-event product identity (brand/sponsor) from the regulator record —
+  // extracted here so heavy raw_data never reaches the client components.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const shortages = shortagesRaw.map(({ raw_data, ...ev }: any) => ({
+    ...ev,
+    ...extractEventBrand(ev.data_source_id ?? null, raw_data),
+  }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const statusLog = logRes.status === "fulfilled" ? ((logRes.value as any).data ?? []) : [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -16,6 +16,8 @@ import { PriceTrendChart } from "./PriceTrendChart";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { affinity, relationshipLabel } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
+import { BAND_LABEL, type CompareResult } from "@/lib/pricing-compare";
+import { truncateDrugName } from "@/lib/utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -99,7 +101,7 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, products, brandSkus, brandHint,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint,
 }: {
   id: string;
   drug: any;
@@ -151,6 +153,8 @@ export default function V1DrugView({
     effective_date: string | null;
     concession: number | null;
   }[] | null;
+  // Cost-vs-alternatives comparison for the user's market (like-for-like basis).
+  altPricing?: CompareResult | null;
   // Registered products for this molecule (drug_products + joined sponsor / MA
   // holder). Already fetched in page.tsx; drives the "Full drug record" section.
   products?: any[] | null;
@@ -1022,6 +1026,67 @@ export default function V1DrugView({
             </div>
           )}
 
+          {/* Cost vs alternatives — like-for-like, to answer "which alternative
+              is close in price and which is dramatically more expensive". Only
+              rows priced on the SAME basis + currency + price_type are compared;
+              anything else is listed as "no comparable price". */}
+          {altPricing && altPricing.alternatives.some((a) => a.comparable) && (() => {
+            const cur = altPricing.currency;
+            const money = (v: number) => fmtPrice(v, cur);
+            // Real prices may be a range across strengths/packs → show both ends.
+            const priceText = (r: { value: number | null; min: number | null; max: number | null }) =>
+              r.value == null ? "—"
+                : r.min != null && r.max != null && r.max - r.min > 0.005
+                  ? `${money(r.min)}–${money(r.max)}`
+                  : money(r.value);
+            const multiple = (ratio: number) =>
+              ratio >= 1.25 ? `~${ratio >= 9.5 ? Math.round(ratio) : ratio.toFixed(1)}×`
+                : ratio <= 0.8 ? `−${Math.round((1 - ratio) * 100)}%` : "≈";
+            return (
+              <div className="sec">
+                <div className="sec-title">
+                  Cost vs alternatives{" "}
+                  <span className="help">{altPricing.priceTypeLabel} · {altPricing.basisLabel} · {cName}</span>
+                </div>
+                <div className="cmp-list">
+                  {/* Anchor row = this medicine, the baseline everything compares to. */}
+                  <div className="cmp-row cmp-anchor">
+                    <div className="cmp-name">{truncateDrugName(altPricing.anchor.name)} <span className="cmp-tag">this medicine</span></div>
+                    <div className="cmp-price">{priceText(altPricing.anchor)}</div>
+                    <div className="cmp-band"><span className="cmp-pill cmp-base">baseline</span></div>
+                  </div>
+                  {altPricing.alternatives.map((a, i) => (
+                    <div key={i} className="cmp-row">
+                      <div className="cmp-name">
+                        {a.drug_id !== altPricing.anchor.drug_id
+                          ? <a href={`/drugs/${a.drug_id}`}>{truncateDrugName(a.name)}</a>
+                          : truncateDrugName(a.name)}
+                        {a.relationship && <span className="cmp-rel">{relationshipLabel(a.relationship)}</span>}
+                      </div>
+                      {a.comparable ? (
+                        <>
+                          <div className="cmp-price">{priceText(a)}</div>
+                          <div className="cmp-band">
+                            {a.ratio != null && <span className="cmp-mult">{multiple(a.ratio)}</span>}
+                            <span className={`cmp-pill band-${a.band}`}>{a.band ? BAND_LABEL[a.band] : ""}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="cmp-price cmp-muted">—</div>
+                          <div className="cmp-band"><span className="cmp-pill cmp-na">no comparable price</span></div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="stat-foot">
+                  Like-for-like {altPricing.basisLabel} prices in {cName}; a specific brand or pack may differ. Not a clinical equivalence claim — confirm suitability before substituting.
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Regulator status */}
           {regulators.length > 0 && (
             <div className="sec">
@@ -1370,6 +1435,26 @@ const CSS = `
 .alt-bar{width:96px;height:5px;border-radius:99px;background:var(--bg-3);overflow:hidden}
 .alt-bar span{display:block;height:100%;border-radius:99px;background:var(--grad-soft)}
 .alt-pct{font-size:10.5px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace}
+.cmp-list{display:flex;flex-direction:column;gap:6px}
+.cmp-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:11px 14px;border-radius:11px;background:var(--bg);border:1px solid var(--border);box-shadow:var(--sh-card),var(--hi-inset)}
+.cmp-anchor{background:var(--bg-2);border-color:var(--border-2)}
+.cmp-name{min-width:0;font-size:13.5px;font-weight:600;display:flex;flex-wrap:wrap;align-items:baseline;gap:7px}
+.cmp-name a{color:inherit;text-decoration:none}
+.cmp-name a:hover{color:var(--green-d);text-decoration:underline}
+.cmp-tag{font-size:10px;font-weight:600;color:var(--text-4);text-transform:uppercase;letter-spacing:.04em}
+.cmp-rel{font-size:10.5px;font-weight:500;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;flex-basis:100%}
+.cmp-price{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.cmp-muted{color:var(--text-4);font-weight:400}
+.cmp-band{display:flex;align-items:center;gap:7px;justify-content:flex-end;min-width:132px}
+.cmp-mult{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-3)}
+.cmp-pill{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.cmp-base{color:var(--text-3);background:var(--bg-3);border:1px solid var(--border)}
+.cmp-na{color:var(--text-4);background:var(--bg-3);border:1px solid var(--border)}
+.band-lower{color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b)}
+.band-similar{color:var(--text-2);background:var(--bg-3);border:1px solid var(--border-2)}
+.band-higher{color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
+.band-much_higher,.band-far_higher{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
+@media(max-width:620px){.cmp-row{grid-template-columns:1fr auto;gap:6px}.cmp-band{grid-column:1/-1;justify-content:flex-start;min-width:0}}
 .country-list{display:flex;flex-direction:column;gap:9px}
 .country-row{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-radius:13px;background:var(--bg);border:1px solid var(--border);box-shadow:var(--sh-card),var(--hi-inset);}
 .cl{display:flex;align-items:center;gap:11px}

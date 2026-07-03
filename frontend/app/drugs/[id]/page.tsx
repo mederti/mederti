@@ -21,6 +21,7 @@ import { truncateDrugName } from "@/lib/utils";
 import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand } from "@/lib/event-brand";
+import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import { getPartnerForCountry } from "@/lib/suppliers";
 import AvailableSuppliers from "./AvailableSuppliers";
 import SoWhatInsight from "./SoWhatInsight";
@@ -198,6 +199,57 @@ async function buildMarketPricing(
     }
   }
   return { concession, priceMarkets };
+}
+
+/**
+ * Cost-vs-alternatives comparison for the user's market. Fetches per-drug
+ * pricing for the current molecule + its alternatives from drug_pricing_history
+ * and delegates the like-for-like banding to buildPriceComparison. Defensive:
+ * any error → null and the section is simply omitted.
+ */
+async function buildAlternativePricingData(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  drugId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  alternatives: any[],
+  userCountry: string,
+  genericName: string | null | undefined,
+): Promise<CompareResult | null> {
+  const altMeta = new Map<string, { name: string; relationship: string | null }>();
+  for (const a of alternatives) {
+    const altId = a.alternative_drug_id;
+    if (!altId || altMeta.has(altId)) continue;
+    altMeta.set(altId, {
+      name: a.drugs?.generic_name ?? "Therapeutic alternative",
+      relationship: a.relationship_type ?? null,
+    });
+  }
+  altMeta.set(drugId, { name: genericName ?? "This medicine", relationship: null });
+  const ids = [...altMeta.keys()];
+  if (ids.length < 2) return null; // need the anchor + at least one alternative
+
+  let rows: PriceRow[] = [];
+  try {
+    const { data } = await supabase
+      .from("drug_pricing_history")
+      .select("drug_id, price_type, currency, pack_price, unit_price, pack_description, product_name, effective_date, source")
+      .in("drug_id", ids)
+      .eq("country", userCountry)
+      .order("effective_date", { ascending: false, nullsFirst: false })
+      .limit(600);
+    rows = (data ?? []) as PriceRow[];
+  } catch {
+    return null;
+  }
+  if (rows.length === 0) return null;
+
+  const rowsByDrug = new Map<string, PriceRow[]>();
+  for (const r of rows) {
+    const k = r.drug_id ?? "";
+    if (!k) continue;
+    (rowsByDrug.get(k) ?? rowsByDrug.set(k, []).get(k)!).push(r);
+  }
+  return buildPriceComparison(drugId, rowsByDrug, altMeta, HEADLINE_PRIORITY, PRICE_TYPE_LABEL);
 }
 
 interface Props {
@@ -776,7 +828,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // buildMarketPricing, ~5 serial round-trips before first paint.) supabase-js
     // resolves (not rejects) on a query error, so a missing table still soft-fails
     // to null without taking down the batch.
-    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing] = await Promise.all([
+    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing] = await Promise.all([
       supabase
         .from("api_suppliers")
         .select("manufacturer_name, country, source, who_pq")
@@ -804,6 +856,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .order("price_date", { ascending: false, nullsFirst: false })
         .limit(1),
       buildMarketPricing(supabase, id, drug.generic_name, userCountry),
+      buildAlternativePricingData(supabase, id, alternatives, userCountry, drug.generic_name),
     ]);
     const apiSupplierRows = apiSupplierRes.data;
     const approvalRows = approvalRes.data;
@@ -965,6 +1018,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         pricing={pricing}
         concession={concession}
         priceMarkets={priceMarkets}
+        altPricing={altPricing}
         products={products}
         brandSkus={brandSkus}
         brandHint={brandHint}

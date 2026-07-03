@@ -101,25 +101,76 @@ class BosniaALMBIHScraper(BaseScraper):
 
     # Free-text (Obrazloženje) keyword hints, checked before the coarse map
     # and before falling back to the centralised map_reason_category().
+    #
+    # ORDER MATTERS: _map_reason() returns the FIRST matching keyword, so the
+    # specific causes below are listed before the broad "proizvodn" (production)
+    # catch-all — a row that mentions both a supply chain and a production note
+    # then lands on the more informative category. Roots (not whole phrases) are
+    # used to absorb the register's heavy inflection/spelling variation
+    # (proizvodnja/-e/-i/-u/-ih, potražnja/potraznja, obezbijedio/obezbjedio).
+    # Derived from the live "Drugo" free-text corpus, 2026-07-03.
     _EXPLANATION_KEYWORDS: dict[str, str] = {
+        # -- Discontinuation / withdrawal (a decision to stop or not renew) --
+        "poslovna odluka": "discontinuation",
+        "komercijalnih razloga": "discontinuation",
+        "neće biti obnovljena": "discontinuation",
+        "nece biti obnovljena": "discontinuation",
+        "ukidanj": "discontinuation",            # ukidanje/ukidanju dozvole = licence revocation
+
+        # -- Demand surge. Use surge-SPECIFIC phrases, not a bare "potražnj"
+        #    (demand) root: the register also says "nije bilo potražnje" ("there
+        #    was NO demand"), a commercial discontinuation — a loose root would
+        #    mislabel that negated phrase as a surge. --
+        "povećana potražnja": "demand_surge",
+        "povecana potraznja": "demand_surge",
+        "povećana potrošnja": "demand_surge",    # increased consumption
+        "povecana potrosnja": "demand_surge",
+        "prevazilazi": "demand_surge",           # potražnja prevazilazi dostupne količine = demand exceeds supply
+        "veća od ponude": "demand_surge",        # potražnja veća od ponude = demand greater than supply
+        "veca od ponude": "demand_surge",
+
+        # -- Raw material / active substance --
+        "aktivnom supstancom": "raw_material",
+        "aktivne supstance": "raw_material",
+        "nabavci aktivne": "raw_material",
+        "sirovin": "raw_material",
+
+        # -- Supply-chain disruption (before the production catch-all, so a
+        #    "lanci snabdijevanja" row isn't swallowed by a co-mentioned
+        #    capacity note) --
+        "lanac snabdij": "supply_chain",
+        "lancu snabdij": "supply_chain",
+        "lanci snabdij": "supply_chain",
+        "lanaca snabdij": "supply_chain",
+
+        # -- Manufacturing / production: the dominant "Drugo" bucket. Covers
+        #    production delays, reorganisation, limited capacity, variations,
+        #    and post-renewal gaps where the manufacturer hasn't yet produced
+        #    or secured market stock pending first-batch QC. --
         "kašnjenje proizvodnje": "manufacturing_issue",
         "kasnjenje proizvodnje": "manufacturing_issue",
         "kašnjenje opremanja": "manufacturing_issue",
         "kasnjenje opremanja": "manufacturing_issue",
         "nedostataka tokom": "manufacturing_issue",
         "kvalitet": "manufacturing_issue",
-        "lanac snabdij": "supply_chain",
-        "lancu snabdij": "supply_chain",
-        "aktivnom supstancom": "raw_material",
-        "aktivne supstance": "raw_material",
-        "nabavci aktivne": "raw_material",
-        "sirovin": "raw_material",
-        "poslovna odluka": "discontinuation",
-        "komercijalnih razloga": "discontinuation",
-        "neće biti obnovljena": "discontinuation",
-        "nece biti obnovljena": "discontinuation",
-        "povećana potražnja": "demand_surge",
-        "povecana potraznja": "demand_surge",
+        "proizvodn": "manufacturing_issue",      # proizvodnja/-e/-i, proizvodni kapaciteti, proizvodnu lokaciju
+        "proizveden": "manufacturing_issue",     # serije ... proizvedene nakon obnove
+        "proizveo": "manufacturing_issue",
+        "proizvesti": "manufacturing_issue",
+        "reorganizacij": "manufacturing_issue",  # reorganizacija proizvodnje
+        "zastoj": "manufacturing_issue",         # zastoj (u proizvodnji) = stoppage
+        "prve serije": "manufacturing_issue",    # kontrola prve serije nakon obnove dozvole
+        "izmjen": "manufacturing_issue",         # zahtjev za izmjenu = manufacturing variation
+        "obezbij": "manufacturing_issue",        # nije obezbijedio dovoljne zalihe/količine
+        "obezbjed": "manufacturing_issue",       # spelling variant (obezbjedio)
+
+        # -- Delivery / logistics (after production, so "proizvodnji i isporuci"
+        #    rows stay manufacturing; only pure-delivery rows land here) --
+        "isporuc": "supply_chain",               # kašnjenje u isporuci = delivery delay
+        "isporuk": "supply_chain",
+        "dostav": "supply_chain",                # dostava/dostavi pošiljke = shipment
+
+        # -- Distribution / import --
         "uvoz": "distribution",
         "distribuci": "distribution",
     }

@@ -11,6 +11,7 @@ import {
 } from "@/lib/insights/dashboard-snapshot";
 import { generateDashboardPdf } from "@/lib/insights/dashboard-pdf";
 import { ShortageTrendChart } from "./ShortageTrendChart";
+import { WatchlistRiskBoard } from "./WatchlistRiskBoard";
 
 // Generic search terms for the essential-medicines rows — resolved to a real
 // drug/product page via /api/drug-autocomplete so each name links only when a
@@ -261,6 +262,11 @@ export function GovDashboardView() {
       </div>
 
       <div className="gov-scroll">
+        {/* WATCHLIST RISK BOARD — signed-in users see their own medicines,
+            tiered by forward risk, above the broad national picture. Renders
+            nothing for anonymous visitors. (Feedback #5.) */}
+        <WatchlistRiskBoard />
+
         {/* AI MARKET READ */}
         <div className="gov-read">
           <div className="gov-read-head">

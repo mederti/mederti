@@ -96,6 +96,17 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/government",
   "/governments",
   "/suppliers",           // supplier acquisition / discovery landing
+  // ── Product data surfaces, now PUBLIC (open-funnel launch) ──
+  // Anyone (and search-engine crawlers / shared links) can search and read
+  // drug shortage data without an account — this is the homepage promise and
+  // the primary SEO surface. Login is still required only for personalisation
+  // (alerts, watchlist), account, supplier dashboard and admin, which are
+  // deliberately NOT listed here and so stay gated below.
+  "/search",              // drug search (core promise)
+  "/drugs",               // drug detail pages (SEO surface, shared links)
+  "/intelligence",        // Pharma Brief / intelligence views
+  "/shortages",           // shortage listings
+  "/freshness",           // data-freshness transparency page
   // Static demo / preview HTML in public/
   "/table-preview.html",
   // Public APIs that are safe to expose

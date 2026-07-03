@@ -147,9 +147,12 @@ export default function SiteNav() {
         const e = session.user.email;
         setEmail(e);
         setInitials(e[0].toUpperCase());
-        // Pull display name and avatar from user metadata
+        // Pull display name and avatar from user metadata. Fall back to the
+        // user's own email (local part) — NOT a hardcoded placeholder — so new
+        // users (who have no name set) see themselves, not the founder.
         const meta = session.user.user_metadata ?? {};
-        const name = meta.full_name || meta.name || meta.display_name || "Rob @ Mederti";
+        const name =
+          meta.full_name || meta.name || meta.display_name || e.split("@")[0] || e;
         setDisplayName(name);
         setAvatarUrl(meta.avatar_url || null);
         if (name) {

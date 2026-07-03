@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 // ─── Question definitions ────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ type Role =
   | "manufacturer"
   | "government"
   | "researcher"
+  | "patient"
   | "other";
 
 type UseCase =
@@ -43,6 +45,7 @@ const ROLES: Array<{ value: Role; label: string; sub: string }> = [
   { value: "manufacturer",         label: "Pharma manufacturer or supplier",         sub: "I make or supply medicines and want to find buyers" },
   { value: "government",           label: "Government, regulator or health system",  sub: "I plan, regulate or oversee medicines policy" },
   { value: "researcher",           label: "Researcher, journalist or analyst",       sub: "I write about or study the industry" },
+  { value: "patient",              label: "Patient or carer",                        sub: "I'm looking after my own or someone else's medicines" },
   { value: "other",                label: "Something else",                          sub: "" },
 ];
 
@@ -115,7 +118,9 @@ function landingPathFor(role: Role | null, useCase: UseCase | null): string {
   if (role === "government" || role === "researcher" || useCase === "analyse_market") {
     return "/intelligence";
   }
-  if (useCase === "find_alternative") return "/search";
+  // Patients / carers want the "is my medicine short, what else can I get?"
+  // answer — /search (the unified conversational home) is the right landing.
+  if (role === "patient" || useCase === "find_alternative") return "/search";
   return "/home";
 }
 
@@ -132,6 +137,8 @@ export default function OnboardingPage() {
   const [useCase, setUseCase]         = useState<UseCase | null>(null);
   const [orgSize, setOrgSize]         = useState<OrgSize | null>(null);
   const [therapyAreas, setTherapyAreas] = useState<string[]>([]);
+  const [name, setName] = useState("");
+  const supabase = createBrowserClient();
   // Phase of the final-step submit so we can show better copy than "Saving…"
   // once the API call has returned and we're waiting on the destination
   // page to render.
@@ -206,6 +213,16 @@ export default function OnboardingPage() {
     if (step === 2 && countries.length === 0) { setErr("Pick at least one market."); return; }
     if (step === 3 && !useCase) { setErr("Pick what fits best."); return; }
     setErr(null);
+
+    // Save the display name to user_metadata (what the nav reads) when leaving
+    // step 1. Optional — falls back to the email if left blank.
+    if (step === 1 && name.trim()) {
+      try {
+        await supabase.auth.updateUser({ data: { full_name: name.trim() } });
+      } catch {
+        /* non-blocking — display just falls back to email */
+      }
+    }
 
     if (step < TOTAL_STEPS) {
       // Save and move forward
@@ -338,9 +355,26 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 1 — Role */}
+          {/* Step 1 — Name + Role */}
           {step === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ marginBottom: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--app-text-3)", display: "block", marginBottom: 6 }}>
+                  Your name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="First name"
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: 8,
+                    border: "1px solid var(--app-border)", fontSize: 14,
+                    fontFamily: "var(--font-inter), sans-serif",
+                    outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
               {ROLES.map((r) => (
                 <RadioCard
                   key={r.value}

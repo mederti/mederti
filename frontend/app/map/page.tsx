@@ -1,5 +1,8 @@
 import AppShell from "@/app/components/v1/AppShell";
-import MapViewClient from "@/app/map/MapViewClient";
+// MapViewLoader wraps MapViewClient in next/dynamic ssr:false. A plain static
+// import of the MapLibre client component SSRs its markup but the client
+// bundle never links under Turbopack (Next 16), so the map never mounts.
+import MapViewLoader from "@/app/map/MapViewLoader";
 
 export const metadata = {
   title: "Map view | Mederti",
@@ -24,7 +27,7 @@ export default function MapPage() {
         ],
       }}
     >
-      <MapViewClient />
+      <MapViewLoader />
     </AppShell>
   );
 }

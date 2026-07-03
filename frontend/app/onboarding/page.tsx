@@ -9,6 +9,7 @@ import SiteNav from "@/app/components/landing-nav";
 // ─── Question definitions ────────────────────────────────────────────────────
 
 type Role =
+  | "patient"
   | "hospital_pharmacist"
   | "community_pharmacist"
   | "hospital_procurement"
@@ -34,6 +35,7 @@ type OrgSize =
   | "1000_plus";
 
 const ROLES: Array<{ value: Role; label: string; sub: string }> = [
+  { value: "patient",              label: "Patient or carer",                        sub: "I'm affected by a shortage of my own or a loved one's medicine" },
   { value: "hospital_pharmacist",  label: "Hospital pharmacist or clinician",        sub: "I work in a hospital pharmacy or clinical role" },
   { value: "community_pharmacist", label: "Community pharmacist",                    sub: "I run or work in a retail / high-street pharmacy" },
   { value: "hospital_procurement", label: "Hospital procurement or supply chain",    sub: "I source medicines for a hospital or trust" },

@@ -81,6 +81,13 @@ def _resolve_default_scraper_version() -> str:
 _DEFAULT_SCRAPER_VERSION = _resolve_default_scraper_version()
 
 
+def _chunks(seq: list, size: int):
+    """Yield successive `size`-length slices of `seq`. Used to bound PostgREST
+    request sizes (GET URL length for .in_() filters, POST body for bulk upserts)."""
+    for i in range(0, len(seq), size):
+        yield seq[i : i + size]
+
+
 class ScraperError(Exception):
     """Raised when a scraper encounters an unrecoverable error."""
 
@@ -137,6 +144,11 @@ class BaseScraper(ABC):
         # Accept an injected client for testing / dry-run; otherwise build one.
         self.db: Client = db_client if db_client is not None else get_supabase_client()
         self._last_request_time: float = 0.0
+        # Per-run cache of generic_name_normalised → drug_id. Pre-warmed in
+        # bulk by upsert() and consulted by _find_or_create_drug() so a run
+        # resolves each distinct drug name at most once instead of once per
+        # event. Cleared implicitly per process; keyed on the normalised name.
+        self._drug_id_cache: dict[str, str] = {}
 
         if not all([self.SOURCE_ID, self.SOURCE_NAME, self.BASE_URL,
                     self.COUNTRY, self.COUNTRY_CODE]):
@@ -330,15 +342,28 @@ class BaseScraper(ABC):
         if not normalised:
             return None
 
+        # 0. Per-run cache (pre-warmed in bulk by upsert()) — avoids a DB
+        #    round-trip for every event whose drug was already resolved this run.
+        cached = self._drug_id_cache.get(normalised)
+        if cached:
+            return cached
+
         # 1. Exact normalised match
+        #    generic_name_normalised is NOT unique (importer paths + auto-create
+        #    races produce duplicate rows), so order deterministically — else the
+        #    per-event path and the bulk pre-warm can resolve the same name to
+        #    DIFFERENT ids, flipping the MD5 shortage_id and orphaning every
+        #    existing event for that drug/source.
         result = (
             self.db.table("drugs")
             .select("id")
             .eq("generic_name_normalised", normalised)
+            .order("id")
             .limit(1)
             .execute()
         )
         if result.data:
+            self._drug_id_cache[normalised] = result.data[0]["id"]
             return result.data[0]["id"]
 
         # 2. Prefix / first-word match
@@ -363,6 +388,7 @@ class BaseScraper(ABC):
                         "drug_id": matched["id"],
                     },
                 )
+                self._drug_id_cache[normalised] = matched["id"]
                 return matched["id"]
 
         # 3. Auto-create minimal record — shortage data is too valuable to discard
@@ -387,6 +413,7 @@ class BaseScraper(ABC):
             "Auto-created drug record",
             extra={"drug_id": new_id, "generic_name": generic_name},
         )
+        self._drug_id_cache[normalised] = new_id
         return new_id
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -404,23 +431,67 @@ class BaseScraper(ABC):
         raw = f"{drug_id}|{self.SOURCE_ID}|{self.COUNTRY_CODE}|{start_date}"
         return hashlib.md5(raw.encode()).hexdigest()
 
+    def _prewarm_drug_cache(self, events: list[dict]) -> None:
+        """Resolve exact-match drug_ids for all distinct generic names in one
+        chunked query, populating self._drug_id_cache. Only the exact-match
+        tier is batched here — misses fall through to _find_or_create_drug's
+        prefix-match / auto-create logic per event (unchanged semantics)."""
+        names = {
+            (ev.get("generic_name") or "").strip().lower() for ev in events
+        }
+        names.discard("")
+        for chunk in _chunks(sorted(names), 100):
+            try:
+                resp = (
+                    self.db.table("drugs")
+                    .select("id, generic_name_normalised")
+                    .in_("generic_name_normalised", chunk)
+                    .order("id")
+                    .execute()
+                )
+            except Exception as exc:
+                # Non-fatal: fall back to per-event resolution for this chunk.
+                self.log.warning(
+                    "Drug cache pre-warm chunk failed; falling back per-event",
+                    extra={"error": str(exc), "chunk_size": len(chunk)},
+                )
+                continue
+            for row in resp.data or []:
+                key = row.get("generic_name_normalised")
+                # Keep FIRST-seen per key to match the per-event path's
+                # ".order('id').limit(1)" — both must pick the same row.
+                if key and key not in self._drug_id_cache:
+                    self._drug_id_cache[key] = row["id"]
+
     # ─────────────────────────────────────────────────────────────────────────
     # Upsert
     # ─────────────────────────────────────────────────────────────────────────
 
     def upsert(self, events: list[dict]) -> dict[str, int]:
         """
-        For each normalized shortage dict:
-          1. Resolve drug_id (find or create)
-          2. Compute deterministic shortage_id
-          3. Check existing row for status/severity change detection
-          4. Upsert into shortage_events using ON CONFLICT (shortage_id)
-          5. If status or severity changed, log to shortage_status_log
+        For the batch of normalized shortage dicts:
+          1. Pre-warm the drug-id cache with one bulk exact-match query
+             (per-event misses still fall through to prefix-match / auto-create)
+          2. Resolve drug_id + deterministic shortage_id per event
+          3. Bulk-fetch existing rows (chunked) for status/severity change detection
+          4. Bulk-upsert into shortage_events (chunked, ON CONFLICT shortage_id),
+             falling back to per-row upsert if a chunk fails
+          5. Bulk-insert any status/severity changes into shortage_status_log
+
+        This replaces the previous per-event SELECT+SELECT+UPSERT loop (3 round
+        trips × N events) with O(N/chunk_size) round trips — the dominant driver
+        of scraper-run disk IO across ~22 shortage scrapers sharing this base.
 
         Returns counts: {"upserted": n, "skipped": n, "status_changes": n}
         """
         counts = {"upserted": 0, "skipped": 0, "status_changes": 0}
+        if not events:
+            return counts
 
+        self._prewarm_drug_cache(events)
+
+        # ── Phase 1: resolve drug_id + shortage_id per event ────────────────
+        pending: list[dict[str, Any]] = []
         for ev in events:
             try:
                 drug_id = self._find_or_create_drug(
@@ -437,115 +508,15 @@ class BaseScraper(ABC):
 
                 start_date = ev.get("start_date") or date.today().isoformat()
                 shortage_id = self._shortage_id(drug_id, start_date)
-
-                # ── Pre-fetch existing row for change detection ───────────────
-                existing_resp = (
-                    self.db.table("shortage_events")
-                    .select("id, status, severity")
-                    .eq("shortage_id", shortage_id)
-                    .limit(1)
-                    .execute()
-                )
-                existing: dict | None = (
-                    existing_resp.data[0] if existing_resp.data else None
-                )
-
-                new_status = ev.get("status", "active")
-
-                # Auto-set end_date when transitioning to resolved
-                end_date = ev.get("end_date")
-                if new_status == "resolved" and not end_date:
-                    # Use existing end_date if already set, otherwise today
-                    if existing and existing.get("end_date"):
-                        end_date = existing["end_date"]
-                    else:
-                        end_date = date.today().isoformat()
-
-                record: dict[str, Any] = {
-                    "shortage_id":              shortage_id,
-                    "drug_id":                  drug_id,
-                    "data_source_id":           self.SOURCE_ID,
-                    "country":                  self.COUNTRY,
-                    "country_code":             self.COUNTRY_CODE,
-                    "status":                   new_status,
-                    "severity":                 ev.get("severity"),
-                    "reason":                   ev.get("reason"),
-                    "reason_category":          ev.get("reason_category"),
-                    "start_date":               start_date,
-                    "end_date":                 end_date,
-                    "estimated_resolution_date": ev.get("estimated_resolution_date"),
-                    "last_verified_at":         datetime.now(timezone.utc).isoformat(),
-                    "source_url":               ev.get("source_url", self.BASE_URL),
-                    "raw_data":                 ev.get("raw_record", {}),
-                    "notes":                    ev.get("notes"),
-                }
-
-                # ── New optional columns (migration 009) ─────────────
-                if ev.get("affected_countries") is not None:
-                    record["affected_countries"] = ev["affected_countries"]
-                if ev.get("available_alternatives") is not None:
-                    record["available_alternatives"] = ev["available_alternatives"]
-                if ev.get("source_confidence_score") is not None:
-                    record["source_confidence_score"] = ev["source_confidence_score"]
-
-                # ── Tier 3 clinical-priority flag (migration 048) ─────
-                # Only sources that emit it (Health Canada) set this; every
-                # other feed leaves it absent → column stays NULL.
-                if ev.get("tier_3") is not None:
-                    record["tier_3"] = ev["tier_3"]
-
-                # ── Anticipated onset date (migration 049) ────────────
-                # Set only by sources that publish a distinct anticipated
-                # start date separate from the actual start (Health Canada
-                # carries both; suppliers must report >= 6 months ahead).
-                # Every other feed leaves it absent → column stays NULL.
-                if ev.get("anticipated_start_date") is not None:
-                    record["anticipated_start_date"] = ev["anticipated_start_date"]
-
-                (
-                    self.db.table("shortage_events")
-                    .upsert(record, on_conflict="shortage_id")
-                    .execute()
-                )
-                counts["upserted"] += 1
-
-                # ── Log status/severity changes for alert dispatch ─────────────
-                if existing:
-                    old_status   = existing.get("status")
-                    old_severity = existing.get("severity")
-                    new_severity = record.get("severity")
-
-                    if old_status != new_status or old_severity != new_severity:
-                        try:
-                            self.db.table("shortage_status_log").insert({
-                                "shortage_event_id": existing["id"],
-                                "drug_id":           drug_id,
-                                "old_status":        old_status,
-                                "new_status":        new_status,
-                                "old_severity":      old_severity,
-                                "new_severity":      new_severity,
-                            }).execute()
-                            counts["status_changes"] += 1
-                            self.log.info(
-                                "Status change logged",
-                                extra={
-                                    "drug_id":      drug_id,
-                                    "old_status":   old_status,
-                                    "new_status":   new_status,
-                                    "old_severity": old_severity,
-                                    "new_severity": new_severity,
-                                },
-                            )
-                        except Exception as log_exc:
-                            # Don't fail the upsert if change logging fails
-                            self.log.warning(
-                                "Could not log status change",
-                                extra={"error": str(log_exc), "drug_id": drug_id},
-                            )
-
+                pending.append({
+                    "ev": ev,
+                    "drug_id": drug_id,
+                    "start_date": start_date,
+                    "shortage_id": shortage_id,
+                })
             except Exception as exc:
                 self.log.error(
-                    "Failed to upsert shortage event",
+                    "Failed to resolve drug for shortage event",
                     extra={
                         "error":        str(exc),
                         "generic_name": ev.get("generic_name"),
@@ -553,6 +524,182 @@ class BaseScraper(ABC):
                     },
                 )
                 counts["skipped"] += 1
+
+        if not pending:
+            return counts
+
+        # ── Phase 2: bulk-fetch existing rows for change detection ──────────
+        existing_by_shortage_id: dict[str, dict] = {}
+        failed_lookup_ids: set[str] = set()
+        all_shortage_ids = [p["shortage_id"] for p in pending]
+        for chunk in _chunks(all_shortage_ids, 100):
+            try:
+                resp = (
+                    self.db.table("shortage_events")
+                    .select("id, shortage_id, status, severity, end_date")
+                    .in_("shortage_id", chunk)
+                    .execute()
+                )
+            except Exception as exc:
+                # A failed lookup does NOT mean these rows are new — treating
+                # them as new resets a resolved event's end_date to today,
+                # clobbering the real stored date, and skips status-change log
+                # entries. Record the ids and skip them this run (old, safe
+                # semantics); they'll re-sync next run.
+                self.log.warning(
+                    "Existing-row fetch chunk failed; skipping these ids this run",
+                    extra={"error": str(exc), "chunk_size": len(chunk)},
+                )
+                failed_lookup_ids.update(chunk)
+                continue
+            for row in resp.data or []:
+                existing_by_shortage_id[row["shortage_id"]] = row
+
+        # ── Phase 3: build records + collect status-change log entries ──────
+        records: list[dict[str, Any]] = []
+        status_log_entries: list[dict[str, Any]] = []
+
+        for p in pending:
+            ev          = p["ev"]
+            drug_id     = p["drug_id"]
+            start_date  = p["start_date"]
+            shortage_id = p["shortage_id"]
+
+            # Skip rows whose existing-state lookup failed this run — upserting
+            # them blind would clobber stored end_dates (see Phase 2).
+            if shortage_id in failed_lookup_ids:
+                counts["skipped"] += 1
+                continue
+
+            existing    = existing_by_shortage_id.get(shortage_id)
+
+            new_status = ev.get("status", "active")
+
+            # Auto-set end_date when transitioning to resolved
+            end_date = ev.get("end_date")
+            if new_status == "resolved" and not end_date:
+                # Use existing end_date if already set, otherwise today
+                if existing and existing.get("end_date"):
+                    end_date = existing["end_date"]
+                else:
+                    end_date = date.today().isoformat()
+
+            record: dict[str, Any] = {
+                "shortage_id":              shortage_id,
+                "drug_id":                  drug_id,
+                "data_source_id":           self.SOURCE_ID,
+                "country":                  self.COUNTRY,
+                "country_code":             self.COUNTRY_CODE,
+                "status":                   new_status,
+                "severity":                 ev.get("severity"),
+                "reason":                   ev.get("reason"),
+                "reason_category":          ev.get("reason_category"),
+                "start_date":               start_date,
+                "end_date":                 end_date,
+                "estimated_resolution_date": ev.get("estimated_resolution_date"),
+                "last_verified_at":         datetime.now(timezone.utc).isoformat(),
+                "source_url":               ev.get("source_url", self.BASE_URL),
+                "raw_data":                 ev.get("raw_record", {}),
+                "notes":                    ev.get("notes"),
+            }
+
+            # ── New optional columns (migration 009) ─────────────
+            if ev.get("affected_countries") is not None:
+                record["affected_countries"] = ev["affected_countries"]
+            if ev.get("available_alternatives") is not None:
+                record["available_alternatives"] = ev["available_alternatives"]
+            if ev.get("source_confidence_score") is not None:
+                record["source_confidence_score"] = ev["source_confidence_score"]
+
+            # ── Tier 3 clinical-priority flag (migration 048) ─────
+            # Only sources that emit it (Health Canada) set this; every
+            # other feed leaves it absent → column stays NULL.
+            if ev.get("tier_3") is not None:
+                record["tier_3"] = ev["tier_3"]
+
+            # ── Anticipated onset date (migration 049) ────────────
+            # Set only by sources that publish a distinct anticipated
+            # start date separate from the actual start (Health Canada
+            # carries both; suppliers must report >= 6 months ahead).
+            # Every other feed leaves it absent → column stays NULL.
+            if ev.get("anticipated_start_date") is not None:
+                record["anticipated_start_date"] = ev["anticipated_start_date"]
+
+            records.append(record)
+
+            # ── Queue status/severity change for alert dispatch ──────────────
+            if existing:
+                old_status   = existing.get("status")
+                old_severity = existing.get("severity")
+                new_severity = record.get("severity")
+
+                if old_status != new_status or old_severity != new_severity:
+                    status_log_entries.append({
+                        "shortage_event_id": existing["id"],
+                        "drug_id":           drug_id,
+                        "old_status":        old_status,
+                        "new_status":        new_status,
+                        "old_severity":      old_severity,
+                        "new_severity":      new_severity,
+                    })
+
+        # ── Phase 4: bulk-upsert shortage_events, chunked ────────────────────
+        # Collapse intra-batch duplicate shortage_ids first. Many sources list
+        # one row per pack/brand/presentation of the same INN (Latvia, Peru,
+        # Bosnia…), all resolving to the same (drug_id, start_date) → the same
+        # shortage_id. Two rows with the same conflict key in ONE upsert make
+        # Postgres raise 21000 ("ON CONFLICT DO UPDATE cannot affect row a
+        # second time") and fail the whole chunk to the slow per-row path.
+        # Keep the last occurrence (latest wins), matching per-row upsert order.
+        if records:
+            records = list({r["shortage_id"]: r for r in records}.values())
+        if status_log_entries:
+            status_log_entries = list(
+                {e["shortage_event_id"]: e for e in status_log_entries}.values()
+            )
+
+        for chunk in _chunks(records, 200):
+            try:
+                self.db.table("shortage_events").upsert(
+                    chunk, on_conflict="shortage_id"
+                ).execute()
+                counts["upserted"] += len(chunk)
+            except Exception as exc:
+                # A bad value in one row can fail the whole chunk — fall back
+                # to per-row upserts so the rest of the batch still lands.
+                self.log.warning(
+                    "Bulk upsert chunk failed; falling back to per-row",
+                    extra={"error": str(exc), "chunk_size": len(chunk)},
+                )
+                for record in chunk:
+                    try:
+                        self.db.table("shortage_events").upsert(
+                            record, on_conflict="shortage_id"
+                        ).execute()
+                        counts["upserted"] += 1
+                    except Exception as row_exc:
+                        self.log.error(
+                            "Failed to upsert shortage event",
+                            extra={
+                                "error":       str(row_exc),
+                                "shortage_id": record.get("shortage_id"),
+                            },
+                        )
+                        counts["skipped"] += 1
+
+        # ── Phase 5: bulk-insert status-change log entries, chunked ─────────
+        for chunk in _chunks(status_log_entries, 200):
+            try:
+                self.db.table("shortage_status_log").insert(chunk).execute()
+                counts["status_changes"] += len(chunk)
+                for entry in chunk:
+                    self.log.info("Status change logged", extra=entry)
+            except Exception as exc:
+                # Don't fail the run if change logging fails
+                self.log.warning(
+                    "Could not log status change chunk",
+                    extra={"error": str(exc), "chunk_size": len(chunk)},
+                )
 
         return counts
 
@@ -667,6 +814,29 @@ class BaseScraper(ABC):
             )
             if raw_scrape_id:
                 self._update_raw_scrape(raw_scrape_id, status="failed", error=str(exc))
+            else:
+                # fetch() raised before any raw_scrapes row was written, so the
+                # freshness surface would show SILENCE, not failure — the exact
+                # gap the ANVISA rework was meant to close. Write a failed row
+                # so raw_scrapes reflects the failure. Best-effort: never let a
+                # logging error mask the original exception.
+                try:
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    self.db.table("raw_scrapes").insert({
+                        "data_source_id":        self.SOURCE_ID,
+                        "scraped_at":            now_iso,
+                        "raw_data":              {"error": str(exc)},
+                        "content_hash":          f"fetch-failed:{hashlib.md5(str(exc).encode()).hexdigest()}",
+                        "status":                "failed",
+                        "scraper_version":       self.SCRAPER_VERSION,
+                        "processing_started_at": now_iso,
+                        "error_message":         str(exc)[:2000],
+                    }).execute()
+                except Exception as log_exc:
+                    self.log.warning(
+                        "Could not write failed raw_scrapes row after fetch failure",
+                        extra={"error": str(log_exc), "source": self.SOURCE_NAME},
+                    )
 
         finally:
             finished_at = datetime.now(timezone.utc)

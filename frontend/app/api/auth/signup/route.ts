@@ -73,12 +73,24 @@ export async function POST(req: Request) {
   // Persist role to user_profiles so onboarding/personalisation pick it up.
   if (role && isValidProfileRole(role) && data.user?.id) {
     try {
-      await admin.from("user_profiles").upsert(
+      // supabase-js returns { error } rather than throwing, so the catch alone
+      // would never see a CHECK-constraint violation (e.g. role='patient'
+      // before migration 062 is applied to prod). Inspect it explicitly and log
+      // loudly — this class of failure was previously silent, leaving the user
+      // with an account but no profile row.
+      const { error: profileError } = await admin.from("user_profiles").upsert(
         { user_id: data.user.id, role },
         { onConflict: "user_id" },
       );
-    } catch {
-      /* non-blocking */
+      if (profileError) {
+        console.error("[signup] failed to persist role to user_profiles", {
+          role,
+          code: profileError.code,
+          message: profileError.message,
+        });
+      }
+    } catch (e) {
+      console.error("[signup] user_profiles upsert threw", e);
     }
   }
 

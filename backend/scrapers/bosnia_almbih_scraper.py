@@ -402,8 +402,12 @@ class BosniaALMBIHScraper(BaseScraper):
         # -- Status --
         status = self._determine_status(rec.get("suspension_type", ""))
 
-        # -- End date (derived from expected-duration text, if resolvable) --
-        end_date = self._parse_end_date(rec.get("expected_duration", ""))
+        # -- Estimated resolution (derived from expected-duration text) --
+        # This is the ANTICIPATED end ("do 30.08.2026"), not a confirmed one —
+        # status is always active here — so it maps to estimated_resolution_date.
+        # Writing it to end_date would make consumers treating end_date IS NOT
+        # NULL as "resolved" misread ~181 still-active BA rows.
+        estimated_resolution_date = self._parse_end_date(rec.get("expected_duration", ""))
 
         # -- Reason: prefer the free-text explanation, fall back to coarse category --
         explanation = (rec.get("explanation") or "").strip()
@@ -435,8 +439,8 @@ class BosniaALMBIHScraper(BaseScraper):
             "notes":           notes,
             "raw_record":      rec,
         }
-        if end_date:
-            result["end_date"] = end_date
+        if estimated_resolution_date:
+            result["estimated_resolution_date"] = estimated_resolution_date
         if rec.get("atc"):
             result["notes"] = (result["notes"] + f"; ATC: {rec['atc']}") if result["notes"] else f"ATC: {rec['atc']}"
 

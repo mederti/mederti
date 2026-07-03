@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin-auth";
 import { scoreMatch, type DrugFacts } from "@/lib/parallel-trade/score";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,13 @@ export async function POST(
   _req: Request,
   ctx: { params: Promise<{ product_id: string }> }
 ) {
+  // Internal maintenance action: a service-role write (up to 2000 reads + N
+  // updates) that has no business being anonymous. Gate behind admin.
+  const adminCtx = await requireAdmin();
+  if (!adminCtx) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { product_id } = await ctx.params;
   if (!product_id) {
     return NextResponse.json({ error: "Missing product_id" }, { status: 400 });

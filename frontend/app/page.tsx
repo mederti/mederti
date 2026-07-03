@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import V1Search from "@/app/components/v1/V1Search";
 import V1TrendingShortages from "@/app/components/v1/V1TrendingShortages";
+import GlobeSection from "@/app/components/v1/GlobeSection";
 
 // Live stats are the single source of truth. Honest "—" if a fetch fails —
 // never a stale hardcoded figure on a clinician-facing page.
@@ -229,6 +230,9 @@ export default async function Home() {
           <p>Save a medicine and we&apos;ll email you the moment its shortage status changes or it&apos;s reported back in supply.</p>
         </div>
       </div>
+
+      {/* ── Global coverage globe ── */}
+      <GlobeSection />
 
       {/* ── Founder quote ── */}
       <figure className="founder">

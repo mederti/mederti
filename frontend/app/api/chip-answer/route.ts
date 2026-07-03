@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { recordAiUsage } from "@/lib/ai/usage-log";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { createServerClient } from "@/lib/supabase/server";
 
 const ROUTE = "/api/chip-answer";
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
@@ -70,6 +72,18 @@ GUIDELINES:
 /* ── Handler ── */
 
 export async function POST(req: NextRequest) {
+  // This endpoint spends billable Anthropic tokens on a fully caller-supplied
+  // prompt, so it must be both throttled and authenticated. The drug page it
+  // lives on is middleware-gated, so a legitimate caller always has a session.
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Authentication required" }), { status: 401 });
+  }
+
   const { question, drugContext } = (await req.json()) as {
     question: string;
     drugContext: DrugContext;
@@ -156,7 +170,7 @@ export async function POST(req: NextRequest) {
         });
         controller.enqueue(
           encoder.encode(
-            `data: ${JSON.stringify({ type: "text", content: `Sorry, I encountered an error: ${msg}` })}\n\n`
+            `data: ${JSON.stringify({ type: "text", content: "Sorry, I encountered an error generating that answer. Please try again." })}\n\n`
           )
         );
       } finally {

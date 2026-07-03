@@ -42,6 +42,18 @@ export async function GET(req: Request, ctx: { params: Promise<{ drug_id: string
 
   const inn = ((drug as { generic_name: string }).generic_name ?? "").toLowerCase();
 
+  // Build the drug_id/generic_name OR filter safely. Combination INNs contain
+  // commas/parens (e.g. "amoxicillin, clavulanic acid", "iron (III) hydroxide")
+  // which are PostgREST .or() structural chars — interpolating them raw
+  // corrupts the whole expression, so all three queries silently returned []
+  // (no approvals, suppliers or pricing) for those drugs. When the name isn't
+  // or()-safe, fall back to the drug_id match alone (drugId is a validated
+  // UUID) rather than breaking the query.
+  const innIsOrSafe = inn.length > 0 && !/[,()]/.test(inn);
+  const idOrName = innIsOrSafe
+    ? `drug_id.eq.${drugId},generic_name.ilike.${inn}`
+    : `drug_id.eq.${drugId}`;
+
   // Fetch resilience signals in parallel
   const [
     approvalsRes,
@@ -53,12 +65,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ drug_id: string
     admin
       .from("drug_approvals")
       .select("authority, application_number, application_type, approval_date, status, te_code, applicant_name, brand_name, source_url")
-      .or(`drug_id.eq.${drugId},generic_name.ilike.${inn}`)
+      .or(idOrName)
       .limit(20),
     admin
       .from("api_suppliers")
       .select("manufacturer_name, country, capabilities, cep_holder, dmf_holder, who_pq, source_url")
-      .or(`drug_id.eq.${drugId},generic_name.ilike.${inn}`)
+      .or(idOrName)
       .limit(20),
     admin
       .from("manufacturing_facilities")
@@ -66,7 +78,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ drug_id: string
     admin
       .from("drug_pricing_history")
       .select("country, price_type, pack_price, currency, pack_description, effective_date")
-      .or(`drug_id.eq.${drugId},generic_name.ilike.${inn}`)
+      .or(idOrName)
       .order("effective_date", { ascending: false })
       .limit(10),
     admin

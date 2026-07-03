@@ -64,11 +64,22 @@ export async function GET(req: Request) {
   if (role && isValidProfileRole(role) && data.user?.id) {
     try {
       const admin = getSupabaseAdmin();
-      await admin
+      // supabase-js returns { error } instead of throwing, so check it
+      // explicitly — a CHECK violation (e.g. role='patient' before migration
+      // 062 is applied) would otherwise leave the user with no profile row and
+      // no trace in the logs.
+      const { error: profileError } = await admin
         .from("user_profiles")
         .upsert({ user_id: data.user.id, role }, { onConflict: "user_id" });
+      if (profileError) {
+        console.error("auth/callback role upsert error:", {
+          role,
+          code: profileError.code,
+          message: profileError.message,
+        });
+      }
     } catch (e) {
-      console.error("auth/callback role upsert error:", e);
+      console.error("auth/callback role upsert threw:", e);
     }
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { confidenceLabel } from "@/lib/parallel-trade/labels";
 
 /**
  * VIEW A — "Sourcing routes during a shortage" (procurement / hospital
@@ -41,6 +42,7 @@ interface Lane {
 interface Payload {
   available: boolean;
   destination_in_shortage: boolean;
+  drug_name: string;
   market: string;
   market_name: string;
   viable_count: number;
@@ -65,12 +67,18 @@ export function ParallelTradeSourcing({
 }) {
   const [data, setData] = useState<Payload | null>(null);
 
-  // Reuse the existing "Find a supplier" drawer (rendered by FindSupplier on the
-  // same page) rather than duplicating the enquiry flow.
-  const requestSourcing = () => {
-    const btn = document.querySelector<HTMLButtonElement>(".find-supplier-btn");
-    if (btn) btn.click();
-    else document.getElementById("pt-sourcing")?.scrollIntoView({ behavior: "smooth" });
+  // Open the existing "Find a supplier" drawer (rendered by FindSupplier on the
+  // same page) PRE-FILLED with this lane's context, via a CustomEvent, rather
+  // than duplicating the enquiry flow. Falls back to a plain scroll if the
+  // FindSupplier island isn't present.
+  const requestSourcing = (l: Lane) => {
+    const message = [
+      `Parallel-import sourcing request for ${data?.drug_name ?? "this product"}.`,
+      `Lane: ${l.source_country_name ?? l.source_country} → ${data?.market_name ?? l.destination_country} via ${l.licence_holder ?? "licensed importer"}${l.licence_number ? ` (${l.licence_number})` : ""}.`,
+      l.pack_size ? `Pack: ${l.pack_size}.` : "",
+      l.reference_product_name ? `Reference product: ${l.reference_product_name}.` : "",
+    ].filter(Boolean).join(" ");
+    window.dispatchEvent(new CustomEvent("mederti:sourcing-request", { detail: { message } }));
   };
 
   useEffect(() => {
@@ -130,13 +138,13 @@ export function ParallelTradeSourcing({
             <span><span className="k">Pack</span> {l.pack_size ?? "—"}</span>
             {l.strength && <span><span className="k">Strength</span> {l.strength}</span>}
             <span><span className="k">Source status</span> {l.source_in_shortage ? `${l.source_country} shortage notice active` : `No ${l.source_country} shortage notice`}</span>
-            <span className="pts-conf"><span className="k">Match</span> <span className="pts-cb">{l.confidence.toFixed(2)}</span></span>
+            <span className="pts-conf" title={`Confidence ${l.confidence.toFixed(2)}`}><span className="pts-cb">{confidenceLabel(l.confidence).label}</span></span>
           </div>
           <div className="pts-foot">
             {l.source_url ? (
               <a href={l.source_url} target="_blank" rel="noopener noreferrer" className="pts-src">{l.source_authority ?? "Source"} ↗</a>
             ) : <span className="pts-checked">checked {fmtDate(l.last_checked)}</span>}
-            <button type="button" className="pts-req" disabled={!l.viable} onClick={requestSourcing}>
+            <button type="button" className="pts-req" disabled={!l.viable} onClick={() => requestSourcing(l)}>
               Request via Mederti
             </button>
           </div>

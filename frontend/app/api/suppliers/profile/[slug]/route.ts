@@ -13,10 +13,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
   const { slug } = await ctx.params;
   const admin = getSupabaseAdmin();
 
-  // Get supplier
+  // Get supplier. Deliberately omit contact_email / contact_phone: this is an
+  // anonymous public SEO route, and the sibling /api/suppliers/directory omits
+  // them too. Exposing them here let scrapers harvest every supplier's contact
+  // details, bypassing the gated /api/supplier-enquiry lead flow.
   const { data: supplier, error } = await admin
     .from("supplier_profiles")
-    .select("id, slug, company_name, description, website, contact_email, contact_phone, countries_served, verified, tier, year_founded, specialties, logo_url, created_at")
+    .select("id, slug, company_name, description, website, countries_served, verified, tier, year_founded, specialties, logo_url, created_at")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -50,8 +53,20 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     event_type: "profile_view",
   }).then(() => {}, () => {});
 
-  // Update view count
-  admin.rpc("increment", { table_name: "supplier_profiles", id: supplier.id, column_name: "view_count" }).then(() => {}, () => {});
+  // Update view count. No `increment` RPC exists in any migration, so the
+  // previous rpc() call silently no-op'd and view_count never moved (supplier
+  // analytics reported 0 views forever). Do a fire-and-forget read-modify-write
+  // — a small race on concurrent views is fine for a counter, and the
+  // authoritative record is the supplier_analytics_events row inserted above.
+  (async () => {
+    const { data: cur } = await admin
+      .from("supplier_profiles")
+      .select("view_count")
+      .eq("id", supplier.id)
+      .maybeSingle();
+    const next = ((cur?.view_count as number | null) ?? 0) + 1;
+    await admin.from("supplier_profiles").update({ view_count: next }).eq("id", supplier.id);
+  })().catch(() => {});
 
   return NextResponse.json({
     supplier,

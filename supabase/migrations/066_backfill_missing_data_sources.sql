@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Migration 065 — Backfill 5 data_sources rows dropped by prod migration drift
+-- Migration 066 — Backfill 5 data_sources rows dropped by prod migration drift
 --
 -- Discovered 2026-07-02 while reconciling the homepage "countries" stat (35
 -- live vs 38 expected). These 5 rows were part of migration 010's original

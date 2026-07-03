@@ -46,6 +46,7 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/ask",               // conversational home (logged-in landing; logo target)
   "/chat",              // Claude-led answer surface (asks/prompts route here)
   "/shortages",         // "See all active" target from the trending row
+  "/map",               // global map view (shortages/manufacturing/regulators)
   "/intelligence",      // Pharma Brief and any subroutes
   "/insights",          // public Intelligence / Dashboard reading views (/insights/[kind])
   "/freshness",         // public source-freshness dashboard (credibility lever)

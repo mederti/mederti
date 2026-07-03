@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
 import { recordAiUsage } from "@/lib/ai/usage-log";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // 6h edge cache, matching the existing in-memory TTL_MS. Without this, a
 // cold start hits Claude Sonnet + a fresh DB aggregation on every region/
@@ -43,7 +44,11 @@ interface PublicBriefing {
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const force = url.searchParams.get("refresh") === "1";
+  let force = url.searchParams.get("refresh") === "1";
+  // This route takes no id and has a single global cache, so ?refresh=1 in a
+  // loop forces back-to-back billable Sonnet calls. Honour the bypass for
+  // admins only; everyone else gets the cached briefing.
+  if (force && !(await requireAdmin())) force = false;
 
   if (!force && cache && Date.now() - cache.generated < TTL_MS) {
     return NextResponse.json({ ...cache.briefing, cached: true, generated_at: new Date(cache.generated).toISOString() });

@@ -14,9 +14,16 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
+  // Strip PostgREST filter metacharacters (comma / parens) from any value that
+  // gets interpolated into an .or() expression — otherwise a value like
+  // `x),(status.eq.foo` restructures the filter tree. Dots/spaces are safe
+  // inside an ilike value; only the or()-structural chars matter.
+  const orSafe = (s: string) => s.replace(/[,()]/g, " ").trim();
   const productName = searchParams.get("product_name")?.trim();
   const inn = searchParams.get("inn")?.trim();
-  const country = searchParams.get("country")?.trim().toUpperCase();
+  const rawCountry = searchParams.get("country")?.trim().toUpperCase();
+  // Only accept a valid ISO alpha-2; anything else is dropped (not injected).
+  const country = rawCountry && /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : undefined;
   const type = searchParams.get("type")?.trim();
   const limit = Math.min(Number(searchParams.get("limit")) || 100, 500);
 
@@ -39,9 +46,10 @@ export async function GET(req: Request) {
     .limit(limit);
 
   if (productName) {
-    q = q.or(`product_name.ilike.%${productName}%,brand_name.ilike.%${productName}%`);
+    const pn = orSafe(productName);
+    if (pn) q = q.or(`product_name.ilike.%${pn}%,brand_name.ilike.%${pn}%`);
   }
-  if (inn) q = q.ilike("active_substance", `%${inn}%`);
+  if (inn) q = q.ilike("active_substance", `%${orSafe(inn)}%`);
   if (country) {
     q = q.or(`destination_country.eq.${country},source_country.eq.${country}`);
   }
@@ -51,7 +59,9 @@ export async function GET(req: Request) {
 
   const { data, error } = await q;
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Don't leak PostgREST/schema internals to the client.
+    console.error("[/api/parallel-trade/search] query error:", error.message);
+    return NextResponse.json({ error: "search failed" }, { status: 500 });
   }
 
   return NextResponse.json({

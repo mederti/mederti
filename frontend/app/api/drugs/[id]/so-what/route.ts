@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
 import { recordAiUsage } from "@/lib/ai/usage-log";
 import { cleanBrandNames } from "@/lib/brand";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,11 @@ interface SoWhatPayload {
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: drugId } = await ctx.params;
   const url = new URL(req.url);
-  const force = url.searchParams.get("refresh") === "1";
+  let force = url.searchParams.get("refresh") === "1";
+  // The cache-bypass forces a fresh, billable Claude call. Honour it only for
+  // admins so it can't be looped anonymously to run up Anthropic spend;
+  // everyone else transparently gets the cached payload.
+  if (force && !(await requireAdmin())) force = false;
 
   if (!force) {
     const c = cache.get(drugId);

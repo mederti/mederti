@@ -94,22 +94,37 @@ async function buildMarketPricing(
   userCountry: string,
 ): Promise<{ concession: ConcessionSignal | null; priceMarkets: MarketPrice[] }> {
   const inn = (genericName ?? "").trim();
-  // Only add the generic_name fallback when the INN is filter-safe (no
-  // PostgREST `or()` metacharacters) so we never break the whole query.
+  // Only use the generic_name fallback when the INN is filter-safe (no
+  // PostgREST metacharacters) so we never break the whole query.
   const innSafe = inn && /^[a-z0-9 .\-/]+$/i.test(inn) ? inn : "";
-  const orFilter = innSafe ? `drug_id.eq.${drugId},generic_name.ilike.${innSafe}` : `drug_id.eq.${drugId}`;
 
+  // Two-step fetch (NOT a single or() filter): once drug_pricing_history got
+  // large (post NADAC backfill, ~500k US rows) the or(drug_id, generic_name
+  // ilike) shape can't use any index and dies on the statement timeout —
+  // which supabase-js reports as a soft `error`, not a throw, so the panel
+  // silently vanished. Query by indexed drug_id first; only when it finds
+  // nothing, best-effort the name fallback (unlinked-variant case), tolerating
+  // a timeout as empty. Migration 067 (trigram idx) makes the fallback fast.
+  const PRICE_COLS = "country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source";
   let rows: any[] = [];
-  try {
-    const { data } = await supabase
+  {
+    const { data, error } = await supabase
       .from("drug_pricing_history")
-      .select("country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source")
-      .or(orFilter)
+      .select(PRICE_COLS)
+      .eq("drug_id", drugId)
       .order("effective_date", { ascending: false, nullsFirst: false })
       .limit(400);
+    if (error) return { concession: null, priceMarkets: [] };
     rows = data ?? [];
-  } catch {
-    return { concession: null, priceMarkets: [] };
+  }
+  if (rows.length === 0 && innSafe) {
+    const { data } = await supabase
+      .from("drug_pricing_history")
+      .select(PRICE_COLS)
+      .ilike("generic_name", innSafe)
+      .order("effective_date", { ascending: false, nullsFirst: false })
+      .limit(400);
+    rows = data ?? []; // timeout here → just no fallback rows
   }
   if (rows.length === 0) return { concession: null, priceMarkets: [] };
 
@@ -217,15 +232,31 @@ type Persona = "pharmacist" | "procurement" | "supplier";
 /** Maps user_profiles.role → persona view. */
 function personaFromRole(role: string | null | undefined): Persona | null {
   if (!role) return null;
-  if (role === "pharmacist") return "pharmacist";
-  // Closes audit FINDING-UX-04: doctors previously fell through to the
-  // supplier (F bento) view despite /doctors marketing promising
-  // "shortage alerts before you prescribe". Pharmacist view is the
-  // closest fit for clinical decision-makers.
-  if (role === "doctor") return "pharmacist";
-  if (role === "hospital" || role === "government") return "procurement";
-  if (role === "supplier") return "supplier";
-  return null; // 'default' or unknown
+  // Covers BOTH the current onboarding roles (migration 025 / lib/roles.ts) and
+  // the legacy values still in the table. Previously only legacy roles were
+  // mapped, so every role onboarding actually writes today
+  // (hospital_procurement, wholesaler, manufacturer, *_pharmacist, researcher,
+  // patient) fell through to null → the pharmacist default. Harmless while
+  // soft-launch forces the pharmacist view, but the moment that flag is off,
+  // procurement buyers and manufacturers would get the wrong page.
+  const MAP: Record<string, Persona> = {
+    // Pharmacist-shaped (clinical / read-only answer card is the closest fit)
+    pharmacist: "pharmacist",
+    hospital_pharmacist: "pharmacist",
+    community_pharmacist: "pharmacist",
+    doctor: "pharmacist",
+    researcher: "pharmacist",
+    patient: "pharmacist",
+    // Procurement / buyer-side
+    hospital: "procurement",
+    hospital_procurement: "procurement",
+    government: "procurement",
+    // Supply-side (F bento market-scan view)
+    supplier: "supplier",
+    wholesaler: "supplier",
+    manufacturer: "supplier",
+  };
+  return MAP[role] ?? null; // 'default'/'other'/unknown → null (pharmacist default)
 }
 
 /** Explicit ?as= wins, else session role, else pharmacist. */
@@ -741,7 +772,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
 
   const latestUpdate = shortages[0]?.updated_at ?? shortages[0]?.last_verified_at;
   const cookieStore = await cookies();
-  const userCountry = cookieStore.get("mederti-country")?.value ?? "AU";
+  // Validate the cookie: a malformed/legacy value (e.g. 3 letters) flows into
+  // the arbitrage API's destination param, fails its ^[A-Z]{2}$ check → 400,
+  // and used to crash the whole drug page. Fall back to AU on anything invalid.
+  const rawCountry = (cookieStore.get("mederti-country")?.value ?? "").toUpperCase();
+  const userCountry = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : "AU";
 
   // Pharmacist-only launch: render the V1 design, fed by the already-fetched
   // (and safety-hardened) data. Bypasses the legacy persona render entirely.

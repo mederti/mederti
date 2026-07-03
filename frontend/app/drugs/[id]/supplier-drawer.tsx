@@ -18,6 +18,10 @@ interface Props {
   // a named wholesale partner. Tweaks copy so it reads as "Mederti will source
   // this for you" rather than partner-direct enquiry semantics.
   broker?: boolean;
+  // Optional pre-filled message — used when the drawer is opened from a specific
+  // parallel-import lane ("via kohlpharma, DE→GB…") so the sourcing team gets
+  // the route context without the buyer retyping it.
+  prefillMessage?: string;
 }
 
 const COUNTRY_LABELS: Record<string, string> = {
@@ -27,14 +31,14 @@ const COUNTRY_LABELS: Record<string, string> = {
 
 export function SupplierDrawer({
   isOpen, onClose, drugName, drugId, severity,
-  partner, userCountry, userId, userEmail, userOrganisation, broker,
+  partner, userCountry, userId, userEmail, userOrganisation, broker, prefillMessage,
 }: Props) {
   const [quantity, setQuantity] = useState("");
   const [urgency, setUrgency] = useState(
     severity === "critical" ? "critical" : severity === "high" ? "urgent" : "routine"
   );
   const [organisation, setOrganisation] = useState(userOrganisation ?? "");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(prefillMessage ?? "");
   // Contact details Mederti needs to come back to the buyer. Email is always
   // collected (pre-filled from the session when known, still editable so a
   // buyer can give a different reply-to); phone is optional.
@@ -54,8 +58,12 @@ export function SupplierDrawer({
       setError("");
       setEmail(prev => prev || userEmail || "");
       setOrganisation(prev => prev || userOrganisation || "");
+      // Lane context is specific to how the drawer was opened — refresh it each
+      // open so a request from the "DE→GB via kohlpharma" lane carries that,
+      // not a stale message from a previous lane.
+      if (prefillMessage) setMessage(prefillMessage);
     }
-  }, [isOpen, userEmail, userOrganisation]);
+  }, [isOpen, userEmail, userOrganisation, prefillMessage]);
 
   async function handleSubmit() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {

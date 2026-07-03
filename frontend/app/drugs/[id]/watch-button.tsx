@@ -73,13 +73,20 @@ export function WatchButton({ drugId }: Props) {
     setToggling(true);
 
     if (isWatching && watchlistId) {
-      await supabase
+      const { error } = await supabase
         .from("user_watchlists")
         .update({ is_active: false })
         .eq("id", watchlistId);
+      if (error) {
+        // Don't flip the UI to a state the DB didn't accept (expired session,
+        // network, RLS deny) — the sidebar refetch would contradict it.
+        console.error("[watch] unwatch failed", error.message);
+        setToggling(false);
+        return;
+      }
       setIsWatching(false);
     } else {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("user_watchlists")
         .upsert(
           {
@@ -92,7 +99,15 @@ export function WatchButton({ drugId }: Props) {
         )
         .select("id")
         .single();
-      if (data) setWatchlistId(data.id);
+      if (error || !data) {
+        // Leave the button in its prior "Watch" state; without the returned id
+        // a false "Watching" would re-run the add branch on the next click
+        // instead of unwatching.
+        console.error("[watch] add failed", error?.message);
+        setToggling(false);
+        return;
+      }
+      setWatchlistId(data.id);
       setIsWatching(true);
       // Fire-and-forget demand signal (watchlist_add) — recorded server-side.
       fetch("/api/demand/watchlist-add", {
@@ -102,7 +117,8 @@ export function WatchButton({ drugId }: Props) {
       }).catch(() => {});
     }
 
-    // Let the sidebar's Watchlist section refresh without a page reload.
+    // Let the sidebar's Watchlist section refresh without a page reload — only
+    // reached on a confirmed write.
     window.dispatchEvent(new Event("watchlist:changed"));
     setToggling(false);
   }

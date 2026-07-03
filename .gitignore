@@ -92,3 +92,8 @@ node_modules/
 /Mederti_Data_Sources_Report.pdf
 /build_data_sources_report.py
 /trade-price-preview.html
+
+# Proprietary local data exports — supplier dataset, INN target lists, assets.
+# Kept on disk for the pipeline; must never enter git history.
+/exports/
+/catalogue_inn_targets.tsv

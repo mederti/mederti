@@ -56,6 +56,10 @@ export function ParallelTradeArbitrage({ drugId, destination }: { drugId: string
     (async () => {
       try {
         const res = await fetch(`/api/drugs/${drugId}/parallel-trade/arbitrage?destination=${encodeURIComponent(destination)}`);
+        // The API returns bare {error} (no `routes`) on 4xx/5xx — e.g. a
+        // malformed destination cookie → 400. Bail so the render-time
+        // data.routes.some() below never runs on an error payload.
+        if (!res.ok) return;
         const json = (await res.json()) as Payload;
         if (!cancelled) setData(json);
       } catch {
@@ -66,7 +70,7 @@ export function ParallelTradeArbitrage({ drugId, destination }: { drugId: string
   }, [drugId, destination]);
 
   // Only surface when at least one route has a real, comparable spread.
-  const hasRealSpread = !!data && data.routes.some((r) => r.spread_pct != null);
+  const hasRealSpread = !!data && Array.isArray(data.routes) && data.routes.some((r) => r.spread_pct != null);
   if (!data || !data.available || !hasRealSpread) return null;
 
   return (

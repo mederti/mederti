@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 
 // Mirrors migration 025 enums + onboarding/page.tsx
 const ROLES: Array<{ value: string; label: string }> = [
+  { value: "patient",              label: "Patient or carer" },
   { value: "hospital_pharmacist",  label: "Hospital pharmacist or clinician" },
   { value: "community_pharmacist", label: "Community pharmacist" },
   { value: "hospital_procurement", label: "Hospital procurement / supply chain" },

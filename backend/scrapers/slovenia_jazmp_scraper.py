@@ -179,19 +179,18 @@ class SloveniaJAZMPScraper(BaseScraper):
 
         workbook_url = self._find_workbook_url(soup)
         if not workbook_url:
-            self.log.warning(
-                "No Excel/xls attachment link found on JAZMP page",
-                extra={"url": self.BASE_URL},
+            # Raise, don't return []: a silent 0-record "success" hashes as a
+            # duplicate on every later run, refreshing last_verified_at and
+            # re-activating stale SI events — poisoning the freshness surface.
+            raise ScraperError(
+                f"No Excel/xls attachment link found on JAZMP page ({self.BASE_URL})"
             )
-            return []
 
         content = self._download_workbook(workbook_url)
         if content is None:
-            self.log.warning(
-                "Could not download JAZMP workbook (xls/xlsx both failed)",
-                extra={"attempted_url": workbook_url},
+            raise ScraperError(
+                f"Could not download JAZMP workbook (xls/xlsx both failed): {workbook_url}"
             )
-            return []
 
         records = self._parse_workbook(content)
         self.log.info("JAZMP fetch complete", extra={"records": len(records)})
@@ -249,12 +248,12 @@ class SloveniaJAZMPScraper(BaseScraper):
         """Parse the 'Zadnja obvestila' (latest-per-drug) sheet into raw dicts."""
         try:
             import openpyxl
-        except ImportError:
-            self.log.error(
+        except ImportError as exc:
+            # Missing dep must fail loudly — a silent [] would poison freshness.
+            raise ScraperError(
                 "openpyxl not installed -- required for JAZMP xlsx parsing. "
                 "Install with: pip install openpyxl"
-            )
-            return []
+            ) from exc
 
         try:
             wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)

@@ -175,6 +175,25 @@ export default function V1DrugView({
   // elsewhere are surfaced as secondary context + the regulator breakdown.
   const cName = COUNTRY[userCountry] ?? userCountry;
   const mine = active.find((s) => (s.country_code || "").toUpperCase() === userCountry) || null;
+  // ALL events in the user's market — one row per regulator-reported product,
+  // so multi-brand shortages stop collapsing into a single ingredient line.
+  // Events that would render identically (same product, sponsor, status,
+  // severity, return date) are collapsed: they carry no extra information for
+  // the reader, only noise.
+  const mineSeen = new Set<string>();
+  const mineAll = active
+    .filter((s) => (s.country_code || "").toUpperCase() === userCountry)
+    .sort((a, b) =>
+      (SEV[(b.severity || "").toLowerCase()] ?? 0) - (SEV[(a.severity || "").toLowerCase()] ?? 0) ||
+      (a.estimated_resolution_date || "9999").localeCompare(b.estimated_resolution_date || "9999"),
+    )
+    .filter((s) => {
+      const k = [s.brand_name, s.sponsor, s.status, s.severity, s.estimated_resolution_date]
+        .map((v) => (v || "").toString().toLowerCase()).join("|");
+      if (mineSeen.has(k)) return false;
+      mineSeen.add(k);
+      return true;
+    });
   const elsewhere = active.filter((s) => (s.country_code || "").toUpperCase() !== userCountry);
   const elsewhereCount = new Set(elsewhere.map((s) => (s.country_code || "").toUpperCase())).size;
 
@@ -684,6 +703,64 @@ export default function V1DrugView({
               <div className="sw-d">{expected ? `Sponsor est. via ${expSource} — may differ by brand` : "No estimate provided"}</div>
             </div>
           </div>
+
+          {/* Products affected — brand-level rows for the user's market.
+              Pharmacists procure by brand: the exact product each notice
+              covers, its sponsor, and its OWN return estimate. Events whose
+              source reports at ingredient level only are labelled as such,
+              never dressed up with the molecule's brand list. */}
+          {mineAll.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">
+                Products affected in {cName}{" "}
+                <span className="help">one row per regulator notice</span>
+              </div>
+              <div className="country-list">
+                {mineAll.slice(0, 12).map((s, i) => {
+                  const r = SEV[(s.severity || "").toLowerCase()] ?? 0;
+                  const anticip = (s.status || "").toLowerCase() === "anticipated";
+                  const cls = anticip ? "sp-part" : r >= 2 ? "sp-crit" : "sp-part";
+                  const lbl = anticip
+                    ? "Anticipated"
+                    : `${(s.severity || "shortage")[0].toUpperCase()}${(s.severity || "hortage").slice(1)}`;
+                  const back = monthYear(s.estimated_resolution_date);
+                  const sku = s.brand_name ? skuByBrand.get(s.brand_name.toLowerCase()) : undefined;
+                  return (
+                    <div key={i} className="country-row">
+                      <div className="cl">
+                        <div>
+                          <div className="cn">
+                            {s.brand_name
+                              ? sku
+                                ? <a href={`/drugs/${sku.catId}?brand=1`}>{s.brand_name}</a>
+                                : s.brand_name
+                              : "Ingredient-level notice — brand not published"}
+                          </div>
+                          <div className="alt-f">
+                            {[s.sponsor, abbr(s.data_sources?.name, s.data_sources?.abbreviation)]
+                              .filter(Boolean).join(" · ") || "—"}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className={`status-pill ${cls}`}><span className="d" />{lbl}</span>
+                        <span className="alt-f">
+                          {back
+                            ? `back ~${back}${s.brand_name ? "" : " (ingredient-level)"}`
+                            : "no return estimate"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {mineAll.length > 12 && (
+                  <div className="alt-f" style={{ padding: "6px 2px" }}>
+                    +{mineAll.length - 12} more notices in {cName}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Product attributes — detailed 2-column reference table */}
           {attrRows.length > 0 && (

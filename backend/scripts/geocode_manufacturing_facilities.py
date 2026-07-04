@@ -47,10 +47,19 @@ def _query_string(country: str, state_or_region: Optional[str], city: Optional[s
     return ", ".join(parts)
 
 
+# Nominatim place_rank: country=4, state=8, county=10-12, city/town/village=16+.
+# A "City, State, Country" query that can't resolve the city silently falls
+# back to the COUNTRY (rank 4) — whose centroid we must NOT store as a precise
+# facility pin (it stacks hundreds of unrelated factories on one point, e.g.
+# 506 US facilities in the middle of Kansas). Reject anything coarser than a
+# county so those fall through to the honest country-centroid UI fallback.
+MIN_PLACE_RANK = 13
+
+
 def geocode(query: str, client: httpx.Client) -> Optional[Tuple[float, float]]:
     resp = client.get(
         NOMINATIM_URL,
-        params={"q": query, "format": "json", "limit": 1},
+        params={"q": query, "format": "json", "limit": 1, "addressdetails": 1},
         headers={"User-Agent": USER_AGENT},
         timeout=15.0,
     )
@@ -58,7 +67,12 @@ def geocode(query: str, client: httpx.Client) -> Optional[Tuple[float, float]]:
     results = resp.json()
     if not results:
         return None
-    return float(results[0]["lat"]), float(results[0]["lon"])
+    hit = results[0]
+    place_rank = int(hit.get("place_rank", 0))
+    addresstype = hit.get("addresstype", "")
+    if place_rank < MIN_PLACE_RANK or addresstype in ("country", "state", "province", "region"):
+        return None  # country/state-level match — not a real facility location
+    return float(hit["lat"]), float(hit["lon"])
 
 
 def geocode_with_address(query: str, client: httpx.Client) -> Optional[dict]:
@@ -76,18 +90,32 @@ def geocode_with_address(query: str, client: httpx.Client) -> Optional[dict]:
 
 def run(limit: Optional[int] = None) -> None:
     db = get_supabase_client()
-    resp = (
-        db.table("manufacturing_facilities")
-        .select("id, facility_name, country, state_or_region, city")
-        .is_("latitude", "null")
-        .not_.is_("country", "null")
-        .execute()
-    )
-    rows = resp.data or []
+    # Paginate: PostgREST caps a single response at 1000 rows, so an
+    # unpaginated .execute() silently processed only the first 1000 of 10k+.
+    # Also require a city — geocoding country/state alone returns the country
+    # centroid, which must never be written as a precise facility pin.
+    rows = []
+    offset = 0
+    page = 1000
+    while True:
+        resp = (
+            db.table("manufacturing_facilities")
+            .select("id, facility_name, country, state_or_region, city")
+            .is_("latitude", "null")
+            .not_.is_("country", "null")
+            .not_.is_("city", "null")
+            .range(offset, offset + page - 1)
+            .execute()
+        )
+        batch = resp.data or []
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        offset += page
     if limit:
         rows = rows[:limit]
 
-    print(f"[geocode] {len(rows)} facilities need coordinates (dry_run={DRY_RUN})")
+    print(f"[geocode] {len(rows)} facilities with a city need coordinates (dry_run={DRY_RUN})")
 
     cache: Dict[CacheKey, Optional[Tuple[float, float]]] = {}
     geocoded = 0

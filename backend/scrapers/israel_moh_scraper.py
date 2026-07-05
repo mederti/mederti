@@ -1,23 +1,31 @@
 """
-Israel Ministry of Health Drug Shortage Scraper
--------------------------------------------------
+Israel Ministry of Health Drug Shortage Scraper — DORMANT, NO PUBLIC SOURCE
+---------------------------------------------------------------------------
 Source:  Israel Ministry of Health - Drug Registry
 URL:     https://israeldrugs.health.gov.il/
 
-The Israel MOH publishes drug shortage and availability information through
-its drug registry portal. The site exposes a web API that returns JSON data
-about drug shortages, supply problems, and availability updates.
+*** DO NOT WIRE INTO CRON. Israel publishes no public drug-shortage feed. ***
 
-This scraper attempts to use the site's REST API endpoints. If the API is
-not available or has changed, it falls back to scraping the HTML pages for
-shortage notices.
+Investigated 2026-07-03 (memory `israel-moh-no-shortage-source`). This scraper
+was originally built against the ASSUMPTION that israeldrugs.health.gov.il
+exposes a shortage API. It does not:
+
+  - The site is an AngularJS SPA. Its real backend is
+    POST https://israeldrugs.health.gov.il/GovServiceList/IDRServer/<Action>
+    (JSON body) — NOT the guessed `.svc` GET endpoints below. The actions are
+    registry/search only (SearchByName, SearchByAdv, GetSpecificDrug,
+    GetAtcList, ...). There is NO shortage/supply action, and the app has no
+    shortage controller or route (the #!/drugShortage pages never existed).
+  - data.gov.il (national open-data portal) has no drug-shortage dataset.
+
+The only adjacent signal is SearchByAdv's canceled/withdrawn registrations
+(a discontinuation signal, not a supply shortage) — deliberately NOT built,
+to avoid overstating coverage. fetch() therefore fails loudly rather than
+returning a misleading 0-record "success".
 
 Data source UUID:  10000000-0000-0000-0000-000000000046
 Country:           Israel
 Country code:      IL
-Confidence:        82/100 (official government drug registry)
-
-Cron:  Every 24 hours
 """
 
 from __future__ import annotations
@@ -97,6 +105,18 @@ class IsraelMOHScraper(BaseScraper):
             "url": self.BASE_URL,
         })
 
+        # Israel MOH exposes no public drug-shortage source (verified 2026-07-03;
+        # see module docstring). Fail loudly instead of returning a misleading
+        # 0-record "success" that reads as a transient outage.
+        raise ScraperError(
+            "Israel MOH publishes no public drug-shortage feed: the israeldrugs "
+            "registry API (/GovServiceList/IDRServer/) is search-only and "
+            "data.gov.il has no shortage dataset. This scraper is intentionally "
+            "dormant — do not wire into cron. See module docstring / memory "
+            "`israel-moh-no-shortage-source`."
+        )
+
+        # Unreachable — legacy endpoint-probing kept for reference only.
         # Primary: Try API endpoints
         for endpoint in self.API_ENDPOINTS:
             try:

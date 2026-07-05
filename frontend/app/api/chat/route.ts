@@ -2,7 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/chat/system-prompt";
 import { TOOL_DEFINITIONS, executeTool, hydrateReferencedIds, newContext } from "@/lib/chat/tools";
-import { checkRateLimit, getClientIp } from "@/lib/chat/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { getClientIp } from "@/lib/chat/rate-limit";
 import { recordDemandSignal } from "@/lib/demand-signal";
 import { recordAiUsage } from "@/lib/ai/usage-log";
 import { createServerClient } from "@/lib/supabase/server";
@@ -323,18 +324,23 @@ async function runTier1({
 }
 
 export async function POST(req: NextRequest) {
-  const ip = getClientIp(req);
-  const rl = checkRateLimit(ip);
-  if (!rl.ok) {
+  // Durable, cross-region rate limit (Upstash-backed when configured). This
+  // route costs real Anthropic tokens per call, so the previous in-memory
+  // limiter — per-instance, reset on cold start — let an attacker get
+  // 30/hr × (warm instances) across regions. Preserve the chat response shape
+  // so the client keeps rendering the 429 gracefully.
+  const limited = await enforceRateLimit(req, "chat");
+  if (limited) {
     return Response.json(
       {
         content: "",
         drugs: {},
-        error: `Rate limit reached. Try again at ${new Date(rl.resetAt).toLocaleTimeString()}.`,
+        error: "Rate limit reached. Please slow down and try again shortly.",
       },
       { status: 429 }
     );
   }
+  const ip = getClientIp(req); // used for demand-signal identifier + logging
 
   let body: IncomingBody;
   try {

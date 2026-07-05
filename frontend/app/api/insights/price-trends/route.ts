@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { forecastPrice } from "@/lib/forecast/holt";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 // 1-hour cache: prices update at most weekly/monthly, and the fit is a little
 // CPU (grid-search × rolling backtest), so recomputing per request is wasted.
@@ -80,11 +81,19 @@ const median = (xs: number[]): number => {
 };
 
 export async function GET(req: Request) {
+  const limited = await enforceRateLimit(req, "strict");
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const drugId = url.searchParams.get("drug_id") ?? "";
   const country = (url.searchParams.get("country") ?? "GB").toUpperCase();
-  const displayMonths = Math.min(Math.max(Number(url.searchParams.get("months") ?? "24"), 6), 60);
-  const forward = Math.min(Math.max(Number(url.searchParams.get("forward") ?? "6"), 1), 12);
+  // Coerce defensively: Number("abc")→NaN would propagate through the clamps to
+  // segMonths[NaN]→undefined and crash monthRange(undefined) with a 500. Round
+  // so fractional values (?months=10.5) can't produce a fractional index.
+  const rawMonths = Number(url.searchParams.get("months") ?? "24");
+  const displayMonths = Number.isFinite(rawMonths) ? Math.min(Math.max(Math.round(rawMonths), 6), 60) : 24;
+  const rawForward = Number(url.searchParams.get("forward") ?? "6");
+  const forward = Number.isFinite(rawForward) ? Math.min(Math.max(Math.round(rawForward), 1), 12) : 6;
 
   const empty = (reason: string) =>
     NextResponse.json({ drug_id: drugId, country, available: false, reason, history: [], forecast: null, concessions: [] });
@@ -109,21 +118,25 @@ export async function GET(req: Request) {
   // as "no rows". So: (1) query by drug_id (indexed) and treat an error as
   // unreachable-not-empty; (2) only when that finds nothing, best-effort name
   // fallback for rows that never resolved to a drug_id (unlinked-variant
-  // case), tolerating a timeout as "no extra rows". Migration 066 (trigram
+  // case), tolerating a timeout as "no extra rows". Migration 067 (trigram
   // index on generic_name) makes the fallback fast once applied.
   const COLS = "country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source";
   let rows: Row[] = [];
   {
+    // Order DESCENDING then reverse in memory: high-volume markets (post-NADAC
+    // ~500k US rows, and the ~1000-row PostgREST response cap) overflow the
+    // limit, and ascending+limit would keep the OLDEST rows — dropping recent
+    // prices, showing a stale "latest", and falsely tripping the recency gate.
     const { data, error } = await sb
       .from("drug_pricing_history")
       .select(COLS)
       .eq("drug_id", drugId)
       .eq("country", country)
       .not("effective_date", "is", null)
-      .order("effective_date", { ascending: true })
+      .order("effective_date", { ascending: false })
       .limit(4000);
     if (error) return empty("pricing layer unreachable");
-    rows = (data ?? []) as Row[];
+    rows = ((data ?? []) as Row[]).reverse();
   }
   if (rows.length === 0 && innSafe) {
     const { data } = await sb
@@ -132,9 +145,9 @@ export async function GET(req: Request) {
       .ilike("generic_name", innSafe)
       .eq("country", country)
       .not("effective_date", "is", null)
-      .order("effective_date", { ascending: true })
+      .order("effective_date", { ascending: false })
       .limit(4000);
-    rows = (data ?? []) as Row[]; // error here (likely 57014) → just no fallback rows
+    rows = ((data ?? []) as Row[]).reverse(); // error here (likely 57014) → just no fallback rows
   }
   if (rows.length === 0) return empty("no price history for this market");
 

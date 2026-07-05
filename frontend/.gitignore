@@ -36,6 +36,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# generated map tiles (built by backend/scripts/build_healthcare_tiles.py;
+# deploy to object storage for prod, don't commit multi-MB binaries)
+/public/tiles/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

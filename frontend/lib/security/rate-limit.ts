@@ -20,7 +20,7 @@
 import { NextResponse } from "next/server";
 import { getClientIp } from "@/lib/chat/rate-limit";
 
-export type RateTier = "search" | "browse" | "strict" | "bulk";
+export type RateTier = "search" | "browse" | "strict" | "bulk" | "chat";
 
 // limit = requests permitted per `windowSec` window, per IP, per tier.
 const TIERS: Record<RateTier, { limit: number; windowSec: number }> = {
@@ -33,6 +33,10 @@ const TIERS: Record<RateTier, { limit: number; windowSec: number }> = {
   // Expensive bulk matchers (bulk-lookup, resolve-drug-names) — the clone
   // vector. Deliberately tight; legit pharmacy uploads are occasional.
   bulk: { limit: 12, windowSec: 60 },
+  // /api/chat — the one route that spends real Anthropic money per call
+  // (Sonnet + web_search). Hourly cap, DURABLE + cross-region (the in-memory
+  // limiter it replaced reset on cold start and was per-instance).
+  chat: { limit: 30, windowSec: 3600 },
 };
 
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;

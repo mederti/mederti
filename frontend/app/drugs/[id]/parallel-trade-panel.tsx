@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { confidenceLabel, basisText, paralleltradeVerdict } from "@/lib/parallel-trade/labels";
 
 /**
  * Parallel Trade Intelligence panel for the V1 drug page.
@@ -113,9 +114,9 @@ function LicenceRow({ l, review }: { l: Licence; review?: boolean }) {
             <span className="pt-k">Route</span> {route}
           </span>
         )}
-        <span className="pt-conf">
-          <span className="pt-k">Match</span>
-          <span className={`pt-conf-badge ${confClass(l.confidence)}`}>{l.confidence.toFixed(2)}</span>
+        <span className="pt-conf" title={`Confidence ${l.confidence.toFixed(2)} — matched on ${basisText(l.match_basis)}`}>
+          <span className={`pt-conf-badge ${confClass(l.confidence)}`}>{confidenceLabel(l.confidence).label}</span>
+          <span className="pt-basis">{basisText(l.match_basis)}</span>
         </span>
       </div>
       {review ? (
@@ -141,6 +142,7 @@ function LicenceRow({ l, review }: { l: Licence; review?: boolean }) {
 export function ParallelTradePanel({ drugId }: { drugId: string }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [showReview, setShowReview] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +187,7 @@ export function ParallelTradePanel({ drugId }: { drugId: string }) {
         <div className="pt-empty">No parallel-import licences or EMA distribution notices matched this product yet.</div>
       ) : (
         <>
+          <div className="pt-verdict">{paralleltradeVerdict(summary)}</div>
           <div className="pt-chips">
             {summary.ema_count > 0 && <span className="pt-pill pt-pill-ok">● {summary.ema_count} EMA notice{summary.ema_count !== 1 ? "s" : ""}</span>}
             {summary.national_count > 0 && (
@@ -215,8 +218,11 @@ export function ParallelTradePanel({ drugId }: { drugId: string }) {
 
           {review.length > 0 && (
             <>
-              <div className="pt-group">Under review</div>
-              {review.map((l) => (
+              <button type="button" className="pt-review-toggle" onClick={() => setShowReview((v) => !v)} aria-expanded={showReview}>
+                <span className="pt-rt-chev">{showReview ? "▾" : "▸"}</span>
+                {review.length} possible match{review.length !== 1 ? "es" : ""} under review
+              </button>
+              {showReview && review.map((l) => (
                 <LicenceRow key={l.licence_id} l={l} review />
               ))}
             </>
@@ -232,7 +238,12 @@ export function ParallelTradePanel({ drugId }: { drugId: string }) {
 }
 
 const PT_CSS = `
+#parallel-trade .pt-verdict{font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--ink);margin-bottom:12px;line-height:1.4}
 #parallel-trade .pt-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+#parallel-trade .pt-basis{font-size:11px;color:var(--text-4)}
+#parallel-trade .pt-review-toggle{display:inline-flex;align-items:center;gap:7px;margin-top:6px;padding:8px 12px;border:1px solid var(--med-b);background:var(--med-bg);color:var(--med);border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+#parallel-trade .pt-review-toggle:hover{filter:brightness(.98)}
+#parallel-trade .pt-rt-chev{font-size:10px}
 #parallel-trade .pt-group{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-4);margin:18px 0 10px}
 #parallel-trade .pt-group:first-of-type{margin-top:0}
 #parallel-trade .pt-row{border:1px solid var(--border);border-radius:12px;background:var(--bg-2);padding:14px 16px;margin-bottom:10px;box-shadow:var(--sh-card),var(--hi-inset)}

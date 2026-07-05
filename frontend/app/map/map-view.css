@@ -1,0 +1,154 @@
+.mv-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.mv-hero {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 12px;
+}
+
+.mv-hero h1 {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.mv-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 0 20px 12px;
+  border-bottom: 0.5px solid var(--border);
+}
+
+.mv-horizons {
+  display: flex;
+  gap: 6px;
+}
+
+.mv-chip {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.mv-chip--active {
+  background: var(--bg-accent);
+  color: var(--text-accent);
+  border-color: var(--border-accent);
+}
+
+.mv-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.mv-layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.mv-layer-toggle--disabled {
+  color: var(--text-muted);
+}
+
+.mv-soon {
+  font-size: 10px;
+  background: var(--surface-1);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.mv-error {
+  margin: 8px 20px 0;
+  font-size: 13px;
+  color: var(--text-danger, #a32d2d);
+}
+
+.mv-map-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 420px;
+}
+
+.mv-maplibre {
+  position: absolute;
+  inset: 0;
+}
+
+.mv-loading {
+  position: absolute;
+  top: 12px;
+  left: 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border);
+}
+
+.mv-legend {
+  position: absolute;
+  bottom: 12px;
+  left: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border);
+}
+
+.mv-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+
+.mv-legend-label {
+  font-weight: 500;
+  color: var(--text-primary, #0c1118);
+}
+
+.mv-ramp {
+  display: inline-flex;
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: -2px;
+}
+
+.mv-ramp-step {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+}
+
+.mv-legend-hint {
+  color: var(--text-muted, #98a1ac);
+}
+
+@media (max-width: 820px) {
+  .mv-map-wrap {
+    min-height: 320px;
+  }
+}

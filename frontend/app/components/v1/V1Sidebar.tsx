@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Search, TrendingUp, LayoutDashboard } from "lucide-react";
+import { Search, TrendingUp, LayoutDashboard, Map } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import { truncateDrugName } from "@/lib/utils";
@@ -125,6 +125,7 @@ export default function V1Sidebar() {
           <Link href="/search" className="sb-item"><Search size={17} strokeWidth={1.9} className="sb-ico" />Search</Link>
           <Link href="/insights/intelligence" className="sb-item"><TrendingUp size={17} strokeWidth={1.9} className="sb-ico" />Intelligence</Link>
           <Link href="/insights/dashboard" className="sb-item"><LayoutDashboard size={17} strokeWidth={1.9} className="sb-ico" />Dashboard</Link>
+          <Link href="/map" className="sb-item"><Map size={17} strokeWidth={1.9} className="sb-ico" />Map view</Link>
         </div>
         <div className="sb-group">
           <div className="sb-glabel">Search history</div>

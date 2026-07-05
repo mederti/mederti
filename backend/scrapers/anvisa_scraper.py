@@ -2,24 +2,65 @@
 ANVISA Brazilian Drug Shortage Scraper
 ───────────────────────────────────────
 Source:  ANVISA — Agência Nacional de Vigilância Sanitária (Brazil)
-URL:     https://consultas.anvisa.gov.br/#/falta/
+URL:     https://consultas.anvisa.gov.br/#/falta/  (ROUTE NO LONGER EXISTS — see below)
 
-Data access
-───────────
-ANVISA provides a REST API for drug shortage (falta) data:
+HARD BLOCKER — confirmed 2026-07-02
+────────────────────────────────────
+This scraper was built against a JSON endpoint (`/api/falta/situacao`) that
+no longer exists. Investigation (raw_scrapes showed status='processed' with
+records_found=0 on every run since at least 2026-06-10 — a silent failure,
+not a real "zero shortages in Brazil" result):
 
-    GET https://consultas.anvisa.gov.br/api/falta/situacao
-        Returns: paginated list of shortage situations
-        Fields: nomeProduto, situacao, dataInicio, dataFim, motivoFalta,
-                categoriaRegulatoriaDescricao, principioAtivo
+1. Direct HTTP (curl/httpx, several realistic desktop browser User-Agent
+   strings) is consistently rejected on ALL of:
+       consultas.anvisa.gov.br/                    -> 403 (Cloudflare JS challenge)
+       consultas.anvisa.gov.br/api/falta/situacao   -> 403 via curl, or a
+                                                        genuine 404 Not Found
+                                                        via httpx depending on
+                                                        request fingerprinting
+       api.anvisa.gov.br/                          -> 403 (Cloudflare JS challenge)
+   The 404 on the API path (once past Cloudflare) is the real signal: the
+   endpoint itself is gone, not merely bot-gated.
 
-    GET https://consultas.anvisa.gov.br/api/falta/situacao?page=0&pageSize=100
-        Paginated results
+2. However, a REAL headless Chromium session (Playwright — which does
+   execute Cloudflare's JS challenge and obtain a clearance cookie, unlike
+   curl/httpx) DOES successfully load consultas.anvisa.gov.br. That rules
+   out "just a UA sniff" and exposes the real problem: the rendered SPA's
+   top-level "Consultas" menu (Bulário, Pareceres, Documentos, Alertas
+   Sanitários, Certificados de Boas Práticas, Medicamentos, etc.) has NO
+   "Falta"/"Desabastecimento" entry anymore, and navigating straight to
+   #/falta/ triggers zero XHR calls to any falta/situacao/desabastecimento
+   endpoint — the Angular route (and its backing API) has been removed
+   from the live app, not just restyled.
 
-Note: ANVISA's public API may enforce CORS or rate limits. Uses httpx with
-Referer and Origin headers to mimic browser requests.
+3. ANVISA's current public surfaces for this topic are NOT a REST API:
+     - "Descontinuação de medicamentos"
+       (gov.br/anvisa/pt-br/assuntos/fiscalizacao-e-monitoramento/mercado/
+        descontinuacao-de-medicamentos) links out to a MicroStrategy BI
+       document at sad.anvisa.gov.br/MicroStrategy/servlet/mstrWeb. That
+       specific servlet path returns a Cloudflare WAF block ("Sorry, you
+       have been blocked" — a rule-based block, not a JS challenge) even
+       via headless Chromium, while sad.anvisa.gov.br's bare root loads
+       fine — the WAF is specifically guarding the legacy (2018-era)
+       MicroStrategy servlet path, not the domain as a whole. Attempting to
+       route around a targeted WAF rule guarding a legacy Java servlet is
+       out of scope for this scraper.
+     - "Medicamentos com risco de desabastecimento" (CMED pricing page,
+       gov.br/anvisa/pt-br/assuntos/medicamentos/cmed/risco-de-desabastecimento)
+       only publishes historical committee-meeting-minutes PDFs (Atas),
+       with no structured/current shortage list and no dates suitable for
+       shortage_events.
 
-Status values (Portuguese):
+Conclusion: this is ANVISA discontinuing a public API, not page-structure
+drift a selector fix can repair. fetch() therefore raises ScraperError with
+a clear diagnostic (so raw_scrapes correctly shows status='failed' with an
+error_message, instead of a misleading status='processed', records_found=0)
+rather than silently returning empty data. normalize() is left implemented
+against the last-known field names so this scraper is fetch-ready the
+moment ANVISA republishes a structured endpoint, or a legitimate
+browser-engine fetch layer is extended to reach the MicroStrategy panel.
+
+Status values (Portuguese, from the old API — kept for when it returns):
     "Em falta"         → active
     "Normalizado"      → resolved
     "Parcialmente em falta" → active (partial)
@@ -31,12 +72,10 @@ Country code:      BR
 
 from __future__ import annotations
 
-import time
 from datetime import datetime, timezone
 
-import httpx
-
-from backend.scrapers.base_scraper import BaseScraper
+from backend.scrapers.base_scraper import BaseScraper, ScraperError
+from backend.utils.reason_mapper import map_reason_category
 
 
 class AnvisaScraper(BaseScraper):
@@ -46,8 +85,9 @@ class AnvisaScraper(BaseScraper):
     SOURCE_NAME:  str = "ANVISA (Brazilian Health Regulatory Agency)"
     BASE_URL:     str = "https://consultas.anvisa.gov.br/#/falta/"
     API_URL:      str = "https://consultas.anvisa.gov.br/api/falta/situacao"
-    # Note: ANVISA API is Cloudflare-protected (403 without browser session).
-    # Use Playwright for browser-based data extraction as fallback.
+    # HARD BLOCKER (confirmed 2026-07-02, see module docstring): this route
+    # no longer exists on the live SPA. Kept as documentation of the last
+    # known endpoint, tried once per run in case ANVISA republishes it.
     COUNTRY:      str = "Brazil"
     COUNTRY_CODE: str = "BR"
 
@@ -55,7 +95,7 @@ class AnvisaScraper(BaseScraper):
     REQUEST_TIMEOUT:  float = 30.0
     PAGE_SIZE:        int   = 100
 
-    _HEADERS: dict = {
+    DEFAULT_HEADERS: dict = {
         "User-Agent":   "Mozilla/5.0 (compatible; Mederti-Scraper/1.0)",
         "Accept":       "application/json",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
@@ -71,6 +111,10 @@ class AnvisaScraper(BaseScraper):
         """
         Fetch all ANVISA shortage records across paginated API pages.
 
+        Raises ScraperError if the first page fails (confirmed hard blocker
+        as of 2026-07-02 — see module docstring) so the run is recorded as
+        a genuine failure rather than a silent zero-record "success".
+
         Returns:
             {"records": list[dict], "fetched_at": str, "pages": int}
         """
@@ -82,54 +126,53 @@ class AnvisaScraper(BaseScraper):
         while True:
             params = {"page": page, "pageSize": self.PAGE_SIZE}
             try:
-                time.sleep(self.RATE_LIMIT_DELAY)
-                with httpx.Client(
-                    headers=self._HEADERS,
-                    timeout=self.REQUEST_TIMEOUT,
-                    follow_redirects=True,
-                ) as client:
-                    resp = client.get(self.API_URL, params=params)
-                    resp.raise_for_status()
-
-                data = resp.json()
-
-                # Handle different response structures
-                if isinstance(data, list):
-                    records = data
-                    has_more = len(data) == self.PAGE_SIZE
-                elif isinstance(data, dict):
-                    records = data.get("content", data.get("items", data.get("data", [])))
-                    total_pages = data.get("totalPages", data.get("total_pages", 1))
-                    has_more = page < (total_pages - 1)
-                else:
-                    break
-
-                all_records.extend(records)
-                self.log.debug(
-                    "ANVISA page fetched",
-                    extra={"page": page, "count": len(records), "total_so_far": len(all_records)},
-                )
-
-                if not has_more or not records:
-                    break
-                page += 1
-
-                # Safety cap
-                if page >= 50:
-                    self.log.warning("ANVISA: reached page cap (50)")
-                    break
-
-            except httpx.HTTPStatusError as exc:
-                self.log.error(
-                    "ANVISA API HTTP error",
-                    extra={"status": exc.response.status_code, "page": page},
-                )
-                break
+                data = self._get_json(self.API_URL, params=params)
             except Exception as exc:
+                if page == 0:
+                    raise ScraperError(
+                        "ANVISA fetch blocked: consultas.anvisa.gov.br/api/falta/"
+                        "situacao is unreachable. Confirmed 2026-07-02 that this "
+                        "is NOT a transient outage or UA-sniffing bot check — "
+                        "the underlying '#/falta/' SPA route and its backing API "
+                        "have been removed from the live ANVISA consultas app "
+                        "entirely (verified with a real headless-Chromium "
+                        "session that otherwise loads the site fine). ANVISA's "
+                        "current replacements (a MicroStrategy BI panel at "
+                        "sad.anvisa.gov.br, and a PDF-only CMED committee-minutes "
+                        "archive) are either WAF-blocked or unstructured — see "
+                        "module docstring for the full investigation. Underlying "
+                        f"error: {exc}"
+                    ) from exc
                 self.log.error(
-                    "ANVISA fetch error",
+                    "ANVISA API error mid-pagination — returning partial results",
                     extra={"page": page, "error": str(exc)},
                 )
+                break
+
+            # Handle different response structures
+            if isinstance(data, list):
+                records = data
+                has_more = len(data) == self.PAGE_SIZE
+            elif isinstance(data, dict):
+                records = data.get("content", data.get("items", data.get("data", [])))
+                total_pages = data.get("totalPages", data.get("total_pages", 1))
+                has_more = page < (total_pages - 1)
+            else:
+                break
+
+            all_records.extend(records)
+            self.log.debug(
+                "ANVISA page fetched",
+                extra={"page": page, "count": len(records), "total_so_far": len(all_records)},
+            )
+
+            if not has_more or not records:
+                break
+            page += 1
+
+            # Safety cap
+            if page >= 50:
+                self.log.warning("ANVISA: reached page cap (50)")
                 break
 
         self.log.info(
@@ -190,7 +233,7 @@ class AnvisaScraper(BaseScraper):
                     "status":                    status,
                     "severity":                  "medium",
                     "reason":                    reason or None,
-                    "reason_category":           self._map_reason(reason),
+                    "reason_category":           map_reason_category(reason),
                     "start_date":                start_date,
                     "end_date":                  end_date if status == "resolved" else None,
                     "estimated_resolution_date": end_date if status == "active" else None,
@@ -222,19 +265,6 @@ class AnvisaScraper(BaseScraper):
                 pass
         return None
 
-    @staticmethod
-    def _map_reason(reason: str) -> str:
-        low = reason.lower()
-        if any(w in low for w in ["produção", "fabricação", "manufactur", "production"]):
-            return "manufacturing_issue"
-        if any(w in low for w in ["matéria", "insumo", "raw material"]):
-            return "raw_material"
-        if any(w in low for w in ["distribuição", "logística", "distribution"]):
-            return "supply_chain"
-        if any(w in low for w in ["demand", "demanda"]):
-            return "demand_surge"
-        return "supply_chain"
-
 
 if __name__ == "__main__":
     import json, os, sys
@@ -245,7 +275,16 @@ if __name__ == "__main__":
         from unittest.mock import MagicMock
         print("=" * 60); print("DRY RUN — ANVISA Brazil"); print("=" * 60)
         scraper = AnvisaScraper(db_client=MagicMock())
-        raw = scraper.fetch()
+        try:
+            raw = scraper.fetch()
+        except ScraperError as exc:
+            print(f"\n!! Fetch failed (expected if the ANVISA block is still up): {exc}")
+            print(
+                "\nThis is a documented HARD BLOCKER: the 'falta de medicamentos' "
+                "API this scraper targets no longer exists on ANVISA's live site. "
+                "See the module docstring for the full investigation."
+            )
+            sys.exit(1)
         print(f"  records: {len(raw.get('records', []))}")
         events = scraper.normalize(raw)
         print(f"  events : {len(events)}")

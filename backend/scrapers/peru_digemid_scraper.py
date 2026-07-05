@@ -154,8 +154,12 @@ class PeruDIGEMIDScraper(BaseScraper):
 
         tbody = table.find("tbody")
         if tbody is None:
-            self.log.warning("DIGEMID table has no <tbody> — returning empty")
-            return []
+            # Found the table but no body: a structural anomaly, not a genuine
+            # empty result. Raise so it can't hash as a duplicate and refresh
+            # last_verified_at on stale PE events.
+            raise ScraperError(
+                "DIGEMID table#tabla_lproductos has no <tbody> — structure changed."
+            )
 
         rows = tbody.find_all("tr", recursive=False)
         self.log.info("Found DIGEMID table rows", extra={"count": len(rows)})

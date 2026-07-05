@@ -1,7 +1,11 @@
 .mv-root {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* Pin to the viewport, not height:100% — the parent .dg-main (inside the
+     scroll column) has no fixed height, so height:100% collapses and the
+     flex:1 map falls back to its min-height (a ~320px band with markers
+     spilling below). 100vh gives the flex column a real height to divide. */
+  height: 100vh;
   min-height: 0;
 }
 
@@ -81,7 +85,7 @@
 .mv-map-wrap {
   position: relative;
   flex: 1;
-  min-height: 420px;
+  min-height: 0;
 }
 
 .mv-maplibre {

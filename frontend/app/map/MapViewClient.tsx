@@ -17,7 +17,39 @@ import { ISO_NUMERIC_TO_ALPHA2 } from "@/lib/geo/country-iso-numeric";
 import { recolorBasemap } from "@/lib/geo/recolor-basemap";
 import "./map-view.css";
 
-const MAPLIBRE_CSS_HREF = "/maplibre-gl.css";
+// A MapLibre IControl-shaped "reset to global view" button, styled with the
+// built-in maplibregl-ctrl classes so it sits under the zoom/compass control
+// and inherits its look. MapLibre has no built-in reset button.
+function makeResetControl(onReset: () => void) {
+  let container: HTMLDivElement;
+  return {
+    onAdd() {
+      container = document.createElement("div");
+      container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.title = "Reset to global view";
+      btn.setAttribute("aria-label", "Reset to global view");
+      btn.style.cssText = "display:flex;align-items:center;justify-content:center;";
+      // Globe icon (inherits currentColor).
+      btn.innerHTML =
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg>';
+      btn.addEventListener("click", onReset);
+      container.appendChild(btn);
+      return container;
+    },
+    onRemove() {
+      container.remove();
+    },
+  };
+}
+
+// Versioned: the soft-launch middleware used to 308-redirect the bare
+// /maplibre-gl.css path (fixed in proxy.ts by excluding .css), but a 308 is a
+// PERMANENT redirect browsers cache hard — anyone who loaded the map before
+// that fix would keep getting the cached redirect (unstyled controls). The
+// ?v query is a fresh URL that was never redirected. Bump on CSS upgrades.
+const MAPLIBRE_CSS_HREF = "/maplibre-gl.css?v=1";
 function ensureMaplibreCss() {
   if (document.querySelector(`link[href="${MAPLIBRE_CSS_HREF}"]`)) return;
   const link = document.createElement("link");
@@ -30,6 +62,9 @@ function ensureMaplibreCss() {
 // no billing account. Gives the same zoom/pan/compass interactions as
 // Google Maps without the recurring-cost + secret-management tradeoff.
 const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+// Initial (and "reset to global") camera. Shared by map init + the reset button.
+const INITIAL_CENTER: [number, number] = [10, 25];
+const INITIAL_ZOOM = 1.4;
 // Country polygons for the shortage choropleth — same world-atlas topology
 // the SpinningGlobe component already fetches.
 const WORLD_TOPOLOGY_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
@@ -224,11 +259,17 @@ export default function MapViewClient() {
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: MAP_STYLE_URL,
-        center: [10, 25],
-        zoom: 1.4,
+        center: INITIAL_CENTER,
+        zoom: INITIAL_ZOOM,
         attributionControl: { compact: true },
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
+      map.addControl(
+        makeResetControl(() =>
+          map.easeTo({ center: INITIAL_CENTER, zoom: INITIAL_ZOOM, bearing: 0, pitch: 0, duration: 600 }),
+        ) as maplibreglNs.IControl,
+        "top-right",
+      );
       createdMap = map;
       mapRef.current = map;
 

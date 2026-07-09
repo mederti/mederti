@@ -96,17 +96,12 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/government",
   "/governments",
   "/suppliers",           // supplier acquisition / discovery landing
-  // ── Product data surfaces, now PUBLIC (open-funnel launch) ──
-  // Anyone (and search-engine crawlers / shared links) can search and read
-  // drug shortage data without an account — this is the homepage promise and
-  // the primary SEO surface. Login is still required only for personalisation
-  // (alerts, watchlist), account, supplier dashboard and admin, which are
-  // deliberately NOT listed here and so stay gated below.
-  "/search",              // drug search (core promise)
-  "/drugs",               // drug detail pages (SEO surface, shared links)
-  "/intelligence",        // Pharma Brief / intelligence views
-  "/shortages",           // shortage listings
-  "/freshness",           // data-freshness transparency page
+  // ── Product data surfaces are GATED (closed-funnel launch decision, Jul 2026) ──
+  // /search, /drugs, /intelligence, /shortages and /freshness all require a
+  // signed-in user: every click off the landing page except About/Privacy/
+  // Contact must go through signup/login. This reverses the earlier
+  // "open-funnel" SEO decision — shared links and crawlers now hit the login
+  // wall. The `?next=` return URL preserves the destination through login.
   // Static demo / preview HTML in public/
   "/table-preview.html",
   // Public APIs that are safe to expose
@@ -159,12 +154,6 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  // ── Skip auth gating for public paths ──
-  if (isPublic(pathname)) {
-    return res;
-  }
-
-  // ── Auth check via Supabase SSR ──
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
   const supabaseAnonKey =
@@ -172,34 +161,80 @@ export async function proxy(req: NextRequest) {
     process.env.SUPABASE_ANON_KEY ??
     "";
 
+  const makeSupabase = () =>
+    createSupabaseSsr(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(cookies) {
+          cookies.forEach(({ name, value, options }) => {
+            res.cookies.set(name, value, options);
+          });
+        },
+      },
+    });
+
+  // Carry any cookies already written to `res` (device cookie, refreshed
+  // Supabase session tokens from getUser()) onto a redirect response, so a
+  // token refresh that happens during the check isn't silently dropped.
+  const redirectWithCookies = (to: URL | string, status?: number) => {
+    const redirect = NextResponse.redirect(
+      typeof to === "string" ? new URL(to, req.url) : to,
+      status
+    );
+    res.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
+  };
+
+  // A corrupt or legacy-format auth cookie makes @supabase/ssr throw while
+  // parsing ("Invalid UTF-8 sequence"), which would 500 the page — treat any
+  // failure as signed-out instead.
+  const getUserSafe = async (client: ReturnType<typeof makeSupabase>) => {
+    try {
+      return (await client.auth.getUser()).data.user;
+    } catch {
+      return null;
+    }
+  };
+
+  // ── Logged-in landing redirect ──
+  // A returning, still-authenticated user hitting the marketing landing page
+  // goes straight to the signed-in home (/search) instead of seeing the
+  // "Get started free / Log in" pitch again. Cookie sniff first: anonymous
+  // visitors have no sb-*-auth-token cookie, so they skip the network
+  // round-trip to Supabase and get the landing page at full speed.
+  if (pathname === "/") {
+    const hasAuthCookie = req.cookies
+      .getAll()
+      .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
+    if (hasAuthCookie && supabaseUrl && supabaseAnonKey) {
+      const user = await getUserSafe(makeSupabase());
+      if (user) return redirectWithCookies("/search");
+    }
+    return res;
+  }
+
+  // ── Skip auth gating for public paths ──
+  if (isPublic(pathname)) {
+    return res;
+  }
+
+  // ── Auth check via Supabase SSR ──
   if (!supabaseUrl || !supabaseAnonKey) {
     // If env not configured, fall through (don't break local dev)
     return res;
   }
 
-  const supabase = createSupabaseSsr(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return req.cookies.getAll();
-      },
-      setAll(cookies) {
-        cookies.forEach(({ name, value, options }) => {
-          res.cookies.set(name, value, options);
-        });
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = makeSupabase();
+  const user = await getUserSafe(supabase);
 
   if (!user) {
     // Build login redirect with return URL
     const returnUrl = pathname + req.nextUrl.search;
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("next", returnUrl);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithCookies(loginUrl);
   }
 
   // ── Onboarding gate ──
@@ -228,10 +263,10 @@ export async function proxy(req: NextRequest) {
           // Schema not migrated; let them through.
         }
       } else if (profile && profile.onboarding_done === false) {
-        return NextResponse.redirect(new URL("/onboarding", req.url));
+        return redirectWithCookies("/onboarding");
       } else if (!profile) {
         // If no row yet, send them to onboarding so we can create it
-        return NextResponse.redirect(new URL("/onboarding", req.url));
+        return redirectWithCookies("/onboarding");
       }
     } catch {
       // If the lookup fails, don't block the user — fall through.

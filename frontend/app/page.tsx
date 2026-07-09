@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import V1Search from "@/app/components/v1/V1Search";
 import V1TrendingShortages from "@/app/components/v1/V1TrendingShortages";
 import GlobeSection from "@/app/components/v1/GlobeSection";
+import BetaBanner from "@/app/components/v1/BetaBanner";
 
 // Live stats are the single source of truth. Honest "—" if a fetch fails —
 // never a stale hardcoded figure on a clinician-facing page.
@@ -104,11 +105,15 @@ export default async function Home() {
     <div className="v1home">
       <style>{CSS}</style>
 
+      {/* ── Beta notice (dismissible) ── */}
+      <BetaBanner />
+
       {/* ── Nav ── */}
       <nav className="home-nav">
-        <Link href="/" className="brand" aria-label="Mederti home">
+        <Link href="/" className="brand" aria-label="Mederti home (beta)">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-black.png" alt="mederti" className="logo-img" />
+          <span className="beta-badge">BETA</span>
         </Link>
         <div className="nav-actions">
           <Link href="/signup" className="btn btn-primary">Get started free</Link>
@@ -282,6 +287,7 @@ const CSS = `
 .v1home .mono{font-family:var(--font-geist-mono),ui-monospace,monospace}
 .v1home .brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.03em;color:var(--ink)}
 .v1home .logo-img{height:31px;width:auto;display:block}
+.v1home .beta-badge{align-self:flex-start;margin-top:2px;font-size:9.5px;font-weight:700;letter-spacing:.06em;line-height:1;color:var(--green-d);background:var(--green-bg);border:1px solid var(--green-b);padding:3px 6px;border-radius:5px}
 .v1home .btn{border:1px solid var(--border);background:var(--bg);color:var(--text-2);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;white-space:nowrap;transition:.15s;display:inline-flex;align-items:center;text-decoration:none}
 .v1home .btn:hover{border-color:var(--border-2);background:var(--bg-2)}
 .v1home .btn-primary{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 8px 20px -8px rgba(16,185,129,.55)}

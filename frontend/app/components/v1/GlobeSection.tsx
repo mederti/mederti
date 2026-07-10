@@ -295,7 +295,7 @@ export default function GlobeSection() {
   return (
     <section
       aria-hidden
-      style={{ position: "relative", width: "100%", height: "clamp(480px, 78vh, 820px)", marginTop: 84 }}
+      style={{ position: "relative", width: "100%", height: "clamp(480px, 78vh, 820px)", marginTop: 0 }}
     >
       <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
     </section>

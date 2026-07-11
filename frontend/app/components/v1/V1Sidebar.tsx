@@ -34,6 +34,9 @@ export default function V1Sidebar() {
   const [signedIn, setSignedIn] = useState(false);
   // Signed-in user's email, shown in the footer account row (null = anon).
   const [email, setEmail] = useState<string | null>(null);
+  // Display name from auth metadata (set at signup / editable in /account) —
+  // shown in place of the email, which stays as the fallback + hover title.
+  const [displayName, setDisplayName] = useState<string | null>(null);
   // The signed-in user's real watchlist. `null` = not loaded yet (or anon);
   // an array (possibly empty) = loaded, so we can distinguish "loading" from
   // "watchlist is genuinely empty".
@@ -69,9 +72,14 @@ export default function V1Sidebar() {
       setWatchedMedicines(meds);
     }
 
-    const sync = (user: { id: string; email?: string } | null | undefined) => {
+    const sync = (
+      user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null | undefined
+    ) => {
       setSignedIn(!!user);
       setEmail(user?.email ?? null);
+      const meta = user?.user_metadata ?? {};
+      const name = (meta.full_name || meta.name || meta.display_name || "") as string;
+      setDisplayName(name.trim() || null);
       if (user?.id) loadWatchlist(user.id);
       else setWatchedMedicines(null);
     };
@@ -169,7 +177,10 @@ export default function V1Sidebar() {
       {signedIn ? (
         <div className="sb-account">
           <Link href="/account" className="sb-profile" title={email ?? "My account"}>
-            {email && email.length > 24 ? email.slice(0, 22) + "…" : email ?? "My account"}
+            {(() => {
+              const label = displayName ?? email ?? "My account";
+              return label.length > 24 ? label.slice(0, 22) + "…" : label;
+            })()}
           </Link>
           <button type="button" onClick={handleLogout} className="sb-logout">Log out</button>
         </div>

@@ -6,8 +6,11 @@ import AuthClose from "./AuthClose";
  * Full-viewport shell for the auth pages. Renders a blurred mock of the /chat
  * UI as the backdrop, with a small "Mederti" home link in the corner and the
  * auth card centered on top. No site nav, no footer — keeps focus on the form.
+ *
+ * Pass `aside` to switch to a split layout: a value-proposition column on the
+ * left, the form card on the right (the card comes first on small screens).
  */
-export default function AuthShell({ children }: { children: ReactNode }) {
+export default function AuthShell({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
     <div style={{
       minHeight: "100vh", position: "relative",
@@ -34,10 +37,26 @@ export default function AuthShell({ children }: { children: ReactNode }) {
       {/* Close (X) + Escape-to-close */}
       <AuthClose />
 
-      {/* Card */}
-      <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 420 }}>
-        {children}
-      </div>
+      {aside ? (
+        <div className="auth-split" style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 980 }}>
+          <style>{`
+            .auth-split{display:flex;align-items:center;gap:56px}
+            .auth-split .auth-aside{flex:1 1 0;min-width:0}
+            .auth-split .auth-card{flex:0 0 420px;max-width:420px;width:100%}
+            @media(max-width:880px){
+              .auth-split{flex-direction:column;gap:32px}
+              .auth-split .auth-card{flex:0 0 auto;order:0}
+              .auth-split .auth-aside{order:1;max-width:460px;text-align:center}
+            }
+          `}</style>
+          <div className="auth-aside">{aside}</div>
+          <div className="auth-card">{children}</div>
+        </div>
+      ) : (
+        <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 420 }}>
+          {children}
+        </div>
+      )}
     </div>
   );
 }

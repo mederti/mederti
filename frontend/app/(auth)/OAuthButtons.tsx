@@ -5,29 +5,40 @@ import { createBrowserClient } from "@/lib/supabase/client";
 
 type Provider = "google" | "apple";
 
-// Google/Apple providers must be enabled in the Supabase dashboard before these
-// buttons work — otherwise signInWithOAuth returns "provider is not enabled".
-// Keep the buttons hidden until the env flag is flipped on (set
-// NEXT_PUBLIC_OAUTH_ENABLED=true once the providers are configured).
-const OAUTH_ENABLED =
-  (process.env.NEXT_PUBLIC_OAUTH_ENABLED ?? "").toLowerCase() === "true";
+// Each provider must be enabled in the Supabase dashboard before its button
+// works — otherwise signInWithOAuth returns "provider is not enabled". List
+// the configured providers in NEXT_PUBLIC_OAUTH_PROVIDERS (e.g. "google" or
+// "google,apple") so a half-configured setup never shows a broken button.
+// Legacy NEXT_PUBLIC_OAUTH_ENABLED=true still shows both.
+const PROVIDERS: Provider[] = (
+  process.env.NEXT_PUBLIC_OAUTH_PROVIDERS ??
+  ((process.env.NEXT_PUBLIC_OAUTH_ENABLED ?? "").toLowerCase() === "true"
+    ? "google,apple"
+    : "")
+)
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter((s): s is Provider => s === "google" || s === "apple");
 
 export default function OAuthButtons({
   next,
   role,
   mode,
+  placement = "top",
 }: {
   next: string;
   role: string | null;
   mode: "signin" | "signup";
+  /** "top" = buttons first, "or" divider below (default). "bottom" = "or continue with" divider first, buttons below. */
+  placement?: "top" | "bottom";
 }) {
   const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const supabase = createBrowserClient();
 
-  // Until the providers are enabled server-side, render nothing (no broken
-  // buttons, no dangling "or" divider). The email/password form stands alone.
-  if (!OAUTH_ENABLED) return null;
+  // Until at least one provider is enabled server-side, render nothing (no
+  // broken buttons, no dangling "or" divider). The form stands alone.
+  if (PROVIDERS.length === 0) return null;
 
   async function handleOAuth(provider: Provider) {
     setError(null);
@@ -52,8 +63,21 @@ export default function OAuthButtons({
 
   const verb = mode === "signup" ? "Sign up" : "Sign in";
 
+  const divider = (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 12,
+      margin: placement === "top" ? "20px 0 4px" : "4px 0 20px",
+    }}>
+      <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
+      <span style={{ fontSize: 12, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+        {placement === "top" ? "or" : "or continue with"}
+      </span>
+      <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
+    </div>
+  );
+
   return (
-    <div style={{ marginBottom: 20 }}>
+    <div style={{ marginBottom: placement === "top" ? 20 : 0 }}>
       {error && (
         <div style={{
           marginBottom: 12, padding: "10px 14px", borderRadius: 8,
@@ -64,7 +88,9 @@ export default function OAuthButtons({
         </div>
       )}
 
-      <button
+      {placement === "bottom" && divider}
+
+      {PROVIDERS.includes("google") && <button
         type="button"
         onClick={() => handleOAuth("google")}
         disabled={pending !== null}
@@ -82,9 +108,9 @@ export default function OAuthButtons({
       >
         <GoogleIcon />
         {pending === "google" ? "Redirecting…" : `${verb} with Google`}
-      </button>
+      </button>}
 
-      <button
+      {PROVIDERS.includes("apple") && <button
         type="button"
         onClick={() => handleOAuth("apple")}
         disabled={pending !== null}
@@ -101,18 +127,9 @@ export default function OAuthButtons({
       >
         <AppleIcon />
         {pending === "apple" ? "Redirecting…" : `${verb} with Apple`}
-      </button>
+      </button>}
 
-      <div style={{
-        display: "flex", alignItems: "center", gap: 12,
-        margin: "20px 0 4px",
-      }}>
-        <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
-        <span style={{ fontSize: 12, color: "var(--app-text-4)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-          or
-        </span>
-        <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
-      </div>
+      {placement === "top" && divider}
     </div>
   );
 }

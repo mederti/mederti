@@ -155,6 +155,17 @@ export default function OnboardingPage() {
     }
   }, [step, role, useCase, router]);
 
+  // Pre-fill the name from signup (user_metadata.full_name) so users who
+  // already typed it on the signup form don't have to repeat themselves.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const meta = session?.user?.user_metadata ?? {};
+      const existing = (meta.full_name || meta.name || "") as string;
+      if (existing) setName((prev) => (prev ? prev : existing));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Pre-seed countries from cookie (mederti-country)
   useEffect(() => {
     if (typeof document === "undefined") return;

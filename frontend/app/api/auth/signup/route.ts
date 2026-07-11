@@ -32,7 +32,13 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { email?: string; password?: string; role?: string };
+  let body: {
+    email?: string;
+    password?: string;
+    role?: string;
+    first_name?: string;
+    last_name?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -42,6 +48,8 @@ export async function POST(req: Request) {
   const email = (body.email ?? "").trim().toLowerCase();
   const password = body.password ?? "";
   const role = body.role;
+  const firstName = (body.first_name ?? "").trim().slice(0, 60);
+  const lastName = (body.last_name ?? "").trim().slice(0, 60);
 
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
@@ -52,11 +60,21 @@ export async function POST(req: Request) {
 
   const admin = getSupabaseAdmin();
 
+  // full_name is what the nav components and account page read for display.
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+  const userMetadata: Record<string, string> = {};
+  if (fullName) {
+    userMetadata.full_name = fullName;
+    if (firstName) userMetadata.first_name = firstName;
+    if (lastName) userMetadata.last_name = lastName;
+  }
+  if (role && isValidProfileRole(role)) userMetadata.role = role;
+
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true, // skip the (unreliable) confirmation email
-    user_metadata: role && isValidProfileRole(role) ? { role } : undefined,
+    user_metadata: Object.keys(userMetadata).length ? userMetadata : undefined,
   });
 
   if (error) {

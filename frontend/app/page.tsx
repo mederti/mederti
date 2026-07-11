@@ -237,6 +237,10 @@ export default async function Home() {
       </div>
 
       {/* ── Global coverage globe ── */}
+      <div className="pp-head" style={{ marginTop: "clamp(40px,5vw,64px)" }}>
+        <h2 className="pp-title">Track and forecast the world&apos;s shortages.</h2>
+        <p className="pp-sub">Live global coverage and shortages, with live research and insights to inform your business.</p>
+      </div>
       <GlobeSection />
 
       {/* ── Founder quote ── */}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import SiteNav from "@/app/components/landing-nav";
@@ -18,7 +18,6 @@ type Role =
   | "manufacturer"
   | "government"
   | "researcher"
-  | "patient"
   | "other";
 
 type UseCase =
@@ -45,7 +44,6 @@ const ROLES: Array<{ value: Role; label: string; sub: string }> = [
   { value: "manufacturer",         label: "Pharma manufacturer or supplier",         sub: "I make or supply medicines and want to find buyers" },
   { value: "government",           label: "Government, regulator or health system",  sub: "I plan, regulate or oversee medicines policy" },
   { value: "researcher",           label: "Researcher, journalist or analyst",       sub: "I write about or study the industry" },
-  { value: "patient",              label: "Patient or carer",                        sub: "I'm looking after my own or someone else's medicines" },
   { value: "other",                label: "Something else",                          sub: "" },
 ];
 
@@ -126,8 +124,22 @@ function landingPathFor(role: Role | null, useCase: UseCase | null): string {
 
 // ─── The page ────────────────────────────────────────────────────────────────
 
-export default function OnboardingPage() {
+/**
+ * Only allow same-origin relative redirects for the carried ?next= (set by
+ * middleware when it bounces an un-onboarded user off a gated page, so
+ * finishing onboarding lands them where they were originally headed).
+ */
+function safeNext(raw: string | null): string | null {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return null;
+  // Never loop back into onboarding or auth scaffolding.
+  if (raw.startsWith("/onboarding") || raw.startsWith("/login") || raw.startsWith("/signup")) return null;
+  return raw;
+}
+
+function OnboardingInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -151,9 +163,9 @@ export default function OnboardingPage() {
   // /home or /supplier-dashboard is already warm.
   useEffect(() => {
     if (step >= 3 && (role || useCase)) {
-      try { router.prefetch(landingPathFor(role, useCase)); } catch { /* noop */ }
+      try { router.prefetch(next ?? landingPathFor(role, useCase)); } catch { /* noop */ }
     }
-  }, [step, role, useCase, router]);
+  }, [step, role, useCase, router, next]);
 
   // Pre-fill the name from signup (user_metadata.full_name) so users who
   // already typed it on the signup form don't have to repeat themselves.
@@ -181,10 +193,10 @@ export default function OnboardingPage() {
     fetch("/api/user/profile")
       .then((r) => r.json())
       .then((d) => {
-        if (d?.profile?.onboarding_done) router.replace("/home");
+        if (d?.profile?.onboarding_done) router.replace(next ?? "/home");
       })
       .catch(() => {});
-  }, [router]);
+  }, [router, next]);
 
   function toggleCountry(code: string) {
     setCountries((prev) =>
@@ -274,7 +286,7 @@ export default function OnboardingPage() {
         document.cookie = `mederti-country=${countries[0]}; path=/; max-age=${60 * 60 * 24 * 365}`;
       }
 
-      const target = landingPathFor(role, useCase);
+      const target = next ?? landingPathFor(role, useCase);
       // Switch the message — the user is now waiting on the destination
       // page, not on us.
       setPhase("redirecting");
@@ -585,5 +597,13 @@ function RadioCard({
       </div>
       {selected && !centered && <Check size={15} color="var(--teal)" />}
     </button>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense>
+      <OnboardingInner />
+    </Suspense>
   );
 }

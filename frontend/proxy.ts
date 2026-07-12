@@ -198,19 +198,42 @@ export async function proxy(req: NextRequest) {
     }
   };
 
+  // Same-origin-only ?next= sanitiser (mirrors the auth pages' own checks).
+  const safeNext = (raw: string | null): string | null => {
+    if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return null;
+    return raw;
+  };
+
+  // Cookie sniff: anonymous visitors have no sb-*-auth-token cookie, so they
+  // skip the network round-trip to Supabase entirely on the pages below.
+  const hasAuthCookie = req.cookies
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
+
   // ── Logged-in landing redirect ──
   // A returning, still-authenticated user hitting the marketing landing page
   // goes straight to the signed-in home (/search) instead of seeing the
-  // "Get started free / Log in" pitch again. Cookie sniff first: anonymous
-  // visitors have no sb-*-auth-token cookie, so they skip the network
-  // round-trip to Supabase and get the landing page at full speed.
+  // "Get started free / Log in" pitch again.
   if (pathname === "/") {
-    const hasAuthCookie = req.cookies
-      .getAll()
-      .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
     if (hasAuthCookie && supabaseUrl && supabaseAnonKey) {
       const user = await getUserSafe(makeSupabase());
       if (user) return redirectWithCookies("/search");
+    }
+    return res;
+  }
+
+  // ── Signed-in users skip the auth forms ──
+  // A logged-in user landing on /login or /signup (bookmark, back button,
+  // stale shared link) goes straight to their destination (?next=) or the
+  // app home — not a form that would double-authenticate them.
+  if (pathname === "/login" || pathname === "/signup") {
+    if (hasAuthCookie && supabaseUrl && supabaseAnonKey) {
+      const user = await getUserSafe(makeSupabase());
+      if (user) {
+        return redirectWithCookies(
+          safeNext(req.nextUrl.searchParams.get("next")) ?? "/search"
+        );
+      }
     }
     return res;
   }
@@ -262,11 +285,13 @@ export async function proxy(req: NextRequest) {
         if (msg.includes("could not find") || msg.includes("schema cache") || msg.includes("column")) {
           // Schema not migrated; let them through.
         }
-      } else if (profile && profile.onboarding_done === false) {
-        return redirectWithCookies("/onboarding");
-      } else if (!profile) {
-        // If no row yet, send them to onboarding so we can create it
-        return redirectWithCookies("/onboarding");
+      } else if (!profile || profile.onboarding_done === false) {
+        // No row yet, or profiling unfinished → onboarding. Carry the page
+        // they were trying to reach so finishing onboarding lands them there
+        // (deep links into drugs/search survive the whole funnel).
+        const ob = new URL("/onboarding", req.url);
+        ob.searchParams.set("next", pathname + req.nextUrl.search);
+        return redirectWithCookies(ob);
       }
     } catch {
       // If the lookup fails, don't block the user — fall through.

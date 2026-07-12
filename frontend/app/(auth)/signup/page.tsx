@@ -1,6 +1,9 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import SignupClient, { type SignupStats } from "./SignupClient";
+
+export const metadata: Metadata = { title: "Sign up — Mederti" };
 
 // Live numbers for the value panel next to the form. Same honest-fallback
 // policy as the landing page: if a count fails we show generic copy, never a

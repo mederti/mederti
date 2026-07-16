@@ -28,6 +28,7 @@ const HIGHLIGHT_IDS = new Set([
   "784", "710", "566", "156", "392", "410", "764", // AE ZA NG CN JP KR TH
   "458", "036", "554", "703", "348", "705", "191", // MY AU NZ SK HU SI HR
   "352", "070", "428", "233", "686", "158", "144", // IS BA LV EE SN TW LK
+  "356", // IN
 ]);
 
 // Major container ports [lon, lat] — teal dots + endpoints for shipping lanes.
@@ -63,7 +64,7 @@ const LANES: [number, number][] = [
 ];
 
 const GOLDEN_ANGLE = 2.399963229728653;
-const SPIN_DEG_PER_S = 6.5;
+const SPIN_DEG_PER_S = 8.45;
 const TILT_DEG = -16;
 
 function smoothstep(e0: number, e1: number, x: number): number {
@@ -78,9 +79,9 @@ function smoothstep(e0: number, e1: number, x: number): number {
 // "lit" window is a bit wider than a pure toggle, so more countries glow at
 // once and each cycles on more often.
 function intensity(i: number, t: number): number {
-  const freq = 0.18 + 0.4 * ((i * 0.7548776662466927) % 1);
+  const freq = 0.24 + 0.5 * ((i * 0.7548776662466927) % 1);
   const s = 0.5 + 0.5 * Math.sin(i * GOLDEN_ANGLE + t * freq);
-  return smoothstep(0.34, 0.7, s);
+  return smoothstep(0.2, 0.6, s);
 }
 
 function lerp(a: number, b: number, k: number): number {

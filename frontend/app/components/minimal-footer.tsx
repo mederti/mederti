@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CookiePreferencesLink from "@/app/components/CookiePreferencesLink";
 
 /* Slim, light footer — mirrors the landing page's `home-foot` row.
    Replaces the heavy dark SiteFooter on the simple public pages
@@ -25,6 +26,7 @@ export default function MinimalFooter() {
       <div style={{ display: "flex", gap: 18 }}>
         <Link href="/about" style={{ color: "inherit", textDecoration: "none" }}>About</Link>
         <Link href="/privacy" style={{ color: "inherit", textDecoration: "none" }}>Privacy</Link>
+        <CookiePreferencesLink style={{ color: "inherit", fontSize: 12 }} />
         <Link href="/contact" style={{ color: "inherit", textDecoration: "none" }}>Contact</Link>
       </div>
       <span>© 2026 Mederti Pty Ltd · Melbourne, Australia</span>

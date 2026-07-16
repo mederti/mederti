@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CookiePreferencesLink from "@/app/components/CookiePreferencesLink";
 
 const SOFT_LAUNCH =
   (process.env.NEXT_PUBLIC_SOFT_LAUNCH ?? "").toLowerCase() === "true";
@@ -81,6 +82,7 @@ export default function SiteFooter() {
             <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <Link href="/privacy" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Privacy Policy</Link>
               <Link href="/terms" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Terms of Service</Link>
+              <CookiePreferencesLink style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }} />
             </nav>
           </div>
         </div>

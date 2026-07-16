@@ -4,6 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { PostHogProvider } from "@/lib/analytics/posthog-provider";
+import CookieConsent from "@/app/components/CookieConsent";
 import { siteUrl } from "@/lib/seo";
 import "./globals.css";
 
@@ -55,6 +56,7 @@ export default function RootLayout({
       <head />
       <body className="antialiased">
         <PostHogProvider>{children}</PostHogProvider>
+        <CookieConsent />
         <Analytics />
         <SpeedInsights />
       </body>

@@ -45,7 +45,12 @@ export async function GET(req: Request) {
   //    so it survives cross-device opens and email-scanner prefetch that
   //    silently break PKCE links. Email templates point here directly.
   if (!code && !tokenHash) {
-    return NextResponse.redirect(new URL("/login", url.origin));
+    const back = new URL("/login", url.origin);
+    back.searchParams.set(
+      "error",
+      "That sign-in link is invalid or has expired — please sign in or request a new one."
+    );
+    return NextResponse.redirect(back);
   }
 
   const supabase = await createServerClient();

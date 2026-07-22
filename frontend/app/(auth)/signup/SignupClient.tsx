@@ -114,12 +114,18 @@ export default function SignupClient({ stats }: { stats: SignupStats }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set for the "account already exists" case so we can render a direct
+  // sign-in link (with the destination preserved) inside the error banner.
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const supabase = createBrowserClient();
+  // Preserve the deep-link destination when hopping to /login.
+  const loginHref = `/login${next !== "/onboarding" ? `?next=${encodeURIComponent(next)}` : ""}`;
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorCode(null);
 
     if (!firstName.trim() || !lastName.trim()) {
       setError("Please enter your first and last name.");
@@ -151,6 +157,7 @@ export default function SignupClient({ stats }: { stats: SignupStats }) {
       if (!r.ok) {
         setLoading(false);
         setError(d?.error || "Could not create your account. Please try again.");
+        setErrorCode((d as { code?: string })?.code ?? null);
         return;
       }
       // Account exists + confirmed — sign in (a normal, reliable password login).
@@ -195,6 +202,13 @@ export default function SignupClient({ stats }: { stats: SignupStats }) {
             fontSize: 13, color: "var(--crit)",
           }}>
             {error}
+            {errorCode === "exists" && (
+              <>{" "}
+                <Link href={loginHref} style={{ color: "var(--crit)", fontWeight: 600, textDecoration: "underline" }}>
+                  Sign in instead →
+                </Link>
+              </>
+            )}
           </div>
         )}
 
@@ -278,7 +292,7 @@ export default function SignupClient({ stats }: { stats: SignupStats }) {
 
         <div style={{ marginTop: 20, textAlign: "center", fontSize: 13, color: "var(--app-text-3)" }}>
           Already have an account?{" "}
-          <Link href="/login" style={{ color: "var(--teal)", fontWeight: 500 }}>
+          <Link href={loginHref} style={{ color: "var(--teal)", fontWeight: 500 }}>
             Sign in
           </Link>
         </div>

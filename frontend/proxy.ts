@@ -50,6 +50,7 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/intelligence",      // Pharma Brief and any subroutes
   "/insights",          // public Intelligence / Dashboard reading views (/insights/[kind])
   "/freshness",         // public source-freshness dashboard (credibility lever)
+  "/methodology",       // data & methodology page (unlisted — URL-only for now)
   "/coming-soon",
   "/admin",             // separately gated by requireAdmin
   "/privacy",
@@ -81,6 +82,7 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/",                    // landing
   "/about",
   "/pricing",
+  "/methodology",         // data & methodology (unlisted: no nav/footer/sitemap links yet)
   "/contact",
   "/privacy",
   "/terms",

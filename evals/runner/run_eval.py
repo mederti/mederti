@@ -95,12 +95,64 @@ def ask_chat(question_text: str, *, timeout: int = 240) -> dict:
     t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = resp.read().decode("utf-8", "replace")
-    try:
-        parsed = json.loads(body)
-    except json.JSONDecodeError:
-        parsed = {"content": "", "error": f"non-JSON response: {body[:500]}"}
+    parsed = _parse_chat_body(body)
     parsed["_elapsed_sec"] = round(time.time() - t0, 2)
     return parsed
+
+
+def _parse_chat_body(body: str) -> dict:
+    """Parse a /api/chat response body.
+
+    The route streams NDJSON — one JSON event per line — and the terminal
+    {"type": "done", ...} event carries the legacy non-streaming contract
+    (content/drugs/tool_calls/truncated). Older deployments returned that
+    object as a bare JSON body, so a line without a "type" envelope is
+    accepted as-is. Tool names are collected from tool_start events into
+    "_tool_names" so the deterministic grader can check expected_tools_min.
+    """
+    text_deltas: list[str] = []
+    tool_names: list[str] = []
+    done: dict | None = None
+    error: str | None = None
+    for line in body.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            evt = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(evt, dict):
+            continue
+        etype = evt.get("type")
+        if etype is None:
+            # Legacy single-object contract (pre-streaming deployments).
+            # Tool calls are unobservable here — None makes the grader skip
+            # the expected_tools check rather than fail it.
+            evt.setdefault("content", "")
+            evt["_tool_names"] = None
+            return evt
+        if etype == "text_delta":
+            text_deltas.append(evt.get("delta") or "")
+        elif etype == "tool_start":
+            tool_names.append(evt.get("name") or "?")
+        elif etype == "done":
+            done = evt
+        elif etype == "error":
+            error = evt.get("message")
+    if done is not None:
+        if not done.get("content"):
+            done["content"] = "".join(text_deltas)
+        done["_tool_names"] = tool_names
+        return done
+    result: dict = {"content": "".join(text_deltas), "_tool_names": tool_names}
+    if error:
+        result["error"] = error
+    elif not result["content"]:
+        result["error"] = f"unparseable response: {body[:500]}"
+    else:
+        result["error"] = "stream ended without done event"
+    return result
 
 
 def load_gold(qid: str) -> str | None:
@@ -142,7 +194,7 @@ def main() -> int:
             rows.append({"id": qid, "error": str(e)})
             continue
 
-        det = grade_deterministic(q, resp, tool_calls=None)
+        det = grade_deterministic(q, resp, tool_calls=resp.get("_tool_names"))
         row = {
             "id": qid,
             "persona": q.get("persona"),

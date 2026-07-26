@@ -184,6 +184,8 @@ def main() -> int:
     print()
 
     rows: list[dict] = []
+    det_results: list = []
+    judge_results: list = []
     for i, q in enumerate(questions, 1):
         qid = q["id"]
         print(f"[{i}/{len(questions)}] {qid} ...", end="", flush=True)
@@ -195,6 +197,7 @@ def main() -> int:
             continue
 
         det = grade_deterministic(q, resp, tool_calls=resp.get("_tool_names"))
+        det_results.append(det)
         row = {
             "id": qid,
             "persona": q.get("persona"),
@@ -206,6 +209,7 @@ def main() -> int:
         if not args.no_judge:
             gold = load_gold(qid)
             judge = grade_judge(q, resp, gold_answer=gold)
+            judge_results.append(judge)
             row["judge_pass"] = judge.passed
             row["judge_summary"] = judge.summary
             if judge.raw:
@@ -219,31 +223,11 @@ def main() -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M")
     out_path = REPORT_DIR / f"{stamp}_{args.scope_label}.md"
 
-    det_results = []
-    for r in rows:
-        from grader_deterministic import DeterministicResult
-        if "error" in r:
-            continue
-        dr = DeterministicResult(question_id=r["id"])
-        dr.notes = r["deterministic_notes"]
-        # Re-derive pass from the boolean
-        if not r["deterministic_pass"]:
-            dr.expected_tools_called = False
-        det_results.append(dr)
-
+    # Summarise from the actual grader results — an earlier version lossily
+    # reconstructed them from the pass boolean, which dumped every failure
+    # into expected_tools_called and zeroed the other dimensions.
     det_summary = det_summarise(det_results)
-    judge_summary = None
-    if not args.no_judge:
-        from grader_judge import JudgeResult
-        jrs = []
-        for r in rows:
-            if "error" in r:
-                continue
-            jr = JudgeResult(question_id=r["id"], raw=r.get("judge_raw") or {})
-            if not r.get("judge_pass") and jr.raw:
-                jr.raw["passed_overall"] = False
-            jrs.append(jr)
-        judge_summary = judge_summarise(jrs)
+    judge_summary = judge_summarise(judge_results) if not args.no_judge else None
 
     with out_path.open("w") as fh:
         fh.write(f"# Mederti eval — {args.scope_label}\n\n")

@@ -65,6 +65,12 @@ concurrency:
   group: eval-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The default GITHUB_TOKEN is read-only; the PR-comment step needs
+# pull-requests: write or it 403s ("Resource not accessible by integration").
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   eval:
     name: persona-coverage
@@ -94,12 +100,13 @@ jobs:
         id: scope
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            # Nightly: full set + judge
-            echo "args=--scope-label nightly --judge" >> "$GITHUB_OUTPUT"
+            # Nightly: full set + judge (judge is run_eval.py's default —
+            # there is no --judge flag, only --no-judge)
+            echo "args=--scope-label nightly" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ARGS="--scope-label dispatched-${{ inputs.scope }}"
-            if [ "${{ inputs.use_judge }}" = "true" ]; then
-              ARGS="$ARGS --judge"
+            if [ "${{ inputs.use_judge }}" != "true" ]; then
+              ARGS="$ARGS --no-judge"
             fi
             if [ "${{ inputs.scope }}" = "pr" ]; then
               ARGS="$ARGS --pr"

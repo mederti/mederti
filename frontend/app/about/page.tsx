@@ -5,6 +5,7 @@ import MinimalFooter from "@/app/components/minimal-footer";
 export const metadata: Metadata = {
   title: "About — Mederti",
   description: "Mederti aggregates pharmaceutical shortage data from regulatory bodies worldwide to help clinicians and procurement teams act before supply chains fail.",
+  alternates: { canonical: "/about" },
 };
 
 export default function AboutPage() {

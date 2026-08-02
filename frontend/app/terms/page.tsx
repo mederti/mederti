@@ -6,6 +6,7 @@ import MinimalFooter from "@/app/components/minimal-footer";
 export const metadata: Metadata = {
   title: "Terms of Service — Mederti",
   description: "Terms and conditions for using the Mederti pharmaceutical shortage intelligence platform.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {

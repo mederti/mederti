@@ -8,10 +8,18 @@
  *   single highest-leverage rich-results unlock for B2B pharma search.
  */
 
+// Env vars pasted into the Vercel dashboard can carry stray whitespace or a
+// trailing newline. That newline survived string interpolation and shipped
+// literal "https://www.mederti.com\n/drugs/..." URLs in the live sitemap and
+// canonicals — sanitise every origin before use, whatever its source.
+function cleanOrigin(raw: string): string {
+  return raw.trim().replace(/\/+$/, "");
+}
+
 export function siteUrl(): string {
   if (typeof window !== "undefined") {
     // Client-side: prefer the env var; fall back to the actual host.
-    return (
+    return cleanOrigin(
       process.env.NEXT_PUBLIC_SITE_URL ??
       window.location.origin
     );
@@ -21,9 +29,9 @@ export function siteUrl(): string {
   // would leak into canonical/OG/sitemap URLs and wreck SEO + link sharing.
   // NEXT_PUBLIC_SITE_URL still wins if set; VERCEL_URL is only used for
   // preview/branch deploys so their metadata self-references correctly.
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  if (process.env.NEXT_PUBLIC_SITE_URL) return cleanOrigin(process.env.NEXT_PUBLIC_SITE_URL);
   if (process.env.VERCEL_ENV === "production") return "https://mederti.com";
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (process.env.VERCEL_URL) return cleanOrigin(`https://${process.env.VERCEL_URL}`);
   return "https://mederti.com";
 }
 
@@ -82,8 +90,9 @@ export function drugJsonLd(
   drug: DrugForJsonLd,
   activeShortages: ShortageForJsonLd[],
   countriesCount: number,
+  pagePath?: string,
 ): Record<string, unknown> {
-  const url = canonicalUrl(`/drugs/${drug.id}`);
+  const url = canonicalUrl(pagePath ?? `/drugs/${drug.id}`);
 
   const sameAs: string[] = [];
   if (drug.rxcui) {
@@ -216,5 +225,102 @@ export function breadcrumbJsonLd(
       "name": step.name,
       "item": canonicalUrl(step.path),
     })),
+  };
+}
+
+// ─── Site-wide entity structured data ───────────────────────────────────────
+
+/**
+ * schema.org Organization node for Mederti itself. Emitted once, in the root
+ * layout, so Google and AI crawlers can resolve "Mederti" as an entity with a
+ * stable @id rather than inferring it per page.
+ */
+export function organizationJsonLd(): Record<string, unknown> {
+  const base = siteUrl();
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": `${base}/#organization`,
+    "name": "Mederti",
+    "url": base,
+    "logo": {
+      "@type": "ImageObject",
+      "url": `${base}/logo-black.png`,
+    },
+    "description":
+      "Mederti is a global medicine shortage intelligence platform. It aggregates, normalises and monitors drug shortage and recall notices published by official medicines regulators across 50+ countries, updated daily.",
+    "email": "hello@mederti.com",
+    "sameAs": [
+      "https://www.linkedin.com/company/mederti",
+    ],
+    "knowsAbout": [
+      "drug shortages",
+      "medicine shortages",
+      "pharmaceutical supply chain",
+      "drug recalls",
+      "medicines regulation",
+    ],
+  };
+}
+
+/** schema.org WebSite node, linked to the Organization entity. */
+export function webSiteJsonLd(): Record<string, unknown> {
+  const base = siteUrl();
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${base}/#website`,
+    "url": base,
+    "name": "Mederti",
+    "publisher": { "@id": `${base}/#organization` },
+  };
+}
+
+/**
+ * schema.org FAQPage node. Pass ONLY questions whose answers are rendered
+ * verbatim on the page — Google penalises FAQ markup for invisible content.
+ */
+export function faqJsonLd(
+  faqs: Array<{ question: string; answer: string }>,
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqs.map((f) => ({
+      "@type": "Question",
+      "name": f.question,
+      "acceptedAnswer": { "@type": "Answer", "text": f.answer },
+    })),
+  };
+}
+
+/**
+ * schema.org Dataset node describing a slice of the Mederti shortage dataset
+ * (e.g. one country's live shortage register). This is what Google Dataset
+ * Search and AI retrieval systems read to understand and cite the data.
+ */
+export function datasetJsonLd(opts: {
+  name: string;
+  description: string;
+  path: string;
+  temporalCoverage?: string;
+  spatialName?: string;
+  keywords?: string[];
+}): Record<string, unknown> {
+  const base = siteUrl();
+  return {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    "name": opts.name,
+    "description": opts.description,
+    "url": canonicalUrl(opts.path),
+    "creator": { "@id": `${base}/#organization` },
+    "license": `${base}/terms`,
+    "isAccessibleForFree": true,
+    ...(opts.temporalCoverage ? { "temporalCoverage": opts.temporalCoverage } : {}),
+    ...(opts.spatialName
+      ? { "spatialCoverage": { "@type": "Place", "name": opts.spatialName } }
+      : {}),
+    ...(opts.keywords && opts.keywords.length > 0 ? { "keywords": opts.keywords } : {}),
   };
 }

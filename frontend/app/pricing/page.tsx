@@ -6,6 +6,7 @@ import SiteFooter from "@/app/components/site-footer";
 export const metadata: Metadata = {
   title: "Pricing — Mederti",
   description: "Free for individual pharmacists. Institutional pricing for procurement teams and health ministries.",
+  alternates: { canonical: "/pricing" },
 };
 
 const FREE_FEATURES = [

@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import PersonaPage, { PersonaContent } from "../components/persona-page";
 import { getLivePreviewRows } from "@/lib/persona-preview";
+
+export const metadata: Metadata = {
+  title: "National medicine shortage intelligence for government — Mederti",
+  description:
+    "Early-warning shortage signals, cross-country intelligence and policy-ready reporting for health ministries, regulators and government procurement agencies.",
+  alternates: { canonical: "/government" },
+};
 
 // 10-min ISR cache; preview rows refresh on the same cadence as the
 // scraper window. Closes more of UX-09.

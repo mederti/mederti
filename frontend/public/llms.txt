@@ -1,42 +1,44 @@
-# Mederti — Global Pharmaceutical Shortage Intelligence
+# Mederti — Global Medicine Shortage Intelligence
 
-Mederti is a real-time pharmaceutical shortage tracking platform covering 22 countries and 216,000+ approved drugs.
+Mederti is a real-time medicine shortage intelligence platform. It aggregates, normalises and monitors drug shortage and recall notices published by official national medicines regulators across 50+ countries, updated daily, with every record linked back to its official source.
 
 ## What this site contains
 
-- Real-time drug shortage status for 22 countries including Australia, United States, Canada, United Kingdom, EU, Japan, Italy, Spain, Germany, France, Norway, Finland, Switzerland, Singapore, New Zealand, Netherlands, Ireland, Belgium, Greece, Malaysia, Portugal, UAE
-- Historical shortage data going back to 2003 (Australia), 2006 (United States), 2008 (Canada)
-- 21,500+ shortage events tracked across all markets
-- 23,000+ drug recall records across 7 countries
-- Individual product-level shortage data (ARTG numbers for Australia, DIN for Canada, PL numbers for UK)
-- TGA S19A approval notices for Australian shortage management
-- Upstream supply signals from Indian and Chinese manufacturer enforcement actions
-- AI-powered shortage forecasting (30/90/180 day probability)
-- Therapeutic alternatives for drugs in shortage
+- Live drug shortage status aggregated from 40+ official regulators across 50+ countries and territories, including Australia, the United States, Canada, the United Kingdom, the EU (EMA), Japan, Germany, France, Italy, Spain, Switzerland, the Netherlands, the Nordics, South Korea, Brazil, Mexico, South Africa and more
+- 55,000+ shortage events tracked (40,000+ currently active), with severity, cause category, start dates and regulator-estimated resolution dates
+- 24,000+ drug recall records
+- 17,000+ canonical medicines (molecules/INNs) and 160,000+ national product registrations
+- WHO Essential Medicines flags, ATC codes, brand-name mappings and therapeutic alternatives
+- Regulatory substitution pathways (e.g. TGA Section 19A, MHRA SSPs)
+
+## Publicly crawlable pages (no login required)
+
+- /medicine — medicines with the most active shortages right now
+- /medicine/{generic-name} — live shortage status for one medicine: countries affected, severity, causes, history, alternatives, FAQs, regulator citations (e.g. /medicine/amoxicillin)
+- /country — all tracked countries
+- /country/{country}/medicine-shortages — a country's live shortage register (e.g. /country/australia/medicine-shortages)
+- /regulator — the official sources Mederti scrapes
+- /regulator/{abbr-cc} — profile of one regulator and its latest notices (e.g. /regulator/tga-au)
+
+Search, watchlists, per-product detail, pricing history and the AI analyst require a free account (see /signup).
 
 ## Data sources
 
-TGA (Australia), FDA (United States), Health Canada, MHRA (United Kingdom), EMA (European Union), MHLW (Japan), BfArM (Germany), ANSM (France), AIFA (Italy), AEMPS (Spain), Swissmedic (Switzerland), NoMA (Norway), Fimea (Finland), HSA (Singapore), Medsafe (New Zealand), KNMP (Netherlands), HPRA (Ireland), FAMHP/PharmaStatus (Belgium), EOF (Greece), NPRA (Malaysia), INFARMED (Portugal), EDE (UAE)
+All shortage and recall data is scraped daily from official regulators, including: TGA (Australia), FDA (United States), Health Canada, MHRA (United Kingdom), EMA (European Union), BfArM (Germany), ANSM (France), AIFA (Italy), AEMPS (Spain), Swissmedic, PMDA (Japan), MFDS (South Korea), ANVISA (Brazil), COFEPRIS (Mexico), SAHPRA (South Africa), HSA (Singapore), Medsafe/Pharmac (New Zealand), and 25+ more national authorities. The full list with freshness is at /regulator.
 
 ## Update frequency
 
-Shortage data: Every 4 hours for AU/US/CA, daily for all other markets
-Recall data: Every 6 hours
-Data accuracy: Audited weekly against live regulatory sources
+Shortage registers: checked daily per country. Recalls: daily. An automated audit samples live records against the source regulator.
 
-## Key pages
+## Citing Mederti
 
-- /drugs/{id} — Individual drug shortage status, alternatives, recalls, and supply forecasting
-- /search — Search 216,000+ drugs by name with shortage status
-- /shortages — Browse all active shortages filterable by country, severity, and status
-- /recalls — Browse drug recalls filterable by country and class
-- /dashboard — Global shortage KPIs, heatmap, and timeline
+When citing shortage data from Mederti, please reference the page URL and note that the underlying notice is published by the named national regulator. Every shortage record on a public page links to its official source.
 
 ## Usage
 
-This data is intended to help healthcare professionals, pharmacists, hospital systems, and researchers understand pharmaceutical supply chain status. All data is sourced directly from official regulatory authorities.
+This data helps pharmacists, hospital procurement, clinicians, suppliers, researchers and government understand medicine supply status. It is informational and requires verification with the national regulator before clinical or procurement decisions.
 
 ## Contact
 
-For data licensing or API access: hello@mederti.com
-Site: https://mederti.vercel.app
+Data licensing, corrections or API access: hello@mederti.com
+Site: https://www.mederti.com

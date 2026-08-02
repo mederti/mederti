@@ -1,9 +1,21 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { canonicalUrl } from "@/lib/seo";
 import V1Search from "@/app/components/v1/V1Search";
 import V1TrendingShortages from "@/app/components/v1/V1TrendingShortages";
 import GlobeSection from "@/app/components/v1/GlobeSection";
 import BetaBanner from "@/app/components/v1/BetaBanner";
+
+// The landing page is the single most-linked URL on the site. It needs its
+// own metadata (not just the layout default) and a self-referencing canonical
+// so the vercel.app / apex / www variants consolidate.
+export const metadata: Metadata = {
+  title: "Mederti — Global Medicine Shortage Intelligence Platform",
+  description:
+    "Check live drug shortage status for any medicine. Mederti tracks shortage and recall notices from 40+ official medicines regulators across 50+ countries, updated daily. Free for individual pharmacists and clinicians.",
+  alternates: { canonical: canonicalUrl("/") },
+};
 
 // Live stats are the single source of truth. Honest "—" if a fetch fails —
 // never a stale hardcoded figure on a clinician-facing page.
@@ -258,10 +270,16 @@ export default async function Home() {
       </div>
 
       {/* ── Footer ── */}
+      {/* Browse links are the crawl entry point into the public shortage
+          pages (/medicine, /country, /regulator) — without them every
+          programmatic page is an orphan reachable only via the sitemap. */}
       <div className="home-foot">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-black.png" alt="mederti" className="logo-img" style={{ height: 20 }} />
-        <div style={{ display: "flex", gap: 18 }}>
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
+          <Link href="/medicine">Medicines</Link>
+          <Link href="/country">Countries</Link>
+          <Link href="/regulator">Regulators</Link>
           <Link href="/about">About</Link><Link href="/privacy">Privacy</Link><Link href="/contact">Contact</Link>
         </div>
         <span>© 2026 Mederti Pty Ltd · Melbourne, Australia</span>

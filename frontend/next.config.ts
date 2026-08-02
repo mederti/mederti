@@ -94,6 +94,17 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // Host canonicalisation: the auto-assigned Vercel domain serves the
+      // exact same site with 200s, which splits link equity and creates a
+      // fully duplicated indexable host. 308 everything to the canonical
+      // domain. (Apex mederti.com → www is already handled by Vercel's
+      // domain config; this covers the *.vercel.app leak.)
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "mederti.vercel.app" }],
+        destination: "https://www.mederti.com/:path*",
+        permanent: true,
+      },
       // Drug page sub-version stubs → canonical drug page
       { source: "/drugs/:id/v2",      destination: "/drugs/:id", permanent: true },
       { source: "/drugs/:id/v3",      destination: "/drugs/:id", permanent: true },

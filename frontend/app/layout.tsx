@@ -5,7 +5,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { PostHogProvider } from "@/lib/analytics/posthog-provider";
 import CookieConsent from "@/app/components/CookieConsent";
-import { siteUrl } from "@/lib/seo";
+import { siteUrl, jsonLdSafe, organizationJsonLd, webSiteJsonLd } from "@/lib/seo";
 import "./globals.css";
 
 // Canonical origin, env-driven. Set NEXT_PUBLIC_SITE_URL in prod to the final
@@ -46,6 +46,11 @@ export const metadata: Metadata = {
       "Track drug shortages across major markets in real time. 216,000+ drugs monitored from regulatory sources worldwide.",
     images: [`${SITE_URL}/api/og`],
   },
+  // Set NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION in Vercel to verify the domain
+  // in Google Search Console without a DNS record.
+  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION.trim() } }
+    : {}),
 };
 
 export default function RootLayout({
@@ -55,6 +60,16 @@ export default function RootLayout({
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head />
       <body className="antialiased">
+        {/* Site-wide entity graph: lets Google + AI crawlers resolve Mederti
+            as a stable Organization entity from any landing URL. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(organizationJsonLd()) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(webSiteJsonLd()) }}
+        />
         <PostHogProvider>{children}</PostHogProvider>
         <CookieConsent />
         <Analytics />

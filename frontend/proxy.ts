@@ -56,6 +56,11 @@ const SOFT_LAUNCH_ALLOW: ReadonlyArray<string> = [
   "/terms",
   "/about",             // footer
   "/contact",           // footer
+  // Public SEO layer (see PUBLIC_PATHS note below) — must stay reachable
+  // under soft-launch or the crawlable surface collapses to the homepage.
+  "/medicine",
+  "/country",
+  "/regulator",
 ];
 
 function softLaunchAllowed(pathname: string): boolean {
@@ -102,6 +107,17 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   // Contact must go through signup/login. This reverses the earlier
   // "open-funnel" SEO decision — shared links and crawlers now hit the login
   // wall. The `?next=` return URL preserves the destination through login.
+  //
+  // ── Public SEO layer (Aug 2026) ──
+  // /medicine, /country and /regulator are summary-level programmatic pages
+  // built FOR crawlers and anonymous visitors: shortage status + regulator
+  // citations + signup CTA. They deliberately do NOT ungate the product —
+  // search, watchlists, per-product detail, pricing history and chat stay
+  // behind login. This is the indexable acquisition surface the closed
+  // funnel otherwise lacks.
+  "/medicine",
+  "/country",
+  "/regulator",
   // Static demo / preview HTML in public/
   "/table-preview.html",
   // Public APIs that are safe to expose

@@ -7,6 +7,7 @@ import CookiePreferencesLink from "@/app/components/CookiePreferencesLink";
 export const metadata: Metadata = {
   title: "Privacy Policy — Mederti",
   description: "How Mederti collects, uses, and protects your personal data.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

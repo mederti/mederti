@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import SignupClient, { type SignupStats } from "./SignupClient";
+
+export const metadata: Metadata = {
+  title: "Create a free account — Mederti",
+  description:
+    "Sign up free to search live shortage status for any medicine, across 50+ countries and 40+ official regulators. No credit card required.",
+  alternates: { canonical: "/signup" },
+};
 
 // Live numbers for the value panel next to the form. Same honest-fallback
 // policy as the landing page: if a count fails we show generic copy, never a

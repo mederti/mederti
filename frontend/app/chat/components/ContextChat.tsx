@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DrugDetail, SubstituteRow } from "@/lib/chat/types";
 import { ToolSteps, type ToolStep, type Turn } from "./ChatMain";
@@ -100,6 +100,13 @@ export function ContextChat({
   const idRef = useRef(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
+  const spacerRef = useRef<HTMLDivElement | null>(null);
+
+  const lastUserId = useMemo(() => {
+    for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "user") return turns[i].id;
+    return null;
+  }, [turns]);
 
   // Reset the conversation whenever the context changes.
   useEffect(() => {
@@ -110,9 +117,40 @@ export function ContextChat({
     idRef.current = 0;
   }, [contextKey]);
 
+  // Size the bottom spacer to exactly what's needed for the last user message
+  // to scroll to the top of the panel — no more, no less. Avoids the empty
+  // gap under short answers while still allowing scroll-to-top on new turns.
+  useLayoutEffect(() => {
+    if (lastUserId === null) return;
+    const scroller = scrollerRef.current;
+    const lastMsg = lastUserMsgRef.current;
+    const spacer = spacerRef.current;
+    if (!scroller || !lastMsg || !spacer) return;
+
+    const adjust = () => {
+      const currentSpacer = spacer.offsetHeight;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const lastMsgRect = lastMsg.getBoundingClientRect();
+      const lastMsgTop = scroller.scrollTop + (lastMsgRect.top - scrollerRect.top);
+      const tailWithoutSpacer = scroller.scrollHeight - lastMsgTop - currentSpacer;
+      const needed = Math.max(0, scroller.clientHeight - tailWithoutSpacer);
+      if (Math.abs(needed - currentSpacer) > 1) {
+        spacer.style.height = `${needed}px`;
+      }
+    };
+
+    adjust();
+    const onResize = () => adjust();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [lastUserId, pending, turns]);
+
+  // Pin the latest question to the top of the panel so the answer reads
+  // top-down — never chase the bottom of a streaming reply.
   useEffect(() => {
-    scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: "smooth" });
-  }, [turns, pending]);
+    if (lastUserId === null) return;
+    lastUserMsgRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+  }, [lastUserId, pending]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -283,7 +321,11 @@ export function ContextChat({
           <div className="flex flex-col gap-4">
             {turns.map((t) =>
               t.role === "user" ? (
-                <div key={t.id} className="flex justify-end">
+                <div
+                  key={t.id}
+                  ref={t.id === lastUserId ? lastUserMsgRef : undefined}
+                  className="flex justify-end scroll-mt-2"
+                >
                   <div className="max-w-[85%] bg-slate-100 border border-slate-200 px-3.5 py-2.5 rounded-2xl rounded-br-md text-[13.5px] text-slate-900 leading-relaxed">
                     {t.text}
                   </div>
@@ -316,6 +358,7 @@ export function ContextChat({
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "240ms" }} />
               </div>
             ) : null}
+            <div ref={spacerRef} aria-hidden />
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { PostHogProvider } from "@/lib/analytics/posthog-provider";
+import { GoogleTag } from "@/lib/analytics/google-tag";
 import CookieConsent from "@/app/components/CookieConsent";
 import { siteUrl, jsonLdSafe, organizationJsonLd, webSiteJsonLd } from "@/lib/seo";
 import "./globals.css";
@@ -71,6 +72,8 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: jsonLdSafe(webSiteJsonLd()) }}
         />
         <PostHogProvider>{children}</PostHogProvider>
+        {/* Google Ads tag (gtag.js) — loads only after cookie consent. */}
+        <GoogleTag />
         <CookieConsent />
         <Analytics />
         <SpeedInsights />

@@ -49,6 +49,11 @@ export default function PrivacyPage() {
           PostHog (hosted in the EU) to understand how the product is used: pages visited, features
           clicked, and — for signed-in users — your account ID and role. We do not record your
           screen, the text you type, or your search terms. If you decline, PostHog never loads.<br /><br />
+          <b>Advertising measurement (with your consent)</b> — if you accept cookies, we load
+          the Google Ads tag (gtag.js) so we can see which ads led to sign-ups and show ads to
+          people who have visited the site. Google receives the page path you visited (never the
+          query string, so your searches are not sent) and the cookie identifiers below. If you
+          decline, the Google tag never loads.<br /><br />
           <b>Anonymous traffic measurement</b> — Vercel Analytics counts page visits without
           cookies or persistent identifiers, so it cannot follow you across visits or sites.<br /><br />
           <b>Error reports</b> — if a page crashes, technical details of the error may be sent to
@@ -71,12 +76,15 @@ export default function PrivacyPage() {
           <ul style={{ paddingLeft: 20, lineHeight: 2, margin: 0 }}>
             <li><b>PostHog analytics cookies</b> (names beginning <code>ph_</code>) — distinguish
               your browser between visits so we can measure product usage.</li>
+            <li><b>Google Ads cookies</b> (names beginning <code>_gcl_</code>, <code>_gac_</code>
+              or <code>_ga</code>) — attribute sign-ups to the ad that brought you here, and
+              support remarketing.</li>
           </ul>
           <br />
-          We do not use advertising cookies. You can change or withdraw your choice at any time
-          via <CookiePreferencesLink style={{ color: "var(--teal)", fontSize: 14 }} /> (also linked
-          in the footer of every page). Withdrawing consent stops analytics immediately and deletes
-          the PostHog cookies from your browser.
+          You can change or withdraw your choice at any time via{" "}
+          <CookiePreferencesLink style={{ color: "var(--teal)", fontSize: 14 }} /> (also linked
+          in the footer of every page). Withdrawing consent stops analytics and advertising
+          measurement immediately and deletes the PostHog and Google cookies from your browser.
         </Section>
 
         <Section title="3. How we use your data">
@@ -92,8 +100,8 @@ export default function PrivacyPage() {
         <Section title="4. Legal basis (GDPR)">
           For users in the European Economic Area, we process personal data under the following
           legal bases:<br /><br />
-          <b>Consent</b> — email subscriptions and analytics cookies (you can withdraw either at
-          any time).<br />
+          <b>Consent</b> — email subscriptions and analytics/advertising cookies (you can
+          withdraw either at any time).<br />
           <b>Contract</b> — account creation and watchlist features (needed to provide the service).<br />
           <b>Legitimate interests</b> — security logging and abuse prevention.
         </Section>
@@ -112,6 +120,8 @@ export default function PrivacyPage() {
           vercel.com/legal/privacy-policy<br /><br />
           <b>PostHog</b> — product analytics, EU-hosted, loaded only with your consent. Privacy
           policy: posthog.com/privacy<br /><br />
+          <b>Google (Ads)</b> — advertising conversion measurement and remarketing, loaded only
+          with your consent. Privacy policy: policies.google.com/privacy<br /><br />
           <b>Sentry</b> — error monitoring. Privacy policy: sentry.io/privacy<br /><br />
           Shortage data is sourced from public regulatory databases (FDA, TGA, EMA, etc.) and
           contains no personal data.

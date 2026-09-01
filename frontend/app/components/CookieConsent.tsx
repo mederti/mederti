@@ -10,7 +10,8 @@ import {
 } from "@/lib/consent";
 
 /**
- * GDPR/ePrivacy consent banner for optional analytics cookies (PostHog).
+ * GDPR/ePrivacy consent banner for optional analytics and advertising cookies
+ * (PostHog product analytics; the Google Ads tag in lib/analytics/google-tag.tsx).
  *
  * Shows on first visit (no stored choice) and whenever a "Cookie preferences"
  * link fires OPEN_PREFERENCES_EVENT. Accept and Decline are equal-prominence
@@ -76,8 +77,8 @@ export default function CookieConsent() {
       </div>
       <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--app-text-3, #555)", margin: "0 0 14px" }}>
         We&apos;d like to use optional analytics cookies (PostHog, EU-hosted) to understand how
-        the product is used. Essential cookies — login and your country preference — are always
-        on. See our{" "}
+        the product is used, and Google Ads cookies to measure our advertising. Essential
+        cookies — login and your country preference — are always on. See our{" "}
         <Link href="/privacy" style={{ color: "var(--teal, #0fa676)", textDecoration: "none" }}>
           Privacy Policy
         </Link>
@@ -104,7 +105,7 @@ export default function CookieConsent() {
             color: "#fff",
           }}
         >
-          Accept analytics
+          Accept cookies
         </button>
       </div>
     </div>

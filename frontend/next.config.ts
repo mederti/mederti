@@ -13,6 +13,8 @@ import { withSentryConfig } from "@sentry/nextjs";
 //   • wss://*.supabase.co          — Realtime websocket (subscriptions)
 //   • https://api.anthropic.com    — chat surface streams from here
 //   • https://va.vercel-scripts.com + https://vercel.live — Vercel Analytics + Speed Insights
+//   • https://www.googletagmanager.com — Google Ads tag (gtag.js), consent-gated
+//   • https://*.google.com + https://*.doubleclick.net — Ads conversion beacons
 //   • https://*.ingest.sentry.io + https://*.sentry.io — Sentry beacon (when DSN is set)
 //   • https://fonts.googleapis.com + https://fonts.gstatic.com — next/font Google
 //
@@ -25,14 +27,14 @@ const CSP_REPORT_ONLY = [
   "default-src 'self'",
   // 'unsafe-inline' for Next.js hydration. No 'unsafe-eval' — prod Next
   // shouldn't need eval; report-only will tell us if anything does.
-  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://vercel.live",
+  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   // https: for any HTTPS image source (regulator favicons, drug images,
   // generated OG images via /api/og); data: + blob: for next/image internals
   // and inline previews from bulk-upload.
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://*.ingest.sentry.io https://*.sentry.io https://va.vercel-scripts.com https://vercel.live",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://*.ingest.sentry.io https://*.sentry.io https://va.vercel-scripts.com https://vercel.live https://www.googletagmanager.com https://*.google.com https://*.google-analytics.com https://*.doubleclick.net",
   // No iframes allowed in either direction. frame-src 'self' permits same-
   // origin iframes (we don't use any today). frame-ancestors 'none' is the
   // CSP equivalent of X-Frame-Options: DENY (which we already send too).

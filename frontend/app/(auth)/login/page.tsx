@@ -163,6 +163,7 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 placeholder="you@example.com"
                 style={{
                   width: "100%", padding: "10px 12px", borderRadius: 8,
@@ -181,6 +182,7 @@ function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
                 placeholder="••••••••"
                 style={{
                   width: "100%", padding: "10px 12px", borderRadius: 8,
@@ -231,6 +233,7 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 placeholder="you@example.com"
                 style={{
                   width: "100%", padding: "10px 12px", borderRadius: 8,

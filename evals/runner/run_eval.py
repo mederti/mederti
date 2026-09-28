@@ -95,12 +95,64 @@ def ask_chat(question_text: str, *, timeout: int = 240) -> dict:
     t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = resp.read().decode("utf-8", "replace")
-    try:
-        parsed = json.loads(body)
-    except json.JSONDecodeError:
-        parsed = {"content": "", "error": f"non-JSON response: {body[:500]}"}
+    parsed = _parse_chat_body(body)
     parsed["_elapsed_sec"] = round(time.time() - t0, 2)
     return parsed
+
+
+def _parse_chat_body(body: str) -> dict:
+    """Parse a /api/chat response body.
+
+    The route streams NDJSON — one JSON event per line — and the terminal
+    {"type": "done", ...} event carries the legacy non-streaming contract
+    (content/drugs/tool_calls/truncated). Older deployments returned that
+    object as a bare JSON body, so a line without a "type" envelope is
+    accepted as-is. Tool names are collected from tool_start events into
+    "_tool_names" so the deterministic grader can check expected_tools_min.
+    """
+    text_deltas: list[str] = []
+    tool_names: list[str] = []
+    done: dict | None = None
+    error: str | None = None
+    for line in body.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            evt = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(evt, dict):
+            continue
+        etype = evt.get("type")
+        if etype is None:
+            # Legacy single-object contract (pre-streaming deployments).
+            # Tool calls are unobservable here — None makes the grader skip
+            # the expected_tools check rather than fail it.
+            evt.setdefault("content", "")
+            evt["_tool_names"] = None
+            return evt
+        if etype == "text_delta":
+            text_deltas.append(evt.get("delta") or "")
+        elif etype == "tool_start":
+            tool_names.append(evt.get("name") or "?")
+        elif etype == "done":
+            done = evt
+        elif etype == "error":
+            error = evt.get("message")
+    if done is not None:
+        if not done.get("content"):
+            done["content"] = "".join(text_deltas)
+        done["_tool_names"] = tool_names
+        return done
+    result: dict = {"content": "".join(text_deltas), "_tool_names": tool_names}
+    if error:
+        result["error"] = error
+    elif not result["content"]:
+        result["error"] = f"unparseable response: {body[:500]}"
+    else:
+        result["error"] = "stream ended without done event"
+    return result
 
 
 def load_gold(qid: str) -> str | None:
@@ -132,6 +184,8 @@ def main() -> int:
     print()
 
     rows: list[dict] = []
+    det_results: list = []
+    judge_results: list = []
     for i, q in enumerate(questions, 1):
         qid = q["id"]
         print(f"[{i}/{len(questions)}] {qid} ...", end="", flush=True)
@@ -142,7 +196,8 @@ def main() -> int:
             rows.append({"id": qid, "error": str(e)})
             continue
 
-        det = grade_deterministic(q, resp, tool_calls=None)
+        det = grade_deterministic(q, resp, tool_calls=resp.get("_tool_names"))
+        det_results.append(det)
         row = {
             "id": qid,
             "persona": q.get("persona"),
@@ -154,6 +209,7 @@ def main() -> int:
         if not args.no_judge:
             gold = load_gold(qid)
             judge = grade_judge(q, resp, gold_answer=gold)
+            judge_results.append(judge)
             row["judge_pass"] = judge.passed
             row["judge_summary"] = judge.summary
             if judge.raw:
@@ -167,31 +223,11 @@ def main() -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M")
     out_path = REPORT_DIR / f"{stamp}_{args.scope_label}.md"
 
-    det_results = []
-    for r in rows:
-        from grader_deterministic import DeterministicResult
-        if "error" in r:
-            continue
-        dr = DeterministicResult(question_id=r["id"])
-        dr.notes = r["deterministic_notes"]
-        # Re-derive pass from the boolean
-        if not r["deterministic_pass"]:
-            dr.expected_tools_called = False
-        det_results.append(dr)
-
+    # Summarise from the actual grader results — an earlier version lossily
+    # reconstructed them from the pass boolean, which dumped every failure
+    # into expected_tools_called and zeroed the other dimensions.
     det_summary = det_summarise(det_results)
-    judge_summary = None
-    if not args.no_judge:
-        from grader_judge import JudgeResult
-        jrs = []
-        for r in rows:
-            if "error" in r:
-                continue
-            jr = JudgeResult(question_id=r["id"], raw=r.get("judge_raw") or {})
-            if not r.get("judge_pass") and jr.raw:
-                jr.raw["passed_overall"] = False
-            jrs.append(jr)
-        judge_summary = judge_summarise(jrs)
+    judge_summary = judge_summarise(judge_results) if not args.no_judge else None
 
     with out_path.open("w") as fh:
         fh.write(f"# Mederti eval — {args.scope_label}\n\n")

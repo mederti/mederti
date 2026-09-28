@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-// 10-min cache. The 30k-row aggregation is expensive (audit FINDING-P5-02)
-// and the underlying shortage_events table is updated by scrapers running
-// every 4h+. Per-?country variant caches separately. Closes part of
-// audit FINDING-P5-01.
+// `export const revalidate` is inert here: reading url.searchParams (?country,
+// ?min_peers, ?limit) makes the handler dynamic, which opts it out of the
+// full-route cache. So every request was paying the full paginated
+// cross-market aggregation — measured at 9.3s in production.
+//
+// The aggregation is now wrapped in unstable_cache keyed by (country,
+// min_peers), which does apply to a dynamic route and is shared across
+// instances. ?limit only slices an already-computed list, so it stays outside
+// the key — otherwise every distinct limit would be its own cache entry for
+// identical work.
 export const revalidate = 600;
+const TTL_SECONDS = 600;
+// Ranked head retained in the cache entry; must stay >= the handler's ?limit cap.
+const CACHE_HEAD = 200;
 
 /**
  * GET /api/predictive-signals?country=GB
@@ -41,12 +51,12 @@ const SEV_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low:
 // current + prior month given monthly publication + scrape lag).
 const CONCESSION_ACTIVE_MS = 75 * 86400000;
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const country = (url.searchParams.get("country") ?? "GB").toUpperCase();
-  const minPeers = Number(url.searchParams.get("min_peers") ?? "3");
-  const limit = Math.min(Number(url.searchParams.get("limit") ?? "20"), 100);
-
+/**
+ * The expensive half: page every active shortage and rank cross-market
+ * candidates. Independent of ?limit, so one cache entry serves every page
+ * size for a given (country, minPeers).
+ */
+async function computeCandidates(country: string, minPeers: number) {
   const peers = PEER_GROUPS[country] ?? PEER_GROUPS.GB;
   const sb = getSupabaseAdmin();
 
@@ -194,6 +204,35 @@ export async function GET(req: Request) {
     return (b.days_lead ?? 0) - (a.days_lead ?? 0);
   });
 
+  // unstable_cache rejects values over ~2MB, and silently degrades to "never
+  // cached" if we exceed it — which would quietly undo this whole change. The
+  // handler caps ?limit at 100, so keeping a bounded head of the ranked list is
+  // lossless for every reachable request while keeping the entry small.
+  // total_candidates is preserved separately so the reported figure stays the
+  // true count rather than the truncated one.
+  return {
+    peers,
+    total_candidates: candidates.length,
+    concession_candidates: candidates.filter((c) => c.concession_local).length,
+    candidates: candidates.slice(0, CACHE_HEAD),
+  };
+}
+
+const getCachedCandidates = unstable_cache(computeCandidates, ["mederti-predictive-signals"], {
+  revalidate: TTL_SECONDS,
+  tags: ["predictive-signals"],
+});
+
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const country = (url.searchParams.get("country") ?? "GB").toUpperCase();
+  const minPeers = Number(url.searchParams.get("min_peers") ?? "3");
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? "20"), 100);
+
+  const sb = getSupabaseAdmin();
+  const { peers, candidates, total_candidates, concession_candidates } =
+    await getCachedCandidates(country, minPeers);
+
   const top = candidates.slice(0, limit);
   const drugIds = top.map((c) => c.drug_id);
   const drugLookup = new Map<string, { generic_name: string; who_essential_medicine: boolean }>();
@@ -221,8 +260,8 @@ export async function GET(req: Request) {
     country,
     peer_set: peers,
     min_peers: minPeers,
-    total_candidates: candidates.length,
-    concession_candidates: candidates.filter((c) => c.concession_local).length,
+    total_candidates,
+    concession_candidates,
     results,
   });
 }

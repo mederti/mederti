@@ -29,7 +29,7 @@ from typing import Any
 # pipelines tag raw_scrapes rows with the same identifier. Closes audit
 # FINDING-D1-09 on the recall side. Single import means no duplicated
 # git-resolution logic; the helper runs once per process.
-from backend.scrapers.base_scraper import _DEFAULT_SCRAPER_VERSION
+from backend.scrapers.base_scraper import _DEFAULT_SCRAPER_VERSION, grade_write_outcome
 
 # ── Drug-name plausibility guard ────────────────────────────────────────────
 # Recall feed titles often look like sentences ("Updated labelling for X",
@@ -431,9 +431,15 @@ class BaseRecallScraper(ABC):
           4. Link to existing shortage_events
           5. Auto-create shortage if Class I + no active shortage
 
-        Returns: {"upserted": n, "skipped": n, "linked": n, "auto_shortages": n}
+        Returns: {"upserted": n, "skipped": n, "linked": n, "auto_shortages": n,
+        "write_failures": n}
+
+        `skipped` is a recall we chose not to write (no generic_name).
+        `write_failures` is one we tried to write and could not — see
+        BaseShortageScraper._grade_write_outcome for why the split matters.
         """
-        counts = {"upserted": 0, "skipped": 0, "linked": 0, "auto_shortages": 0}
+        counts = {"upserted": 0, "skipped": 0, "linked": 0, "auto_shortages": 0,
+                  "write_failures": 0}
 
         for recall in recalls:
             try:
@@ -502,7 +508,7 @@ class BaseRecallScraper(ABC):
                     "Failed to upsert recall",
                     extra={"error": str(exc), "generic_name": recall.get("generic_name")},
                 )
-                counts["skipped"] += 1
+                counts["write_failures"] += 1
 
         return counts
 
@@ -538,9 +544,22 @@ class BaseRecallScraper(ABC):
                 "status":            "success",
                 "records_processed": counts["upserted"],
                 "skipped":           counts["skipped"],
+                "write_failures":    counts.get("write_failures", 0),
                 "linked":            counts["linked"],
                 "auto_shortages":    counts["auto_shortages"],
             })
+
+            # A recall scrape that wrote nothing is not a success either. This
+            # is the path that logged "tga_recalls: status=success records=0
+            # skipped=139" on 2026-09-27 while every write was failing DNS.
+            summary["status"] = grade_write_outcome(
+                found=len(recalls),
+                upserted=counts["upserted"],
+                write_failures=counts.get("write_failures", 0),
+                summary=summary,
+                source_name=self.SOURCE_NAME,
+                log=self.log,
+            )
 
         except Exception as exc:
             summary["error"] = str(exc)

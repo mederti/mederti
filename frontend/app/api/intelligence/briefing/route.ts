@@ -1,16 +1,23 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
 import { recordAiUsage } from "@/lib/ai/usage-log";
 import { requireAdmin } from "@/lib/admin-auth";
 
-// 6h edge cache, matching the existing in-memory TTL_MS. Without this, a
-// cold start hits Claude Sonnet + a fresh DB aggregation on every region/
-// instance. With this, the response is held at the edge so any user
-// anywhere within the 6h window gets the cached payload essentially free.
-// Closes part of audit FINDING-P5-01. The in-memory `cache` variable
-// below becomes belt-and-braces.
+// `export const revalidate` does NOT cache this route. Reading
+// url.searchParams (for ?refresh=1) makes the handler dynamic, which opts it
+// out of the full-route cache, so the directive was inert and the only cache
+// was the per-instance `cache` variable below. On serverless that dies with
+// every cold start, so a measured cold request cost 23.0s — a fresh
+// cross-country aggregation plus a Sonnet call, on the user's clock.
+//
+// The generation is now wrapped in unstable_cache, which lives in the shared
+// Next data cache: it survives cold starts and is shared across instances, so
+// at most one request per 6h pays the cost. Same pattern /api/daily-question
+// already uses correctly. The in-memory `cache` stays as a first-level hit.
 export const revalidate = 21600;
+const TTL_SECONDS = 6 * 60 * 60;
 
 const client = new Anthropic();
 const ROUTE = "/api/intelligence/briefing";
@@ -19,6 +26,64 @@ const TTL_MS = 6 * 60 * 60 * 1000; // 6h cache for public briefing
 
 // In-memory cache (per server instance)
 let cache: { briefing: PublicBriefing; generated: number } | null = null;
+
+/** One active-shortage row as the cross-country signal needs it. */
+interface CrossCountryRow {
+  drug_id: string;
+  country_code: string;
+  severity: string | null;
+  reason_category: string | null;
+}
+
+/**
+ * Every active shortage row, paginated.
+ *
+ * This used to be a single unbounded `.select(...).eq("status","active")`.
+ * PostgREST caps an unbounded select at 1,000 rows, so the cross-country
+ * signal — "which molecules are short in 3+ countries", the headline claim of
+ * the whole briefing — was computed from 1,000 of 85,903 active rows (1.2%),
+ * in arbitrary order. It did not just run slowly; it asserted findings the
+ * data behind them could not support. Two runs could disagree.
+ *
+ * Pages are fetched in parallel batches so the full scan stays acceptable;
+ * it happens at most once per TTL_SECONDS behind unstable_cache.
+ */
+const PAGE = 1000;
+const PARALLEL = 8;
+
+async function fetchActiveCrossCountryRows(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+): Promise<CrossCountryRow[]> {
+  const { count, error: countErr } = await sb
+    .from("shortage_events")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "active");
+  if (countErr || !count) return [];
+
+  const offsets: number[] = [];
+  for (let off = 0; off < count; off += PAGE) offsets.push(off);
+
+  const rows: CrossCountryRow[] = [];
+  // Batch the page requests so we don't open ~86 sockets at once.
+  for (let i = 0; i < offsets.length; i += PARALLEL) {
+    const batch = offsets.slice(i, i + PARALLEL).map((off) =>
+      sb
+        .from("shortage_events")
+        .select("drug_id, country_code, severity, reason_category")
+        .eq("status", "active")
+        .order("id", { ascending: true })
+        .range(off, off + PAGE - 1),
+    );
+    for (const res of await Promise.all(batch)) {
+      if (res.error) {
+        console.error("briefing: cross-country page failed", res.error);
+        continue;
+      }
+      rows.push(...((res.data ?? []) as CrossCountryRow[]));
+    }
+  }
+  return rows;
+}
 
 interface PublicBriefingItem {
   lead_phrase: string;     // bold lead — e.g. "Indian regulators" / "Italy's AIFA" / "Cisplatin"
@@ -42,18 +107,18 @@ interface PublicBriefing {
  *
  * Cached 6h server-side (in-memory).
  */
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  let force = url.searchParams.get("refresh") === "1";
-  // This route takes no id and has a single global cache, so ?refresh=1 in a
-  // loop forces back-to-back billable Sonnet calls. Honour the bypass for
-  // admins only; everyone else gets the cached briefing.
-  if (force && !(await requireAdmin())) force = false;
+type BuildResult =
+  | { ok: true; briefing: PublicBriefing }
+  | { ok: false; error: string };
 
-  if (!force && cache && Date.now() - cache.generated < TTL_MS) {
-    return NextResponse.json({ ...cache.briefing, cached: true, generated_at: new Date(cache.generated).toISOString() });
-  }
-
+/**
+ * Aggregate the data plane and have Claude write the briefing.
+ *
+ * Expensive on purpose: a full cross-country scan plus one Sonnet call. Only
+ * ever entered on a cache miss (or an admin's explicit ?refresh=1), so cost is
+ * amortised across the TTL rather than charged to whoever arrives first.
+ */
+async function buildBriefing(): Promise<BuildResult> {
   const sb = getSupabaseAdmin();
 
   // Pull data context — global, not supplier-specific
@@ -65,7 +130,7 @@ export async function GET(req: Request) {
     activeRes,
     criticalRes,
     recentRes,
-    crossCountryRes,
+    crossCountryRows,
     upcomingEventsRes,
     activeTrialsRes,
     facilityOaiRes,
@@ -74,7 +139,7 @@ export async function GET(req: Request) {
     sb.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
     sb.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active").eq("severity", "critical"),
     sb.from("shortage_events").select("id", { count: "exact", head: true }).gte("created_at", sevenDaysAgo),
-    sb.from("shortage_events").select("drug_id, country_code, severity, reason_category").eq("status", "active"),
+    fetchActiveCrossCountryRows(sb),
     sb.from("regulatory_events")
       .select("event_type, event_date, generic_name, sponsor, description, source_country")
       .eq("outcome", "scheduled")
@@ -105,7 +170,7 @@ export async function GET(req: Request) {
   // Compute cross-country signals
   const drugCountries = new Map<string, Set<string>>();
   const reasonCounts = new Map<string, number>();
-  for (const r of (crossCountryRes.data ?? []) as { drug_id: string; country_code: string; reason_category: string | null }[]) {
+  for (const r of crossCountryRows) {
     if (!drugCountries.has(r.drug_id)) drugCountries.set(r.drug_id, new Set());
     drugCountries.get(r.drug_id)!.add(r.country_code);
     const k = r.reason_category ?? "unknown";
@@ -306,7 +371,7 @@ Length discipline. Each "body" is between 50 and 100 words. Cut anything that do
       status: "error",
       notes: "invalid_json",
     });
-    return NextResponse.json({ error: "AI returned invalid JSON" }, { status: 500 });
+    return { ok: false, error: "AI returned invalid JSON" };
   }
 
   recordAiUsage({
@@ -316,5 +381,48 @@ Length discipline. Each "body" is between 50 and 100 words. Cut anything that do
     latency_ms: Date.now() - t0,
   });
   cache = { briefing, generated: Date.now() };
-  return NextResponse.json({ ...briefing, cached: false, generated_at: new Date().toISOString() });
+  return { ok: true, briefing };
+}
+
+/**
+ * Shared-cache wrapper. Lives in the Next data cache, so unlike the in-memory
+ * `cache` it survives cold starts and is shared across instances — the whole
+ * point of the change. Keyed on nothing: the briefing is global.
+ */
+const getCachedBriefing = unstable_cache(buildBriefing, ["mederti-public-briefing"], {
+  revalidate: TTL_SECONDS,
+  tags: ["intelligence-briefing"],
+});
+
+/**
+ * GET /api/intelligence/briefing
+ *
+ * Public-facing daily intelligence briefing. Served from cache; admins can
+ * force a regeneration with ?refresh=1.
+ */
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  let force = url.searchParams.get("refresh") === "1";
+  // ?refresh=1 in a loop would force back-to-back billable Sonnet calls, so
+  // honour the bypass for admins only; everyone else gets the cached briefing.
+  if (force && !(await requireAdmin())) force = false;
+
+  // First level: this instance already has it and it is still warm.
+  if (!force && cache && Date.now() - cache.generated < TTL_MS) {
+    return NextResponse.json({
+      ...cache.briefing,
+      cached: true,
+      generated_at: new Date(cache.generated).toISOString(),
+    });
+  }
+
+  const result = force ? await buildBriefing() : await getCachedBriefing();
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 500 });
+  }
+  return NextResponse.json({
+    ...result.briefing,
+    cached: !force,
+    generated_at: new Date().toISOString(),
+  });
 }

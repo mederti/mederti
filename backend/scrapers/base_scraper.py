@@ -88,6 +88,74 @@ def _chunks(seq: list, size: int):
         yield seq[i : i + size]
 
 
+def grade_write_outcome(
+    *,
+    found: int,
+    upserted: int,
+    write_failures: int,
+    summary: dict[str, Any],
+    source_name: str,
+    log: Any,
+) -> str:
+    """
+    Decide a scrape's status from what actually reached the database.
+
+    Shared by BaseShortageScraper and BaseRecallScraper — the two upsert paths
+    both swallow per-row errors on purpose (one bad row must not lose the
+    batch), which is why neither could previously tell a write outage from a
+    clean run. `run_all_scrapers` treats {"error", "failed"} as broken and
+    alerts on them, so returning "failed" here is what turns a silent write
+    outage into a page.
+
+      failed   — records were found and none landed. Either every write errored
+                 (infrastructure: the 2026-09-27 tga_recalls run found 139
+                 recalls, wrote 0, and reported success while DNS was down) or
+                 every record was unresolvable (normalisation/data). Both need
+                 a human.
+      partial  — some rows landed, some writes errored. This source's data is
+                 now incomplete. Visible, but deliberately outside
+                 BAD_STATUSES so a flaky upstream does not page anyone.
+      empty    — the source itself returned nothing. The pipeline worked; the
+                 upstream had no rows. Legitimate for narrow sources (Sri
+                 Lanka, Senegal), so not "broken" — but no longer called
+                 "success", so a source going quiet becomes visible.
+      success  — records found and written, no write errors.
+    """
+    if found == 0:
+        return "empty"
+    if upserted == 0:
+        reason = (
+            f"all {write_failures} write(s) failed"
+            if write_failures
+            else f"all {found} record(s) skipped before write"
+        )
+        summary["error"] = (
+            f"Scrape found {found} record(s) but wrote 0 — {reason}. "
+            "Treating as failed: a zero-write run must not report success."
+        )
+        log.error(
+            "Scrape wrote nothing despite finding records",
+            extra={
+                "source":         source_name,
+                "records_found":  found,
+                "write_failures": write_failures,
+            },
+        )
+        return "failed"
+    if write_failures:
+        log.warning(
+            "Scrape wrote only part of the batch",
+            extra={
+                "source":         source_name,
+                "records_found":  found,
+                "upserted":       upserted,
+                "write_failures": write_failures,
+            },
+        )
+        return "partial"
+    return "success"
+
+
 class ScraperError(Exception):
     """Raised when a scraper encounters an unrecoverable error."""
 
@@ -482,9 +550,17 @@ class BaseScraper(ABC):
         trips × N events) with O(N/chunk_size) round trips — the dominant driver
         of scraper-run disk IO across ~22 shortage scrapers sharing this base.
 
-        Returns counts: {"upserted": n, "skipped": n, "status_changes": n}
+        Returns counts: {"upserted": n, "skipped": n, "status_changes": n,
+        "write_failures": n}
+
+        `skipped` covers events we chose not to write (blank generic_name, an
+        unresolvable drug). `write_failures` counts rows we DID try to write and
+        could not — an infrastructure signal, not a data one. run() uses the
+        split to tell "this source had nothing for us" apart from "we could not
+        reach the database", which previously both reported success.
         """
-        counts = {"upserted": 0, "skipped": 0, "status_changes": 0}
+        counts = {"upserted": 0, "skipped": 0, "status_changes": 0,
+                  "write_failures": 0}
         if not events:
             return counts
 
@@ -685,7 +761,7 @@ class BaseScraper(ABC):
                                 "shortage_id": record.get("shortage_id"),
                             },
                         )
-                        counts["skipped"] += 1
+                        counts["write_failures"] += 1
 
         # ── Phase 5: bulk-insert status-change log entries, chunked ─────────
         for chunk in _chunks(status_log_entries, 200):
@@ -702,6 +778,28 @@ class BaseScraper(ABC):
                 )
 
         return counts
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Outcome grading
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _grade_write_outcome(
+        self,
+        *,
+        found: int,
+        upserted: int,
+        write_failures: int,
+        summary: dict[str, Any],
+    ) -> str:
+        """Grade this run from what reached the DB. See grade_write_outcome()."""
+        return grade_write_outcome(
+            found=found,
+            upserted=upserted,
+            write_failures=write_failures,
+            summary=summary,
+            source_name=self.SOURCE_NAME,
+            log=self.log,
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Orchestrator
@@ -794,8 +892,24 @@ class BaseScraper(ABC):
                 "status":            "success",
                 "records_processed": counts["upserted"],
                 "skipped":           counts["skipped"],
+                "write_failures":    counts.get("write_failures", 0),
                 "status_changes":    counts.get("status_changes", 0),
             })
+
+            # ── 4b. A scrape that wrote nothing is NOT a success ──────────────
+            # The upsert path deliberately swallows per-row errors so one bad
+            # row can't lose the batch. That made a total write outage (laptop
+            # asleep → DNS failure on every request) report
+            # "status=success records=0" while 139 found records evaporated.
+            # Freshness dashboards and the ops alert both trusted that status,
+            # so the fleet could rot silently for weeks. Grade the outcome on
+            # what actually landed.
+            summary["status"] = self._grade_write_outcome(
+                found=len(events),
+                upserted=counts["upserted"],
+                write_failures=counts.get("write_failures", 0),
+                summary=summary,
+            )
 
             # ── 5. Mark raw scrape processed ──────────────────────────────────
             self._update_raw_scrape(

@@ -182,12 +182,12 @@ async function buildBriefing(): Promise<BuildResult> {
     const k = r.reason_category ?? "unknown";
     reasonCounts.set(k, (reasonCounts.get(k) ?? 0) + 1);
   }
-  const multiCountry = [...drugCountries.entries()].filter(([_, c]) => c.size >= 3);
+  const multiCountry = [...drugCountries.entries()].filter(([, c]) => c.size >= 3);
   const topReasons = [...reasonCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
 
   // Top affected drugs (5+ countries)
   const topAffected = multiCountry
-    .filter(([_, c]) => c.size >= 5)
+    .filter(([, c]) => c.size >= 5)
     .sort((a, b) => b[1].size - a[1].size)
     .slice(0, 5);
   const topDrugIds = topAffected.map(([id]) => id);

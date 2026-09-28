@@ -14,6 +14,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 // identical work.
 export const revalidate = 600;
 const TTL_SECONDS = 600;
+// Ranked head retained in the cache entry; must stay >= the handler's ?limit cap.
+const CACHE_HEAD = 200;
 
 /**
  * GET /api/predictive-signals?country=GB
@@ -202,7 +204,18 @@ async function computeCandidates(country: string, minPeers: number) {
     return (b.days_lead ?? 0) - (a.days_lead ?? 0);
   });
 
-  return { peers, candidates };
+  // unstable_cache rejects values over ~2MB, and silently degrades to "never
+  // cached" if we exceed it — which would quietly undo this whole change. The
+  // handler caps ?limit at 100, so keeping a bounded head of the ranked list is
+  // lossless for every reachable request while keeping the entry small.
+  // total_candidates is preserved separately so the reported figure stays the
+  // true count rather than the truncated one.
+  return {
+    peers,
+    total_candidates: candidates.length,
+    concession_candidates: candidates.filter((c) => c.concession_local).length,
+    candidates: candidates.slice(0, CACHE_HEAD),
+  };
 }
 
 const getCachedCandidates = unstable_cache(computeCandidates, ["mederti-predictive-signals"], {
@@ -217,7 +230,8 @@ export async function GET(req: Request) {
   const limit = Math.min(Number(url.searchParams.get("limit") ?? "20"), 100);
 
   const sb = getSupabaseAdmin();
-  const { peers, candidates } = await getCachedCandidates(country, minPeers);
+  const { peers, candidates, total_candidates, concession_candidates } =
+    await getCachedCandidates(country, minPeers);
 
   const top = candidates.slice(0, limit);
   const drugIds = top.map((c) => c.drug_id);
@@ -246,8 +260,8 @@ export async function GET(req: Request) {
     country,
     peer_set: peers,
     min_peers: minPeers,
-    total_candidates: candidates.length,
-    concession_candidates: candidates.filter((c) => c.concession_local).length,
+    total_candidates,
+    concession_candidates,
     results,
   });
 }

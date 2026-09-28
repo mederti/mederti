@@ -18,6 +18,12 @@ import { requireAdmin } from "@/lib/admin-auth";
 // already uses correctly. The in-memory `cache` stays as a first-level hit.
 export const revalidate = 21600;
 const TTL_SECONDS = 6 * 60 * 60;
+// A cache miss now pays a full paginated scan (~86 pages) AND a Sonnet call.
+// That is strictly more work than the old capped single page, so the cold path
+// needs headroom it did not have — this route had no maxDuration at all and the
+// pre-change cold request already measured 23.0s. One request per 6h reaches
+// here; everyone else is served from cache.
+export const maxDuration = 120;
 
 const client = new Anthropic();
 const ROUTE = "/api/intelligence/briefing";

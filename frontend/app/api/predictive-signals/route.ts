@@ -16,6 +16,11 @@ export const revalidate = 600;
 const TTL_SECONDS = 600;
 // Ranked head retained in the cache entry; must stay >= the handler's ?limit cap.
 const CACHE_HEAD = 200;
+// A cache miss pages every active shortage row. Measured at 40.7s in production
+// on the first request after deploy — longer than the briefing's cold path, on a
+// route that had no maxDuration at all. One request per 10min window reaches
+// here; everyone else is served from cache in ~1s.
+export const maxDuration = 120;
 
 /**
  * GET /api/predictive-signals?country=GB

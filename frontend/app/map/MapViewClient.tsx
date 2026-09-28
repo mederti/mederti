@@ -172,6 +172,25 @@ function heatColor(count: number, max: number): string {
   return HEAT_RAMP[idx];
 }
 
+// The choropleth can be coloured two ways. "volume" is the raw shortage count
+// (log-scaled, above) — useful but skewed by how granularly each regulator
+// reports (one market lists every affected pack, another one product line).
+// "severity" colours by the worst active-shortage severity in the country,
+// which reads as clinical pressure independent of reporting style.
+type ShortageMetric = "volume" | "severity";
+const SEVERITY_COLORS: Record<string, string> = {
+  critical: "#9c1f30",
+  high: "#d0552f",
+  medium: "#e0a02a",
+  low: "#7aa33f",
+};
+const SEVERITY_ORDER: { key: string; label: string }[] = [
+  { key: "critical", label: "Critical" },
+  { key: "high", label: "High" },
+  { key: "medium", label: "Medium" },
+  { key: "low", label: "Low" },
+];
+
 type LayerKey = "shortages" | "manufacturing" | "manufacturers" | "regulators" | "hospitals";
 
 // "hospitals" is served from static PMTiles, not /api/map-data — keep the
@@ -221,6 +240,7 @@ function markerEl(opts: { size: number; color: string; shape?: "circle" | "squar
 
 export default function MapViewClient() {
   const [horizon, setHorizon] = useState<Horizon>("today");
+  const [shortageMetric, setShortageMetric] = useState<ShortageMetric>("volume");
   const [enabledLayers, setEnabledLayers] = useState<Set<LayerKey>>(
     new Set(["shortages", "manufacturing"]),
   );
@@ -499,13 +519,17 @@ export default function MapViewClient() {
     const max = Math.max(...rows.map((s) => s.count));
     const matchExpr: unknown[] = ["match", ["get", "alpha2"]];
     for (const s of rows) {
-      matchExpr.push(s.country_code, heatColor(s.count, max));
+      const color =
+        shortageMetric === "severity"
+          ? SEVERITY_COLORS[s.severity ?? ""] ?? "#c9cec8"
+          : heatColor(s.count, max);
+      matchExpr.push(s.country_code, color);
     }
     matchExpr.push("rgba(0,0,0,0)"); // countries with no data stay unfilled
 
     map.setPaintProperty(CHORO_FILL_LAYER_ID, "fill-color", matchExpr as never);
     map.setPaintProperty(CHORO_FILL_LAYER_ID, "fill-opacity", 0.65);
-  }, [data, enabledLayers, countriesReady]);
+  }, [data, enabledLayers, countriesReady, shortageMetric]);
 
   // Redraw point markers (manufacturing/HQ/regulator layers) on data change.
   useEffect(() => {
@@ -602,6 +626,22 @@ export default function MapViewClient() {
           ))}
         </div>
 
+        {enabledLayers.has("shortages") && (
+          <div className="mv-metric" role="group" aria-label="Colour shortages by">
+            <span className="mv-metric-label">Colour by</span>
+            {(["volume", "severity"] as ShortageMetric[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`mv-chip ${shortageMetric === m ? "mv-chip--active" : ""}`}
+                onClick={() => setShortageMetric(m)}
+              >
+                {m === "volume" ? "Volume" : "Severity"}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="mv-layers">
           {ACTIVE_LAYERS.map((l) => (
             <label key={l.key} className="mv-layer-toggle">
@@ -629,12 +669,22 @@ export default function MapViewClient() {
 
         <div className="mv-legend">
           <span className="mv-legend-label">Shortages</span>
-          <span className="mv-ramp" aria-hidden="true">
-            {HEAT_RAMP.map((c) => (
-              <i key={c} className="mv-ramp-step" style={{ background: c }} />
-            ))}
-          </span>
-          <span className="mv-legend-hint">fewer → more</span>
+          {shortageMetric === "volume" ? (
+            <>
+              <span className="mv-ramp" aria-hidden="true">
+                {HEAT_RAMP.map((c) => (
+                  <i key={c} className="mv-ramp-step" style={{ background: c }} />
+                ))}
+              </span>
+              <span className="mv-legend-hint">fewer → more</span>
+            </>
+          ) : (
+            SEVERITY_ORDER.map((s) => (
+              <span key={s.key}>
+                <i className="mv-dot" style={{ background: SEVERITY_COLORS[s.key] }} /> {s.label}
+              </span>
+            ))
+          )}
           <span><i className="mv-dot" style={{ background: "#378add" }} /> Manufacturing site</span>
           <span><i className="mv-dot" style={{ background: "#534ab7", borderRadius: 2 }} /> Manufacturer HQ</span>
           <span><i className="mv-dot" style={{ background: "#0c447c" }} /> Regulator HQ</span>

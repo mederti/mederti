@@ -12,8 +12,14 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 // instances. ?limit only slices an already-computed list, so it stays outside
 // the key — otherwise every distinct limit would be its own cache entry for
 // identical work.
-export const revalidate = 600;
-const TTL_SECONDS = 600;
+// TTL is set by how fast the DATA changes, not by habit. shortage_events is
+// written by country scrapers on a staggered daily cadence — nothing here moves
+// minute to minute — so a 10-minute TTL was ~24x tighter than the underlying
+// data, and every expiry made one unlucky user wait out the full aggregation
+// (measured at 11.0s on a cold miss in production). 30 minutes is still well
+// inside the data's change rate and cuts cold misses threefold.
+export const revalidate = 1800;
+const TTL_SECONDS = 1800;
 // Ranked head retained in the cache entry; must stay >= the handler's ?limit cap.
 const CACHE_HEAD = 200;
 // A cache miss pages every active shortage row. Measured at 40.7s in production

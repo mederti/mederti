@@ -174,10 +174,22 @@ SHELL=/bin/bash
 0  21 1 * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.pbs_pricing_importer >> logs/cron.log 2>&1
 
 # ─── Pricing connectors (drug_pricing_history — migration 055) ───
-# NADAC: CMS refreshes Wednesdays → fetch Thursdays. NHS: tariff changes
-# monthly, concessions announced throughout the month → weekly Mondays.
+# NADAC: CMS refreshes Wednesdays → fetch Thursdays.
+#
+# NHS tariff was weekly at Mon 06:50 local. On a laptop that is asleep at
+# 06:50 a weekly slot means one missed fire costs a full week, and it did:
+# five consecutive Mondays were missed and UK pricing went 46 days stale
+# (2026-08-14 → 2026-09-28), which matters because the Part VIIIA concession
+# list is the only accessible UK supply-pressure signal we have and it feeds
+# /api/predictive-signals for GB.
+#
+# Two changes: daily instead of weekly (the scrape is idempotent, dedupes, and
+# costs a handful of HTTP requests, so a missed fire now costs a day not a
+# week), and moved to an afternoon slot when the machine is actually awake.
+# The real fix is Railway — see cron/RAILWAY_SERVICES.md. This just stops the
+# laptop's sleep schedule deciding how fresh UK data is.
 15  7 * * 4  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nadac           >> logs/cron.log 2>&1
-50  6 * * 1  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nhs_drug_tariff >> logs/cron.log 2>&1
+50 14 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nhs_drug_tariff >> logs/cron.log 2>&1
 # BDPM: ANSM refreshes the public medicines DB ~weekly → fetch Tuesdays.
 30  6 * * 2  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py france_bdpm    >> logs/cron.log 2>&1
 # AIFA: transparency lists refresh ~monthly → weekly Wednesday.

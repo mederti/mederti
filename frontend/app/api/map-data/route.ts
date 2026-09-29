@@ -18,8 +18,13 @@ import { regulatorHqLocation } from "@/lib/geo/regulator-hq-locations";
 // The aggregation now sits behind unstable_cache, which DOES apply to a dynamic
 // route and is shared across instances instead of dying with each cold start.
 // Rate limiting and param validation stay in the handler, outside the cache.
-export const revalidate = 60;
-const TTL_SECONDS = 60;
+// Same reasoning as /api/predictive-signals: a 60-second TTL on an aggregate
+// fed by daily scrapers meant most requests were revalidations, which is why
+// this route sat at a steady ~3.5s after caching rather than dropping to the
+// sub-second warm hits the other routes show. 5 minutes still far outpaces how
+// often the map's underlying counts actually move.
+export const revalidate = 300;
+const TTL_SECONDS = 300;
 // A cache miss pages several tables; give the cold path room it never had.
 export const maxDuration = 120;
 

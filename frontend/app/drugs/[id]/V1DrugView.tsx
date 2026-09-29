@@ -13,6 +13,7 @@ import { ParallelTradeSourcing } from "./parallel-trade-sourcing";
 import { ParallelTradeArbitrage } from "./parallel-trade-arbitrage";
 import { ParallelTradePanel } from "./parallel-trade-panel";
 import { PriceTrendChart } from "./PriceTrendChart";
+import { ShortageTrendChart } from "@/app/chat/components/views/ShortageTrendChart";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { affinity, relationshipLabel } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -916,6 +917,14 @@ export default function V1DrugView({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Shortage trend for this molecule, every market (range-selectable) */}
+          {shortages.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Shortage history <span className="help">new &amp; open notices across all markets we track</span></div>
+              <ShortageTrendChart drugId={id} defaultRange="MAX" />
             </div>
           )}
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { countryCentroid } from "@/lib/geo/country-centroids";
@@ -8,7 +9,19 @@ import { regulatorHqLocation } from "@/lib/geo/regulator-hq-locations";
 // filters out synthetic (recall-derived) and upstream-signal rows, since
 // this route drives a country-level choropleth where noise visibly
 // overstates risk rather than just appearing as one row in a list.
+// `export const revalidate` does NOT cache this route: reading url.searchParams
+// (?horizon, ?layers) makes the handler dynamic, which opts it out of the
+// full-route cache. The directive was inert, so every request drained several
+// tables in .range() pages — measured at 18.0s in production. Same defect that
+// was fixed on /api/intelligence/briefing and /api/predictive-signals.
+//
+// The aggregation now sits behind unstable_cache, which DOES apply to a dynamic
+// route and is shared across instances instead of dying with each cold start.
+// Rate limiting and param validation stay in the handler, outside the cache.
 export const revalidate = 60;
+const TTL_SECONDS = 60;
+// A cache miss pages several tables; give the cold path room it never had.
+export const maxDuration = 120;
 
 const HORIZON_DAYS: Record<string, number | null> = {
   today: null,
@@ -86,30 +99,20 @@ async function drainQuery<T>(
   return { data: out, error: null };
 }
 
-export async function GET(req: NextRequest) {
-  const limited = await enforceRateLimit(req, "browse");
-  if (limited) return limited;
+type MapResult =
+  | { ok: true; payload: Record<string, unknown> }
+  | { ok: false; error: string };
 
-  const url = new URL(req.url);
-  const horizonParam = url.searchParams.get("horizon") ?? "today";
-  const layersParam = url.searchParams.get("layers");
-  const layers = layersParam
-    ? layersParam.split(",").map((l) => l.trim()).filter(Boolean)
-    : ["shortages", "manufacturing", "manufacturers", "regulators"];
-
-  if (!(horizonParam in HORIZON_DAYS)) {
-    return NextResponse.json(
-      { error: `horizon must be one of: ${Object.keys(HORIZON_DAYS).join(", ")}` },
-      { status: 400 },
-    );
-  }
-  const invalidLayer = layers.find((l) => !VALID_LAYERS.has(l));
-  if (invalidLayer) {
-    return NextResponse.json(
-      { error: `unknown layer "${invalidLayer}" — valid layers: ${[...VALID_LAYERS].join(", ")}` },
-      { status: 400 },
-    );
-  }
+/**
+ * The expensive half: drain the layer tables and shape the map payload.
+ * Depends only on (horizonParam, layers), so it caches cleanly.
+ */
+async function buildMapData(
+  horizonParam: string,
+  layers: string[],
+): Promise<MapResult> {
+  // Layer names are validated by the handler before we get here, so a bad
+  // request never reaches — or pollutes — the cache.
 
   // Untyped client: shortage_events/data_sources columns used here (world_region,
   // is_upstream_signal, anticipated_start_date, region) aren't modeled in the
@@ -167,7 +170,7 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error("[/api/map-data] shortages query error:", error.message);
-      return NextResponse.json({ error: "shortages query failed" }, { status: 500 });
+      return { ok: false, error: "shortages query failed" };
     }
     if (degraded) {
       response.shortages_degraded =
@@ -222,7 +225,7 @@ export async function GET(req: NextRequest) {
         response.manufacturing_degraded = "coordinates not available yet in this environment (migration 063 / geocoding backfill pending)";
       } else {
         console.error("[/api/map-data] manufacturing query error:", error.message);
-        return NextResponse.json({ error: "manufacturing query failed" }, { status: 500 });
+        return { ok: false, error: "manufacturing query failed" };
       }
     } else {
       // Cluster by (country, city, rounded lat/lng) so many facilities sharing
@@ -281,7 +284,7 @@ export async function GET(req: NextRequest) {
     }
     if (error) {
       console.error("[/api/map-data] manufacturers query error:", error.message);
-      return NextResponse.json({ error: "manufacturers query failed" }, { status: 500 });
+      return { ok: false, error: "manufacturers query failed" };
     }
     if (!hqAvailable) {
       response.manufacturers_degraded =
@@ -327,7 +330,7 @@ export async function GET(req: NextRequest) {
       .eq("is_active", true);
     if (error) {
       console.error("[/api/map-data] regulators query error:", error.message);
-      return NextResponse.json({ error: "regulators query failed" }, { status: 500 });
+      return { ok: false, error: "regulators query failed" };
     }
 
     response.regulators = ((data ?? []) as RegulatorRow[])
@@ -351,5 +354,45 @@ export async function GET(req: NextRequest) {
       });
   }
 
-  return NextResponse.json(response);
+  return { ok: true, payload: response };
+}
+
+const getCachedMapData = unstable_cache(buildMapData, ["mederti-map-data"], {
+  revalidate: TTL_SECONDS,
+  tags: ["map-data"],
+});
+
+export async function GET(req: NextRequest) {
+  const limited = await enforceRateLimit(req, "browse");
+  if (limited) return limited;
+
+  const url = new URL(req.url);
+  const horizonParam = url.searchParams.get("horizon") ?? "today";
+  const layersParam = url.searchParams.get("layers");
+  const layers = layersParam
+    ? layersParam.split(",").map((l) => l.trim()).filter(Boolean)
+    : ["shortages", "manufacturing", "manufacturers", "regulators"];
+
+  if (!(horizonParam in HORIZON_DAYS)) {
+    return NextResponse.json(
+      { error: `horizon must be one of: ${Object.keys(HORIZON_DAYS).join(", ")}` },
+      { status: 400 },
+    );
+  }
+
+  const invalidLayer = layers.find((l) => !VALID_LAYERS.has(l));
+  if (invalidLayer) {
+    return NextResponse.json(
+      { error: `unknown layer "${invalidLayer}" — valid layers: ${[...VALID_LAYERS].join(", ")}` },
+      { status: 400 },
+    );
+  }
+
+  // Normalise the layer list so ?layers=b,a and ?layers=a,b share one cache
+  // entry instead of computing identical work twice.
+  const result = await getCachedMapData(horizonParam, [...layers].sort());
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 500 });
+  }
+  return NextResponse.json(result.payload);
 }

@@ -13,6 +13,8 @@ import { ParallelTradeSourcing } from "./parallel-trade-sourcing";
 import { ParallelTradeArbitrage } from "./parallel-trade-arbitrage";
 import { ParallelTradePanel } from "./parallel-trade-panel";
 import { PriceTrendChart } from "./PriceTrendChart";
+import { ShortageTrendChart } from "@/app/chat/components/views/ShortageTrendChart";
+import { ShortageEpisodeTimeline } from "./ShortageEpisodeTimeline";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { affinity, relationshipLabel } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -916,6 +918,22 @@ export default function V1DrugView({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Shortage trend for this molecule, every market (range-selectable) */}
+          {shortages.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Shortage history <span className="help">new &amp; open notices across all markets we track</span></div>
+              <ShortageTrendChart drugId={id} defaultRange="MAX" />
+            </div>
+          )}
+
+          {/* Where & when: one row per market, one bar per notice, by dose form */}
+          {shortages.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Where and when <span className="help">each regulator notice, by market and dose form</span></div>
+              <ShortageEpisodeTimeline drugId={id} />
             </div>
           )}
 

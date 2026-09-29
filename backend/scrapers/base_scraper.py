@@ -780,6 +780,76 @@ class BaseScraper(ABC):
         return counts
 
     # ─────────────────────────────────────────────────────────────────────────
+    # Housekeeping
+    # ─────────────────────────────────────────────────────────────────────────
+
+    _VERIFY_PAGE = 500
+
+    def _refresh_verified_chunked(
+        self,
+        *,
+        statuses: list[str],
+        patch: dict[str, Any],
+    ) -> int:
+        """
+        Apply `patch` to this source's rows in the given statuses, in id-keyed
+        chunks, and return how many rows were updated.
+
+        A single UPDATE filtered only by data_source_id exceeds the statement
+        timeout on large sources (AIFA 5,385 rows; PMDA 37,138), and PostgREST
+        surfaces that as a 500. Selecting ids first and patching
+        _VERIFY_PAGE at a time keeps every statement small. Chunks are
+        independent, so a failure mid-way still leaves the earlier chunks
+        committed — partial progress beats none, and the count returned says how
+        far it got.
+        """
+        updated = 0
+        offset = 0
+        # Hard iteration cap. When `patch` changes `status`, updated rows drop
+        # out of the filter and the window deliberately does NOT advance — so a
+        # chunk that keeps failing would re-select the same ids forever. The cap
+        # (and the break below) makes that terminate.
+        max_iterations = 400
+        for _ in range(max_iterations):
+            try:
+                page = (
+                    self.db.table("shortage_events")
+                    .select("id")
+                    .eq("data_source_id", self.SOURCE_ID)
+                    .in_("status", statuses)
+                    .range(offset, offset + self._VERIFY_PAGE - 1)
+                    .execute()
+                )
+            except Exception as exc:
+                self.log.warning(
+                    "Could not page rows for last_verified_at refresh",
+                    extra={"error": str(exc), "source": self.SOURCE_NAME, "offset": offset},
+                )
+                break
+            ids = [r["id"] for r in (page.data or [])]
+            if not ids:
+                break
+            try:
+                self.db.table("shortage_events").update(patch).in_("id", ids).execute()
+                updated += len(ids)
+            except Exception as exc:
+                self.log.warning(
+                    "last_verified_at refresh chunk failed",
+                    extra={"error": str(exc), "source": self.SOURCE_NAME, "chunk": len(ids)},
+                )
+                # A failed chunk on the status-changing path leaves these rows in
+                # the filter, so continuing would re-select the same ids. Stop.
+                if "status" in patch:
+                    break
+            if len(ids) < self._VERIFY_PAGE:
+                break
+            # Rows whose status we just changed drop out of the filter, so the
+            # window must not advance past them or we would skip rows.
+            if "status" not in patch:
+                offset += self._VERIFY_PAGE
+        return updated
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Outcome grading
     # ─────────────────────────────────────────────────────────────────────────
 
@@ -853,23 +923,37 @@ class BaseScraper(ABC):
                 # scraper was returning duplicate payloads.
                 now_iso = datetime.now(timezone.utc).isoformat()
                 try:
-                    # Refresh active/anticipated records
-                    self.db.table("shortage_events").update({
-                        "last_verified_at": now_iso,
-                    }).eq("data_source_id", self.SOURCE_ID).in_(
-                        "status", ["active", "anticipated"]
-                    ).execute()
-                    # Re-activate stale records (they were active before
-                    # mark_stale_shortages() demoted them)
-                    self.db.table("shortage_events").update({
-                        "status": "active",
-                        "last_verified_at": now_iso,
-                    }).eq("data_source_id", self.SOURCE_ID).eq(
-                        "status", "stale"
-                    ).execute()
+                    # Refresh active/anticipated records, then re-activate any
+                    # that cleanup_stale.py demoted while this source was
+                    # returning duplicate payloads.
+                    #
+                    # Both used to be ONE bulk UPDATE filtered by
+                    # data_source_id. For a large source that is an update over
+                    # tens of thousands of rows in a single statement, and
+                    # PostgREST returns 500 (statement timeout) — observed on
+                    # AIFA (5,385 rows) and worse on PMDA (37,138). The failure
+                    # was swallowed as a warning, so last_verified_at silently
+                    # stopped advancing: 71,835 active rows (84% of the corpus)
+                    # were last verified more than 7 days ago, which is exactly
+                    # what cleanup_stale.py demotes to 'stale'. The only reason
+                    # the active counts still looked healthy is that the sweeper
+                    # is not wired into cron. Chunking by id keeps each
+                    # statement small enough to commit.
+                    refreshed = self._refresh_verified_chunked(
+                        statuses=["active", "anticipated"],
+                        patch={"last_verified_at": now_iso},
+                    )
+                    reactivated = self._refresh_verified_chunked(
+                        statuses=["stale"],
+                        patch={"status": "active", "last_verified_at": now_iso},
+                    )
                     self.log.info(
                         "Refreshed last_verified_at and re-activated stale records (duplicate payload)",
-                        extra={"source": self.SOURCE_NAME},
+                        extra={
+                            "source":      self.SOURCE_NAME,
+                            "refreshed":   refreshed,
+                            "reactivated": reactivated,
+                        },
                     )
                 except Exception as refresh_exc:
                     self.log.warning(

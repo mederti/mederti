@@ -141,7 +141,7 @@ class CofeprisseScraper(BaseScraper):
                     r"(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})",
                     text, re.IGNORECASE
                 )
-                start_date = today
+                start_date = None  # base class carries forward / marks first_seen
                 if date_match:
                     parsed = self._parse_es_date(date_match.group(0))
                     if parsed:

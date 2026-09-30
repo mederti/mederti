@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import io
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -56,7 +56,34 @@ class PmdaScraper(BaseScraper):
 
     RATE_LIMIT_DELAY: float = 2.0
     REQUEST_TIMEOUT:  float = 60.0
-    SCRAPER_VERSION:  str   = "2.0.0"
+    SCRAPER_VERSION:  str   = "2.1.0"
+    # The Excel is a rolling snapshot of current supply status — one open
+    # event per drug, not a new one per weekly file. See BaseScraper.
+    SNAPSHOT_IDENTITY: bool = True
+
+    @staticmethod
+    def _parse_update_date(value: Any) -> str | None:
+        """⑬更新日 arrives as an Excel serial day number ("45930" =
+        2025-09-30), occasionally as a date/datetime or ISO string, and is
+        blank for about half the rows. Previously only ISO was accepted, so
+        every row silently fell back to today."""
+        if value is None:
+            return None
+        if hasattr(value, "year") and hasattr(value, "month"):
+            return value.isoformat()[:10]
+        v = str(value).strip()
+        if not v:
+            return None
+        m = re.match(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})", v)
+        if m:
+            return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+        if re.fullmatch(r"\d{5}(\.\d+)?", v):
+            serial = int(float(v))
+            # Excel's day 0 is 1899-12-30 (the 1900 leap-year bug offset).
+            d = (datetime(1899, 12, 30) + timedelta(days=serial)).date()
+            if date(2000, 1, 1) <= d <= datetime.now(timezone.utc).date():
+                return d.isoformat()
+        return None
 
     _HEADERS: dict = {
         "User-Agent":      "Mozilla/5.0 (compatible; Mederti-Scraper/2.0)",
@@ -275,20 +302,10 @@ class PmdaScraper(BaseScraper):
             else:
                 reason_text = "Limited shipment (other)"
 
-        # Parse update date
-        update_date = rec.get("update_date", "")
-        start_date = today
-        if update_date:
-            ud = str(update_date).strip()
-            # Try ISO format (YYYY-MM-DD)
-            iso_match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", ud)
-            if iso_match:
-                start_date = iso_match.group(0)
-            # Try datetime string with time component
-            elif "T" in ud or " " in ud:
-                dt_match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", ud)
-                if dt_match:
-                    start_date = dt_match.group(0)
+        # ⑬更新日 (status update date). None when absent: the base class then
+        # carries forward the open row's date (SNAPSHOT_IDENTITY) or, for a
+        # drug seen for the first time, records today flagged "first_seen".
+        start_date = self._parse_update_date(rec.get("update_date"))
 
         # Notes
         notes_parts: list[str] = []

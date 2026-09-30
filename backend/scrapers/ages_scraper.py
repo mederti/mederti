@@ -261,7 +261,7 @@ class AgesScraper(BaseScraper):
                     "status":          status,
                     "severity":        "medium",
                     "reason_category": "regulatory",
-                    "start_date":      today,
+                    "start_date":      None,  # no date published; base class carries forward
                     "source_url":      self.BASE_URL,
                     "notes":           " ".join(notes_parts),
                     "raw_record":      dict(row),

@@ -193,6 +193,15 @@ class BaseScraper(ABC):
     # for the resolution chain. Closes audit FINDING-D1-09.
     SCRAPER_VERSION: str = _DEFAULT_SCRAPER_VERSION
 
+    # Snapshot sources publish "what is short right now" as a rolling list
+    # (MHLW Japan, Swissmedic). For them a drug's open shortage is ONE ongoing
+    # event, whatever date the list shows today: upsert() reuses the existing
+    # open row's start_date (and so its shortage_id) instead of minting a new
+    # identity whenever the date moves. Without this, a list with no or
+    # changing dates wrote a fresh "active" row for every product on every
+    # run — 58k phantom shortages across JP + CH by Sep 2026.
+    SNAPSHOT_IDENTITY: bool = False
+
     DEFAULT_HEADERS: dict[str, str] = {
         "User-Agent": (
             "Mederti-Scraper/1.0 (+https://mederti.com/bot; "
@@ -499,6 +508,34 @@ class BaseScraper(ABC):
         raw = f"{drug_id}|{self.SOURCE_ID}|{self.COUNTRY_CODE}|{start_date}"
         return hashlib.md5(raw.encode()).hexdigest()
 
+    def _open_start_dates(self, drug_ids: list[str]) -> dict[str, str]:
+        """Earliest start_date of this source's open (active / anticipated /
+        stale) rows per drug_id. A failed chunk just means those drugs fall
+        back to their given date / today, i.e. the pre-carry-forward
+        behaviour — never worse than before."""
+        out: dict[str, str] = {}
+        for chunk in _chunks(drug_ids, 100):
+            try:
+                resp = (
+                    self.db.table("shortage_events")
+                    .select("drug_id, start_date")
+                    .eq("data_source_id", self.SOURCE_ID)
+                    .in_("status", ["active", "anticipated", "stale"])
+                    .in_("drug_id", chunk)
+                    .execute()
+                )
+            except Exception as exc:
+                self.log.warning(
+                    "Open-row start_date lookup failed for chunk",
+                    extra={"error": str(exc), "chunk_size": len(chunk)},
+                )
+                continue
+            for row in resp.data or []:
+                d, sd = row.get("drug_id"), row.get("start_date")
+                if d and sd and (d not in out or sd < out[d]):
+                    out[d] = sd
+        return out
+
     def _prewarm_drug_cache(self, events: list[dict]) -> None:
         """Resolve exact-match drug_ids for all distinct generic names in one
         chunked query, populating self._drug_id_cache. Only the exact-match
@@ -567,7 +604,7 @@ class BaseScraper(ABC):
         self._prewarm_drug_cache(events)
 
         # ── Phase 1: resolve drug_id + shortage_id per event ────────────────
-        pending: list[dict[str, Any]] = []
+        resolved: list[tuple[dict, str]] = []
         for ev in events:
             try:
                 drug_id = self._find_or_create_drug(
@@ -581,15 +618,7 @@ class BaseScraper(ABC):
                     )
                     counts["skipped"] += 1
                     continue
-
-                start_date = ev.get("start_date") or date.today().isoformat()
-                shortage_id = self._shortage_id(drug_id, start_date)
-                pending.append({
-                    "ev": ev,
-                    "drug_id": drug_id,
-                    "start_date": start_date,
-                    "shortage_id": shortage_id,
-                })
+                resolved.append((ev, drug_id))
             except Exception as exc:
                 self.log.error(
                     "Failed to resolve drug for shortage event",
@@ -600,6 +629,34 @@ class BaseScraper(ABC):
                     },
                 )
                 counts["skipped"] += 1
+
+        # Events with no source date (and every event of a snapshot source)
+        # carry forward the start_date of this source's existing open row for
+        # the drug, so a re-run lands on the same shortage_id instead of
+        # minting today's. Only drugs with no open row fall back to today —
+        # the date Mederti first saw it, flagged as such in raw_data.
+        carry_ids = sorted({
+            d for ev, d in resolved
+            if self.SNAPSHOT_IDENTITY or not ev.get("start_date")
+        })
+        open_start = self._open_start_dates(carry_ids)
+
+        pending: list[dict[str, Any]] = []
+        today = date.today().isoformat()
+        for ev, drug_id in resolved:
+            given = ev.get("start_date")
+            carried = open_start.get(drug_id) if (self.SNAPSHOT_IDENTITY or not given) else None
+            start_date = carried or given or today
+            basis = "carried_forward" if carried else "source" if given else "first_seen"
+            raw = ev.get("raw_record")
+            if isinstance(raw, dict):
+                ev["raw_record"] = {**raw, "start_date_basis": basis}
+            pending.append({
+                "ev": ev,
+                "drug_id": drug_id,
+                "start_date": start_date,
+                "shortage_id": self._shortage_id(drug_id, start_date),
+            })
 
         if not pending:
             return counts

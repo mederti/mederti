@@ -20,8 +20,9 @@ Pages 2..N are loaded via AEM teaserlist AJAX:
 Drug names are in aria-label attributes:
     aria-label="Out-of-Stock &ndash; PRODUCT_NAME"
 
-Typical data: ~190 approved out-of-stock applications (all active).
-No dates or severity data are available in the list view.
+Typical data: ~165-190 approved out-of-stock applications (all active).
+Each teaser carries a <p class="teaserDate">DD.MM.YYYY</p> (the approval
+date) and a link to the product's notice; there is no severity data.
 
 Data source UUID:  10000000-0000-0000-0000-000000000018  (Swissmedic, CH)
 Country:           Switzerland
@@ -84,6 +85,16 @@ class SwissmedicScraper(BaseScraper):
         r'aria-label="Out-of-Stock\s*&ndash;\s*([^"]+)"',
         re.IGNORECASE,
     )
+    # One teaser: approval date, notice link, product name.
+    _TEASER_RE = re.compile(
+        r'<p class="teaserDate">\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s*</p>\s*<h3>\s*'
+        r'<a href="([^"]+)"[^>]*?aria-label="Out-of-Stock\s*&ndash;\s*([^"]+)"',
+        re.IGNORECASE,
+    )
+
+    # The list is a rolling snapshot of currently approved applications —
+    # one open event per drug. See BaseScraper.SNAPSHOT_IDENTITY.
+    SNAPSHOT_IDENTITY: bool = True
 
     # ─────────────────────────────────────────────────────────────────────────
     # fetch()
@@ -177,14 +188,23 @@ class SwissmedicScraper(BaseScraper):
         Each product becomes one shortage event (status=active, severity=medium).
         """
         raw_pages: list[str] = raw.get("raw_pages", [])
-        today = datetime.now(timezone.utc).date().isoformat()
         normalised: list[dict] = []
         seen: set[str] = set()
 
         for page_idx, html_content in enumerate(raw_pages, start=1):
-            names = self._NAME_RE.findall(html_content)
-            for raw_name in names:
-                product_name = html_lib.unescape(raw_name).strip()
+            # Prefer full teasers (date + link); fall back to bare names so a
+            # markup change degrades to undated records, not zero records.
+            teasers = [
+                (html_lib.unescape(name).strip(), f"{y}-{int(m):02d}-{int(d):02d}", href)
+                for d, m, y, href, name in self._TEASER_RE.findall(html_content)
+            ]
+            dated = {t[0] for t in teasers}
+            teasers += [
+                (html_lib.unescape(n).strip(), None, None)
+                for n in self._NAME_RE.findall(html_content)
+                if html_lib.unescape(n).strip() not in dated
+            ]
+            for product_name, approved, href in teasers:
                 if not product_name or product_name in seen:
                     continue
                 seen.add(product_name)
@@ -199,8 +219,13 @@ class SwissmedicScraper(BaseScraper):
                     "status":          "active",
                     "severity":        "medium",
                     "reason_category": "regulatory_action",
-                    "start_date":      today,
-                    "source_url":      self.BASE_URL,
+                    # Approval date of the out-of-stock application; None
+                    # lets the base class carry forward / mark first_seen.
+                    "start_date":      approved,
+                    "source_url":      (
+                        f"https://www.swissmedic.ch{href}" if href and href.startswith("/")
+                        else self.BASE_URL
+                    ),
                     "notes": (
                         f"Swissmedic approved out-of-stock application. "
                         f"Product: {product_name}. "
@@ -208,6 +233,7 @@ class SwissmedicScraper(BaseScraper):
                     ),
                     "raw_record": {
                         "product_name": product_name,
+                        "approval_date": approved,
                         "page":         page_idx,
                         "source":       "swissmedic_approved_applications",
                     },

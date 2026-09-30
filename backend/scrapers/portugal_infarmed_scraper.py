@@ -580,7 +580,7 @@ class PortugalInfarmedScraper(BaseScraper):
                 "severity":                  "medium",
                 "reason":                    raw_reason or None,
                 "reason_category":           reason_category,
-                "start_date":                today,
+                "start_date":                None,  # no date published; base class carries forward
                 "end_date":                  None,
                 "estimated_resolution_date": None,
                 "source_url":                self.BASE_URL,
@@ -663,7 +663,7 @@ class PortugalInfarmedScraper(BaseScraper):
             "severity":                  "medium",
             "reason":                    "Export restricted due to shortage",
             "reason_category":           "supply_chain",
-            "start_date":                today,
+            "start_date":                None,  # no date published; base class carries forward
             "end_date":                  None,
             "estimated_resolution_date": None,
             "source_url":                self.BASE_URL,

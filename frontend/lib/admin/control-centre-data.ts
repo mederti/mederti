@@ -4,12 +4,12 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
  * Aggregation pass for the CEO control centre (/admin/control-centre).
  *
  * Everything here is real: Supabase counts, data_sources freshness, auth
- * users. Panels whose backing system isn't wired (PostHog traffic, Stripe
+ * users. Panels whose backing system isn't wired (traffic, Stripe
  * revenue) report { available: false } so the UI renders an honest
  * "not connected" state instead of fabricated numbers.
  *
- * Traffic becomes real when POSTHOG_PERSONAL_API_KEY + POSTHOG_PROJECT_ID
- * are set (HogQL query over pageview events).
+ * Traffic comes from the Vercel Web Analytics query API when
+ * VERCEL_ANALYTICS_TOKEN is set (PostHog HogQL is a fallback).
  *
  * Called only from the admin-gated route handler — never expose without
  * requireAdmin().
@@ -104,12 +104,100 @@ async function fetchAllAuthUsers(admin: ReturnType<typeof getSupabaseAdmin>) {
   return users;
 }
 
+type NamedCount = { name: string; value: number };
+
 export type TrafficData =
   | { available: false; reason: string }
-  | { available: true; daily: { date: string; visitors: number }[]; total_30d: number };
+  | {
+      available: true;
+      source: "vercel" | "posthog";
+      window_days: number;
+      daily: { date: string; visitors: number; views: number | null }[];
+      /** De-duplicated across the whole window (not a sum of daily uniques). */
+      visitors_total: number;
+      views_total: number | null;
+      top_pages: NamedCount[];
+      top_referrers: NamedCount[];
+      top_countries: NamedCount[];
+    };
 
-/** Optional PostHog traffic — real numbers when the server-side key is set. */
-async function fetchTraffic(): Promise<TrafficData> {
+const TRAFFIC_WINDOW_DAYS = 90;
+
+/**
+ * Vercel Web Analytics — the primary traffic source. <Analytics /> has been
+ * in the root layout since launch (cookieless, so not consent-gated), and
+ * the public query API exposes the same numbers as the Vercel dashboard.
+ *
+ * Needs VERCEL_ANALYTICS_TOKEN (a Vercel access token scoped to the team).
+ * Project/team IDs default to the mederti project; override via env.
+ */
+async function fetchVercelTraffic(): Promise<TrafficData | null> {
+  const token = process.env.VERCEL_ANALYTICS_TOKEN;
+  if (!token) return null;
+  const projectId = process.env.VERCEL_ANALYTICS_PROJECT_ID || "prj_YEn45c67WshFBA6D6jP6NwkYBwk5";
+  const teamId = process.env.VERCEL_ANALYTICS_TEAM_ID || "team_fwNsQpnIDnvi9VPRfxPf03QH";
+  const base = "https://api.vercel.com/v1/query/web-analytics/visits";
+
+  const DAY = 86_400_000;
+  const today = new Date();
+  const since = new Date(today.getTime() - (TRAFFIC_WINDOW_DAYS - 1) * DAY);
+  // by=day is capped at 62 days per request, so the daily series is two halves.
+  const mid = new Date(since.getTime() + 45 * DAY);
+
+  type Row = Record<string, string | number | null> & { pageviews?: number; visitors?: number };
+  const get = async (endpoint: "count" | "aggregate", params: Record<string, string>) => {
+    const qs = new URLSearchParams({ projectId, teamId, ...params });
+    const res = await fetch(`${base}/${endpoint}?${qs}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 600 },
+    });
+    if (!res.ok) throw new Error(`Vercel Analytics HTTP ${res.status}`);
+    return ((await res.json()) as { data: unknown }).data;
+  };
+  const top = async (by: string, label: (v: string) => string = (v) => v) =>
+    ((await get("aggregate", { by, since: dayKey(since), until: dayKey(today), limit: "9" })) as Row[])
+      .filter((r) => r[by] && r[by] !== "Others")
+      .slice(0, 8)
+      .map((r) => ({ name: label(String(r[by])), value: Number(r.visitors ?? 0) }));
+
+  try {
+    const [totals, firstHalf, secondHalf, top_pages, top_referrers, top_countries] = await Promise.all([
+      get("count", { since: dayKey(since), until: dayKey(today) }) as Promise<Row>,
+      get("aggregate", { by: "day", since: dayKey(since), until: dayKey(new Date(mid.getTime() - DAY)), limit: "100" }) as Promise<Row[]>,
+      get("aggregate", { by: "day", since: dayKey(mid), until: dayKey(today), limit: "100" }) as Promise<Row[]>,
+      top("requestPath"),
+      top("referrerHostname"),
+      top("country", (c) => COUNTRY_NAMES[c] ?? c),
+    ]);
+
+    const byDay = new Map<string, Row>();
+    for (const r of [...firstHalf, ...secondHalf]) byDay.set(String(r.timestamp).slice(0, 10), r);
+    const daily: { date: string; visitors: number; views: number | null }[] = [];
+    for (let t = since.getTime(); t <= today.getTime(); t += DAY) {
+      const key = dayKey(new Date(t));
+      const r = byDay.get(key);
+      daily.push({ date: key, visitors: Number(r?.visitors ?? 0), views: Number(r?.pageviews ?? 0) });
+    }
+
+    return {
+      available: true,
+      source: "vercel",
+      window_days: TRAFFIC_WINDOW_DAYS,
+      daily,
+      visitors_total: Number(totals.visitors ?? 0),
+      views_total: Number(totals.pageviews ?? 0),
+      top_pages,
+      top_referrers,
+      top_countries,
+    };
+  } catch (e) {
+    return { available: false, reason: `Vercel Analytics query failed: ${(e as Error).message}.` };
+  }
+}
+
+/** PostHog fallback — only used when the Vercel token isn't configured. */
+async function fetchPostHogTraffic(): Promise<TrafficData> {
   const key = process.env.POSTHOG_PERSONAL_API_KEY;
   const projectId = process.env.POSTHOG_PROJECT_ID;
   const host = process.env.POSTHOG_API_HOST || "https://eu.posthog.com";
@@ -117,7 +205,7 @@ async function fetchTraffic(): Promise<TrafficData> {
     return {
       available: false,
       reason:
-        "Set POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID in Vercel to pull visitor counts here.",
+        "Set VERCEL_ANALYTICS_TOKEN in Vercel (Account Settings → Tokens, scoped to the team) to pull Web Analytics visitors here.",
     };
   }
   try {
@@ -137,15 +225,26 @@ async function fetchTraffic(): Promise<TrafficData> {
     });
     if (!res.ok) return { available: false, reason: `PostHog query failed (HTTP ${res.status}).` };
     const json = (await res.json()) as { results?: [string, number][] };
-    const daily = (json.results ?? []).map(([date, visitors]) => ({ date, visitors }));
+    const daily = (json.results ?? []).map(([date, visitors]) => ({ date, visitors, views: null }));
     return {
       available: true,
+      source: "posthog",
+      window_days: 30,
       daily,
-      total_30d: daily.reduce((a, d) => a + d.visitors, 0),
+      // PostHog query is per-day uniques; the sum over-counts repeat visitors.
+      visitors_total: daily.reduce((a, d) => a + d.visitors, 0),
+      views_total: null,
+      top_pages: [],
+      top_referrers: [],
+      top_countries: [],
     };
   } catch {
     return { available: false, reason: "PostHog query timed out or errored." };
   }
+}
+
+export async function fetchTraffic(): Promise<TrafficData> {
+  return (await fetchVercelTraffic()) ?? (await fetchPostHogTraffic());
 }
 
 export async function getControlCentreData() {
@@ -362,9 +461,11 @@ export async function getControlCentreData() {
       note: process.env.RESEND_API_KEY ? "Key configured" : "Key missing",
     },
     {
-      name: "PostHog (traffic)",
+      name: "Web Analytics (traffic)",
       status: traffic.available ? ("ok" as const) : ("warn" as const),
-      note: traffic.available ? "Query API connected" : "Server query key not set",
+      note: traffic.available
+        ? `${traffic.source === "vercel" ? "Vercel" : "PostHog"} query API connected`
+        : "Query token not set",
     },
   ];
 

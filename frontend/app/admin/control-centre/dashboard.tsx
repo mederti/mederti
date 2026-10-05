@@ -180,7 +180,10 @@ export default function ControlCentreDashboard({
   data: ControlCentreData; loading: boolean; onRefresh: () => void;
 }) {
   const [signupRange, setSignupRange] = useState<(typeof RANGE_OPTIONS)[number]>(30);
+  const [trafficRange, setTrafficRange] = useState<(typeof RANGE_OPTIONS)[number]>(30);
+  const [trafficMetric, setTrafficMetric] = useState<"visitors" | "views">("visitors");
   const k = data.kpis;
+  const t = data.traffic;
 
   const kpis = [
     { label: "Active shortages", value: fmt(k.active_shortages), sub: `${fmt(k.anticipated)} anticipated · ${fmt(k.total_events)} all-time` },
@@ -188,6 +191,13 @@ export default function ControlCentreDashboard({
     { label: "Events added · 7d", value: fmt(k.events_added_7d), sub: "new shortage records" },
     { label: "Registered users", value: fmt(k.users_total), sub: `+${fmt(k.signups_7d)} last 7 days` },
     { label: "Weekly active users", value: fmt(k.wau), sub: "signed in within 7 days" },
+    ...(t.available
+      ? [{
+          label: `Site visitors · ${t.window_days}d`,
+          value: fmt(t.visitors_total),
+          sub: t.views_total != null ? `${fmt(t.views_total)} page views` : "unique visitors",
+        }]
+      : []),
     { label: "Watchlist items", value: fmt(k.watchlist_items), sub: `${fmt(k.recalls_total)} recalls · ${fmt(k.drugs_total)} drugs` },
   ];
 
@@ -281,6 +291,65 @@ export default function ControlCentreDashboard({
               data={data.signups_daily.slice(-signupRange).map((p) => ({ date: p.date, value: p.count }))} />
           </div>
 
+          <div className="cc-card">
+            <div className="cc-card-head">
+              <div>
+                <h3>Site traffic</h3>
+                <p className="cc-cap">
+                  {t.available
+                    ? `${fmt(t.visitors_total)} visitors${t.views_total != null ? ` · ${fmt(t.views_total)} page views` : ""} · last ${t.window_days} days, production (${t.source === "vercel" ? "Vercel Web Analytics" : "PostHog"})`
+                    : "Unique visitors per day"}
+                </p>
+              </div>
+              {t.available && (
+                <div className="cc-card-tools">
+                  {t.daily.some((d) => d.views != null) && (
+                    <div className="cc-chips" role="group" aria-label="Traffic metric">
+                      <button aria-pressed={trafficMetric === "visitors"} onClick={() => setTrafficMetric("visitors")}>Visitors</button>
+                      <button aria-pressed={trafficMetric === "views"} onClick={() => setTrafficMetric("views")}>Page views</button>
+                    </div>
+                  )}
+                  <div className="cc-chips" role="group" aria-label="Traffic range">
+                    {RANGE_OPTIONS.filter((r) => r <= t.window_days).map((r) => (
+                      <button key={r} aria-pressed={trafficRange === r} onClick={() => setTrafficRange(r)}>
+                        {r}d
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {t.available ? (
+              <>
+                <AreaChart color="#eb6834"
+                  data={t.daily.slice(-trafficRange).map((p) => ({
+                    date: p.date,
+                    value: trafficMetric === "views" ? p.views ?? 0 : p.visitors,
+                  }))} />
+                {(t.top_pages.length > 0 || t.top_referrers.length > 0 || t.top_countries.length > 0) && (
+                  <div className="cc-row cc-traffic-tops">
+                    <div>
+                      <p className="cc-mini">Top pages · visitors</p>
+                      <HBars color="#eb6834" rows={t.top_pages} />
+                    </div>
+                    <div>
+                      <p className="cc-mini">Top referrers · visitors</p>
+                      {t.top_referrers.length ? <HBars color="#eb6834" rows={t.top_referrers} /> : <p className="cc-cap">No referrers recorded</p>}
+                    </div>
+                    <div>
+                      <p className="cc-mini">Top countries · visitors</p>
+                      <HBars color="#eb6834" rows={t.top_countries} />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="cc-unwired">
+                <b>Not wired yet.</b> {t.reason}
+              </div>
+            )}
+          </div>
+
           <div className="cc-row">
             <div className="cc-card">
               <h3>Users by persona</h3>
@@ -306,20 +375,6 @@ export default function ControlCentreDashboard({
           </div>
 
           <div className="cc-row">
-            <div className="cc-card">
-              <h3>Traffic</h3>
-              {data.traffic.available ? (
-                <>
-                  <p className="cc-cap">{fmt(data.traffic.total_30d)} unique visitors · 30 days (PostHog)</p>
-                  <AreaChart color="#eb6834"
-                    data={data.traffic.daily.map((p) => ({ date: p.date, value: p.visitors }))} />
-                </>
-              ) : (
-                <div className="cc-unwired">
-                  <b>Not wired yet.</b> {data.traffic.reason}
-                </div>
-              )}
-            </div>
             <div className="cc-card">
               <h3>Revenue</h3>
               <div className="cc-unwired">
@@ -445,6 +500,9 @@ const CSS = `
 .cc-sev-critical { background: #d03b3b; }
 .cc-sev-serious { background: #ec835a; }
 .cc-sev-warning { background: #fab219; }
+.cc-card-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.cc-traffic-tops { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(14,21,18,0.08); }
+.cc-mini { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #86908b; margin: 0 0 8px; }
 .cc-unwired { background: rgba(122,79,208,0.08); border: 1px dashed rgba(122,79,208,0.4); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #4d5652; line-height: 1.5; }
 .cc-unwired b { color: #0e1512; }
 .cc-table { border-collapse: collapse; width: 100%; font-size: 13px; }

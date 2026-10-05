@@ -77,9 +77,11 @@ export async function GET() {
           }}
         >
           {[
-            { n: "22", label: "Countries" },
-            { n: "12,900+", label: "Active Shortages" },
-            { n: "47", label: "Scrapers Running" },
+            // Keep these non-perishable — a hardcoded count goes stale and
+            // shows up in every link preview (was "22 countries" at 51 live).
+            { n: "51", label: "Countries" },
+            { n: "Daily", label: "Updates" },
+            { n: "Official", label: "Regulator Sources" },
           ].map((s) => (
             <div
               key={s.label}

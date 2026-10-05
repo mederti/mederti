@@ -31,18 +31,23 @@ export default function robots(): MetadataRoute.Robots {
     "/home",
     "/supplier-dashboard",
   ];
+  // /api/og* is the social-card image. X (Twitterbot), LinkedIn, Slack etc.
+  // honour robots.txt when fetching og:image, so the blanket /api/ disallow
+  // made every shared link render as a bare no-image card. Allow is the
+  // longer match, so it wins over the /api/ disallow.
+  const publicAllow = ["/", "/medicine/", "/country/", "/regulator/", "/api/og"];
   return {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/medicine/", "/country/", "/regulator/"],
+        allow: publicAllow,
         disallow: gatedOrPrivate,
       },
       // AI crawlers — explicitly welcome on the public data layer so ChatGPT,
       // Claude, Perplexity et al. can retrieve and cite Mederti pages.
       {
         userAgent: ["GPTBot", "Claude-Web", "ClaudeBot", "PerplexityBot", "GoogleOther", "Bingbot"],
-        allow: ["/", "/medicine/", "/country/", "/regulator/"],
+        allow: publicAllow,
         disallow: gatedOrPrivate,
       },
     ],

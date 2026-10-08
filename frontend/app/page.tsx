@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { COVERAGE_COPY, liveCoverage } from "@/lib/coverage";
 import { canonicalUrl } from "@/lib/seo";
 import V1Search from "@/app/components/v1/V1Search";
 import V1TrendingShortages from "@/app/components/v1/V1TrendingShortages";
@@ -13,7 +14,7 @@ import BetaBanner from "@/app/components/v1/BetaBanner";
 export const metadata: Metadata = {
   title: "Mederti — Global Medicine Shortage Intelligence Platform",
   description:
-    "Check live drug shortage status for any medicine. Mederti tracks shortage and recall notices from 40+ official medicines regulators across 50+ countries, updated daily. Free for individual pharmacists and clinicians.",
+    `Check live drug shortage status for any medicine. Mederti tracks shortage and recall notices from ${COVERAGE_COPY.regulators} across ${COVERAGE_COPY.countries}, updated daily. Free for individual pharmacists and clinicians.`,
   alternates: { canonical: canonicalUrl("/") },
 };
 
@@ -71,16 +72,18 @@ export default async function Home() {
       // hit Postgres's statement_timeout under Vercel's pooler → null count →
       // a baked-in "—". The estimate is within a few rows and never times out.
       admin.from("drug_catalogue").select("id", { count: "estimated", head: true }),
-      admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
-      // Countries & official regulators we monitor (the data_sources we scrape),
-      // not just countries with active shortages this month. Exact count, no "+".
-      admin.from("data_sources").select("country_code"),
+      admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active").or("synthetic.is.null,synthetic.eq.false"),
+      // Countries with live shortage data right now (lib/coverage) — not every
+      // data_sources row, several of which are scheduled but empty.
+      liveCoverage(),
       // Trending pool: the 100 most-recent active shortages. We count generic-name
       // frequency below — most-reported = the drugs most short of supply right now.
       admin
         .from("shortage_events")
         .select("drugs(generic_name)")
         .eq("status", "active")
+        .or("synthetic.is.null,synthetic.eq.false")
+        .lte("start_date", new Date().toISOString().slice(0, 10))
         .order("start_date", { ascending: false })
         .limit(100),
     ]);
@@ -88,15 +91,7 @@ export default async function Home() {
     if (catRes.count) medicines = k(catRes.count);
     if (activeRes.error) console.error("[home] shortage_events active count failed:", activeRes.error.message);
     if (activeRes.count) activeShortages = activeRes.count.toLocaleString();
-    if (ctyRes.error) console.error("[home] data_sources country count failed:", ctyRes.error.message);
-    if (ctyRes.data) {
-      const n = new Set(
-        ctyRes.data
-          .map((r: { country_code: string }) => (r.country_code || "").toUpperCase())
-          .filter((c: string) => c && c !== "ZZ")
-      ).size;
-      if (n) countries = `${n}`;
-    }
+    if (ctyRes?.countries) countries = `${ctyRes.countries}`;
     if (trendRes.data) {
       const counts = new Map<string, number>();
       // The drugs join can come back as an object or a single-element array
@@ -143,7 +138,7 @@ export default async function Home() {
         <div className="hero-stats">
           <div className="stat"><div className="stat-n">{medicines}</div><div className="stat-l">Medicines tracked globally</div></div>
           <div className="stat"><div className="stat-n">{activeShortages}</div><div className="stat-l">Active shortages right now</div></div>
-          <div className="stat"><div className="stat-n">{countries}</div><div className="stat-l">Countries &amp; official regulators</div></div>
+          <div className="stat"><div className="stat-n">{countries}</div><div className="stat-l">Countries with live shortage data</div></div>
         </div>
         <div className="trust">
           <div className="trust-label">Sourced directly from drug regulators</div>
@@ -155,7 +150,7 @@ export default async function Home() {
               ))}
             </div>
           </div>
-          <div className="trust-line">Plus EMA, AIFA, HSA, Pharmac, SFDA and 25+ more — 40+ official regulators across 40 countries · updated multiple times daily</div>
+          <div className="trust-line">{`Plus EMA, AIFA, HSA, Pharmac, SFDA and 25+ more — ${COVERAGE_COPY.regulators} across ${COVERAGE_COPY.countries} · updated daily`}</div>
         </div>
       </div>
 
@@ -197,7 +192,7 @@ export default async function Home() {
           </div>
           <div className="pp-float pp-f1"><div className="ppf-ic">🔔</div><div><div className="ppf-n">Alert set</div><div className="ppf-s">We&apos;ll email when it&apos;s back</div></div></div>
           <div className="pp-float pp-f2"><div><div className="ppf-n" style={{ color: "var(--green-d)" }}>● Back in supply</div><div className="ppf-s">Metformin 500mg · 🇬🇧 UK</div></div></div>
-          <div className="pp-float pp-f3"><div className="ppf-ic">🌐</div><div><div className="ppf-n">20+ regulators</div><div className="ppf-s">Monitored multiple times daily</div></div></div>
+          <div className="pp-float pp-f3"><div className="ppf-ic">🌐</div><div><div className="ppf-n">{COVERAGE_COPY.regulators.replace(" official", "")}</div><div className="ppf-s">Monitored multiple times daily</div></div></div>
           <div className="pp-float pp-f4"><div className="ppf-ic">💊</div><div><div className="ppf-n">2 suppliers ready</div><div className="ppf-s">Request via Mederti</div></div></div>
         </div>
       </div>

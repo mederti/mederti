@@ -3,6 +3,7 @@ import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
 import MinimalFooter from "@/app/components/minimal-footer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { liveCoverage } from "@/lib/coverage";
 import SourceRegistry from "./SourceRegistry";
 
 // Public methodology page — the credibility lever from the known-issues list.
@@ -26,18 +27,11 @@ export default async function MethodologyPage() {
   try {
     const admin = getSupabaseAdmin();
     const [ctyRes, activeRes, totalRes] = await Promise.all([
-      admin.from("data_sources").select("country_code"),
-      admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active"),
+      liveCoverage(),
+      admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active").or("synthetic.is.null,synthetic.eq.false"),
       admin.from("shortage_events").select("id", { count: "estimated", head: true }),
     ]);
-    if (ctyRes.data) {
-      const n = new Set(
-        ctyRes.data
-          .map((r: { country_code: string }) => (r.country_code || "").toUpperCase())
-          .filter((c: string) => c && c !== "ZZ")
-      ).size;
-      if (n) countries = `${n}`;
-    }
+    if (ctyRes?.countries) countries = `${ctyRes.countries}`;
     if (activeRes.count) activeShortages = activeRes.count.toLocaleString();
     if (totalRes.count) totalEvents = `${Math.floor(totalRes.count / 1000)}K+`;
   } catch {
@@ -60,7 +54,7 @@ export default async function MethodologyPage() {
           the source, and timestamped on every record. No estimates dressed up as facts.
         </p>
         <div className="hero-stats">
-          <div><div className="stat-n">{countries}</div><div className="stat-l">Countries &amp; official regulators monitored</div></div>
+          <div><div className="stat-n">{countries}</div><div className="stat-l">Countries with live shortage data</div></div>
           <div><div className="stat-n">74</div><div className="stat-l">Collection runs, every day</div></div>
           <div><div className="stat-n">{totalEvents}</div><div className="stat-l">Shortage events on record</div></div>
           <div><div className="stat-n">{activeShortages}</div><div className="stat-l">Active shortages right now</div></div>
@@ -143,8 +137,12 @@ export default async function MethodologyPage() {
         </div>
         <div className="limits">
           <div className="limit">
-            <h4>~26% of countries have a direct source</h4>
-            <p>51 of ~195 countries publish a machine-readable shortage register. Most of the rest publish nothing at all — that&apos;s a gap in global transparency, not a queue we&apos;re working through. Where a country has no register, we don&apos;t invent one.</p>
+            <h4>About 1 in 5 countries has a live source</h4>
+            <p>We have a collector for 51 of ~195 countries&apos; shortage registers; {countries} of them are returning live data right now (the rest are blocked, discontinued or temporarily empty at source, and we count them as uncovered rather than claim them). Most other countries publish nothing at all — that&apos;s a gap in global transparency, not a queue we&apos;re working through. Where a country has no register, we don&apos;t invent one.</p>
+          </div>
+          <div className="limit">
+            <h4>Notices, not medicines</h4>
+            <p>Regulators list each strength, pack and presentation separately, so a single medicine can appear as several notices. Our shortage totals count notices. Official per-medicine tallies (e.g. ASHP in the US) will be lower; country pages show both figures.</p>
           </div>
           <div className="limit">
             <h4>EU members without a dedicated source</h4>

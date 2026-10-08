@@ -5,6 +5,7 @@ import MinimalFooter from "@/app/components/minimal-footer";
 import { jsonLdSafe, breadcrumbJsonLd } from "@/lib/seo";
 import { allRegulators } from "@/lib/pseo";
 import { countryName, countrySlug, COUNTRY_NAMES } from "@/lib/geo/country-names";
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
 
 // Hub page linking to every /country/[slug]/medicine-shortages page.
 // Country list comes from data_sources (one row per regulator we scrape), so
@@ -14,7 +15,7 @@ export const revalidate = 21600;
 export const metadata: Metadata = {
   title: "Medicine shortages by country — 50+ national registers | Mederti",
   description:
-    "Live medicine shortage registers for 50+ countries, aggregated daily from each country's official medicines regulator. Pick a country to see its current shortages.",
+    `Live medicine shortage registers for ${COVERAGE_COPY.countries}, aggregated daily from each country's official medicines regulator. Pick a country to see its current shortages.`,
   alternates: { canonical: "/country" },
 };
 

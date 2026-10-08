@@ -708,6 +708,16 @@ class BaseScraper(ABC):
 
             new_status = ev.get("status", "active")
 
+            # A shortage that hasn't started yet isn't active. TGA publishes
+            # future-dated discontinuations (status D, shortage_start in 2027)
+            # and other feeds post forward-dated notices; counting them as
+            # active inflated live totals and put future dates in "Since"
+            # columns. Demote to anticipated and surface the onset date.
+            if new_status == "active" and start_date > date.today().isoformat():
+                new_status = "anticipated"
+                if ev.get("anticipated_start_date") is None:
+                    ev["anticipated_start_date"] = start_date
+
             # Auto-set end_date when transitioning to resolved
             end_date = ev.get("end_date")
             if new_status == "resolved" and not end_date:
@@ -743,6 +753,12 @@ class BaseScraper(ABC):
                 record["available_alternatives"] = ev["available_alternatives"]
             if ev.get("source_confidence_score") is not None:
                 record["source_confidence_score"] = ev["source_confidence_score"]
+
+            # ── Recall-derived flag (migration 046) ───────────────
+            # Sources that emit recalls/enforcement actions rather than
+            # declared shortages set this so public queries exclude them.
+            if ev.get("synthetic") is not None:
+                record["synthetic"] = ev["synthetic"]
 
             # ── Tier 3 clinical-priority flag (migration 048) ─────
             # Only sources that emit it (Health Canada) set this; every

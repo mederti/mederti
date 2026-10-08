@@ -8,6 +8,7 @@ import { GoogleTag } from "@/lib/analytics/google-tag";
 import CookieConsent from "@/app/components/CookieConsent";
 import { siteUrl, jsonLdSafe, organizationJsonLd, webSiteJsonLd } from "@/lib/seo";
 import "./globals.css";
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
 
 // Canonical origin, env-driven. Set NEXT_PUBLIC_SITE_URL in prod to the final
 // domain (e.g. https://mederti.com); falls back to the Vercel URL then the
@@ -21,13 +22,13 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "Real-time pharmaceutical shortage tracking across major markets. 216,000+ drugs monitored. TGA, FDA, MHRA, EMA and more regulatory sources. Used by pharmacists, hospitals, and health systems.",
+    `Real-time pharmaceutical shortage tracking across ${COVERAGE_COPY.countries}. ${COVERAGE_COPY.products} monitored. TGA, FDA, MHRA, EMA and more regulatory sources. Used by pharmacists, hospitals, and health systems.`,
   keywords: ["drug shortage", "medicine shortage", "pharmaceutical shortage", "TGA shortage", "FDA drug shortage", "MHRA shortage", "medicine availability", "drug recall"],
   metadataBase: new URL(SITE_URL),
   openGraph: {
     title: "Mederti — Global Drug Shortage Intelligence",
     description:
-      "Track drug shortages across major markets in real time. 216,000+ drugs monitored from regulatory sources worldwide.",
+      `Track drug shortages across ${COVERAGE_COPY.countries} in real time. ${COVERAGE_COPY.products} monitored from official regulatory sources.`,
     url: SITE_URL,
     siteName: "Mederti",
     type: "website",
@@ -44,7 +45,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Mederti — Global Drug Shortage Intelligence",
     description:
-      "Track drug shortages across major markets in real time. 216,000+ drugs monitored from regulatory sources worldwide.",
+      `Track drug shortages across ${COVERAGE_COPY.countries} in real time. ${COVERAGE_COPY.products} monitored from official regulatory sources.`,
     images: [`${SITE_URL}/api/og`],
   },
   // Set NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION in Vercel to verify the domain

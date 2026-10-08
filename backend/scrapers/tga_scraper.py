@@ -39,7 +39,8 @@ Confirmed response format (probed 2026-02-22):
 Status codes (verified 2026-06-03 against the live MSI feed):
     C  → active       (Current shortage — availability Unavailable/Limited, past start)
     R  → resolved     (Resolved shortage — now Available)
-    D  → active       (Discontinued — reason_category=discontinuation; deleted_date set)
+    D  → active       (Discontinued — reason_category=discontinuation; deleted_date set.
+                       Future-dated D records become anticipated in BaseScraper.upsert)
     A  → anticipated  (Anticipated shortage — FUTURE shortage_start, still Available now;
                        shortage_start is the anticipated onset → anticipated_start_date)
 

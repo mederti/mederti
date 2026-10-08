@@ -106,6 +106,8 @@ export default async function CountryShortagesPage(
   const td = { padding: "10px 12px", fontSize: 14, borderTop: "1px solid var(--app-border)" } as const;
   const th = { padding: "10px 12px", fontSize: 12, textTransform: "uppercase" as const, letterSpacing: "0.05em", color: "var(--app-text-3)", textAlign: "left" as const };
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const stat = (label: string, value: number | null, color?: string) => (
     <div style={{ padding: "14px 18px", border: "1px solid var(--app-border)", borderRadius: 12, minWidth: 130 }}>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: color ?? "var(--app-text)" }}>
@@ -140,10 +142,16 @@ export default async function CountryShortagesPage(
         </p>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {stat("Active shortages", summary.active, "#b42318")}
+          {stat("Active notices", summary.active, "#b42318")}
+          {stat("Medicines affected", summary.activeMedicines)}
           {stat("Anticipated", summary.anticipated, "#b54708")}
           {stat("Critical severity", summary.critical)}
         </div>
+        <p style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.6, margin: "10px 0 0", maxWidth: 640 }}>
+          Regulators list each strength and pack separately, so one medicine can carry several
+          notices — compare official per-medicine tallies against &ldquo;Medicines affected&rdquo;.{" "}
+          <Link href="/methodology" style={{ color: "inherit" }}>How we count</Link>
+        </p>
 
         {/* ── Recent notices ── */}
         {summary.recent.length > 0 && (
@@ -178,7 +186,9 @@ export default async function CountryShortagesPage(
                           <span style={{ color: sevColor[e.severity] ?? "var(--app-text-2)", fontWeight: 600, textTransform: "capitalize" }}>{e.severity}</span>
                         ) : "—"}
                       </td>
-                      <td style={td}>{fmtDate(e.start_date)}</td>
+                      <td style={td}>
+                        {e.start_date && e.start_date > today ? `From ${fmtDate(e.start_date)}` : fmtDate(e.start_date)}
+                      </td>
                       <td style={td}>
                         {e.source_url ? (
                           <a href={e.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--app-text-2)" }}>
@@ -194,7 +204,7 @@ export default async function CountryShortagesPage(
               </table>
             </div>
             <p style={{ fontSize: 13, color: "var(--app-text-3)", marginTop: 10 }}>
-              Showing the {summary.recent.length} most recent of {summary.active ?? "all"} active notices.
+              Showing the {summary.recent.length} most recent of {summary.active?.toLocaleString() ?? "all"} active notices.
               Sign up free to search, filter and export the full {name} register.
             </p>
           </>

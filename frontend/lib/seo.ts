@@ -8,6 +8,8 @@
  *   single highest-leverage rich-results unlock for B2B pharma search.
  */
 
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
+
 // Env vars pasted into the Vercel dashboard can carry stray whitespace or a
 // trailing newline. That newline survived string interpolation and shipped
 // literal "https://www.mederti.com\n/drugs/..." URLs in the live sitemap and
@@ -248,7 +250,7 @@ export function organizationJsonLd(): Record<string, unknown> {
       "url": `${base}/logo-black.png`,
     },
     "description":
-      "Mederti is a global medicine shortage intelligence platform. It aggregates, normalises and monitors drug shortage and recall notices published by official medicines regulators across 50+ countries, updated daily.",
+      `Mederti is a global medicine shortage intelligence platform. It aggregates, normalises and monitors drug shortage and recall notices published by official medicines regulators across ${COVERAGE_COPY.countries}, updated daily.`,
     "email": "hello@mederti.com",
     "sameAs": [
       "https://www.linkedin.com/company/mederti",

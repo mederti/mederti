@@ -17,6 +17,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
 
 // ─── Slugs ──────────────────────────────────────────────────────────────────
 
@@ -236,6 +237,13 @@ export interface CountrySummary {
   active: number | null;
   anticipated: number | null;
   critical: number | null;
+  /**
+   * Distinct canonical medicines behind the active notices. Regulators list
+   * each strength/pack separately, so `active` counts notices and runs well
+   * above official per-medicine tallies; this is the comparable figure.
+   * null when it couldn't be computed (or the country is too large to page).
+   */
+  activeMedicines: number | null;
   recent: PseoShortageEventWithDrug[];
 }
 
@@ -261,10 +269,40 @@ export async function countrySummary(code: string): Promise<CountrySummary> {
     }
   };
 
-  const [active, anticipated, critical, recentRes] = await Promise.all([
+  // Distinct drug_id across active notices. PostgREST aggregates are disabled,
+  // so page the column (1,000-row cap per request); bail out past 20k rows
+  // rather than hammer the DB for a figure that's only context.
+  const distinctActiveMedicines = async (): Promise<number | null> => {
+    try {
+      const ids = new Set<string>();
+      for (let from = 0; from < 20000; from += 1000) {
+        const { data, error } = await realEventsFilter(
+          admin
+            .from("shortage_events")
+            .select("drug_id")
+            .eq("country_code", code)
+            .eq("status", "active")
+            .not("drug_id", "is", null),
+        )
+          .order("id")
+          .range(from, from + 999);
+        if (error || !data) return null;
+        for (const r of data as { drug_id: string }[]) ids.add(r.drug_id);
+        if (data.length < 1000) return ids.size;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [active, anticipated, critical, activeMedicines, recentRes] = await Promise.all([
     countWhere({ status: "active" }),
     countWhere({ status: "anticipated" }),
     countWhere({ status: "active", severity: "critical" }),
+    distinctActiveMedicines(),
     // Only events resolved to a canonical molecule: each row links out to its
     // /medicine page, and unlinked catalogue-level rows would render as an
     // unclickable "Unlinked product" wall on a public page.
@@ -276,7 +314,11 @@ export async function countrySummary(code: string): Promise<CountrySummary> {
         )
         .eq("country_code", code)
         .not("drug_id", "is", null)
-        .in("status", ["active", "anticipated"]),
+        .in("status", ["active", "anticipated"])
+        // "Latest notices" sorts by start_date desc, so forward-dated notices
+        // (TGA discontinuations effective 2027) would otherwise pin the top
+        // of the table with dates that haven't happened yet.
+        .lte("start_date", today),
     )
       .order("start_date", { ascending: false, nullsFirst: false })
       .limit(50),
@@ -286,6 +328,7 @@ export async function countrySummary(code: string): Promise<CountrySummary> {
     active,
     anticipated,
     critical,
+    activeMedicines,
     recent: ((recentRes as { data: unknown[] | null }).data ??
       []) as unknown as PseoShortageEventWithDrug[],
   };
@@ -402,7 +445,7 @@ export function buildDrugFaqs(
 
   faqs.push({
     question: `Where does this ${name} shortage data come from?`,
-    answer: `Every shortage notice on this page is scraped daily from an official national medicines regulator (such as the FDA, TGA, MHRA or EMA) and linked back to its source. Mederti aggregates 40+ regulators across 50+ countries and never publishes unsourced shortage claims.`,
+    answer: `Every shortage notice on this page is scraped daily from an official national medicines regulator (such as the FDA, TGA, MHRA or EMA) and linked back to its source. Mederti aggregates ${COVERAGE_COPY.regulators} across ${COVERAGE_COPY.countries} and never publishes unsourced shortage claims.`,
   });
 
   return faqs;

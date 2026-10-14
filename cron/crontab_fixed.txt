@@ -143,6 +143,8 @@ SHELL=/bin/bash
 # substitution-pathway signal surfaced on the pharmacist drug page; the base
 # class marks entries missing-on-next-run as lapsed, so a daily run keeps the
 # "in force" state honest. Requires migration 040 applied in prod first.
+# Also runs the NSW Health CEC advisories scraper → clinical_advisories
+# (migration 070; needs Playwright + Chromium, Cloudflare-fronted source).
 45  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m cron.run_eligibility_scrapers >> logs/cron.log 2>&1
 
 # ─── Daily data-health digest (08:00 UTC = 18:00 AEST + 1). Emails OPS_ALERT_EMAIL ───

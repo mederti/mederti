@@ -27,7 +27,7 @@ import AvailableSuppliers from "./AvailableSuppliers";
 import SoWhatInsight from "./SoWhatInsight";
 import PersonaSwitcher from "./PersonaSwitcher";
 import PharmacistAnswerCard from "./PharmacistAnswerCard";
-import V1DrugView from "./V1DrugView";
+import V1DrugView, { type ClinicalAdvisory } from "./V1DrugView";
 import ProcurementView from "./ProcurementView";
 import SupplierView from "./SupplierView";
 
@@ -860,7 +860,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // buildMarketPricing, ~5 serial round-trips before first paint.) supabase-js
     // resolves (not rejects) on a query error, so a missing table still soft-fails
     // to null without taking down the batch.
-    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing] = await Promise.all([
+    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing, advisoryRes] = await Promise.all([
       supabase
         .from("api_suppliers")
         .select("manufacturer_name, country, source, who_pq")
@@ -889,7 +889,18 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .limit(1),
       buildMarketPricing(supabase, id, drug.generic_name, userCountry),
       buildAlternativePricingData(supabase, id, alternatives, userCountry, drug.generic_name),
+      // State-level clinical guidance (NSW Health CEC substitutes / conservation
+      // advice) from clinical_advisories (migration 070). Soft-fails to null if
+      // the migration isn't applied yet — the panel then simply doesn't render.
+      supabase
+        .from("clinical_advisories")
+        .select("source_reference, title, status, categories, keywords, guidance, date_issued, date_updated, source_url, source_name, jurisdiction")
+        .or(`drug_id.eq.${id},drug_ids.cs.{${id}}`)
+        .neq("status", "lapsed")
+        .order("date_updated", { ascending: false, nullsFirst: false })
+        .limit(10),
     ]);
+    const advisories = (advisoryRes.data ?? []) as ClinicalAdvisory[];
     const apiSupplierRows = apiSupplierRes.data;
     const approvalRows = approvalRes.data;
     const eligRows = eligRes.data;
@@ -1047,6 +1058,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         recalls={recalls}
         approvalFootprint={approvalFootprint}
         eligibility={eligibility}
+        advisories={advisories}
         pricing={pricing}
         concession={concession}
         priceMarkets={priceMarkets}

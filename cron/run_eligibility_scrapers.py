@@ -38,6 +38,7 @@ from backend.scrapers.eligibility.fda_shortage import FdaShortageList
 from backend.scrapers.eligibility.mhra_ssp import NhsbsaSsp
 from backend.scrapers.eligibility.tga_s19a import TgaSection19A
 from backend.scrapers.eligibility.eu_art_5_2 import EuArticle5_2
+from backend.scrapers.advisories.nsw_cec import NswCecAdvisories
 
 
 ELIGIBILITY_SCRAPERS = [
@@ -45,6 +46,10 @@ ELIGIBILITY_SCRAPERS = [
     ("nhsbsa_ssp",        NhsbsaSsp),
     ("tga_section_19a",   TgaSection19A),
     ("eu_article_5_2",    EuArticle5_2),
+    # Not an eligibility scheme — state clinical guidance into clinical_advisories
+    # (migration 070). Same run()/summary contract, so it rides this daily slot.
+    # Needs Playwright + Chromium (Cloudflare challenge) — Mac cron has both.
+    ("nsw_cec_advisories", NswCecAdvisories),
 ]
 
 log = _setup_logging()

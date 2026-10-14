@@ -40,6 +40,31 @@ export type EligibilityEntry = {
   country_code: string | null;
 };
 
+// State-level clinical guidance from clinical_advisories (migration 070) —
+// first source NSW Health CEC "Medication safety updates". `guidance` is plain
+// text (HTML stripped at scrape time): blank-line paragraphs, "• " list items.
+export type ClinicalAdvisory = {
+  source_reference: string;
+  title: string;
+  status: string;
+  categories: string[] | null;
+  keywords: string | null;
+  guidance: string | null;
+  date_issued: string | null;
+  date_updated: string | null;
+  source_url: string | null;
+  source_name: string | null;
+  jurisdiction: string | null;
+};
+
+const ADVISORY_CAT: Record<string, string> = {
+  shortage: "Shortage",
+  discontinuation: "Discontinuation",
+  recall: "Recall",
+  safety_consideration: "Safety consideration",
+  practice_change: "Practice change",
+};
+
 // Human labels for the substitution schemes. Drives the pathways block so a new
 // scraper (MHRA SSP etc.) renders correctly with no further UI change.
 const SCHEME_LABEL: Record<string, string> = {
@@ -99,11 +124,16 @@ function monthYear(iso?: string | null) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? null : d.toLocaleDateString("en-AU", { month: "short", year: "numeric" });
 }
+function dayMonthYear(iso?: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+}
 const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR: "€", NZD: "NZ$", CAD: "C$" };
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, advisories, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint,
 }: {
   id: string;
   drug: any;
@@ -126,6 +156,7 @@ export default function V1DrugView({
     latest: string | null;
   } | null;
   eligibility?: EligibilityEntry[] | null;
+  advisories?: ClinicalAdvisory[] | null;
   pricing?: {
     ex_manufacturer: number;
     dispensed: number | null;
@@ -274,6 +305,9 @@ export default function V1DrugView({
   // Notes fallback (legacy path) — only consulted when no structured entry.
   const s19aEvt = active.find((s) => detectS19A(s.notes));
   const s19aNotesText = s19aEvt ? getS19AText(s19aEvt.notes) : null;
+
+  const advCurrent = (advisories ?? []).filter((a) => a.status === "current");
+  const advResolved = (advisories ?? []).filter((a) => a.status === "resolved").length;
 
   // Short detail line for the "Can I substitute?" tile.
   const s19aTileDetail = s19aStructured
@@ -921,6 +955,56 @@ export default function V1DrugView({
             </div>
           )}
 
+          {/* NSW Health guidance — state clinical advice (Formulary-approved
+              substitutes, conservation, safety) from the CEC. Current entries
+              in full; resolved ones collapsed to a count. AU only: the advice
+              is written for NSW Health hospitals. */}
+          {userCountry === "AU" && advCurrent.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">NSW Health guidance <span className="help">🇦🇺 Clinical Excellence Commission · for NSW Health clinicians</span></div>
+              <div className="subpath">
+                {advCurrent.map((a) => {
+                  const cats = (a.categories ?? []).map((c) => ADVISORY_CAT[c] ?? c);
+                  const upd = dayMonthYear(a.date_updated);
+                  return (
+                    <div className="subpath-row adv-row" key={a.source_reference}>
+                      <div className="subpath-l" style={{ width: "100%" }}>
+                        <span className="subpath-ic ok">i</span>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="subpath-n">{a.title}</div>
+                          <div className="adv-meta">
+                            {cats.map((c) => <span key={c} className="adv-tag">{c}</span>)}
+                            {upd ? <span>Updated {upd}</span> : null}
+                          </div>
+                          {a.guidance ? (
+                            <details className="adv-body">
+                              <summary>Read guidance</summary>
+                              <div className="adv-text">{a.guidance}</div>
+                            </details>
+                          ) : null}
+                          {a.source_url ? (
+                            <div className="subpath-d">
+                              <a href={a.source_url} target="_blank" rel="noopener noreferrer">
+                                Verify on NSW Health CEC ↗
+                              </a>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {advResolved > 0 && (
+                  <div className="subpath-row">
+                    <div className="subpath-d">
+                      {advResolved} earlier NSW advisor{advResolved === 1 ? "y" : "ies"} for this medicine marked resolved.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Shortage trend for this molecule, every market (range-selectable) */}
           {shortages.length > 0 && (
             <div className="sec">
@@ -1441,6 +1525,12 @@ const CSS = `
 .subpath-ic.neutral{background:var(--bg-3);color:var(--text-4);border:1px solid var(--border)}
 .subpath-n{font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 .subpath-d{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:3px}
+.adv-row+.adv-row,.adv-row+.subpath-row{border-top:1px solid var(--border)}
+.adv-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:5px;font-size:11px;color:var(--text-4)}
+.adv-tag{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:99px;color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
+.adv-body{margin-top:8px}
+.adv-body summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--green-d)}
+.adv-text{white-space:pre-wrap;font-size:12.5px;color:var(--text-2);line-height:1.6;margin-top:8px;overflow-wrap:anywhere}
 .alt-list{display:flex;flex-direction:column;gap:9px}
 .alt-card{background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;box-shadow:var(--sh-card),var(--hi-inset);}
 .alt-link{text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}

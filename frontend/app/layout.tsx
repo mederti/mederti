@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
@@ -47,11 +47,30 @@ export const metadata: Metadata = {
       "Track drug shortages across major markets in real time. 216,000+ drugs monitored from regulatory sources worldwide.",
     images: [`${SITE_URL}/api/og`],
   },
-  // Set NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION in Vercel to verify the domain
-  // in Google Search Console without a DNS record.
-  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
-    ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION.trim() } }
-    : {}),
+  // Search-console ownership tags, env-driven so no DNS record is needed:
+  //   NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION → Google Search Console
+  //   NEXT_PUBLIC_BING_SITE_VERIFICATION   → Bing Webmaster Tools (msvalidate.01)
+  // Bing matters disproportionately for us: Edge + Bing are the default
+  // browser/search on managed NHS / hospital Windows fleets, and the Bing
+  // index also feeds Copilot answers.
+  verification: {
+    ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+      ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION.trim() }
+      : {}),
+    ...(process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+      ? { other: { "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION.trim() } }
+      : {}),
+  },
+  applicationName: "Mederti",
+  // Windows/Edge pinned-site + taskbar tile colour (Edge still reads these).
+  other: {
+    "msapplication-TileColor": "#0fa676",
+    "msapplication-config": "none",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0fa676",
 };
 
 export default function RootLayout({

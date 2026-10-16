@@ -322,6 +322,6 @@ export async function proxy(req: NextRequest) {
 export const config = {
   // Skip API routes, static, image optimisation, favicons, robots, sitemap, llms.txt
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|llms.txt|tiles/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf|otf|eot|pmtiles|css|js)).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|llms.txt|manifest.webmanifest|indexnow-key.txt|tiles/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf|otf|eot|pmtiles|css|js)).*)",
   ],
 };

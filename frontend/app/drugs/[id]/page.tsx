@@ -6,6 +6,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd, jsonLdSafe } from "@/lib/seo";
 import { recordDemandSignal } from "@/lib/demand-signal";
+import { FREE_VIEW_HEADER } from "@/lib/free-views";
 import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
@@ -848,6 +849,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // soft-launch is OFF (full platform). It is dormant — not dead — while
   // PHARMACIST_ONLY is true; don't delete it without also retiring the
   // persona views it serves.
+  // Anonymous free-tier meter: the proxy reports how many of the free drug
+  // views this visitor has used, counting this page (null = signed in).
+  const usedHeader = (await headers()).get(FREE_VIEW_HEADER);
+  const freeViewsUsed = !loggedIn && usedHeader != null ? Number(usedHeader) || 0 : null;
+
   if (PHARMACIST_ONLY) {
     // API supply-base concentration from FDA Drug Master Files (active Type II
     // DMFs = manufacturers cleared to supply this API into the US market). This
@@ -1054,6 +1060,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         products={products}
         brandSkus={brandSkus}
         brandHint={brandHint}
+        freeViewsUsed={freeViewsUsed}
       />
     );
   }

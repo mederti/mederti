@@ -5,6 +5,8 @@ import MobileTabBar from "@/app/components/v1/MobileTabBar";
 import { ContextChat } from "@/app/chat/components/ContextChat";
 import "@/app/chat/chat.css";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
+import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
+import { FreeViewBeacon } from "@/app/components/free-tier/FreeViewBeacon";
 import V1AiSummary from "./V1AiSummary";
 import V1ReportActions from "./V1ReportActions";
 import { FindSupplier } from "./find-supplier";
@@ -103,8 +105,10 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null,
 }: {
+  /** Anonymous free-tier views used (null = signed in). */
+  freeViewsUsed?: number | null;
   id: string;
   drug: any;
   shortages: any[];
@@ -469,6 +473,13 @@ export default function V1DrugView({
                  the standard chat surface — clicking a product in an answer
                  opens its detail. ── */}
             <aside className="chat-col mederti-chat-root">
+              {freeViewsUsed != null ? (
+                <ChatSignupGate
+                  next={`/drugs/${id}`}
+                  headerLabel="Ask about this medicine"
+                  lead={<>Ask about <b>{drug.generic_name}</b> — substitutes, who&apos;s affected, or how long it may last — answered from live regulator data.</>}
+                />
+              ) : (
               <ContextChat
                 key={drug.generic_name}
                 contextKey={drug.generic_name}
@@ -490,10 +501,17 @@ export default function V1DrugView({
                   "How long did past shortages last?",
                 ]}
               />
+              )}
             </aside>
 
             {/* ── Right column: the drug record, full-width detail panel ── */}
             <div className="dg-main">
+          {freeViewsUsed != null && (
+            <>
+              <FreeViewBeacon drugId={id} />
+              <FreeViewBanner used={freeViewsUsed} next={`/drugs/${id}`} />
+            </>
+          )}
           <V1DrugSearch initial={drug.generic_name} />
 
           {brandHint && (

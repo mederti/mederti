@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ALTERNATIVES_CAVEAT, atcMatchLabel } from "@/lib/alternatives";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import SiteNav from "@/app/components/landing-nav";
@@ -348,9 +349,9 @@ export default async function MedicinePage(
         {/* ── Alternatives ── */}
         {alternatives.length > 0 && (
           <>
-            <h2 style={h2}>Alternatives to {drug.generic_name}</h2>
+            <h2 style={h2}>Drugs in the same class as {drug.generic_name}</h2>
             <p style={{ fontSize: 13, color: "var(--app-text-3)", margin: "0 0 12px" }}>
-              Clinically related options from Mederti&apos;s curated alternatives data. Always confirm suitability with a pharmacist or prescriber before substituting.
+              {ALTERNATIVES_CAVEAT}
             </p>
             <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.9 }}>
               {alternatives.map((a) => (
@@ -360,7 +361,7 @@ export default async function MedicinePage(
                       {a.drugs.generic_name}
                     </Link>
                   ) : "Unnamed"}
-                  {a.relationship_type ? <span style={{ color: "var(--app-text-3)" }}> — {a.relationship_type.replace(/_/g, " ")}</span> : null}
+                  {atcMatchLabel(a.atc_match_level, a.drugs?.atc_code) ? <span style={{ color: "var(--app-text-3)" }}> — {atcMatchLabel(a.atc_match_level, a.drugs?.atc_code)}</span> : null}
                 </li>
               ))}
             </ul>

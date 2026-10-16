@@ -1,5 +1,7 @@
 # Railway Cron Services — Deployment Playbook
 
+> **2026-10-17: stale and being replaced.** Railway stops reading per-service `railway.toml` files (Config as Code) on 2026-12-01. Live service settings move to `.railway/railway.ts` (Infrastructure as Code) with Railpack builds. See [`docs/railway-iac-migration.md`](../docs/railway-iac-migration.md) for the current service list, settings and cutover runbook. The service names and schedules below are outdated.
+
 Three cron services + one always-on API, all in the same Railway project, all on the same GitHub repo.
 
 After deploy, decommission the Mac crontab (`crontab_fixed.txt`) so the laptop isn't a single point of failure.

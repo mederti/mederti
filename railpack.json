@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "python",
+  "steps": {
+    "install": {
+      "commands": [
+        { "src": "backend/requirements.txt", "dest": "backend/requirements.txt" },
+        "..."
+      ]
+    }
+  }
+}

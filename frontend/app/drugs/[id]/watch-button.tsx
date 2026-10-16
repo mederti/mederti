@@ -17,7 +17,7 @@ interface Props {
  * buttons live on the old persona page (page.tsx), which soft-launch doesn't
  * render, so without this button the watchlist could never populate.
  *
- * - Anonymous: bounces to /login?next=/drugs/{id}.
+ * - Anonymous: bounces to /signup?next=/drugs/{id} (watchlists are account-only).
  * - Authenticated: toggles the row via Supabase RLS (no server round-trip),
  *   fires the fire-and-forget `watchlist_add` demand signal, and broadcasts a
  *   `watchlist:changed` window event so V1Sidebar re-fetches immediately.
@@ -66,7 +66,7 @@ export function WatchButton({ drugId }: Props) {
     if (loading || toggling) return;
 
     if (!userId) {
-      router.push(`/login?next=/drugs/${drugId}`);
+      router.push(`/signup?next=${encodeURIComponent(`/drugs/${drugId}`)}&reason=watchlist`);
       return;
     }
 
@@ -132,6 +132,8 @@ export function WatchButton({ drugId }: Props) {
       title={
         loading
           ? "Loading…"
+          : !userId
+            ? "Sign up free to watch this medicine and get shortage alerts"
           : isWatching
             ? "Stop watching — remove from your watchlist"
             : "Watch — add to your watchlist and get alerts"

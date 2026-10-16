@@ -342,6 +342,26 @@ export async function POST(req: NextRequest) {
   }
   const ip = getClientIp(req); // used for demand-signal identifier + logging
 
+  // Chat is account-only (free-tier decision, Oct 2026): anonymous visitors
+  // get 10 free drug pages but no AI answers. The nightly eval job calls this
+  // route without a session, so it authenticates with CHAT_EVAL_TOKEN instead.
+  let userId: string | null = null;
+  try {
+    const sbSession = await createServerClient();
+    const { data: { user } } = await sbSession.auth.getUser();
+    userId = user?.id ?? null;
+  } catch {
+    // Auth lookup failure → treated as anonymous.
+  }
+  const evalToken = process.env.CHAT_EVAL_TOKEN;
+  const isEval = !!evalToken && req.headers.get("x-mederti-eval-token") === evalToken;
+  if (!userId && !isEval) {
+    return Response.json(
+      { content: "", drugs: {}, error: "Sign up free to ask Mederti AI.", code: "auth_required" },
+      { status: 401 }
+    );
+  }
+
   let body: IncomingBody;
   try {
     body = (await req.json()) as IncomingBody;
@@ -400,19 +420,9 @@ export async function POST(req: NextRequest) {
     systemBlocks.push({ type: "text", text: articleSystemBlock(articleContext) });
   }
 
-  // Resolve the authenticated user_id, if any. Auth-required tools
-  // (get_my_portfolio_status, get_watchlist_demand, set_portfolio_alert)
-  // check ctx.user_id and refuse cleanly when null. Anonymous chat continues
-  // to work for every other tool.
-  let userId: string | null = null;
-  try {
-    const sbSession = await createServerClient();
-    const { data: { user } } = await sbSession.auth.getUser();
-    userId = user?.id ?? null;
-  } catch {
-    // Auth lookup failure → anonymous. Never blocks the chat.
-  }
-
+  // userId (resolved above) feeds the auth-required tools
+  // (get_my_portfolio_status, get_watchlist_demand, set_portfolio_alert),
+  // which refuse cleanly when it's null (eval runs).
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const ctx = newContext({ user_id: userId });
   const t0 = Date.now();

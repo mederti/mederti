@@ -185,6 +185,11 @@ export function ContextChat({
           signal: controller.signal,
         });
 
+        // Chat is account-only: send a signed-out visitor to signup and back.
+        if (resp.status === 401) {
+          router.push(`/signup?next=${encodeURIComponent(window.location.pathname + window.location.search)}&reason=chat`);
+          return;
+        }
         if (!resp.ok && resp.headers.get("content-type")?.includes("application/json")) {
           let errMsg = `Request failed (${resp.status})`;
           try {

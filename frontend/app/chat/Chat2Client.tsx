@@ -347,6 +347,12 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
         // still returns JSON (the pre-stream early returns). Try the body
         // as NDJSON; if there's no reader (e.g. Vercel HTML error page),
         // fall through to a thrown error.
+        // Chat is account-only: a signed-out visitor goes to signup, which
+        // returns them to this question once they're in.
+        if (resp.status === 401) {
+          router.push(`/signup?next=${encodeURIComponent(`/search?q=${encodeURIComponent(q)}`)}&reason=chat`);
+          return;
+        }
         if (!resp.ok && resp.headers.get("content-type")?.includes("application/json")) {
           let errBody: ChatApiResponse | null = null;
           try {

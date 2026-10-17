@@ -131,7 +131,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "get_trade_prices",
     description:
-      "Get supplier-listed trade prices for a drug across countries. NOTE: per-drug pricing coverage is sparse — Mederti only has direct supplier listings for a small subset of drugs. Returns an empty array if no prices are on file. Do NOT invent prices when this returns nothing; tell the user pricing data is not yet available for that drug.",
+      "Get current prices for a drug across countries. Returns `reference_prices`: official published prices per market (GB NHS Drug Tariff, US CMS NADAC, FR/IT/ES national price lists) from each market's latest publication. Each product line is a verbatim source row with its unit_basis, price_type and effective_date. Also returns sparse `supplier_listings` from the Mederti marketplace. Use this for any price comparison question. `countries_without_data` lists requested markets with nothing on file (Australia has no price feed). Do NOT invent prices for missing markets; say which markets are covered and which are not.",
     input_schema: {
       type: "object",
       properties: {
@@ -1258,21 +1258,148 @@ async function listActiveShortages(args: {
   } as any;
 }
 
-async function getTradePrices(args: { drug_id: string; countries?: string[] }): Promise<SupplierPriceRow[]> {
+// Markets with an official reference-price feed in drug_pricing_history.
+// AU is deliberately absent: only aggregate OECD rows exist there (no PBS feed).
+const REFERENCE_PRICE_MARKETS = ["GB", "US", "FR", "IT", "ES"];
+const MAX_PRODUCT_LINES = 40;
+
+// Each line is one source row, verbatim. No cross-product aggregates: strengths,
+// pack sizes, price types and units differ, so a min/median across them would
+// be a mismatched comparison.
+type ReferencePriceLine = {
+  product_name: string | null;
+  pack_description: string | null;
+  unit_price: number | null;
+  // What unit_price is per (GB: tablet/ml/…, US: EA/ML/GM). Null = unknown.
+  unit_basis: string | null;
+  pack_price: number | null;
+  price_type: string | null;
+  effective_date: string;
+};
+
+type ReferencePriceMarket = {
+  country: string;
+  authority: string | null;
+  source: string | null;
+  source_url: string | null;
+  currency: string | null;
+  // US: date of the NADAC file the lines come from. Others: newest effective_date on file.
+  latest_publication: string;
+  product_count: number;
+  products_shown: number;
+  products: ReferencePriceLine[];
+};
+
+const PRICE_COLS =
+  "country,authority,source,source_url,price_type,product_name,generic_name,pack_description,unit_price,pack_price,currency,effective_date,raw_unit:raw_data->>unit,pricing_unit:raw_data->>pricing_unit,as_of:raw_data->>as_of_date";
+
+async function getMarketReferencePrices(drugId: string, country: string): Promise<ReferencePriceMarket | null> {
   const sb = getSupabase();
-  const { data, error } = await sb
-    .from("supplier_inventory")
-    .select("countries,unit_price,currency,pack_size,available_until,status,notes")
-    .eq("drug_id", args.drug_id)
-    .eq("status", "available");
+  let rows: any[];
+  if (country === "US") {
+    // NADAC: effective_date is when each NDC's rate was set; a rate set months
+    // ago can still be current. "Current" = present in the newest NADAC file.
+    const { data: top, error: e1 } = await sb
+      .from("drug_pricing_history")
+      .select("as_of:raw_data->>as_of_date")
+      .eq("drug_id", drugId)
+      .eq("country", "US")
+      .order("raw_data->>as_of_date", { ascending: false })
+      .limit(1);
+    if (e1) throw e1;
+    const asOf = (top?.[0] as any)?.as_of;
+    if (!asOf) return null;
+    const { data, error } = await sb
+      .from("drug_pricing_history")
+      .select(PRICE_COLS)
+      .eq("drug_id", drugId)
+      .eq("country", "US")
+      .eq("raw_data->>as_of_date", asOf)
+      .order("effective_date", { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    rows = data ?? [];
+  } else {
+    // Snapshot lists (tariff / national price lists): only the newest
+    // publication of each price type (GB tariff and concessions publish separately).
+    const { data, error } = await sb
+      .from("drug_pricing_history")
+      .select(PRICE_COLS)
+      .eq("drug_id", drugId)
+      .eq("country", country)
+      .order("effective_date", { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    const newest = new Map<string, string>();
+    for (const r of data ?? []) if (!newest.has(r.price_type)) newest.set(r.price_type, r.effective_date);
+    rows = (data ?? []).filter((r: any) => r.effective_date === newest.get(r.price_type));
+  }
+  if (rows.length === 0) return null;
+
+  // Collapse only exact duplicates (NADAC repeats an identical line per NDC).
+  const seen = new Set<string>();
+  const lines: ReferencePriceLine[] = [];
+  for (const r of rows) {
+    const line: ReferencePriceLine = {
+      product_name: r.product_name ?? r.generic_name ?? null,
+      pack_description: r.pack_description,
+      unit_price: r.unit_price,
+      unit_basis: r.raw_unit ?? r.pricing_unit ?? null,
+      pack_price: r.pack_price,
+      price_type: r.price_type,
+      effective_date: r.effective_date,
+    };
+    const key = JSON.stringify([line.product_name, line.pack_description, line.unit_price, line.unit_basis, line.pack_price, line.price_type]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(line);
+  }
+  lines.sort((a, b) => (a.product_name ?? "").localeCompare(b.product_name ?? ""));
+
+  return {
+    country,
+    authority: rows[0].authority,
+    source: rows[0].source,
+    source_url: rows[0].source_url,
+    currency: rows[0].currency,
+    latest_publication: country === "US" ? rows[0].as_of : rows.reduce((d: string, r: any) => (r.effective_date > d ? r.effective_date : d), rows[0].effective_date),
+    product_count: lines.length,
+    products_shown: Math.min(lines.length, MAX_PRODUCT_LINES),
+    products: lines.slice(0, MAX_PRODUCT_LINES),
+  };
+}
+
+async function getReferencePrices(drugId: string, countries?: string[]): Promise<ReferencePriceMarket[]> {
+  const markets = countries && countries.length > 0
+    ? REFERENCE_PRICE_MARKETS.filter((c) => countries.includes(c))
+    : REFERENCE_PRICE_MARKETS;
+  const results = await Promise.all(markets.map((c) => getMarketReferencePrices(drugId, c)));
+  return results.filter((m): m is ReferencePriceMarket => m !== null);
+}
+
+async function getTradePrices(args: { drug_id: string; countries?: string[] }) {
+  const sb = getSupabase();
+  // Users say "UK"; the data says "GB".
+  const countries = args.countries
+    ?.map((c) => c.toUpperCase())
+    .map((c) => (c === "UK" ? "GB" : c));
+
+  const [{ data, error }, referencePrices] = await Promise.all([
+    sb
+      .from("supplier_inventory")
+      .select("countries,unit_price,currency,pack_size,available_until,status,notes")
+      .eq("drug_id", args.drug_id)
+      .eq("status", "available"),
+    getReferencePrices(args.drug_id, countries),
+  ]);
   if (error) throw error;
 
-  const rows: SupplierPriceRow[] = [];
+  const supplierListings: SupplierPriceRow[] = [];
   for (const row of data ?? []) {
-    const countries: string[] = row.countries ?? [];
-    for (const c of countries) {
-      if (args.countries && args.countries.length > 0 && !args.countries.includes(c)) continue;
-      rows.push({
+    const rowCountries: string[] = row.countries ?? [];
+    for (const c of rowCountries) {
+      if (countries && countries.length > 0 && !countries.includes(c)) continue;
+      supplierListings.push({
         country: c,
         unit_price: row.unit_price,
         currency: row.currency,
@@ -1283,23 +1410,41 @@ async function getTradePrices(args: { drug_id: string; countries?: string[] }): 
       });
     }
   }
-  // Supplier-listed prices are sparse — confidence reflects volume of evidence.
-  // Zero rows → low (audit §11 HPR-13/16 template territory). 1–2 → low-medium.
-  // 3+ rows → medium (still not procurement-grade — these are listed prices,
-  // not transacted ones).
+
+  const covered = new Set([...referencePrices.map((m) => m.country), ...supplierListings.map((r) => r.country)]);
+  const missing = (countries ?? []).filter((c) => !covered.has(c));
+  const oldestPublication = referencePrices.reduce<string | null>((o, m) => (!o || m.latest_publication < o ? m.latest_publication : o), null);
+
+  // Official reference prices (tariff / NADAC / national price lists) are
+  // regulator-published, so they carry more weight than supplier listings.
+  const signalCount = referencePrices.length * 3 + supplierListings.length;
   const confidence = computeConfidence({
-    sourceReliability: 0.6,
-    signalCount: rows.length,
-    freshnessDays: 0, // supplier_inventory has its own status field; trust the rows we get
+    sourceReliability: referencePrices.length > 0 ? 0.85 : 0.6,
+    signalCount,
+    freshnessDays: oldestPublication ? Math.floor((Date.now() - new Date(oldestPublication).getTime()) / 86400000) : 0,
   });
-  return Object.assign(rows, {
+
+  return {
+    reference_prices: referencePrices,
+    supplier_listings: supplierListings,
+    countries_without_data: missing,
+    coverage_note:
+      `Official reference prices are held for ${REFERENCE_PRICE_MARKETS.join(", ")} only ` +
+      "(GB = NHS Drug Tariff, mostly generics; US = CMS NADAC pharmacy acquisition cost; " +
+      "FR/IT/ES = national public price lists, pack prices only). Each product line is one source row, exactly as published. " +
+      "Price types differ by market (tariff reimbursement vs acquisition cost vs public retail) and so do units (see unit_basis), " +
+      "so only compare the same strength, form and unit across markets, and name the price type and date for each figure. " +
+      "If products_shown < product_count, the list is truncated, so don't state a range or the cheapest/most expensive for that market. " +
+      "Mederti has no Australian (PBS) price feed.",
     confidence: {
       ...confidence,
-      basis: rows.length === 0
-        ? "No supplier-listed prices on file for this drug."
-        : `${rows.length} supplier-listed price point${rows.length === 1 ? "" : "s"} from supplier_inventory.`,
+      basis:
+        referencePrices.length === 0 && supplierListings.length === 0
+          ? "No reference or supplier-listed prices on file for this drug."
+          : `${referencePrices.length} market${referencePrices.length === 1 ? "" : "s"} with official reference prices; ` +
+            `${supplierListings.length} supplier-listed price point${supplierListings.length === 1 ? "" : "s"}.`,
     },
-  }) as any;
+  };
 }
 
 async function searchRecalls(args: {

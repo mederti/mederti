@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { fetchSourcedAlternatives, type SourcedAlternativesResult } from "@/lib/alternatives-evidence";
 import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
@@ -623,6 +624,10 @@ export default async function DrugPage({ params, searchParams }: Props) {
     const { data: altSh } = await supabase.from("shortage_events").select("drug_id").in("drug_id", altIds).eq("status", "active");
     for (const r of altSh ?? []) altShortageCounts.set(r.drug_id, (altShortageCounts.get(r.drug_id) ?? 0) + 1);
   }
+  // Source-backed alternatives (migration 071). A failure here must not take
+  // the page down, and must never render as "none" — the section hides.
+  const sourcedAlternatives: SourcedAlternativesResult = await fetchSourcedAlternatives(id)
+    .catch((e) => ({ available: false as const, reason: String(e?.message ?? e) }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const alternatives = alternativesRaw.map((a: any) => ({ ...a, active_shortage_count: altShortageCounts.get(a.alternative_drug_id) ?? 0 }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1074,6 +1079,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         brandSkus={brandSkus}
         brandHint={brandHint}
         freeViewsUsed={freeViewsUsed}
+        sourcedAlternatives={sourcedAlternatives}
       />
     );
   }

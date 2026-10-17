@@ -1,5 +1,6 @@
 "use client";
 
+import { SOURCE_LABELS } from "@/lib/alternatives-sources";
 import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import { useEffect, useMemo, useState } from "react";
 import type {
@@ -154,7 +155,7 @@ function PaneContent({
   bundle: DrugDetailBundle;
   onOpenDrug: (id: string) => void;
 }) {
-  const { drug, substitutes, recalls } = bundle;
+  const { drug, substitutes, recalls, sourcedAlternatives } = bundle;
   const activeShortages = drug.shortages
     .filter((s) => s.status === "active")
     .sort((a, b) => (SEV_N[b.severity || ""] || 0) - (SEV_N[a.severity || ""] || 0));
@@ -202,6 +203,31 @@ function PaneContent({
       <ProductSummary drug={drug} bundle={bundle} country="AU" />
 
       {/* ALTERNATIVES — only if any */}
+      {sourcedAlternatives?.available ? (
+        <section className="pane-section">
+          <h3 className="pane-section-title">Alternatives with sources</h3>
+          {sourcedAlternatives.alternatives.length === 0 ? (
+            <div className="pane-row-reason">No source-backed alternatives on file.</div>
+          ) : (
+            <div className="pane-rows">
+              {sourcedAlternatives.alternatives.slice(0, 6).map((a) => (
+                <button key={`${a.alternative_drug_id}-${a.kind}`} type="button" className="pane-row pane-row-button" onClick={() => onOpenDrug(a.alternative_drug_id)}>
+                  <div className="pane-row-head">
+                    <div className="pane-row-title">{a.same_drug ? `Other products of ${a.name}` : a.name}</div>
+                    <div className="pane-row-meta"><span className="sub-card-match">{a.status_label}</span></div>
+                  </div>
+                  <div className="sub-card-meta">
+                    {a.kind === "same_molecule" ? "Same medicine — another product" : "Different medicine — prescriber decision"}
+                    {a.citations[0] ? <> · {SOURCE_LABELS[a.citations[0].source_code] ?? a.citations[0].publisher}</> : null}
+                  </div>
+                  {a.citations[0] ? <div className="pane-row-reason">“{a.citations[0].statement}”</div> : null}
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
       {substitutes.length > 0 ? (
         <section className="pane-section">
           <h3 className="pane-section-title">Same-class drugs (ATC)</h3>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import MobileTabBar from "@/app/components/v1/MobileTabBar";
@@ -105,8 +106,9 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
+  sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Anonymous free-tier views used (null = signed in). */
   freeViewsUsed?: number | null;
   id: string;
@@ -1029,6 +1031,9 @@ export default function V1DrugView({
             </div>
           )}
 
+          {/* Source-backed alternatives — hidden entirely when the data isn't loaded */}
+          {sourcedAlternatives?.available && <SourcedAlternativesSection alts={sourcedAlternatives.alternatives} country={userCountry} />}
+
           {/* Alternatives */}
           {alts.length > 0 && (
             <div className="sec">
@@ -1266,7 +1271,86 @@ export default function V1DrugView({
   );
 }
 
+// The same verbatim statement can back several listings (e.g. one WHO
+// Committee sentence under two indications): quote it once, list each source.
+// Order: the viewer's own jurisdiction first (that's where a legal instrument
+// actually applies), then other legal instruments, then guidance/references.
+const AUTH_RANK: Record<string, number> = { regulator_legal: 0, regulator_guidance: 1, clinical_reference: 2 };
+function rankCitations(cites: AlternativeCitation[], country: string): AlternativeCitation[] {
+  return [...cites].sort((a, b) =>
+    Number(b.country_code === country) - Number(a.country_code === country) ||
+    (AUTH_RANK[a.authority_type] ?? 9) - (AUTH_RANK[b.authority_type] ?? 9));
+}
+
+function groupByStatement(cites: AlternativeCitation[]): { statement: string; refs: AlternativeCitation[] }[] {
+  const groups = new Map<string, AlternativeCitation[]>();
+  for (const c of cites) {
+    const k = `${c.publisher}|${c.statement}|${c.dose_statement ?? ""}`;
+    groups.set(k, [...(groups.get(k) ?? []), c]);
+  }
+  return [...groups.values()].map((refs) => ({ statement: refs[0].statement, refs }));
+}
+
+// Source-backed alternatives: status first, then every supporting statement,
+// verbatim and linked. single_source is labelled as exactly that.
+function SourcedAlternativesSection({ alts, country }: { alts: SourcedAlternative[]; country: string }) {
+  return (
+    <div className="sec">
+      <div className="sec-title">Alternatives with sources <span className="help">regulator instruments &amp; published lists</span></div>
+      {alts.length === 0 ? (
+        <div className="alt-note">No source-backed alternatives on file for this medicine.</div>
+      ) : (
+        <div className="alt-list">
+          {alts.map((a) => (
+            <div key={`${a.alternative_drug_id}-${a.kind}`} className="alt-card alt-rich sa-card">
+              <div className="alt-main">
+                <div className="sa-head">
+                  {a.same_drug
+                    ? <span className="alt-n sa-name">Other products of {a.name}</span>
+                    : <Link href={`/drugs/${a.alternative_drug_id}`} className="alt-n sa-name">{a.name}</Link>}
+                  <span className={`sa-badge sa-${a.status}`}>{a.status_label}</span>
+                </div>
+                <div className="alt-f">{a.kind === "same_molecule" ? "Same medicine — another product" : "Different medicine — prescriber decision"}</div>
+                <ul className="sa-cites">
+                  {groupByStatement(rankCitations(a.citations, country)).slice(0, 4).map((g, i) => (
+                    <li key={i}>
+                      {g.refs.map((c, j) => (
+                        <div key={j}>
+                          <a href={c.source_url} target="_blank" rel="noopener noreferrer">{SOURCE_LABELS[c.source_code] ?? c.publisher}</a>
+                          {c.country_code ? ` · ${c.country_code}` : ""}
+                          {c.indication ? ` · ${c.indication}` : ""}
+                          {c.valid_until ? ` · valid until ${c.valid_until}` : ""}
+                          {c.alternative_product ? <div className="sa-prod">{c.alternative_product}</div> : null}
+                        </div>
+                      ))}
+                      <blockquote className="sa-quote">{g.statement}</blockquote>
+                      {g.refs[0].dose_statement ? <div className="sa-prod">Dose per source: {g.refs[0].dose_statement}</div> : null}
+                    </li>
+                  ))}
+                </ul>
+                {groupByStatement(a.citations).length > 4 ? (
+                  <div className="alt-note">+ {groupByStatement(a.citations).length - 4} more source statements</div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CSS = `
+.sa-card{display:block}
+.sa-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:2px}
+.sa-name{text-decoration:none;color:var(--ink)}
+.sa-name:hover{text-decoration:underline}
+.sa-badge{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid var(--border);color:var(--text-3);background:var(--bg-3)}
+.sa-regulator_authorised,.sa-verified{color:var(--green);border-color:var(--green)}
+.sa-cites{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text-3)}
+.sa-cites a{color:var(--green)}
+.sa-quote{margin:4px 0 0;padding-left:10px;border-left:2px solid var(--border);font-size:11.5px;line-height:1.45;color:var(--text-3)}
+.sa-prod{font-size:11.5px;color:var(--text-2);margin-top:2px}
 /* Tuned design system: this surface's scoped token block now mirrors the
    global tuned palette (globals.css :root) and uses Geist. Kept component-
    local because V1DrugView was authored as a self-contained surface. */

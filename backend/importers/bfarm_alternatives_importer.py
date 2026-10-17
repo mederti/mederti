@@ -33,9 +33,10 @@ Accuracy rules (docs/alternatives-importers.md):
   * alternative_name_raw / alternative_product / statement are the verbatim
     cell (outer whitespace stripped only). No dose, form or route is inferred.
   * The reverse direction is not inferred.
-  * drug_id / alternative_drug_id resolve only by exact lowercased Wirkstoffe
-    match against drugs.generic_name_normalised (the BfArM scraper creates
-    drugs under these German names). Unresolved stays NULL.
+  * drug_id / alternative_drug_id resolve via the shared strict
+    alternatives_resolver.DrugResolver on the Wirkstoffe (never the product
+    name): exact name, explicit INN→USAN alias, strict salt form; never
+    fuzzy. German spellings that don't match stay NULL; no local alias table.
   * valid_from / valid_until = Beginn / Ende, so an ended shortage stops
     counting in verified_alternatives.
   * source_ref = the notification's stable id (its `Referenzierte Erstmeldung`,
@@ -66,7 +67,8 @@ from typing import Any
 import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from backend.importers.who_eml_alternatives_importer import _hash, _load_inn_index  # noqa: E402
+from backend.importers.alternatives_resolver import DrugResolver  # noqa: E402
+from backend.importers.who_eml_alternatives_importer import _hash  # noqa: E402
 from backend.utils.db import get_supabase_client  # noqa: E402
 from backend.utils.logger import get_logger  # noqa: E402
 
@@ -212,11 +214,13 @@ def main() -> int:
     filled = sum(1 for r in records if _cell(r, "Alternativpräparat", "Alternativprparat"))
 
     supabase = get_supabase_client()
-    inn = _load_inn_index(supabase)
+    resolver = DrugResolver(supabase)
+    methods: Counter = Counter()
     now = datetime.now(timezone.utc).isoformat()
     for r in rows:
-        r["drug_id"] = inn.get(r.pop("_drug_wirkstoffe").lower())
-        r["alternative_drug_id"] = inn.get(r.pop("_alt_wirkstoffe").lower())
+        r["drug_id"], m_drug = resolver.resolve(r.pop("_drug_wirkstoffe"))
+        r["alternative_drug_id"], m_alt = resolver.resolve(r.pop("_alt_wirkstoffe"))
+        methods.update([m_drug or "unresolved", m_alt or "unresolved"])
         r["content_hash"] = _hash(r)
         r["retrieved_at"] = now
         r["updated_at"] = now
@@ -238,6 +242,7 @@ def main() -> int:
     print(f"  Statements (directed pairs) : {len(rows)}  {dict(Counter(r['kind'] for r in rows))}")
     print(f"  Skipped as ambiguous        : {len(ambiguous)}  {dict(Counter(a['code'] for a in ambiguous))}")
     print(f"  Both sides resolved         : {len(resolved)}")
+    print(f"  Resolution methods (sides)  : {dict(methods)}")
     print(f"  Current (Ende not passed)   : {len(current)}")
     for r in rows[:8]:
         print(f"    [{r['kind'][:4]}] {r['source_ref']:32s} {r['drug_name_raw'][:34]:34s} → {r['alternative_name_raw'][:60]}")

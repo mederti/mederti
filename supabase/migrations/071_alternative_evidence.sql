@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS alternative_evidence (
   statement             TEXT NOT NULL,   -- verbatim excerpt from the source, <= ~500 chars
   indication            TEXT NOT NULL DEFAULT '',  -- scope the source gives (EML section, SSP condition), verbatim; '' = none stated (NOT NULL so the unique key dedupes)
   country_code          TEXT,            -- jurisdiction; NULL = global (e.g. WHO)
+  -- Same-molecule rows name a specific product (often drug_id = alternative_drug_id):
+  alternative_product   TEXT,            -- verbatim product line: brand / strength / form / pack
+  product_ref           TEXT,            -- registry id when the source gives one: AUST R, NDC/appl no., PZN, SSP no.
   route                 TEXT,            -- verbatim from source when stated
   dosage_form           TEXT,
   dose_statement        TEXT,            -- ONLY when the source itself states a dose/conversion, verbatim

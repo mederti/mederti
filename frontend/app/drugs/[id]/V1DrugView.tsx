@@ -18,7 +18,7 @@ import { PriceTrendChart } from "./PriceTrendChart";
 import { ShortageTrendChart } from "@/app/chat/components/views/ShortageTrendChart";
 import { ShortageEpisodeTimeline } from "./ShortageEpisodeTimeline";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
-import { affinity, relationshipLabel } from "@/lib/alternatives";
+import { ALTERNATIVES_CAVEAT, affinity, relationshipLabel } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
 import { BAND_LABEL, type CompareResult } from "@/lib/pricing-compare";
 import { truncateDrugName } from "@/lib/utils";
@@ -288,13 +288,13 @@ export default function V1DrugView({
       ? "TGA-approved overseas product"
       : null;
 
-  // Alternatives — real similarity only; null hides the %.
+  // Same-ATC-class drugs only — no clinical match, evidence or dose data exists.
   const alts = (alternatives || []).slice(0, 5).map((a) => ({
     id: a.alternative_drug_id ?? a.drugs?.id ?? null,
     name: a.drugs?.generic_name ?? "Therapeutic alternative",
     rel: relationshipLabel(a.relationship_type),
     pct: a.similarity_score != null ? Math.round(a.similarity_score * 100) : null,
-    note: a.dose_conversion_notes ?? a.availability_note ?? null,
+    note: null as string | null,
   }));
   const topAlt = alts[0] ?? null;
 
@@ -708,13 +708,13 @@ export default function V1DrugView({
             </div>
             {topAlt?.id != null ? (
               <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
-                <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
+                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
                 <div className="sw-v">{topAlt.name}</div>
                 <div className="sw-d">{`${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}`}</div>
               </Link>
             ) : (
               <div className="sw-card">
-                <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
+                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
                 <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
                 <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
               </div>
@@ -1032,7 +1032,8 @@ export default function V1DrugView({
           {/* Alternatives */}
           {alts.length > 0 && (
             <div className="sec">
-              <div className="sec-title">Related alternatives <span className="help">same class</span></div>
+              <div className="sec-title">Same-class drugs <span className="help">WHO ATC classification</span></div>
+              <div className="alt-note" style={{ marginBottom: 8 }}>{ALTERNATIVES_CAVEAT}</div>
               <div className="alt-list">
                 {alts.map((a, i) => {
                   const inner = (
@@ -1044,7 +1045,6 @@ export default function V1DrugView({
                       </div>
                       {affinity(a.pct) && (
                         <div className="alt-match">
-                          <div className="alt-bar"><span style={{ width: `${a.pct}%` }} /></div>
                           <div className="alt-pct">{affinity(a.pct)}</div>
                         </div>
                       )}

@@ -475,7 +475,7 @@ function Results() {
                 <th className="c-med">Medicine</th>
                 <th className="c-mkt">{isGlobalMarket ? "Supply status" : <>In your market {mk.flag}</>}</th>
                 <th className="c-sub">Can I substitute?</th>
-                <th className="c-alt">Best alternative</th>
+                <th className="c-alt" title="WHO ATC classification only — not a reviewed substitute">Same-class drug</th>
                 <th className="c-n">Alts</th>
                 {hasTradePrice && <th className="c-price">Trade price</th>}
                 <th className="c-eb">Expected back</th>
@@ -609,7 +609,7 @@ function Results() {
                 {(() => { const bn = cleanBrandNames(d.brand_names, d.generic_name); return bn.length > 0 ? <div className="rg">{bn.slice(0, 3).join(" · ")}</div> : null; })()}
                 <div className="rmeta">
                   {d.atc_code ? `ATC ${d.atc_code}` : "—"}
-                  {d.alternatives_count ? ` · ${d.alternatives_count} alternative${d.alternatives_count > 1 ? "s" : ""}` : ""}
+                  {d.alternatives_count ? ` · ${d.alternatives_count} same-class drug${d.alternatives_count > 1 ? "s" : ""}` : ""}
                 </div>
               </div>
               <span className={`status-pill ${st.cls}`}><span className="d" />{st.label}</span>

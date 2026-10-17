@@ -14,6 +14,7 @@ import type {
   SupplierPriceRow,
 } from "./types";
 import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
+import { ALTERNATIVES_CAVEAT, ALTERNATIVES_SOURCE, atcMatchLabel } from "@/lib/alternatives";
 
 export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   // Anthropic server-side web search — used freely as a primary research tool
@@ -86,14 +87,14 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "find_substitutes",
     description:
-      "Find substitution candidates for a drug based on ATC-class matching from the drug_alternatives table. Each candidate includes a similarity_score, clinical evidence level (A=RCT … D=expert opinion), and a flag for whether the alternative is itself in shortage. Returns empty if no alternatives are recorded — substitution data is only available for ~100 high-priority drugs.",
+      "Find drugs in the same WHO ATC class as a drug (drug_alternatives, ATC-prefix pairing for ~200 high-shortage drugs). These are NOT clinically reviewed substitutes: no evidence grade, match %, or dose conversion exists for them. Each row gives match_basis (which ATC level is shared), the alternative's ATC code, and its live active-shortage count. Present them only as same-class context to raise with a prescriber, and attach the returned caveat. Returns empty if none are on file.",
     input_schema: {
       type: "object",
       properties: {
         drug_id: { type: "string", description: "UUID of the drug to substitute." },
         country: {
           type: "string",
-          description: "Optional ISO-2 country code; rank alternatives by their availability in this country.",
+          description: "Optional ISO-2 country code; active_shortage_count counts only this country's shortages.",
         },
         limit: { type: "number", description: "Max results (default 5)" },
       },
@@ -354,7 +355,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "get_dose_conversion",
     description:
-      "Verified dose-conversion + monitoring notes between two specific drugs. HIGH STAKES — returns a refusal envelope when no verified entry exists rather than improvising from priors. Use for HCL-15 / RET-12 dose-conversion questions. Pair with refusal-template language when status=unanswerable.",
+      "Dose conversion between two drugs. HIGH STAKES. Mederti holds NO source-verified dose conversions today, so this always returns status=unanswerable with canonical references. Use the refusal-template language; never improvise a ratio.",
     input_schema: {
       type: "object",
       properties: {
@@ -1028,13 +1029,17 @@ async function findSubstitutes(args: {
   const sb = getSupabase();
   const limit = Math.min(args.limit ?? 5, 10);
 
+  // Order by ATC depth shared (deepest first). The stored similarity_score is a
+  // fixed function of atc_match_level, so it adds nothing and is not exposed.
   const alts = await sb
     .from("drug_alternatives")
-    .select("alternative_drug_id,similarity_score,atc_match_level,clinical_evidence_level,requires_monitoring,availability_note,dose_conversion_notes")
+    .select("alternative_drug_id,atc_match_level")
     .eq("drug_id", args.drug_id)
     .eq("is_approved", true)
-    .order("similarity_score", { ascending: false })
+    .order("atc_match_level", { ascending: false })
     .limit(limit);
+  // A failed query must not be reported as "none on file".
+  if (alts.error) throw alts.error;
 
   const altRows = alts.data ?? [];
   if (altRows.length === 0) {
@@ -1045,7 +1050,7 @@ async function findSubstitutes(args: {
       confidence: {
         level: "low",
         score: 0,
-        basis: "No ATC-matched alternatives on file for this drug.",
+        basis: "No same-ATC-class drugs on file for this drug.",
       } satisfies Confidence,
     }) as any;
   }
@@ -1069,57 +1074,42 @@ async function findSubstitutes(args: {
     shortageByDrug.set(row.drug_id, (shortageByDrug.get(row.drug_id) ?? 0) + 1);
   }
 
-  const out: SubstituteRow[] = altRows.map((a: any) => {
-    const drug = drugMap.get(a.alternative_drug_id) ?? {};
-    return {
-      drug_id: a.alternative_drug_id,
-      name: drug.generic_name ?? "Unknown",
-      atc_code: drug.atc_code ?? null,
-      drug_class: drug.drug_class ?? null,
-      similarity_score: a.similarity_score,
-      atc_match_level: a.atc_match_level,
-      clinical_evidence_level: a.clinical_evidence_level,
-      requires_monitoring: !!a.requires_monitoring,
-      availability_note: a.availability_note,
-      dose_conversion_notes: a.dose_conversion_notes,
-      active_shortage_count: shortageByDrug.get(a.alternative_drug_id) ?? 0,
-    };
-  });
+  const out: SubstituteRow[] = altRows.map((a: any) => toSubstituteRow(
+    a.alternative_drug_id,
+    drugMap.get(a.alternative_drug_id),
+    a.atc_match_level,
+    shortageByDrug.get(a.alternative_drug_id) ?? 0,
+  ));
 
   for (const s of out) ctx.subs[s.drug_id] = s;
-  // Confidence for the substitute set — backed by curated drug_alternatives
-  // rows, so reliability is high (Mederti pharmacists / WHO EML / FDA Orange
-  // Book sources). Use clinical_evidence_level as the per-row reliability:
-  // A → 0.95, B → 0.85, C → 0.7, D → 0.5, E → 0.4. Best-of-set drives the
-  // aggregate. signalCount = number of alternatives surfaced.
-  const evidenceScore = (lvl: string | null | undefined): number => {
-    if (!lvl) return 0.6;
-    const k = lvl.toUpperCase();
-    if (k === "A") return 0.95;
-    if (k === "B") return 0.85;
-    if (k === "C") return 0.7;
-    if (k === "D") return 0.5;
-    return 0.4;
-  };
-  const bestEvidence = out.reduce(
-    (best, s) => Math.max(best, evidenceScore(s.clinical_evidence_level)),
-    0
-  );
-  const confidence = computeConfidence({
-    sourceReliability: bestEvidence,
-    signalCount: out.length,
-    freshnessDays: 0, // drug_alternatives is curated reference data, not scraped
-  });
+  // Automated ATC-prefix pairing, never clinically reviewed: confidence that a
+  // row is a usable substitute is low no matter how many rows there are.
   return Object.assign(out, {
+    caveat: ALTERNATIVES_CAVEAT,
     confidence: {
-      ...confidence,
-      basis: `${out.length} substitute${out.length === 1 ? "" : "s"} (best evidence ${
-        out
-          .map((s) => s.clinical_evidence_level)
-          .filter(Boolean)[0] ?? "unspecified"
-      }) from Mederti's curated alternates table.`,
-    },
+      level: "low",
+      score: 0.3,
+      basis: `${out.length} same-ATC-class drug${out.length === 1 ? "" : "s"} from automated ${ALTERNATIVES_SOURCE} pairing — not clinically reviewed.`,
+    } satisfies Confidence,
   }) as any;
+}
+
+function toSubstituteRow(id: string, drug: any, atcMatchLevel: number | null, activeShortages: number): SubstituteRow {
+  return {
+    drug_id: id,
+    name: drug?.generic_name ?? "Unknown",
+    atc_code: drug?.atc_code ?? null,
+    drug_class: drug?.drug_class ?? null,
+    similarity_score: null,
+    atc_match_level: atcMatchLevel,
+    match_basis: atcMatchLabel(atcMatchLevel, drug?.atc_code ?? null),
+    source: ALTERNATIVES_SOURCE,
+    clinical_evidence_level: null,
+    requires_monitoring: false,
+    availability_note: null,
+    dose_conversion_notes: null,
+    active_shortage_count: activeShortages,
+  };
 }
 
 async function listActiveShortages(args: {
@@ -1512,16 +1502,13 @@ export async function hydrateReferencedIds(text: string, ctx: ToolContext): Prom
 
   if (subIds.size === 0) return;
 
+  // A <sub_card> carries only drug facts + live shortage count. The pair's
+  // ATC level isn't known here (no source drug), so match_basis stays null.
   const sb = getSupabase();
   const ids = [...subIds];
-  const [drugRes, shortageRes, altRes] = await Promise.all([
+  const [drugRes, shortageRes] = await Promise.all([
     sb.from("drugs").select("id,generic_name,atc_code,drug_class").in("id", ids),
     sb.from("shortage_events").select("drug_id").in("drug_id", ids).eq("status", "active"),
-    sb
-      .from("drug_alternatives")
-      .select("alternative_drug_id,similarity_score,atc_match_level,clinical_evidence_level,requires_monitoring,dose_conversion_notes,availability_note")
-      .in("alternative_drug_id", ids)
-      .order("similarity_score", { ascending: false }),
   ]);
 
   const drugMap = new Map<string, any>((drugRes.data ?? []).map((d: any) => [d.id, d]));
@@ -1529,28 +1516,11 @@ export async function hydrateReferencedIds(text: string, ctx: ToolContext): Prom
   for (const s of shortageRes.data ?? []) {
     shortageCounts.set(s.drug_id, (shortageCounts.get(s.drug_id) ?? 0) + 1);
   }
-  const altMap = new Map<string, any>();
-  for (const a of altRes.data ?? []) {
-    if (!altMap.has(a.alternative_drug_id)) altMap.set(a.alternative_drug_id, a);
-  }
 
   for (const id of ids) {
     const drug = drugMap.get(id);
     if (!drug) continue;
-    const alt = altMap.get(id);
-    ctx.subs[id] = {
-      drug_id: id,
-      name: drug.generic_name ?? "Unknown",
-      atc_code: drug.atc_code ?? null,
-      drug_class: drug.drug_class ?? null,
-      similarity_score: alt?.similarity_score ?? null,
-      atc_match_level: alt?.atc_match_level ?? null,
-      clinical_evidence_level: alt?.clinical_evidence_level ?? null,
-      requires_monitoring: !!alt?.requires_monitoring,
-      availability_note: alt?.availability_note ?? null,
-      dose_conversion_notes: alt?.dose_conversion_notes ?? null,
-      active_shortage_count: shortageCounts.get(id) ?? 0,
-    };
+    ctx.subs[id] = toSubstituteRow(id, drug, null, shortageCounts.get(id) ?? 0);
   }
 }
 
@@ -3161,33 +3131,15 @@ async function getRecentDeregistrations(args: { drug_id?: string; country?: stri
 }
 
 async function getDoseConversion(args: { from_drug_id: string; to_drug_id: string }) {
-  if (!args.from_drug_id || !args.to_drug_id) return { status: "unanswerable", reason: "missing_args", hint: "Both from_drug_id and to_drug_id required." };
-  const sb = getSupabase();
-  const { data: rows } = await sb.from("drug_alternatives")
-    .select("drug_id,alternative_drug_id,dose_conversion_notes,clinical_evidence_level,relationship_type,requires_monitoring,monitoring_notes,similarity_score")
-    .or(`and(drug_id.eq.${args.from_drug_id},alternative_drug_id.eq.${args.to_drug_id}),and(drug_id.eq.${args.to_drug_id},alternative_drug_id.eq.${args.from_drug_id})`)
-    .limit(2);
-  const r = (rows ?? [])[0] as any;
-  if (!r || (!r.dose_conversion_notes && !r.monitoring_notes)) {
-    return {
-      status: "unanswerable",
-      reason: "no_verified_conversion",
-      hint: "Mederti doesn't have a verified dose-conversion entry for this pair. Dose conversion depends on patient factors not visible to this system. Canonical references: Australian Medicines Handbook / BNF / Micromedex / hospital antimicrobial stewardship guideline.",
-      from_drug_id: args.from_drug_id, to_drug_id: args.to_drug_id,
-      confidence: { level: "low", score: 0, basis: "No verified dose-conversion entry on file." } satisfies Confidence,
-    };
-  }
-  const e = (r.clinical_evidence_level ?? "").toUpperCase();
-  const scoreByEvidence = e === "A" ? 0.9 : e === "B" ? 0.75 : 0.5;
+  // drug_alternatives.dose_conversion_notes is template text keyed on ATC level
+  // ("dose conversion is 1:1" for every level-5 pair), not a sourced conversion.
+  // Until a source-verified table exists, there is nothing safe to return.
   return {
+    status: "unanswerable",
+    reason: "no_verified_conversion",
+    hint: "Mederti doesn't hold source-verified dose conversions. Dose conversion depends on patient factors not visible to this system. Canonical references: Australian Medicines Handbook / BNF / Micromedex / hospital antimicrobial stewardship guideline.",
     from_drug_id: args.from_drug_id, to_drug_id: args.to_drug_id,
-    dose_conversion_notes: r.dose_conversion_notes,
-    monitoring_notes: r.monitoring_notes,
-    requires_monitoring: !!r.requires_monitoring,
-    clinical_evidence_level: r.clinical_evidence_level,
-    relationship_type: r.relationship_type,
-    similarity_score: r.similarity_score,
-    confidence: { level: levelFromScore(scoreByEvidence), score: scoreByEvidence, basis: `Mederti curated dose-conversion (evidence ${r.clinical_evidence_level ?? "unspecified"}). Final dose decision is yours — patient factors not visible to this system.` } satisfies Confidence,
+    confidence: { level: "low", score: 0, basis: "No source-verified dose-conversion data on file." } satisfies Confidence,
   };
 }
 

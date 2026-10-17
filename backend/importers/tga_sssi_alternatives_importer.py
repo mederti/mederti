@@ -38,8 +38,11 @@ Accuracy rules:
     instrument title appears in both product lines. Otherwise the pair is
     skipped and listed as ambiguous (e.g. estradiol valerate → estradiol
     hemihydrate, "Penicillin V" lines under a phenoxymethylpenicillin title).
-  * drug ids resolve by EXACT match of the title ingredient against
-    drugs.generic_name_normalised. Combination titles never resolve to one
+  * drug ids resolve via alternatives_resolver.DrugResolver (exact name,
+    explicit INN→USAN alias, strict salt form; never fuzzy), given the title's
+    active-ingredient name, not the product line. Combination titles are
+    passed whole ("insulin degludec and insulin aspart") so they never resolve
+    to one
     component. Unresolved ids stay NULL.
 
 Usage
@@ -66,6 +69,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from backend.importers.alternatives_resolver import DrugResolver  # noqa: E402
 from backend.utils.db import get_supabase_client  # noqa: E402
 from backend.utils.logger import get_logger  # noqa: E402
 
@@ -484,17 +488,6 @@ def fetch_statements() -> RunResult:
 
 # ── DB ──────────────────────────────────────────────────────────────────────
 
-def _load_inn_index(supabase, names: set[str]) -> dict[str, str]:
-    """Exact normalised generic name → drug id, for the given names only."""
-    idx: dict[str, str] = {}
-    if names:
-        res = (supabase.table("drugs").select("id, generic_name_normalised")
-               .in_("generic_name_normalised", sorted(names)).order("id").execute())
-        for r in res.data or []:
-            idx.setdefault(r["generic_name_normalised"], r["id"])
-    return idx
-
-
 def _hash(row: dict) -> str:
     key = "|".join(str(row.get(k) or "") for k in
                    ("source_code", "source_ref", "drug_name_raw", "alternative_name_raw", "indication", "statement"))
@@ -511,14 +504,19 @@ def main() -> int:
     result = fetch_statements()
     rows = result.rows
     supabase = get_supabase_client()
-    # A single-ingredient title resolves both sides; a combination title never
-    # resolves to one of its components.
-    singles = {r["_ingredients"][0] for r in rows if len(r["_ingredients"]) == 1}
-    inn = _load_inn_index(supabase, singles)
+    # Every pair names the title's active ingredient on both sides (checked in
+    # build_rows), so that one name resolves both ids. A combination title is
+    # passed whole, so it never resolves to one of its components.
+    resolver = DrugResolver(supabase)
+    methods: dict[str, int] = {}
+    name_ids: dict[str, str | None] = {}
     now = datetime.now(timezone.utc).isoformat()
     for r in rows:
-        ing = r.pop("_ingredients")
-        drug_id = inn.get(ing[0]) if len(ing) == 1 else None
+        name = " and ".join(r.pop("_ingredients"))
+        drug_id, method = resolver.resolve(name)
+        name_ids[name] = drug_id
+        if method:
+            methods[method] = methods.get(method, 0) + 1
         r["drug_id"] = drug_id
         r["alternative_drug_id"] = drug_id
         r["content_hash"] = _hash(r)
@@ -538,6 +536,8 @@ def main() -> int:
     print(f"  Statements (directed pairs) : {len(rows)}")
     print(f"  Valid today ({today})   : {len(current)}")
     print(f"  drug ids resolved           : {len(resolved)}")
+    print(f"  Resolution methods (rows)   : {methods}")
+    print(f"  Unresolved ingredients      : {sorted(n for n, i in name_ids.items() if not i)}")
     print(f"  Skipped as ambiguous        : {len(result.ambiguous)}")
     for i in result.instruments:
         print(f"    [{i['listed']:7s}] {i['title_id']} {i['name'][59:]:52s} versions={','.join(i['versions'])} rows_today={i['current_rows']}")

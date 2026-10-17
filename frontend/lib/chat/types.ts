@@ -1,3 +1,4 @@
+import type { SourcedAlternativesResult } from "@/lib/alternatives-sources";
 export type DrugSummary = {
   drug_id: string;
   name: string;
@@ -244,6 +245,8 @@ export type ShortageHistoryStats = {
 export type DrugDetailBundle = {
   drug: DrugDetail;
   substitutes: SubstituteWithSuppliers[];
+  /** Source-backed alternatives (migration 071); available=false hides the section. */
+  sourcedAlternatives?: SourcedAlternativesResult;
   recalls: RecallRow[];
   suppliers: SupplierStock[];
   manufacturers: ManufacturerRow[];

@@ -18,9 +18,10 @@ Accuracy rules:
     sentences that mention the square box / equivalents, never paraphrased.
   * Direction is as WHO states it (listed medicine → equivalent). The reverse
     pair is NOT inferred.
-  * Names resolve to drugs by EXACT INN match only (same as who_eml_importer).
-    Unresolved names are still stored with NULL ids so nothing is silently
-    dropped; the verified_alternatives view ignores them until resolved.
+  * Names resolve via alternatives_resolver.DrugResolver: exact name, explicit
+    INN→USAN alias, or exact resolved_inn (UNII-desalted, single canonical
+    head) — never fuzzy. Unresolved names are still stored with NULL ids so
+    nothing is silently dropped; the verified_alternatives view ignores them.
 
 Usage
 ─────
@@ -43,6 +44,7 @@ import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from backend.importers.who_eml_importer import HEADERS, TIMEOUT, _as_list, _get, _medicine_ids  # noqa: E402
+from backend.importers.alternatives_resolver import DrugResolver  # noqa: E402
 from backend.utils.db import get_supabase_client  # noqa: E402
 from backend.utils.logger import get_logger  # noqa: E402
 
@@ -149,24 +151,6 @@ def fetch_statements() -> list[dict[str, Any]]:
     return rows
 
 
-def _load_inn_index(supabase) -> dict[str, str]:
-    """Exact INN (normalised generic name) → drug id. Same rule as who_eml_importer."""
-    idx: dict[str, str] = {}
-    page, size = 0, 1000
-    while True:
-        res = (supabase.table("drugs").select("id, generic_name, generic_name_normalised")
-               .range(page * size, page * size + size - 1).execute())
-        batch = res.data or []
-        for r in batch:
-            norm = (r.get("generic_name_normalised") or r.get("generic_name") or "").strip().lower()
-            if norm:
-                idx.setdefault(norm, r["id"])
-        if len(batch) < size:
-            break
-        page += 1
-    return idx
-
-
 def _hash(row: dict) -> str:
     key = "|".join(str(row.get(k) or "") for k in
                    ("source_code", "source_ref", "drug_name_raw", "alternative_name_raw", "indication", "statement"))
@@ -182,11 +166,15 @@ def main() -> int:
 
     rows = fetch_statements()
     supabase = get_supabase_client()
-    inn = _load_inn_index(supabase)
+    resolver = DrugResolver(supabase)
     now = datetime.now(timezone.utc).isoformat()
+    methods: dict[str, int] = {}
     for r in rows:
-        r["drug_id"] = inn.get(r["drug_name_raw"].lower())
-        r["alternative_drug_id"] = inn.get(r["alternative_name_raw"].lower())
+        r["drug_id"], m1 = resolver.resolve(r["drug_name_raw"])
+        r["alternative_drug_id"], m2 = resolver.resolve(r["alternative_name_raw"])
+        for m in (m1, m2):
+            if m:
+                methods[m] = methods.get(m, 0) + 1
         r["content_hash"] = _hash(r)
         r["retrieved_at"] = now
         r["updated_at"] = now
@@ -200,7 +188,8 @@ def main() -> int:
     print("=" * 64)
     print(f"  Statements (directed pairs) : {len(rows)}")
     print(f"  Both sides resolved         : {len(resolved)}")
-    print(f"  Unresolved names            : {len(unresolved_names)}  {unresolved_names[:15]}")
+    print(f"  Resolution methods          : {methods}")
+    print(f"  Unresolved names            : {len(unresolved_names)}  {unresolved_names}")
     for r in rows[:8]:
         print(f"    {r['drug_name_raw']:28s} → {r['alternative_name_raw']:28s} [{(r['indication'] or '')[:40]}]")
     if DRY_RUN:

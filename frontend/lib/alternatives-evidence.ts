@@ -42,29 +42,41 @@ export async function fetchSourcedAlternatives(
       .select("alternative_drug_id,kind,publisher,source_code,authority_type,source_url,statement,indication,country_code,alternative_product,product_ref,dose_statement,valid_until,licence,retrieved_at")
       .eq("drug_id", drugId)
       .in("alternative_drug_id", altIds)
+      .order("retrieved_at", { ascending: false })
+      .limit(1000)
       // Same "current statements only" rule as the verified_alternatives view.
       .or(`valid_until.is.null,valid_until.gte.${today}`)
       .or(`valid_from.is.null,valid_from.lte.${today}`),
     sb.from("drugs").select("id,generic_name").in("id", altIds),
   ]);
   if (e2) throw e2;
+  if ((evidence ?? []).length >= 1000) {
+    // Citations are display detail; status comes from the view and is complete.
+    console.warn(`[alternatives-evidence] citation cap hit for drug ${drugId}; some citations not shown`);
+  }
   if (e3) throw e3;
   const names = new Map((drugs ?? []).map((d) => [d.id as string, d.generic_name as string]));
 
   const alternatives: SourcedAlternative[] = pairs.map((p) => {
     const publishers = (p.publishers ?? []) as string[];
     const status = p.verification_status as AlternativeStatus;
+    const citations = (evidence ?? [])
+      .filter((e) => e.alternative_drug_id === p.alternative_drug_id && e.kind === p.kind)
+      .map(({ alternative_drug_id: _a, kind: _k, ...c }) => ({ ...c, indication: c.indication || null }) as AlternativeCitation);
+    const legalScopes = [...new Set(
+      citations.filter((c) => c.authority_type === "regulator_legal").map((c) => `${c.country_code ?? "global"} (${c.publisher})`),
+    )].sort();
     return {
       alternative_drug_id: p.alternative_drug_id,
       name: names.get(p.alternative_drug_id) ?? "Unknown",
       kind: p.kind,
       status,
-      status_label: statusLabel(status, publishers),
+      status_label: statusLabel(status, publishers, legalScopes),
       publishers,
+      legal_scopes: legalScopes,
+      same_drug: p.alternative_drug_id === drugId,
       last_checked_at: p.last_checked_at,
-      citations: (evidence ?? [])
-        .filter((e) => e.alternative_drug_id === p.alternative_drug_id && e.kind === p.kind)
-        .map(({ alternative_drug_id: _a, kind: _k, ...c }) => ({ ...c, indication: c.indication || null }) as AlternativeCitation),
+      citations,
     };
   });
   alternatives.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || b.publishers.length - a.publishers.length || a.name.localeCompare(b.name));

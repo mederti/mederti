@@ -1296,7 +1296,9 @@ function SourcedAlternativesSection({ alts }: { alts: SourcedAlternative[] }) {
             <div key={`${a.alternative_drug_id}-${a.kind}`} className="alt-card alt-rich sa-card">
               <div className="alt-main">
                 <div className="sa-head">
-                  <Link href={`/drugs/${a.alternative_drug_id}`} className="alt-n sa-name">{a.name}</Link>
+                  {a.same_drug
+                    ? <span className="alt-n sa-name">Other products of {a.name}</span>
+                    : <Link href={`/drugs/${a.alternative_drug_id}`} className="alt-n sa-name">{a.name}</Link>}
                   <span className={`sa-badge sa-${a.status}`}>{a.status_label}</span>
                 </div>
                 <div className="alt-f">{a.kind === "same_molecule" ? "Same medicine — another product" : "Different medicine — prescriber decision"}</div>

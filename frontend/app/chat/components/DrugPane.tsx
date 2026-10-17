@@ -213,7 +213,7 @@ function PaneContent({
               {sourcedAlternatives.alternatives.slice(0, 6).map((a) => (
                 <button key={`${a.alternative_drug_id}-${a.kind}`} type="button" className="pane-row pane-row-button" onClick={() => onOpenDrug(a.alternative_drug_id)}>
                   <div className="pane-row-head">
-                    <div className="pane-row-title">{a.name}</div>
+                    <div className="pane-row-title">{a.same_drug ? `Other products of ${a.name}` : a.name}</div>
                     <div className="pane-row-meta"><span className="sub-card-match">{a.status_label}</span></div>
                   </div>
                   <div className="sub-card-meta">

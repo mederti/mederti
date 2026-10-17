@@ -24,6 +24,10 @@ export type SourcedAlternative = {
   status: AlternativeStatus;
   status_label: string;
   publishers: string[];
+  /** Jurisdictions where a current legal instrument authorises it, e.g. "US (FDA)". */
+  legal_scopes: string[];
+  /** true when the alternative is another product of the SAME drug row. */
+  same_drug: boolean;
   last_checked_at: string;
   citations: AlternativeCitation[];
 };
@@ -44,10 +48,12 @@ export const SOURCE_LABELS: Record<string, string> = {
   bfarm_alternativpraeparat: "BfArM shortage list (holder-declared alternative)",
 };
 
-export function statusLabel(status: AlternativeStatus, publishers: string[]): string {
+// Legal authority is jurisdictional: an FDA AB rating doesn't authorise a swap
+// in Australia. regulator_authorised labels always name the country.
+export function statusLabel(status: AlternativeStatus, publishers: string[], legalScopes: string[] = []): string {
   switch (status) {
     case "regulator_authorised":
-      return `Authorised by regulator (${publishers.join(", ")})`;
+      return `Authorised by regulator in ${legalScopes.length ? legalScopes.join(", ") : publishers.join(", ")}`;
     case "verified":
       return `Confirmed by ${publishers.length} independent sources (${publishers.join(", ")})`;
     case "single_source":

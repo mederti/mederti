@@ -1,5 +1,8 @@
 // Server-only: uses the service-role client.
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { statusLabel, type AlternativeCitation, type AlternativeStatus, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
+export { SOURCE_LABELS, statusLabel } from "@/lib/alternatives-sources";
+export type { AlternativeCitation, AlternativeStatus, SourcedAlternative, SourcedAlternativesResult } from "@/lib/alternatives-sources";
 
 // Source-backed alternatives (migration 071). Every alternative carries the
 // statements that support it, verbatim and linked. Status comes from the
@@ -8,62 +11,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 //   verified              >= 2 independent publishers state it
 //   single_source         exactly one publisher states it — shown with its
 //                         citation, NEVER presented as verified
-export type AlternativeStatus = "regulator_authorised" | "verified" | "single_source";
-
-export type AlternativeCitation = {
-  publisher: string;
-  source_code: string;
-  authority_type: "regulator_legal" | "regulator_guidance" | "clinical_reference";
-  source_url: string;
-  statement: string;
-  indication: string | null;
-  country_code: string | null;
-  alternative_product: string | null;
-  product_ref: string | null;
-  dose_statement: string | null;
-  valid_until: string | null;
-  licence: string | null;
-  retrieved_at: string;
-};
-
-export type SourcedAlternative = {
-  alternative_drug_id: string;
-  name: string;
-  kind: "same_molecule" | "therapeutic";
-  status: AlternativeStatus;
-  status_label: string;
-  publishers: string[];
-  last_checked_at: string;
-  citations: AlternativeCitation[];
-};
-
-export type SourcedAlternativesResult =
-  | { available: true; alternatives: SourcedAlternative[] }
-  // The evidence table isn't in this database yet (migration 071 unapplied).
-  // Callers must say "not available", never "none on file".
-  | { available: false; reason: string };
-
 const STATUS_ORDER: Record<AlternativeStatus, number> = { regulator_authorised: 0, verified: 1, single_source: 2 };
-
-// Source names as users should see them (attribution required by e.g. WHO's CC BY licence).
-export const SOURCE_LABELS: Record<string, string> = {
-  who_eml: "WHO Model List of Essential Medicines",
-  tga_sssi: "TGA Serious Scarcity Substitution Instrument",
-  uk_ssp: "UK Serious Shortage Protocol",
-  fda_orange_book: "FDA Orange Book",
-  bfarm_alternativpraeparat: "BfArM shortage list (holder-declared alternative)",
-};
-
-export function statusLabel(status: AlternativeStatus, publishers: string[]): string {
-  switch (status) {
-    case "regulator_authorised":
-      return `Authorised by regulator (${publishers.join(", ")})`;
-    case "verified":
-      return `Confirmed by ${publishers.length} independent sources (${publishers.join(", ")})`;
-    case "single_source":
-      return `Single source (${publishers[0]}) — not independently confirmed`;
-  }
-}
 
 function isMissingRelation(err: { code?: string; message?: string } | null): boolean {
   if (!err) return false;

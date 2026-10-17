@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SOURCE_LABELS, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import MobileTabBar from "@/app/components/v1/MobileTabBar";
@@ -105,8 +106,9 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
+  sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Anonymous free-tier views used (null = signed in). */
   freeViewsUsed?: number | null;
   id: string;
@@ -1029,6 +1031,9 @@ export default function V1DrugView({
             </div>
           )}
 
+          {/* Source-backed alternatives — hidden entirely when the data isn't loaded */}
+          {sourcedAlternatives?.available && <SourcedAlternativesSection alts={sourcedAlternatives.alternatives} />}
+
           {/* Alternatives */}
           {alts.length > 0 && (
             <div className="sec">
@@ -1266,7 +1271,57 @@ export default function V1DrugView({
   );
 }
 
+// Source-backed alternatives: status first, then every supporting statement,
+// verbatim and linked. single_source is labelled as exactly that.
+function SourcedAlternativesSection({ alts }: { alts: SourcedAlternative[] }) {
+  return (
+    <div className="sec">
+      <div className="sec-title">Alternatives with sources <span className="help">regulator instruments &amp; published lists</span></div>
+      {alts.length === 0 ? (
+        <div className="alt-note">No source-backed alternatives on file for this medicine.</div>
+      ) : (
+        <div className="alt-list">
+          {alts.map((a) => (
+            <div key={`${a.alternative_drug_id}-${a.kind}`} className="alt-card alt-rich sa-card">
+              <div className="alt-main">
+                <div className="sa-head">
+                  <Link href={`/drugs/${a.alternative_drug_id}`} className="alt-n sa-name">{a.name}</Link>
+                  <span className={`sa-badge sa-${a.status}`}>{a.status_label}</span>
+                </div>
+                <div className="alt-f">{a.kind === "same_molecule" ? "Same medicine — another product" : "Different medicine — prescriber decision"}</div>
+                <ul className="sa-cites">
+                  {a.citations.slice(0, 4).map((c, i) => (
+                    <li key={i}>
+                      <a href={c.source_url} target="_blank" rel="noopener noreferrer">{SOURCE_LABELS[c.source_code] ?? c.publisher}</a>
+                      {c.country_code ? ` · ${c.country_code}` : ""}
+                      {c.indication ? ` · ${c.indication}` : ""}
+                      {c.valid_until ? ` · valid until ${c.valid_until}` : ""}
+                      {c.alternative_product ? <div className="sa-prod">{c.alternative_product}</div> : null}
+                      <blockquote className="sa-quote">{c.statement}</blockquote>
+                      {c.dose_statement ? <div className="sa-prod">Dose per source: {c.dose_statement}</div> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CSS = `
+.sa-card{display:block}
+.sa-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:2px}
+.sa-name{text-decoration:none;color:var(--ink)}
+.sa-name:hover{text-decoration:underline}
+.sa-badge{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid var(--border);color:var(--text-3);background:var(--bg-3)}
+.sa-regulator_authorised,.sa-verified{color:var(--green);border-color:var(--green)}
+.sa-cites{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text-3)}
+.sa-cites a{color:var(--green)}
+.sa-quote{margin:4px 0 0;padding-left:10px;border-left:2px solid var(--border);font-size:11.5px;line-height:1.45;color:var(--text-3)}
+.sa-prod{font-size:11.5px;color:var(--text-2);margin-top:2px}
 /* Tuned design system: this surface's scoped token block now mirrors the
    global tuned palette (globals.css :root) and uses Geist. Kept component-
    local because V1DrugView was authored as a self-contained surface. */

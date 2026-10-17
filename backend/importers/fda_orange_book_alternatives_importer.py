@@ -25,9 +25,11 @@ Grouping rule (docs/alternatives-importers.md):
 
 Accuracy rules:
   * `statement` is the exact Products.txt fields the pairing rests on.
-  * drug ids resolve by EXACT match of the Ingredient (lowercased) against
-    drugs.generic_name_normalised. No salt stripping or fuzzy matching, so
-    e.g. 'ATORVASTATIN CALCIUM' stays unresolved (NULL ids, raw names kept).
+  * drug ids resolve through the shared strict DrugResolver
+    (alternatives_resolver.py: exact name → INN/USAN alias → strict salt
+    form; never fuzzy), given the Ingredient lowercased. Multi-ingredient
+    products resolve only if the full combination string matches exactly.
+    Unresolved rows keep NULL ids and their raw names.
   * valid_from = the equivalent product's Approval_Date; NULL for FDA's
     'Approved Prior to Jan 1, 1982' (no exact date stated).
   * The Orange Book is a snapshot: a product that is re-rated or discontinued
@@ -58,6 +60,7 @@ from typing import Any, Iterable
 import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from backend.importers.alternatives_resolver import DrugResolver  # noqa: E402
 from backend.utils.db import get_supabase_client  # noqa: E402
 from backend.utils.logger import get_logger  # noqa: E402
 
@@ -177,24 +180,6 @@ def build_statements(products: Iterable[dict[str, str]]) -> tuple[list[dict[str,
     return rows, skipped
 
 
-def _load_inn_index(supabase) -> dict[str, str]:
-    """Exact normalised generic name → drug id (same rule as who_eml_alternatives_importer)."""
-    idx: dict[str, str] = {}
-    page, size = 0, 1000
-    while True:
-        res = (supabase.table("drugs").select("id, generic_name, generic_name_normalised")
-               .range(page * size, page * size + size - 1).execute())
-        batch = res.data or []
-        for r in batch:
-            norm = (r.get("generic_name_normalised") or r.get("generic_name") or "").strip().lower()
-            if norm:
-                idx.setdefault(norm, r["id"])
-        if len(batch) < size:
-            break
-        page += 1
-    return idx
-
-
 def _hash(row: dict) -> str:
     key = "|".join(str(row.get(k) or "") for k in
                    ("source_code", "source_ref", "drug_name_raw", "alternative_name_raw", "indication", "statement"))
@@ -237,14 +222,16 @@ def main() -> int:
     products = parse_products(download_products())
     rows, skipped = build_statements(products)
     supabase = get_supabase_client()
-    inn = _load_inn_index(supabase)
+    resolver = DrugResolver(supabase)
     now = datetime.now(timezone.utc).isoformat()
-    unresolved: set[str] = set()
+    # One lookup per distinct Ingredient: multi-ingredient strings ("A; B")
+    # only resolve if the whole combination matches a drug row exactly.
+    resolved_by_ingredient = {ing: resolver.resolve(ing.lower()) for ing in {r["ingredient"] for r in rows}}
+    unresolved = {ing for ing, (drug_id, _) in resolved_by_ingredient.items() if not drug_id}
+    methods: dict[str, int] = defaultdict(int)
     for r in rows:
-        ingredient = r.pop("ingredient")
-        drug_id = inn.get(ingredient.lower())
-        if not drug_id:
-            unresolved.add(ingredient)
+        drug_id, method = resolved_by_ingredient[r.pop("ingredient")]
+        methods[method or "unresolved"] += 1
         r["drug_id"] = drug_id
         r["alternative_drug_id"] = drug_id  # same ingredient on both sides by construction
         r["content_hash"] = _hash(r)
@@ -261,7 +248,8 @@ def main() -> int:
     print(f"  Products in file            : {len(products)}  (RX {sum(p['Type'] == 'RX' for p in products)})")
     print(f"  Statements (directed pairs) : {len(rows)}")
     print(f"  Reference products          : {len({r['drug_name_raw'] for r in rows})}")
-    print(f"  Ingredient resolved (exact) : {len(resolved)} rows, {len({r['drug_id'] for r in resolved})} drugs")
+    print(f"  Ingredient resolved         : {len(resolved)} rows, {len({r['drug_id'] for r in resolved})} drugs")
+    print(f"  Resolution methods (rows)   : {dict(sorted(methods.items(), key=lambda kv: -kv[1]))}")
     print(f"  Unresolved rows             : {len(rows) - len(resolved)}  ({len(unresolved)} ingredients, e.g. {sorted(unresolved)[:8]})")
     print(f"  By TE code                  : {dict(sorted(by_te.items(), key=lambda kv: -kv[1])[:12])}")
     print(f"  Skipped (ambiguous, listed) : {len(skipped)}")

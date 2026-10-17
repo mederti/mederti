@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SOURCE_LABELS, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
+import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import MobileTabBar from "@/app/components/v1/MobileTabBar";
@@ -1271,6 +1271,17 @@ export default function V1DrugView({
   );
 }
 
+// The same verbatim statement can back several listings (e.g. one WHO
+// Committee sentence under two indications): quote it once, list each source.
+function groupByStatement(cites: AlternativeCitation[]): { statement: string; refs: AlternativeCitation[] }[] {
+  const groups = new Map<string, AlternativeCitation[]>();
+  for (const c of cites) {
+    const k = `${c.publisher}|${c.statement}|${c.dose_statement ?? ""}`;
+    groups.set(k, [...(groups.get(k) ?? []), c]);
+  }
+  return [...groups.values()].map((refs) => ({ statement: refs[0].statement, refs }));
+}
+
 // Source-backed alternatives: status first, then every supporting statement,
 // verbatim and linked. single_source is labelled as exactly that.
 function SourcedAlternativesSection({ alts }: { alts: SourcedAlternative[] }) {
@@ -1290,15 +1301,19 @@ function SourcedAlternativesSection({ alts }: { alts: SourcedAlternative[] }) {
                 </div>
                 <div className="alt-f">{a.kind === "same_molecule" ? "Same medicine — another product" : "Different medicine — prescriber decision"}</div>
                 <ul className="sa-cites">
-                  {a.citations.slice(0, 4).map((c, i) => (
+                  {groupByStatement(a.citations).slice(0, 4).map((g, i) => (
                     <li key={i}>
-                      <a href={c.source_url} target="_blank" rel="noopener noreferrer">{SOURCE_LABELS[c.source_code] ?? c.publisher}</a>
-                      {c.country_code ? ` · ${c.country_code}` : ""}
-                      {c.indication ? ` · ${c.indication}` : ""}
-                      {c.valid_until ? ` · valid until ${c.valid_until}` : ""}
-                      {c.alternative_product ? <div className="sa-prod">{c.alternative_product}</div> : null}
-                      <blockquote className="sa-quote">{c.statement}</blockquote>
-                      {c.dose_statement ? <div className="sa-prod">Dose per source: {c.dose_statement}</div> : null}
+                      {g.refs.map((c, j) => (
+                        <div key={j}>
+                          <a href={c.source_url} target="_blank" rel="noopener noreferrer">{SOURCE_LABELS[c.source_code] ?? c.publisher}</a>
+                          {c.country_code ? ` · ${c.country_code}` : ""}
+                          {c.indication ? ` · ${c.indication}` : ""}
+                          {c.valid_until ? ` · valid until ${c.valid_until}` : ""}
+                          {c.alternative_product ? <div className="sa-prod">{c.alternative_product}</div> : null}
+                        </div>
+                      ))}
+                      <blockquote className="sa-quote">{g.statement}</blockquote>
+                      {g.refs[0].dose_statement ? <div className="sa-prod">Dose per source: {g.refs[0].dose_statement}</div> : null}
                     </li>
                   ))}
                 </ul>

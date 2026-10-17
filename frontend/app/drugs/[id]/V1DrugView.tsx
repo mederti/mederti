@@ -1032,7 +1032,7 @@ export default function V1DrugView({
           )}
 
           {/* Source-backed alternatives — hidden entirely when the data isn't loaded */}
-          {sourcedAlternatives?.available && <SourcedAlternativesSection alts={sourcedAlternatives.alternatives} />}
+          {sourcedAlternatives?.available && <SourcedAlternativesSection alts={sourcedAlternatives.alternatives} country={userCountry} />}
 
           {/* Alternatives */}
           {alts.length > 0 && (
@@ -1273,6 +1273,15 @@ export default function V1DrugView({
 
 // The same verbatim statement can back several listings (e.g. one WHO
 // Committee sentence under two indications): quote it once, list each source.
+// Order: the viewer's own jurisdiction first (that's where a legal instrument
+// actually applies), then other legal instruments, then guidance/references.
+const AUTH_RANK: Record<string, number> = { regulator_legal: 0, regulator_guidance: 1, clinical_reference: 2 };
+function rankCitations(cites: AlternativeCitation[], country: string): AlternativeCitation[] {
+  return [...cites].sort((a, b) =>
+    Number(b.country_code === country) - Number(a.country_code === country) ||
+    (AUTH_RANK[a.authority_type] ?? 9) - (AUTH_RANK[b.authority_type] ?? 9));
+}
+
 function groupByStatement(cites: AlternativeCitation[]): { statement: string; refs: AlternativeCitation[] }[] {
   const groups = new Map<string, AlternativeCitation[]>();
   for (const c of cites) {
@@ -1284,7 +1293,7 @@ function groupByStatement(cites: AlternativeCitation[]): { statement: string; re
 
 // Source-backed alternatives: status first, then every supporting statement,
 // verbatim and linked. single_source is labelled as exactly that.
-function SourcedAlternativesSection({ alts }: { alts: SourcedAlternative[] }) {
+function SourcedAlternativesSection({ alts, country }: { alts: SourcedAlternative[]; country: string }) {
   return (
     <div className="sec">
       <div className="sec-title">Alternatives with sources <span className="help">regulator instruments &amp; published lists</span></div>
@@ -1303,7 +1312,7 @@ function SourcedAlternativesSection({ alts }: { alts: SourcedAlternative[] }) {
                 </div>
                 <div className="alt-f">{a.kind === "same_molecule" ? "Same medicine — another product" : "Different medicine — prescriber decision"}</div>
                 <ul className="sa-cites">
-                  {groupByStatement(a.citations).slice(0, 4).map((g, i) => (
+                  {groupByStatement(rankCitations(a.citations, country)).slice(0, 4).map((g, i) => (
                     <li key={i}>
                       {g.refs.map((c, j) => (
                         <div key={j}>
@@ -1319,6 +1328,9 @@ function SourcedAlternativesSection({ alts }: { alts: SourcedAlternative[] }) {
                     </li>
                   ))}
                 </ul>
+                {groupByStatement(a.citations).length > 4 ? (
+                  <div className="alt-note">+ {groupByStatement(a.citations).length - 4} more source statements</div>
+                ) : null}
               </div>
             </div>
           ))}

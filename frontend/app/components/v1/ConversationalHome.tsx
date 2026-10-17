@@ -25,7 +25,7 @@ export const HOME_PROMPTS: string[] = [
   "What antibiotics are short in AU right now?",
   "Substitute for amoxicillin 500mg in adult sinusitis",
   "Which GLP-1s have stock in pharmacies this week?",
-  "Compare insulin trade prices · AU vs UK vs US",
+  "Compare atorvastatin prices · UK vs US vs France",
   "What's likely to be short in Q3 from India API issues?",
   "Show me all paediatric formulations in shortage",
 ];

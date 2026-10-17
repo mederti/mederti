@@ -61,9 +61,11 @@ CREATE TABLE IF NOT EXISTS alternative_evidence (
 CREATE INDEX IF NOT EXISTS idx_alt_evidence_drug ON alternative_evidence (drug_id);
 CREATE INDEX IF NOT EXISTS idx_alt_evidence_alt  ON alternative_evidence (alternative_drug_id);
 
--- Per directed pair: what the sources collectively support.
---   regulator_authorised  a currently-valid regulator_legal statement exists
---   verified              >= 2 distinct publishers state it
+-- Per directed pair: what the sources collectively support. Only CURRENT
+-- statements count: a row past its valid_until (lapsed SSSI, expired SSP,
+-- resolved shortage) is history, not a statement that holds today.
+--   regulator_authorised  a current regulator_legal statement exists
+--   verified              >= 2 distinct publishers currently state it
 --   single_source         exactly 1 publisher states it (shown with citation, never as "verified")
 -- Rows with unresolved drug ids are excluded until resolved.
 CREATE OR REPLACE VIEW verified_alternatives WITH (security_invoker = true) AS
@@ -71,19 +73,20 @@ SELECT
   e.drug_id,
   e.alternative_drug_id,
   e.kind,
-  COUNT(DISTINCT e.publisher)                                         AS publisher_count,
-  ARRAY_AGG(DISTINCT e.publisher ORDER BY e.publisher)                AS publishers,
-  BOOL_OR(e.authority_type = 'regulator_legal'
-          AND (e.valid_until IS NULL OR e.valid_until >= CURRENT_DATE)) AS has_current_legal_authority,
+  COUNT(DISTINCT e.publisher)                                   AS publisher_count,
+  ARRAY_AGG(DISTINCT e.publisher ORDER BY e.publisher)          AS publishers,
+  BOOL_OR(e.authority_type = 'regulator_legal')                 AS has_current_legal_authority,
   CASE
-    WHEN BOOL_OR(e.authority_type = 'regulator_legal'
-                 AND (e.valid_until IS NULL OR e.valid_until >= CURRENT_DATE)) THEN 'regulator_authorised'
-    WHEN COUNT(DISTINCT e.publisher) >= 2                                      THEN 'verified'
+    WHEN BOOL_OR(e.authority_type = 'regulator_legal') THEN 'regulator_authorised'
+    WHEN COUNT(DISTINCT e.publisher) >= 2               THEN 'verified'
     ELSE 'single_source'
-  END                                                                 AS verification_status,
-  MAX(e.retrieved_at)                                                 AS last_checked_at
+  END                                                           AS verification_status,
+  MAX(e.retrieved_at)                                           AS last_checked_at
 FROM alternative_evidence e
-WHERE e.drug_id IS NOT NULL AND e.alternative_drug_id IS NOT NULL
+WHERE e.drug_id IS NOT NULL
+  AND e.alternative_drug_id IS NOT NULL
+  AND (e.valid_until IS NULL OR e.valid_until >= CURRENT_DATE)
+  AND (e.valid_from  IS NULL OR e.valid_from  <= CURRENT_DATE)
 GROUP BY e.drug_id, e.alternative_drug_id, e.kind;
 
 ALTER TABLE alternative_evidence ENABLE ROW LEVEL SECURITY;

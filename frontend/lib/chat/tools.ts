@@ -15,6 +15,7 @@ import type {
 } from "./types";
 import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
 import { ALTERNATIVES_CAVEAT, ALTERNATIVES_SOURCE, atcMatchLabel } from "@/lib/alternatives";
+import { SOURCE_LABELS, fetchSourcedAlternatives } from "@/lib/alternatives-evidence";
 
 export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   // Anthropic server-side web search — used freely as a primary research tool
@@ -80,6 +81,19 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
       type: "object",
       properties: {
         drug_id: { type: "string", description: "UUID returned by search_drugs." },
+      },
+      required: ["drug_id"],
+    },
+  },
+  {
+    name: "get_sourced_alternatives",
+    description:
+      "Source-backed alternatives for a drug: each one comes with the statements that support it (publisher, link, verbatim text, indication, country, expiry). status is regulator_authorised (a current legal instrument permits the swap, e.g. TGA SSSI / UK SSP / FDA Orange Book), verified (2+ independent publishers), or single_source (one publisher, e.g. WHO EML only — never call it verified or confirmed). kind is same_molecule (another strength/form/brand/overseas product of the same medicine) or therapeutic (a different medicine). Call this BEFORE find_substitutes for any 'what can I use instead' question. available=false means the data isn't loaded in this environment — say so, don't say 'none exist'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "UUID of the drug being replaced." },
+        kind: { type: "string", enum: ["same_molecule", "therapeutic"], description: "Optional filter." },
       },
       required: ["drug_id"],
     },
@@ -1019,6 +1033,35 @@ export async function fetchRecallsForDrug(drugId: string, limit = 8): Promise<Re
     .order("announced_date", { ascending: false })
     .limit(limit);
   return (fuzzy.data ?? []) as RecallRow[];
+}
+
+async function getSourcedAlternatives(args: { drug_id: string; kind?: "same_molecule" | "therapeutic" }) {
+  const res = await fetchSourcedAlternatives(args.drug_id, { kind: args.kind, limit: 15 });
+  if (!res.available) {
+    return {
+      available: false,
+      reason: res.reason,
+      confidence: { level: "low", score: 0, basis: res.reason } satisfies Confidence,
+    };
+  }
+  const n = res.alternatives.length;
+  const authorised = res.alternatives.filter((a) => a.status === "regulator_authorised").length;
+  const verified = res.alternatives.filter((a) => a.status === "verified").length;
+  return {
+    available: true,
+    alternatives: res.alternatives.map((a) => ({
+      ...a,
+      // Trim citations for the model; the UI reads full rows itself.
+      citations: a.citations.slice(0, 4).map((c) => ({ ...c, source_name: SOURCE_LABELS[c.source_code] ?? c.source_code })),
+    })),
+    confidence: {
+      level: authorised + verified > 0 ? "high" : n > 0 ? "medium" : "low",
+      score: authorised + verified > 0 ? 0.85 : n > 0 ? 0.55 : 0,
+      basis: n === 0
+        ? "No source-backed alternatives on file for this drug."
+        : `${n} source-backed alternative${n === 1 ? "" : "s"}: ${authorised} regulator-authorised, ${verified} confirmed by 2+ sources, ${n - authorised - verified} single-source.`,
+    } satisfies Confidence,
+  };
 }
 
 async function findSubstitutes(args: {
@@ -3477,6 +3520,8 @@ export async function executeTool(
       return await summarizeShortageLandscape(input as any, ctx);
     case "get_class_summary":
       return await getClassSummary(input as any, ctx);
+    case "get_sourced_alternatives":
+      return await getSourcedAlternatives(input as any);
     case "get_trade_prices":
       return await getTradePrices(input as any);
     case "search_recalls":

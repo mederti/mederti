@@ -297,9 +297,9 @@ export default function SupplierView({
         {/* ---------- Row 1: Top substitute (w2) ---------- */}
         {topAlternative ? (
           <div className="sv-tile sv-w2" style={tileBase}>
-            <div style={tileLabelStyle}>Top substitute</div>
+            <div style={tileLabelStyle}>Same-class drug (ATC)</div>
             <div style={tileExtraStyle}>
-              {affinity(topAlternative.matchPercent) ?? "alternative"}
+              {affinity(topAlternative.matchPercent) ?? "same ATC class"}
             </div>
             <div
               style={{
@@ -349,7 +349,7 @@ export default function SupplierView({
                   }`,
                 }}
               >
-                {topAlternative.isAvailable ? "Available" : "Constrained"}
+                {topAlternative.isAvailable ? "No shortage listed" : "Shortage listed"}
               </span>
               {formatAud(topAlternative.priceAud) && (
                 <span
@@ -370,7 +370,7 @@ export default function SupplierView({
           </div>
         ) : (
           <div className="sv-tile sv-w2" style={tileBase}>
-            <div style={tileLabelStyle}>Top substitute</div>
+            <div style={tileLabelStyle}>Same-class drug (ATC)</div>
             <div style={tileExtraStyle}>none mapped</div>
             <div
               style={{
@@ -660,10 +660,10 @@ export default function SupplierView({
         {/* ---------- Row 3: Alternatives (w3 h2) ---------- */}
         {alternatives.length > 0 ? (
           <div className="sv-tile sv-w3 sv-h2" style={tileBase}>
-            <div style={tileLabelStyle}>Alternatives</div>
+            <div style={tileLabelStyle}>Same-class drugs (ATC)</div>
             <div style={tileExtraStyle}>
-              {alternatives.length} option{alternatives.length === 1 ? "" : "s"}{" "}
-              · ranked
+              {alternatives.length} drug{alternatives.length === 1 ? "" : "s"}{" "}
+              · not reviewed substitutes
             </div>
             <div
               style={{
@@ -758,7 +758,7 @@ export default function SupplierView({
                   letterSpacing: "-0.005em",
                 }}
               >
-                No therapeutic alternatives indexed yet
+                No same-class drugs on file
               </div>
               <div
                 style={{
@@ -767,10 +767,9 @@ export default function SupplierView({
                   lineHeight: 1.6,
                 }}
               >
-                Our clinical-equivalence graph is being expanded. For
-                this drug, clinical alternatives need to be cross-referenced
-                against the ATC class and prescriber-substitution guidelines
-                before they appear here.
+                Mederti only lists same-ATC-class drugs today, and none are
+                on file for this drug. Clinically reviewed substitutes are not
+                yet available.
               </div>
               <div
                 style={{

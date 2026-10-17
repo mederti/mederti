@@ -1,5 +1,6 @@
 "use client";
 
+import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import { useContext } from "react";
 import type { DrugDetail, DrugDetailBundle, Persona } from "@/lib/chat/types";
 import { LeadContext } from "../LeadContext";
@@ -101,7 +102,7 @@ export function TradePriceStrip({ tradePrice }: { tradePrice: DrugDetailBundle["
   );
 }
 
-// State A: drug is in shortage. Surface a substitute the user can dispense now, plus pre-order.
+// State A: drug is in shortage. Surface same-ATC-class context (not a reviewed substitute), plus pre-order.
 function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }) {
   const lead = useContext(LeadContext);
   const pane = useContext(PaneContext);
@@ -140,10 +141,8 @@ function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }
       {headSub ? (
         <div className="card-a-sub">
           <div className="card-a-sub-head">
-            <div className="card-a-sub-label">✓ Available alternative · dispense now</div>
-            <div className="card-a-sub-match">
-              {headSub.similarity_score != null ? `${Math.round(headSub.similarity_score * 100)}% clinical match` : "match —"}
-            </div>
+            <div className="card-a-sub-label">Same-class drug · not a reviewed substitute</div>
+            <div className="card-a-sub-match">{headSub.match_basis ?? "Same ATC class"}</div>
           </div>
           <div
             className="card-a-sub-name card-a-sub-name-button"
@@ -158,12 +157,11 @@ function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }
           <div className="card-a-sub-form">
             {headSub.atc_code ?? ""}
             {headSub.drug_class ? ` · ${headSub.drug_class}` : ""}
-            {headSub.clinical_evidence_level ? ` · evidence ${headSub.clinical_evidence_level}` : ""}
           </div>
           <div className="card-a-sub-facts">
             <div className="card-a-sub-fact">
-              <div className="card-a-sub-fact-label">AU stock</div>
-              <div className="card-a-sub-fact-val">{headSub.active_shortage_count === 0 ? "Available" : "Limited"}</div>
+              <div className="card-a-sub-fact-label">Active shortages</div>
+              <div className="card-a-sub-fact-val">{headSub.active_shortage_count === 0 ? "None listed" : headSub.active_shortage_count}</div>
             </div>
             {topSub?.unit_price != null ? (
               <div className="card-a-sub-fact">
@@ -246,7 +244,7 @@ function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }
         </div>
       ) : (
         <div className="card-a-context">
-          Mederti doesn't have an ATC-matched alternative on file for {drug.name} yet. The pre-order signal will route a supplier match when one becomes available.
+          Mederti doesn't have a same-class drug on file for {drug.name} yet. The pre-order signal will route a supplier match when one becomes available.
         </div>
       )}
 
@@ -255,7 +253,7 @@ function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }
 
       <div className="card-a-context">
         {drug.therapeutic_category ? <>Therapeutic class: {drug.therapeutic_category}. </> : null}
-        Confirm clinical suitability before dispensing the substitute — Mederti's match is class-based, not dose-equivalent.
+        {ALTERNATIVES_CAVEAT}
       </div>
 
       <div className="card-actions">

@@ -1,5 +1,6 @@
 "use client";
 
+import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import { useEffect, useMemo, useState } from "react";
 import type {
   DrugDetailBundle,
@@ -203,11 +204,12 @@ function PaneContent({
       {/* ALTERNATIVES — only if any */}
       {substitutes.length > 0 ? (
         <section className="pane-section">
-          <h3 className="pane-section-title">Therapeutic alternatives</h3>
+          <h3 className="pane-section-title">Same-class drugs (ATC)</h3>
+          <div className="pane-row-reason">{ALTERNATIVES_CAVEAT}</div>
           <div className="pane-rows">
             {substitutes.slice(0, 5).map((s) => <SubRowItem key={s.drug_id} sub={s} onOpenDrug={onOpenDrug} />)}
             {substitutes.length > 5 ? (
-              <div className="pane-row-more">+ {substitutes.length - 5} more alternatives</div>
+              <div className="pane-row-more">+ {substitutes.length - 5} more same-class drugs</div>
             ) : null}
           </div>
         </section>
@@ -443,19 +445,14 @@ function SubRowItem({ sub, onOpenDrug }: { sub: SubstituteRow; onOpenDrug: (id: 
       <div className="pane-row-head">
         <div className="pane-row-title">{sub.name}</div>
         <div className="pane-row-meta">
-          {sub.similarity_score != null ? (
-            <span className="sub-card-match">{Math.round(sub.similarity_score * 100)}% match</span>
-          ) : null}
+          {sub.match_basis ? <span className="sub-card-match">{sub.match_basis}</span> : null}
         </div>
       </div>
       <div className="sub-card-meta">
         {sub.atc_code ? <span className="font-mono">{sub.atc_code}</span> : null}
         {sub.drug_class ? <> · {sub.drug_class}</> : null}
-        {sub.clinical_evidence_level ? <> · evidence {sub.clinical_evidence_level}</> : null}
-        {sub.requires_monitoring ? <> · monitoring required</> : null}
         {inShortage ? <> · <span style={{ color: "var(--high)" }}>also in shortage ({sub.active_shortage_count})</span></> : null}
       </div>
-      {sub.dose_conversion_notes ? <div className="pane-row-reason">{sub.dose_conversion_notes}</div> : null}
     </button>
   );
 }

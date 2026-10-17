@@ -29,7 +29,9 @@ Accuracy rules (docs/alternatives-importers.md):
     sets → therapeutic; anything else (e.g. a brand with no ingredient named,
     "Evorel® 50 microgram patch") → ambiguous, skipped, listed. A brand is
     never mapped to an ingredient by us.
-  * drug_id / alternative_drug_id are set only when exactly one INN is named.
+  * drug_id / alternative_drug_id are set only when exactly one INN is named,
+    and resolved from that ingredient name (never the product line) via the
+    shared strict alternatives_resolver.DrugResolver.
   * valid_from / valid_until come from the NHSBSA index, which carries
     extensions, reactivations and early withdrawals that the linked PDF (often
     the original version) does not. The PDF's own dates are the fallback.
@@ -55,6 +57,7 @@ from urllib.parse import urljoin
 import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from backend.importers.alternatives_resolver import DrugResolver  # noqa: E402
 from backend.utils.db import get_supabase_client  # noqa: E402
 from backend.utils.logger import get_logger  # noqa: E402
 
@@ -381,26 +384,21 @@ def build_rows(entry: dict[str, Any], parsed: dict[str, Any],
     return rows, None, None
 
 
-def _load_inn_index(supabase) -> tuple[dict[str, str], set[str]]:
-    """→ (exact normalised generic name → drug id, molecule vocabulary).
-
-    The id map follows who_eml_alternatives_importer. The vocabulary, used only
-    to recognise which active ingredients an SSP names, is restricted to names
-    with a molecule identity (a UNII, or a resolved INN): `drugs` also holds
-    scraper-created rows like "Oral", "Non" or "Preservative Free" that must
-    never count as ingredients."""
-    idx: dict[str, str] = {}
+def _load_molecule_vocab(supabase) -> set[str]:
+    """Names that identify a molecule, used only to recognise which active
+    ingredients an SSP names (not for ids: DrugResolver does that). Restricted
+    to names with a molecule identity (a UNII, or a resolved INN): `drugs` also
+    holds scraper-created rows like "Oral", "Non" or "Preservative Free" that
+    must never count as ingredients."""
     vocab: set[str] = set()
     page, size = 0, 1000
     while True:
         res = (supabase.table("drugs")
-               .select("id, generic_name, generic_name_normalised, unii, resolved_inn, inn_resolution_method")
+               .select("generic_name, generic_name_normalised, unii, resolved_inn, inn_resolution_method")
                .range(page * size, page * size + size - 1).execute())
         batch = res.data or []
         for r in batch:
             norm = (r.get("generic_name_normalised") or r.get("generic_name") or "").strip().lower()
-            if norm:
-                idx.setdefault(norm, r["id"])
             if str(r.get("inn_resolution_method") or "").startswith("non_drug"):
                 continue
             if norm and r.get("unii"):
@@ -410,7 +408,7 @@ def _load_inn_index(supabase) -> tuple[dict[str, str], set[str]]:
         if len(batch) < size:
             break
         page += 1
-    return idx, vocab
+    return vocab
 
 
 def _hash(row: dict) -> str:
@@ -427,7 +425,8 @@ def main() -> int:
         pass
 
     supabase = get_supabase_client()
-    inn, inn_names = _load_inn_index(supabase)
+    inn_names = _load_molecule_vocab(supabase)
+    resolver = DrugResolver(supabase)
 
     rows: list[dict[str, Any]] = []
     skipped: dict[str, list[str]] = {"restriction": [], "ambiguous": []}
@@ -451,10 +450,14 @@ def main() -> int:
 
     today = date.today()
     now = datetime.now(timezone.utc).isoformat()
+    methods: dict[str, int] = {}
     for r in rows:
         p_ing, a_ing = r.pop("_p_ing"), r.pop("_a_ing")
-        r["drug_id"] = inn.get(next(iter(p_ing))) if len(p_ing) == 1 else None
-        r["alternative_drug_id"] = inn.get(next(iter(a_ing))) if len(a_ing) == 1 else None
+        # Combination products (2+ ingredients) have no single drug row: leave NULL.
+        r["drug_id"], m1 = resolver.resolve(next(iter(p_ing))) if len(p_ing) == 1 else (None, None)
+        r["alternative_drug_id"], m2 = resolver.resolve(next(iter(a_ing))) if len(a_ing) == 1 else (None, None)
+        for m in (m1, m2):
+            methods[m or "unresolved"] = methods.get(m or "unresolved", 0) + 1
         r["valid_from"] = r["valid_from"].isoformat() if r["valid_from"] else None
         r["valid_until"] = r["valid_until"].isoformat() if r["valid_until"] else None
         r["content_hash"] = _hash(r)
@@ -474,6 +477,7 @@ def main() -> int:
           f" therapeutic {sum(r['kind'] == 'therapeutic' for r in rows)})")
     print(f"  Currently valid rows           : {len(current)}")
     print(f"  Both drug ids resolved         : {len(resolved)}")
+    print(f"  Resolution methods (per side)  : {methods}")
     print(f"  Index end date differs from PDF: {date_overrides} SSPs (amended/extended/withdrawn; index used)")
     print(f"  Skipped, restriction-only      : {len(skipped['restriction'])}")
     for s in skipped["restriction"]:

@@ -1,0 +1,75 @@
+name: seo-weekly-report
+
+# Weekly SEO health check of the public site (scripts/seo_weekly_report.py).
+# Runs on GitHub, not the Mac cron, so a sleeping laptop can't skip a week.
+#
+# Delivery: a GitHub issue labelled `seo-report` (last week's is closed), plus
+# an email if the Resend secrets below are set. The JSON snapshot is kept as a
+# run artifact and pulled back next week for the week-over-week diff.
+#
+# OPTIONAL secrets:
+#   PSI_API_KEY       — Google PageSpeed Insights key; the keyless quota 429s
+#   RESEND_API_KEY    — email delivery (with the two variables below)
+# OPTIONAL variables:
+#   RESEND_FROM_EMAIL — e.g. intelligence@mederti.com
+#   SEO_REPORT_EMAIL  — comma-separated recipients
+
+on:
+  schedule:
+    # Mondays 07:00 UTC — after the scraper window, start of the AU/EU week.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch last week's snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p prev
+          run_id=$(gh run list --workflow seo-weekly.yml --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" --name seo-report --dir prev || echo "no previous artifact"
+          fi
+
+      - name: Run SEO check
+        env:
+          PSI_API_KEY: ${{ secrets.PSI_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ vars.RESEND_FROM_EMAIL }}
+          SEO_REPORT_EMAIL: ${{ vars.SEO_REPORT_EMAIL }}
+        run: |
+          python3 scripts/seo_weekly_report.py --out reports/seo \
+            --previous prev/latest.json --email > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seo-report
+          path: reports/seo/
+          retention-days: 90
+
+      - name: Publish as GitHub issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create seo-report --color 0fa676 --description "Weekly SEO check" 2>/dev/null || true
+          for n in $(gh issue list --label seo-report --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Superseded by this week's report." || true
+          done
+          title=$(head -1 reports/seo/latest.md | sed 's/^# //')
+          gh issue create --title "$title" --label seo-report --body-file reports/seo/latest.md

@@ -22,7 +22,8 @@ const COUNTRIES: { code: string; name: string; flag: string }[] = [
   { code: "DK", name: "Denmark", flag: "🇩🇰" },
 ];
 
-export default function V1CountryPicker() {
+export default function V1CountryPicker({ compact = false }: { compact?: boolean }) {
+  // `compact` = flag-only button, for the collapsed V1Sidebar icon rail.
   const [code, setCode] = useState("AU");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -55,17 +56,22 @@ export default function V1CountryPicker() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label="Choose your market"
+        title={compact ? cur.name : undefined}
         style={{
           display: "inline-flex", alignItems: "center", gap: 7,
-          padding: "8px 12px", borderRadius: 10,
+          padding: compact ? "8px 9px" : "8px 12px", borderRadius: 10,
           border: "1px solid var(--border)", background: "var(--bg)",
           fontSize: 13, fontWeight: 600, color: "var(--text-2)", cursor: "pointer",
           fontFamily: "inherit",
         }}
       >
         <span style={{ fontSize: 15 }}>{cur.flag}</span>
-        {cur.name}
-        <span style={{ fontSize: 9, color: "var(--text-4)" }}>▾</span>
+        {!compact && (
+          <>
+            {cur.name}
+            <span style={{ fontSize: 9, color: "var(--text-4)" }}>▾</span>
+          </>
+        )}
       </button>
 
       {open && (

@@ -193,7 +193,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "get_class_summary",
     description:
-      "Build a CLASS card for a single ATC code (e.g. 'L01', 'J01CR05', 'C09'). Returns the class name, drug count, severity mix, top affected drugs, a trend signal (rising/stable/falling/insufficient_data), and the regulator provenance — populated into ctx.classes so you can emit <class_card atc=\"L01\" /> and the frontend renders the rich card. Use this for class-scoped Mode C questions ('show oncology shortages', 'how bad are antibiotics globally') INSTEAD of the <kpis> grid. For unscoped multi-class queries ('show critical shortages globally'), keep using <kpis>. The class card replaces the KPI grid — don't emit both.",
+      "Summarise shortages for a single ATC class (e.g. 'L01', 'J01CR05', 'C09'). Returns the class name, drug count, severity mix, top affected drugs, a trend signal (rising/stable/falling/insufficient_data), and the regulator provenance. Use this for class-scoped Mode C questions ('show oncology shortages', 'how bad are antibiotics globally') and put its headline numbers in the <kpis> grid. There is no class card tag — never emit <class_card />.",
     input_schema: {
       type: "object",
       properties: {
@@ -527,7 +527,7 @@ export type ToolContext = {
   drugs: Record<string, DrugDetail>;
   subs: Record<string, SubstituteRow>;
   /** Hydrated class summaries keyed by ATC code (uppercase). Populated by
-   *  get_class_summary; consumed by the frontend when it sees <class_card />.*/
+   *  get_class_summary; kept for provenance; the live renderer has no class card.*/
   classes: Record<string, ClassSummary>;
   /** Optional authenticated user_id (Supabase Auth uid). Populated by the
    *  /api/chat route from createServerClient().auth.getUser(). Auth-required

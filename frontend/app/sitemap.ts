@@ -64,9 +64,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .from("data_sources")
         .select("abbreviation, country_code, is_active, last_scraped_at")
         .eq("is_active", true);
-      regulatorPages = (sources ?? []).map((s) => ({
-        url: `${base}/regulator/${regulatorSlug(s as { abbreviation: string; country_code: string })}`,
-        lastModified: s.last_scraped_at ? new Date(s.last_scraped_at) : new Date(),
+      // data_sources has one row per feed, so a regulator with several
+      // (AIFA shortages + AIFA recalls) shares one slug — keep one URL each,
+      // stamped with the freshest scrape.
+      const latestBySlug = new Map<string, string | null>();
+      for (const s of sources ?? []) {
+        const slug = regulatorSlug(s as { abbreviation: string; country_code: string });
+        const prev = latestBySlug.get(slug);
+        if (prev === undefined || (s.last_scraped_at && (!prev || s.last_scraped_at > prev))) {
+          latestBySlug.set(slug, s.last_scraped_at ?? null);
+        }
+      }
+      regulatorPages = [...latestBySlug].map(([slug, scraped]) => ({
+        url: `${base}/regulator/${slug}`,
+        lastModified: scraped ? new Date(scraped) : new Date(),
         changeFrequency: "weekly" as const,
         priority: 0.5,
       }));

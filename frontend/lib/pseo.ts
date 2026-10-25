@@ -149,14 +149,22 @@ export async function drugBySlug(slug: string): Promise<PseoDrug | null> {
 
   // 2) Fallback: a slug hyphen can also stand for "-", "/", " / ", "(" etc.
   //    Wildcard-match, then verify below so over-matching is harmless.
+  //    slugify() also drops leading/trailing punctuation ("Rabipur,",
+  //    "Acetylcysteine(600Mg)"), so the pattern must be open at the ends or
+  //    those sitemap URLs render "Medicine not found". The trailing-only
+  //    pattern goes first so a common name can't be crowded out of the limit.
   if (candidates.length === 0) {
     const pattern = clean.replace(/-/g, "%");
-    const fuzzy = await admin
-      .from("drugs")
-      .select(DRUG_COLS)
-      .ilike("generic_name_normalised", pattern)
-      .limit(25);
-    candidates = (fuzzy.data ?? []) as unknown as PseoDrug[];
+    for (const p of [`${pattern}%`, `%${pattern}%`]) {
+      const fuzzy = await admin
+        .from("drugs")
+        .select(DRUG_COLS)
+        .ilike("generic_name_normalised", p)
+        .limit(50);
+      candidates = ((fuzzy.data ?? []) as unknown as PseoDrug[])
+        .filter((d) => slugify(d.generic_name) === clean);
+      if (candidates.length > 0) break;
+    }
   }
 
   const verified = candidates.filter((d) => slugify(d.generic_name) === clean);

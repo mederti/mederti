@@ -796,7 +796,7 @@ export default function SupplierDashboardClient() {
   const isLoading = authed === null || profileLoading;
 
   return (
-    <AppShell contentClassName="flush">
+    <AppShell contentClassName="flush base-type">
     <div style={{ background: "#fff", minHeight: "100vh" }}>
 
       {/* Header */}

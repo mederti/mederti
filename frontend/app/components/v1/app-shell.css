@@ -63,6 +63,10 @@
 /* Full-bleed: pages that bring their own padding/centering (legacy pages
    migrated off the top-nav keep their internal layout, minus the gutter). */
 .v1app .dg-main.flush { max-width: none; padding: 0; }
+/* Browser-base type (16px): pages moved here from the marketing SiteNav shell
+   (supplier dashboard, onboarding) were designed at the site's 16px base, not
+   the V1 14px app tokens. */
+.v1app .dg-main.base-type { font-size: 1rem; }
 
 @media (max-width: 820px) {
   .v1app .sb { display: none; }

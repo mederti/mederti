@@ -36,8 +36,9 @@ export default function AppShell({
   children: ReactNode;
   /**
    * Extra classes on the `.dg-main` column. Use `narrow` for prose/settings
-   * widths, `wide` to remove the max-width cap, or `flush` for pages that bring
-   * their own padding. Ignored with `fill`.
+   * widths, `wide` to remove the max-width cap, `flush` for pages that bring
+   * their own padding, or `base-type` for pages designed at the browser's 16px
+   * base rather than the V1 14px tokens. Ignored with `fill`.
    */
   contentClassName?: string;
   className?: string;

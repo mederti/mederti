@@ -328,7 +328,7 @@ function OnboardingInner() {
   }
 
   return (
-    <AppShell contentClassName="flush">
+    <AppShell contentClassName="flush base-type">
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
 
       <main style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "40px 20px 60px" }}>

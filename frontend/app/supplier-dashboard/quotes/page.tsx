@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function SupplierQuotesPage() {
   return (
-    <AppShell contentClassName="flush">
+    <AppShell contentClassName="flush base-type">
       <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
         <SupplierQuotesClient />
       </div>

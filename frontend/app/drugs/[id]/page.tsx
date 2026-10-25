@@ -1,38 +1,20 @@
 export const dynamic = "force-dynamic";
 
 import { fetchSourcedAlternatives, type SourcedAlternativesResult } from "@/lib/alternatives-evidence";
-import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd, jsonLdSafe } from "@/lib/seo";
+import { canonicalUrl, siteUrl, pageTitle, pageDescription } from "@/lib/seo";
 import { recordDemandSignal } from "@/lib/demand-signal";
 import { FREE_VIEW_HEADER } from "@/lib/free-views";
 import { cookies, headers } from "next/headers";
 import Link from "next/link";
-import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
 import SiteNav from "@/app/components/landing-nav";
 import AppShell from "@/app/components/v1/AppShell";
-import { AskMedertiCta } from "./ask-mederti-cta";
-import { buildAiInsightText } from "./build-insight-text";
-import { V4BellButton } from "./bell-button";
-import { HeaderActions } from "./header-actions";
-import { getDevice } from "@/lib/get-device";
-import { MobileDrugPage } from "@/app/components/mobile/MobileDrugPage";
-import { truncateDrugName } from "@/lib/utils";
-import { affinity } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand } from "@/lib/event-brand";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
-import { getPartnerForCountry } from "@/lib/suppliers";
-import AvailableSuppliers from "./AvailableSuppliers";
-import SoWhatInsight from "./SoWhatInsight";
-import PersonaSwitcher from "./PersonaSwitcher";
-import PharmacistAnswerCard from "./PharmacistAnswerCard";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
-import ProcurementView from "./ProcurementView";
-import SupplierView from "./SupplierView";
 
 /** Tiny ISO-3166 → emoji-flag map for the country chips. */
 const FLAG: Record<string, string> = {
@@ -278,7 +260,6 @@ type CatBrandRow = {
 interface Props {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{
-    as?: string;
     // brand=1 keeps a linked catalogue brand page from redirecting to its
     // molecule, so it renders as a brand-distinct SKU view.
     brand?: string;
@@ -290,50 +271,6 @@ interface Props {
     // the same V1 drug template (brand chips link here).
     brand_focus?: string;
   }>;
-}
-
-type Persona = "pharmacist" | "procurement" | "supplier";
-
-/** Maps user_profiles.role → persona view. */
-function personaFromRole(role: string | null | undefined): Persona | null {
-  if (!role) return null;
-  // Covers BOTH the current onboarding roles (migration 025 / lib/roles.ts) and
-  // the legacy values still in the table. Previously only legacy roles were
-  // mapped, so every role onboarding actually writes today
-  // (hospital_procurement, wholesaler, manufacturer, *_pharmacist, researcher,
-  // patient) fell through to null → the pharmacist default. Harmless while
-  // soft-launch forces the pharmacist view, but the moment that flag is off,
-  // procurement buyers and manufacturers would get the wrong page.
-  const MAP: Record<string, Persona> = {
-    // Pharmacist-shaped (clinical / read-only answer card is the closest fit)
-    pharmacist: "pharmacist",
-    hospital_pharmacist: "pharmacist",
-    community_pharmacist: "pharmacist",
-    doctor: "pharmacist",
-    researcher: "pharmacist",
-    patient: "pharmacist",
-    // Procurement / buyer-side
-    hospital: "procurement",
-    hospital_procurement: "procurement",
-    government: "procurement",
-    // Supply-side (F bento market-scan view)
-    supplier: "supplier",
-    wholesaler: "supplier",
-    manufacturer: "supplier",
-  };
-  return MAP[role] ?? null; // 'default'/'other'/unknown → null (pharmacist default)
-}
-
-/** Explicit ?as= wins, else session role, else pharmacist. */
-function resolvePersona(as: string | undefined, sessionRole: string | null): Persona {
-  if (as === "procurement") return "procurement";
-  if (as === "supplier") return "supplier";
-  if (as === "pharmacist") return "pharmacist";
-  // Closes audit FINDING-UX-04: previously defaulted to "supplier" (F bento
-  // layout) when role was missing or unknown. Pharmacist view is the
-  // CLAUDE.md-stated "radical simplification — answer + actions" default;
-  // safer fallback than dropping unknown users into a market-scan UI.
-  return personaFromRole(sessionRole) ?? "pharmacist";
 }
 
 /* ── SEO: dynamic metadata ── */
@@ -448,22 +385,6 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   };
 }
 
-/* ── Flag icon helper ── */
-function FlagIcon({ code, size = 16 }: { code: string; size?: number }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`/flags/${code.toUpperCase()}.svg`}
-      alt={code}
-      width={Math.round(size * 1.5)}
-      height={size}
-      style={{ borderRadius: 2, objectFit: "cover", display: "inline-block", verticalAlign: "middle", border: "1px solid rgba(0,0,0,0.08)" }}
-    />
-  );
-}
-
-const SEV_ORDER = ["critical", "high", "medium", "low"] as const;
-
 const COUNTRY_NAMES: Record<string, string> = {
   AU: "Australia", US: "United States", GB: "United Kingdom", CA: "Canada",
   DE: "Germany", FR: "France", IT: "Italy", ES: "Spain", EU: "EU",
@@ -472,89 +393,11 @@ const COUNTRY_NAMES: Record<string, string> = {
   BE: "Belgium", NL: "Netherlands", JP: "Japan",
 };
 
-function sevColor(sev: string) {
-  const s = sev.toLowerCase();
-  if (s === "critical") return { color: "var(--crit)", bg: "var(--crit-bg)", border: "var(--crit-b)" };
-  if (s === "high")     return { color: "var(--high)", bg: "var(--high-bg)", border: "var(--high-b)" };
-  if (s === "medium")   return { color: "var(--med)",  bg: "var(--med-bg)",  border: "var(--med-b)"  };
-  return                       { color: "var(--low)",  bg: "var(--low-bg)",  border: "var(--low-b)"  };
-}
-
-function abbreviateSource(name: string, abbreviation?: string | null): string {
-  if (abbreviation) return abbreviation;
-  if (name.includes("Food and Drug")) return "FDA";
-  if (name.includes("Therapeutic Goods")) return "TGA";
-  if (name.includes("European Medicines")) return "EMA";
-  if (name.includes("Healthcare products") || name.includes("MHRA")) return "MHRA";
-  if (name.includes("Health Canada")) return "Health Canada";
-  if (name.includes("Bundesinstitut") || name.includes("BfArM")) return "BfArM";
-  if (name.includes("s\u00e9curit\u00e9 du m\u00e9dicament") || name.includes("ANSM")) return "ANSM";
-  if (name.includes("Italiana del Farmaco") || name.includes("AIFA")) return "AIFA";
-  if (name.includes("Espa\u00f1ola") || name.includes("AEMPS")) return "AEMPS";
-  if (name.includes("Health Products Regulatory") || name.includes("HPRA")) return "HPRA";
-  if (name.includes("Finnish Medicines") || name.includes("Fimea")) return "Fimea";
-  if (name.includes("Norwegian") || name.includes("NoMA")) return "NoMA";
-  if (name.includes("Swissmedic")) return "Swissmedic";
-  if (name.includes("Pharmac")) return "Pharmac";
-  if (name.includes("Medsafe")) return "Medsafe";
-  if (name.includes("HSA")) return "HSA";
-  return name.length > 16 ? name.slice(0, 15) + "\u2026" : name;
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "Date unknown";
-  return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
-
-/* ── Timeline types ── */
-interface TimelineEntry {
-  date: string;
-  source: string;
-  description: string;
-  type: "initial" | "escalation" | "de_escalation" | "resolved" | "update";
-  countryCode: string;
-}
-
-const DOT_COLORS: Record<string, string> = {
-  initial: "#94a3b8",
-  escalation: "#dc2626",
-  de_escalation: "#ca8a04",
-  resolved: "#16a34a",
-  update: "#0F172A",
-};
-
-/**
- * Auth-aware chrome for the drug page. Signed-in users get the shared logged-in
- * {@link AppShell} (left V1Sidebar) so navigating search → drug never drops the
- * sidebar; anonymous visitors keep the marketing {@link SiteNav} + signup funnel
- * (each render branch carries its own `<SiteNav/>`, gated on `!loggedIn`).
- * `flush` because the drug views are full-bleed, full-height layouts that bring
- * their own padding/centering — AppShell must not impose its prose gutter.
- */
-function DrugShell({ loggedIn, children }: { loggedIn: boolean; children: ReactNode }) {
-  if (loggedIn) return <AppShell contentClassName="flush">{children}</AppShell>;
-  return <>{children}</>;
-}
-
 export default async function DrugPage({ params, searchParams }: Props) {
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
 
-  // ── Persona resolution ──────────────────────────────────────────────────
-  // Precedence: ?as= query > signed-in user's role > pharmacist default.
   // Session lookup is best-effort — never block the page on it.
-  let sessionRole: string | null = null;
   let loggedIn = false;
   let userId: string | null = null;
   try {
@@ -563,30 +406,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
     const { data: { user } } = await sb.auth.getUser();
     loggedIn = !!user;
     userId = user?.id ?? null;
-    if (user) {
-      const admin = getSupabaseAdmin();
-      const { data: profile } = await admin
-        .from("user_profiles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      sessionRole = (profile as { role?: string } | null)?.role ?? null;
-    }
-  } catch { /* anonymous — default persona */ }
-  // Pharmacist-only launch: when soft-launch is on, the isolated site serves a
-  // single audience — lock to the pharmacist view and ignore ?as=/role so the
-  // procurement/supplier surfaces never appear. Full platform (flag off)
-  // keeps the persona system intact.
-  const PHARMACIST_ONLY =
-    (process.env.NEXT_PUBLIC_SOFT_LAUNCH ?? "").toLowerCase() === "true";
-  const persona: Persona = PHARMACIST_ONLY
-    ? "pharmacist"
-    : resolvePersona(sp.as, sessionRole);
-
+  } catch { /* anonymous */ }
   const supabase = getSupabaseAdmin();
 
   /* ── Parallel data fetching ── */
-  const [drugRes, shortagesRes, logRes, alternativesRes, recallsRes, productsRes] =
+  const [drugRes, shortagesRes, logRes, alternativesRes, recallsRes] =
     await Promise.allSettled([
       supabase.from("drugs")
         .select("id, generic_name, brand_names, atc_code, atc_description, drug_class, dosage_forms, strengths, routes_of_administration, therapeutic_category, is_controlled_substance, who_essential_medicine, who_eml_section, who_eml_year")
@@ -605,9 +429,6 @@ export default async function DrugPage({ params, searchParams }: Props) {
       supabase.from("recalls")
         .select("id, recall_id, country_code, recall_class, generic_name, brand_name, manufacturer, announced_date, status, reason_category, press_release_url")
         .eq("drug_id", id).order("announced_date", { ascending: false }),
-      supabase.from("drug_products")
-        .select("id, product_name, trade_name, strength, dosage_form, route, country, registry_status")
-        .textSearch("product_name", id).limit(0),
     ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -644,8 +465,6 @@ export default async function DrugPage({ params, searchParams }: Props) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let products: any[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let availability: any[] = [];
   if (drug) {
     // Demand-signal instrumentation — the actual product-page view. Previously
     // only chat previews (/api/drug/[id]) recorded drug_view; the server-
@@ -668,14 +487,6 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .ilike("product_name", `%${drug.generic_name}%`)
       .limit(30);
     products = prodData ?? [];
-    if (products.length > 0) {
-      const productIds = products.map((p: { id: string }) => p.id);
-      const { data: availData } = await supabase
-        .from("drug_availability")
-        .select("product_id, country, status, severity, expected_resolution, last_verified_at, source_agency")
-        .in("product_id", productIds);
-      availability = availData ?? [];
-    }
   }
 
   /* ── Catalogue fallback for drugs not in drugs table ── */
@@ -811,37 +622,6 @@ export default async function DrugPage({ params, searchParams }: Props) {
     );
   }
 
-  /* ── Derived data ── */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const activeShortages = shortages.filter((s: any) => s.status?.toLowerCase() !== "resolved");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const activeClassIRecalls = recalls.filter((r: any) => r.recall_class === "I" && r.status === "active");
-
-  const worstSeverity = activeShortages.reduce((worst: string, s: { severity: string | null }) => {
-    const sLower = (s.severity ?? "").toLowerCase();
-    const si = SEV_ORDER.indexOf(sLower as typeof SEV_ORDER[number]);
-    const wi = SEV_ORDER.indexOf(worst as typeof SEV_ORDER[number]);
-    return si >= 0 && si < wi ? sLower : worst;
-  }, "low");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const affectedCountries = new Set(activeShortages.map((s: any) => s.country_code));
-  const isCritical = worstSeverity.toLowerCase() === "critical";
-
-  const primaryProduct = products[0];
-  const drugStrength = primaryProduct?.strength ?? drug.strengths?.[0] ?? "";
-  const drugForm = primaryProduct?.dosage_form ?? drug.dosage_forms?.[0] ?? "";
-  const drugRoute = primaryProduct?.route ?? drug.routes_of_administration?.[0] ?? "";
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sourceSet = new Set<string>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  shortages.forEach((s: any) => {
-    const abbr = abbreviateSource(s.data_sources?.name ?? "", s.data_sources?.abbreviation);
-    if (abbr) sourceSet.add(abbr);
-  });
-
-  const latestUpdate = shortages[0]?.updated_at ?? shortages[0]?.last_verified_at;
   const cookieStore = await cookies();
   // Validate the cookie: a malformed/legacy value (e.g. 3 letters) flows into
   // the arbitrage API's destination param, fails its ^[A-Z]{2}$ check → 400,
@@ -849,16 +629,6 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const rawCountry = (cookieStore.get("mederti-country")?.value ?? "").toUpperCase();
   const userCountry = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : "AU";
 
-  // Pharmacist-only launch: render the V1 design, fed by the already-fetched
-  // (and safety-hardened) data. Bypasses the legacy persona render entirely.
-  //
-  // NOTE ON MOBILE: V1DrugView is fully responsive (its 3-column shell
-  // collapses to a single column on phones), so we do NOT branch to
-  // MobileDrugPage here. The getDevice()/MobileDrugPage path further down
-  // is the LEGACY persona render's mobile variant and only runs when
-  // soft-launch is OFF (full platform). It is dormant — not dead — while
-  // PHARMACIST_ONLY is true; don't delete it without also retiring the
-  // persona views it serves.
   // Anonymous free-tier meter: the proxy reports how many of the free drug
   // views this visitor has used, counting this page (null = signed in).
   const usedHeader = (await headers()).get(FREE_VIEW_HEADER);

@@ -23,7 +23,7 @@ The earlier claim (pfie-signal-research, 2 of 11 drugs flagged, "100% precision"
 | Source | `shortage_events`, pulled read-only on 2026-10-26 to a local snapshot (`extract_shortage_history.py`) |
 | Synthetic rows | Excluded (`synthetic = true`, 4,179 rows at extract time) |
 | Anticipated rows | Excluded. They are not shortage starts. |
-| Other feeds | Only each market's primary national shortage feed is used. **US: 228 rows from "FDA Drug Enforcement — Foreign Manufacturer Recalls" sit in `shortage_events` unflagged.** They are recalls tagged `[SUPPLY-SIDE SIGNAL]`, not shortages. *Follow-up: flag them synthetic.* |
+| Other feeds | Only each market's primary national shortage feed is used. **US: 228 rows from "FDA Drug Enforcement — Foreign Manufacturer Recalls" sit in `shortage_events` unflagged.** They are recalls tagged `[SUPPLY-SIDE SIGNAL]`, not shortages. They were flagged synthetic in prod after this run. |
 | Drug identity | Exact matches only, in order: `drugs.resolved_inn`; else the drug's name equals some `resolved_inn`; else an exact `drug_synonyms` hit. No prefix or fuzzy matching, and `canonical_drug_id` is never followed. That gives 1,778 INN units (4,535 drug rows via resolved_inn, 151 via name, 31 via synonym). |
 | Rows kept / dropped (unresolved drug) | US 785 / 59 · CA 3,011 / 132 · AU 1,903 / 73 · GB 54 / 53 · FR 341 / 134 · DE 772 / 276 · IT 3,954 / 1,397 · ES 2,458 / 1,641 |
 
@@ -155,6 +155,6 @@ python3 -m backend.analysis.research.ct_termination_backtest DATA_DIR [--strict]
 
 ## Follow-ups this surfaced
 
-- **Data:** flag the 228 US "FDA Drug Enforcement — Foreign Manufacturer Recalls" rows in `shortage_events` as synthetic, or move them out. They are recalls, and the product currently counts them as US shortages.
+- **Data (done 2026-10-26):** the 228 US "FDA Drug Enforcement — Foreign Manufacturer Recalls" rows in `shortage_events` are now flagged synthetic (`backend/scripts/flag_fda_enforcement_synthetic.py`), and `fda_enforcement_scraper.py` sets the flag on new rows. US active non-synthetic shortages: 1,045 → 817.
 - **Data:** US, DE and CA feeds rarely close rows (no end dates, almost no `resolved`), so "short now" is overstated and recurrence can't be measured. Capturing resolution from those feeds would unlock any forecast work there.
 - **Method:** re-run Part 1 in early 2027, when the hold-out has 12+ months of live-observed starts. That is the test set for any future risk model.

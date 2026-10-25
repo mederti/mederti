@@ -4,10 +4,8 @@ import type { SupplyInMarket, SupplyStatus } from "@/lib/supply-in-market";
 import Link from "next/link";
 import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
-import V1Sidebar from "@/app/components/v1/V1Sidebar";
-import MobileTabBar from "@/app/components/v1/MobileTabBar";
+import AppShell from "@/app/components/v1/AppShell";
 import { ContextChat } from "@/app/chat/components/ContextChat";
-import "@/app/chat/chat.css";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
 import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
 import { FreeViewBeacon } from "@/app/components/free-tier/FreeViewBeacon";
@@ -527,20 +525,14 @@ export default function V1DrugView({
   ).filter((r) => r.value);
 
   return (
-    <div className="v1home v1drug">
-      <style>{CSS}</style>
-      <div className="shell">
-        {/* ── Left sidebar (app nav) — shared with the search page ── */}
-        <V1Sidebar />
-
-        {/* ── Center + right ── */}
-        <div className="shell-main">
-          <div className="drug-grid">
-            {/* ── Middle column: grounded chat (new template). ContextChat is
-                 the standard chat surface — clicking a product in an answer
-                 opens its detail. ── */}
-            <aside className="chat-col mederti-chat-root">
-              {freeViewsUsed != null ? (
+    // Shared 3-column AppShell: V1Sidebar → grounded chat (middle) → the drug
+    // record (right). chat.css is scoped to the chat column only ("panel") —
+    // the record's own class names (.badge, .country-row, …) collide with it.
+    <AppShell
+      className="v1home v1drug"
+      chatScope="panel"
+      chatPanel={
+              freeViewsUsed != null ? (
                 <ChatSignupGate
                   next={`/drugs/${id}`}
                   headerLabel="Ask about this medicine"
@@ -572,11 +564,10 @@ export default function V1DrugView({
                   "How long did past shortages last?",
                 ]}
               />
-              )}
-            </aside>
-
-            {/* ── Right column: the drug record, full-width detail panel ── */}
-            <div className="dg-main">
+              )
+      }
+    >
+      <style>{CSS}</style>
           {freeViewsUsed != null && (
             <>
               <FreeViewBeacon drugId={id} />
@@ -1533,12 +1524,7 @@ export default function V1DrugView({
           <V1ReportActions generatedLabel={generatedLabel} marketLabel={marketLabel} sourceCount={sources.length} />
 
           <div className="sec"><ClinicalDisclaimer /></div>
-        </div>
-          </div>
-        </div>
-      </div>
-      <MobileTabBar />
-    </div>
+    </AppShell>
   );
 }
 
@@ -1655,8 +1641,7 @@ const CSS = `
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
 .sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
-.drug-grid{display:flex;align-items:flex-start}
-.dg-main{flex:1;min-width:0;padding:18px 48px 80px;width:100%;background:#eef1f5}
+.v1app.v1drug .dg-main{flex:1;min-width:0;max-width:none;padding:18px 48px 80px;width:100%;background:#eef1f5}
 .dsearch{display:flex;align-items:center;gap:8px;margin:18px 0 0;background:var(--bg);border:1.5px solid var(--border-2);border-radius:12px;padding:5px 6px 5px 14px;transition:.15s}
 .dsearch:focus-within{border-color:var(--green);box-shadow:0 8px 24px -16px rgba(15,166,118,.4)}
 .dsearch-ic{color:var(--text-4);font-size:16px}
@@ -1919,7 +1904,6 @@ const CSS = `
 .sp-crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
 .sp-part{color:var(--med);background:var(--med-bg);border:1px solid var(--med-b)}
 .sp-ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-b)}
-.chat-col{width:380px;flex-shrink:0;display:flex;background:var(--bg);position:sticky;top:0;height:100vh}
 .chat-panel{display:flex;flex-direction:column;height:100%}
 .chat-head{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fbfcfe,var(--bg))}
 .chat-h-l{display:flex;align-items:center;gap:11px}
@@ -1992,20 +1976,20 @@ const CSS = `
 .reg-table .reg-name{font-weight:600;color:var(--ink);white-space:normal;min-width:96px}
 .reg-foot{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:10px}
 @media(max-width:620px){.spec-grid{grid-template-columns:1fr}}
-@media(max-width:1080px){.chat-col{display:none}.dg-main{margin:0 auto}}
+@media(max-width:1080px){.v1app.v1drug .dg-main{margin:0 auto}}
 /* Mobile/tablet: collapse to a single full-width content column. The bare
    .sb hide was being out-specified, so scope + force it; stack the grid. */
-@media(max-width:1023px){.v1drug .sb{display:none!important}.v1drug .drug-grid{display:block}.v1drug .dg-main{width:100%}}
+@media(max-width:1023px){.v1drug .sb{display:none!important}.v1app.v1drug .dg-main{width:100%}}
 @media(max-width:620px){.sw-cards{grid-template-columns:repeat(2,1fr)}.d-name{font-size:24px}}
-@media(max-width:480px){.sw-cards{grid-template-columns:1fr}.dg-main{padding:16px 16px 64px}}
+@media(max-width:480px){.sw-cards{grid-template-columns:1fr}.v1app.v1drug .dg-main{padding:16px 16px 64px}}
 /* Print / Export PDF — strip the app chrome and lay the report out as a clean
    document. Sections avoid breaking mid-block; the collapsible record is forced
    open so nothing is hidden in the exported file. */
 @media print{
   .v1home{background:#fff;font-size:11px}
   .sb,.chat-col,.dsearch,.report-export,.sb-profile,.home-nav{display:none !important}
-  .shell,.drug-grid{display:block}
-  .dg-main{max-width:100%;padding:0 4px}
+  .shell{display:block}
+  .v1app.v1drug .dg-main{max-width:100%;padding:0 4px}
   .report-bar{box-shadow:none;border-color:#ccc}
   .sec,.status-card,.price-panel,.subpath,.conc,.record,.record-block,.country-row,.alt-card,.stat-row,.reg-wrap,.attr-wrap{break-inside:avoid;page-break-inside:avoid}
   .sec{margin-top:18px}

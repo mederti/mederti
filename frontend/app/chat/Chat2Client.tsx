@@ -16,12 +16,11 @@ import { collectDrugCandidates } from "./components/parser2";
 import { PreviewPane } from "./components/PreviewPane";
 import { type ArticlePreviewItem } from "./components/ArticlePreviewPane";
 import { ArticleReader, type ArticleFull } from "./components/ArticleReader";
-import { ContextChat } from "./components/ContextChat";
+import type { ContextChatProps } from "./components/ContextChat";
 import { GovDashboardView } from "./components/views/GovDashboardView";
 import { EarlyWarningView } from "./components/views/EarlyWarningView";
 import { ChevronLeft } from "./components/icons";
-import V1Sidebar from "@/app/components/v1/V1Sidebar";
-import MobileTabBar from "@/app/components/v1/MobileTabBar";
+import AppShell from "@/app/components/v1/AppShell";
 import {
   deriveTitle,
   getChat,
@@ -888,6 +887,48 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
     []
   );
 
+  // Middle-column grounded chat while reading an article or a live view; the
+  // default conversation view has none (ChatMain is the content). Product names
+  // in answers click through to drug detail.
+  const readingChat: ContextChatProps | undefined = readingArticle
+    ? {
+        contextKey: `article:${readingArticle.slug}`,
+        title: readingArticle.title,
+        category: `${readingArticle.category} article`,
+        bodyText: articleFull?.body_text ?? readingArticle.summary,
+        headerLabel: "Ask about this article",
+        emptyLead: (
+          <>
+            I&apos;ve read{" "}
+            <span className="font-medium text-slate-700">{readingArticle.title}</span>. Ask me
+            anything about it — I&apos;ll ground answers in the article and pull live Mederti
+            data where it helps.
+          </>
+        ),
+        starters: [
+          "Summarise the key takeaways",
+          "Which drugs are most exposed?",
+          "What should a pharmacist do about this?",
+        ],
+      }
+    : readingView
+      ? {
+          contextKey: `view:${readingView}`,
+          title: VIEW_CONFIG[readingView].title,
+          category: VIEW_CONFIG[readingView].category,
+          bodyText: VIEW_CONFIG[readingView].bodyText,
+          headerLabel: VIEW_CONFIG[readingView].headerLabel,
+          emptyLead: (
+            <>
+              You&apos;re viewing{" "}
+              <span className="font-medium text-slate-700">{VIEW_CONFIG[readingView].title}</span>.
+              Ask me anything about it — I&apos;ll use live Mederti data for specifics.
+            </>
+          ),
+          starters: VIEW_CONFIG[readingView].starters,
+        }
+      : undefined;
+
   return (
     <PaneContext.Provider value={paneCtx}>
       <ChatContext.Provider value={chatCtx}>
@@ -902,96 +943,43 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
               the sidebar + chat stay inline and PreviewPane becomes an
               overlay drawer (see its className + the backdrop below). */}
           <DesktopOnly>
-          <div
-            className="mederti-chat-root flex h-screen overflow-hidden bg-white text-slate-900"
-            style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}
+          {/* Shared AppShell, `fill` mode (the conversation owns its own
+              scrolling). Default view: V1Sidebar → ChatMain (+ PreviewPane).
+              Reading an article or a live view: V1Sidebar → grounded chat
+              (middle) → the article/view (right). */}
+          <AppShell
+            fill
+            chat={readingChat}
           >
-            {/* Shared V1Sidebar — the single left column used across all
-                logged-in surfaces (/search, /drugs, /ask, /insights). Self-
-                styled, so it renders correctly inside the chat shell too. */}
-            <V1Sidebar />
-
             {readingArticle ? (
-              /* Swapped reading layout: chat sits in the middle column, the
-                 article fills the elastic right column — left-to-right reads
-                 high-level → detail. The Sidebar stays. */
-              <>
-                <ContextChat
-                  key={`article:${readingArticle.slug}`}
-                  contextKey={readingArticle.slug}
-                  title={readingArticle.title}
-                  category={`${readingArticle.category} article`}
-                  bodyText={articleFull?.body_text ?? readingArticle.summary}
-                  headerLabel="Ask about this article"
-                  placement="left"
-                  emptyLead={
-                    <>
-                      I&apos;ve read{" "}
-                      <span className="font-medium text-slate-700">{readingArticle.title}</span>. Ask me
-                      anything about it — I&apos;ll ground answers in the article and pull live Mederti
-                      data where it helps.
-                    </>
-                  }
-                  starters={[
-                    "Summarise the key takeaways",
-                    "Which drugs are most exposed?",
-                    "What should a pharmacist do about this?",
-                  ]}
-                />
-                <ArticleReader
-                  article={readingArticle}
-                  full={articleFull}
-                  loading={articleLoading}
-                  onClose={closeReadingArticle}
-                />
-              </>
+              <ArticleReader
+                article={readingArticle}
+                full={articleFull}
+                loading={articleLoading}
+                onClose={closeReadingArticle}
+              />
             ) : readingView ? (
-              /* Operational view (dashboard / early-warning / insights) fills
-                 the middle column with a grounded chat on the right. */
               (() => {
-                const cfg = VIEW_CONFIG[readingView];
                 const ViewComp = VIEW_COMPONENT[readingView];
                 return (
-                  /* Swapped layout: chat sits in the middle column (left of the
-                     content), the live view fills the elastic right column —
-                     left-to-right reads high-level → detail. */
-                  <>
-                    <ContextChat
-                      key={`view:${readingView}`}
-                      contextKey={readingView}
-                      title={cfg.title}
-                      category={cfg.category}
-                      bodyText={cfg.bodyText}
-                      headerLabel={cfg.headerLabel}
-                      placement="left"
-                      emptyLead={
-                        <>
-                          You&apos;re viewing{" "}
-                          <span className="font-medium text-slate-700">{cfg.title}</span>. Ask me anything
-                          about it — I&apos;ll use live Mederti data for specifics.
-                        </>
-                      }
-                      starters={cfg.starters}
-                    />
-                    <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
-                      <div className="h-14 flex items-center px-6 gap-3 shrink-0 border-b border-slate-100">
-                        <button
-                          type="button"
-                          onClick={closeView}
-                          className="inline-flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-slate-900 px-2 py-1.5 rounded-md hover:bg-slate-100 transition-colors"
-                        >
-                          <ChevronLeft size={14} />
-                          Back
-                        </button>
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300 mx-1">
-                          Live view
-                        </span>
-                      </div>
-                      <div className="flex-1 min-h-0">
-                        <ViewComp />
-                      </div>
-                    </main>
-                  </>
+                  <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
+                    <div className="h-14 flex items-center px-6 gap-3 shrink-0 border-b border-slate-100">
+                      <button
+                        type="button"
+                        onClick={closeView}
+                        className="inline-flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-slate-900 px-2 py-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                      >
+                        <ChevronLeft size={14} />
+                        Back
+                      </button>
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300 mx-1">
+                        Live view
+                      </span>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                      <ViewComp />
+                    </div>
+                  </main>
                 );
               })()
             ) : (
@@ -1050,11 +1038,7 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
                 {toast}
               </div>
             ) : null}
-
-            {/* Mobile: chat is the content in the default view, so only offer
-                the Ask tab when a reading article/view opens a separate rail. */}
-            <MobileTabBar hasChat={!!(readingArticle || readingView)} />
-          </div>
+          </AppShell>
           </DesktopOnly>
         </LeadContext.Provider>
       </ChatContext.Provider>

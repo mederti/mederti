@@ -4,8 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, type DrugHit, type StatusFacets } from "@/lib/api";
-import V1Sidebar from "@/app/components/v1/V1Sidebar";
-import MobileTabBar from "@/app/components/v1/MobileTabBar";
+import AppShell from "@/app/components/v1/AppShell";
 import { ContextChat } from "@/app/chat/components/ContextChat";
 import "@/app/chat/chat.css";
 import { truncateDrugName } from "@/lib/utils";
@@ -688,38 +687,30 @@ function ResultsShell() {
   const qs = params.toString();
   const here = `/search${qs ? `?${qs}` : ""}`;
   return (
-    <div className="v1home v1search">
+    // Shared 3-column AppShell: V1Sidebar → grounded chat (middle) → results
+    // (right). chat.css is scoped to the chat column ("panel") so the results'
+    // own class names don't collide with it.
+    <AppShell
+      className="v1home v1search"
+      chatScope="panel"
+      chatPanel={
+        // null = session check pending (a local read, near-instant): render
+        // nothing rather than flash the wrong panel.
+        anon === null ? <></> : anon ? (
+          <ChatSignupGate
+            next={here}
+            headerLabel="Ask about these results"
+            lead="Ask about these results — substitutes, which markets are affected, or what's coming back into supply."
+          />
+        ) : (
+          <SearchChat />
+        )
+      }
+    >
       <style>{CSS}</style>
-      <div className="shell">
-        {/* ── Left sidebar (app nav) — shared with the drug page ── */}
-        <V1Sidebar />
-
-        {/* ── Middle column: grounded chat. New template — chat drives,
-             reading left-to-right as nav → conversation → detail. ── */}
-        <aside className="chat-col mederti-chat-root">
-          {/* null = session check pending (a local read, near-instant): render
-              nothing rather than flash the wrong panel. */}
-          {anon === null ? null : anon ? (
-            <ChatSignupGate
-              next={here}
-              headerLabel="Ask about these results"
-              lead="Ask about these results — substitutes, which markets are affected, or what's coming back into supply."
-            />
-          ) : (
-            <SearchChat />
-          )}
-        </aside>
-
-        {/* ── Right column: results, the full-width detail panel ── */}
-        <div className="shell-main">
-          <div className="dg-main">
-            {anon && <FreeViewBanner used={used} next={here} />}
-            <Results />
-          </div>
-        </div>
-      </div>
-      <MobileTabBar />
-    </div>
+      {anon && <FreeViewBanner used={used} next={here} />}
+      <Results />
+    </AppShell>
   );
 }
 
@@ -806,10 +797,9 @@ const CSS = `
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
 .sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
-.dg-main{flex:1;min-width:0;padding:32px 40px 80px;width:100%;background:#eef1f5}
+.v1app.v1search .dg-main{flex:1;min-width:0;max-width:none;padding:32px 40px 80px;width:100%;background:#eef1f5}
 
 /* ── Right-hand chat column (mirrors V1DrugView) ── */
-.chat-col{width:380px;flex-shrink:0;display:flex;background:var(--bg);position:sticky;top:0;height:100vh}
 .chat-panel{display:flex;flex-direction:column;height:100%}
 .chat-head{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fbfcfe,var(--bg))}
 .chat-h-l{display:flex;align-items:center;gap:11px}
@@ -843,7 +833,6 @@ const CSS = `
 .chat-input input::placeholder{color:var(--text-4)}
 .chat-send{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .chat-send:disabled{opacity:.5;cursor:default}
-@media(max-width:1080px){.chat-col{display:none}}
 
 /* ── Search box + results ── */
 .searchbox.v1sb{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:14px;padding:6px 8px 6px 18px;box-shadow:0 12px 36px -22px rgba(10,15,26,.28);transition:.15s}
@@ -933,5 +922,5 @@ const CSS = `
 .t-ver.stale{color:var(--med)}
 @media(min-width:1024px){.res-table-wrap{display:block}.res-list{display:none}}
 
-@media(max-width:820px){.sb{display:none}.dg-main{margin:0 auto;padding:24px 20px 80px}}
+@media(max-width:820px){.sb{display:none}.v1app.v1search .dg-main{margin:0 auto;padding:24px 20px 80px}}
 `;

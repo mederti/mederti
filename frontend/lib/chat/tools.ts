@@ -1,4 +1,4 @@
-import { TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
+import { type ConcentrationTier, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "./supabase";
 import { coverageGate } from "./coverage";
@@ -2540,23 +2540,43 @@ const SUPPLY_FIELDS =
 const SUPPLY_CAVEAT =
   "Supply concentration describes the supply base (FDA Drug Master File + WHO prequalification API makers; US finished-dose firms). It is NOT a shortage prediction: Mederti's backtest found it predicts neither when a shortage starts nor how long it lasts. Breadth of current shortages across peer markets (get_predictive_signals) is the forward signal. Coverage is US-centric, so medicines not sold in the US often show 'unknown'.";
 
-function supplyRow(r: any, country?: string) {
-  const c = r.geography?.countries as Record<string, number> | undefined;
+interface SupplyScoreRow {
+  inn: string;
+  display_name: string;
+  fragility: number | null;
+  who_eml_list: "core" | "complementary" | null;
+  eu_critical: boolean;
+  n_api_makers: number | null;
+  n_finished_firms: number | null;
+  top_api_country: string | null;
+  short_countries: string[] | null;
+  drug_ids: string[];
+  atc: string[] | null;
+  geography: { countries?: Record<string, number> } | null;
+  computed_at: string;
+}
+
+const TIER_RANK: Record<ConcentrationTier, number> = { highly_concentrated: 3, concentrated: 2, broad: 1, unknown: 0 };
+
+function tierOf(r: SupplyScoreRow): ConcentrationTier {
+  return tierFor(r.fragility == null ? null : Number(r.fragility));
+}
+
+function supplyRow(r: SupplyScoreRow, country?: string) {
+  const c = r.geography?.countries;
   const total = c ? Object.values(c).reduce((x, y) => x + y, 0) : 0;
-  const tier = tierFor(r.fragility == null ? null : Number(r.fragility));
   return {
     molecule: r.display_name,
     atc_codes: r.atc ?? [],
     who_model_list: r.who_eml_list ?? null,
     eu_critical: !!r.eu_critical,
-    supply_concentration: TIER_LABEL[tier],
+    supply_concentration: TIER_LABEL[tierOf(r)],
     api_makers: r.n_api_makers,
     us_finished_dose_firms: r.n_finished_firms,
     top_api_country: r.top_api_country,
     top_api_country_share: r.top_api_country && total ? Math.round((100 * (c![r.top_api_country] ?? 0)) / total) + "%" : null,
     countries_short_now: r.short_countries ?? [],
     ...(country ? { short_in_country_now: (r.short_countries ?? []).includes(country) } : {}),
-    _tier: tier,
   };
 }
 
@@ -2569,7 +2589,8 @@ async function getClassConcentrationRisk(args: { atc_prefix: string; country?: s
   const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
   const { data, error } = await getSupabase().from("inn_risk_scores").select(SUPPLY_FIELDS).limit(2000);
   if (error) throw new Error(error.message);
-  const inClass = (data ?? []).filter((r: any) => (r.atc ?? []).some((code: string) => code.startsWith(atc)));
+  const rows = (data ?? []) as unknown as SupplyScoreRow[];
+  const inClass = rows.filter((r) => (r.atc ?? []).some((code) => code.startsWith(atc)));
   if (inClass.length === 0) {
     return {
       status: "unanswerable",
@@ -2577,10 +2598,9 @@ async function getClassConcentrationRisk(args: { atc_prefix: string; country?: s
       hint: `No molecule on the WHO Model List or EU Union list has an ATC code starting '${atc}'. Supply profiles only cover those ~560 essential/critical molecules.`,
     };
   }
-  const rank: Record<string, number> = { highly_concentrated: 3, concentrated: 2, broad: 1, unknown: 0 };
-  const items = inClass
-    .map((r: any) => supplyRow(r, country))
-    .sort((x, y) => rank[y._tier] - rank[x._tier] || y.countries_short_now.length - x.countries_short_now.length);
+  const sorted = [...inClass].sort((x, y) =>
+    TIER_RANK[tierOf(y)] - TIER_RANK[tierOf(x)] || (y.short_countries ?? []).length - (x.short_countries ?? []).length);
+  const items = sorted.map((r) => supplyRow(r, country));
   const distribution: Record<string, number> = {};
   for (const i of items) distribution[i.supply_concentration] = (distribution[i.supply_concentration] ?? 0) + 1;
   return {
@@ -2588,8 +2608,8 @@ async function getClassConcentrationRisk(args: { atc_prefix: string; country?: s
     country: country ?? null,
     essential_molecules_in_class: items.length,
     concentration_distribution: distribution,
-    items: items.slice(0, limit).map(({ _tier, ...rest }) => rest),
-    computed_at: (inClass[0] as any)?.computed_at ?? null,
+    items: items.slice(0, limit),
+    computed_at: inClass[0]?.computed_at ?? null,
     source: "inn_risk_scores (WHO Model List ∪ EU Union list; FDA DMF, WHO PQ, Drugs@FDA, recalls, shortage reports)",
     caveat: SUPPLY_CAVEAT,
   };
@@ -2604,7 +2624,7 @@ async function getSupplyProfile(args: { drug_id?: string; name?: string; country
   else return { status: "unanswerable", reason: "missing_scope", hint: "Pass drug_id or the medicine's INN as name." };
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  const r = data?.[0];
+  const r = (data?.[0] ?? null) as unknown as SupplyScoreRow | null;
   if (!r) {
     return {
       status: "unanswerable",
@@ -2612,10 +2632,9 @@ async function getSupplyProfile(args: { drug_id?: string; name?: string; country
       hint: "Supply profiles cover only molecules on the WHO Model List of Essential Medicines or the EU Union list of critical medicines. This medicine isn't one of them, or couldn't be matched by name.",
     };
   }
-  const { _tier, ...row } = supplyRow(r, country);
   return {
-    ...row,
-    computed_at: (r as any).computed_at,
+    ...supplyRow(r, country),
+    computed_at: r.computed_at,
     source: "inn_risk_scores (nightly)",
     caveat: SUPPLY_CAVEAT,
   };

@@ -1,11 +1,14 @@
 export const dynamic = "force-dynamic";
 
+import { fetchSourcedAlternatives, type SourcedAlternativesResult } from "@/lib/alternatives-evidence";
+import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd, jsonLdSafe } from "@/lib/seo";
 import { recordDemandSignal } from "@/lib/demand-signal";
+import { FREE_VIEW_HEADER } from "@/lib/free-views";
 import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import { SEV_RANK, calculateRiskScore, riskStyle } from "@/lib/risk-score";
@@ -586,8 +589,10 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .select("id, shortage_event_id, drug_id, old_status, new_status, old_severity, new_severity, changed_at")
         .eq("drug_id", id).order("changed_at", { ascending: false }),
       supabase.from("drug_alternatives")
-        .select("alternative_drug_id, relationship_type, clinical_evidence_level, similarity_score, dose_conversion_notes, availability_note, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name, brand_names)")
-        .eq("drug_id", id).eq("is_approved", true).order("similarity_score", { ascending: false }),
+        // ATC-class pairing only. Evidence grade, dose notes and availability
+        // note are template/lookup values, not evidence — never selected.
+        .select("alternative_drug_id, relationship_type, similarity_score, atc_match_level, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name, brand_names)")
+        .eq("drug_id", id).eq("is_approved", true).order("atc_match_level", { ascending: false }),
       supabase.from("recalls")
         .select("id, recall_id, country_code, recall_class, generic_name, brand_name, manufacturer, announced_date, status, reason_category, press_release_url")
         .eq("drug_id", id).order("announced_date", { ascending: false }),
@@ -610,7 +615,21 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const statusLog = logRes.status === "fulfilled" ? ((logRes.value as any).data ?? []) : [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const alternatives = alternativesRes.status === "fulfilled" ? ((alternativesRes.value as any).data ?? []) : [];
+  const alternativesRaw = alternativesRes.status === "fulfilled" ? ((alternativesRes.value as any).data ?? []) : [];
+  // Live shortage status for each same-class drug (any market). "No shortage
+  // listed" is all we can truthfully say — it is not proof of stock.
+  const altIds = alternativesRaw.map((a: any) => a.alternative_drug_id).filter(Boolean);
+  const altShortageCounts = new Map<string, number>();
+  if (altIds.length > 0) {
+    const { data: altSh } = await supabase.from("shortage_events").select("drug_id").in("drug_id", altIds).eq("status", "active");
+    for (const r of altSh ?? []) altShortageCounts.set(r.drug_id, (altShortageCounts.get(r.drug_id) ?? 0) + 1);
+  }
+  // Source-backed alternatives (migration 071). A failure here must not take
+  // the page down, and must never render as "none" — the section hides.
+  const sourcedAlternatives: SourcedAlternativesResult = await fetchSourcedAlternatives(id)
+    .catch((e) => ({ available: false as const, reason: String(e?.message ?? e) }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const alternatives = alternativesRaw.map((a: any) => ({ ...a, active_shortage_count: altShortageCounts.get(a.alternative_drug_id) ?? 0 }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recalls = recallsRes.status === "fulfilled" ? ((recallsRes.value as any).data ?? []) : [];
 
@@ -848,6 +867,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // soft-launch is OFF (full platform). It is dormant — not dead — while
   // PHARMACIST_ONLY is true; don't delete it without also retiring the
   // persona views it serves.
+  // Anonymous free-tier meter: the proxy reports how many of the free drug
+  // views this visitor has used, counting this page (null = signed in).
+  const usedHeader = (await headers()).get(FREE_VIEW_HEADER);
+  const freeViewsUsed = !loggedIn && usedHeader != null ? Number(usedHeader) || 0 : null;
+
   if (PHARMACIST_ONLY) {
     // API supply-base concentration from FDA Drug Master Files (active Type II
     // DMFs = manufacturers cleared to supply this API into the US market). This
@@ -860,7 +884,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // buildMarketPricing, ~5 serial round-trips before first paint.) supabase-js
     // resolves (not rejects) on a query error, so a missing table still soft-fails
     // to null without taking down the batch.
-    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing] = await Promise.all([
+    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing, profileRes] = await Promise.all([
       supabase
         .from("api_suppliers")
         .select("manufacturer_name, country, source, who_pq")
@@ -889,6 +913,13 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .limit(1),
       buildMarketPricing(supabase, id, drug.generic_name, userCountry),
       buildAlternativePricingData(supabase, id, alternatives, userCountry, drug.generic_name),
+      // Molecule-level supply profile (inn_risk_scores, nightly): same figures
+      // as the National Shortage Dashboard, so the two pages agree.
+      supabase
+        .from("inn_risk_scores")
+        .select("display_name, fragility, who_eml_list, eu_critical, n_api_makers, n_finished_firms, top_api_country, short_countries, geography:components->geography")
+        .contains("drug_ids", [id])
+        .limit(1),
     ]);
     const apiSupplierRows = apiSupplierRes.data;
     const approvalRows = approvalRes.data;
@@ -912,6 +943,27 @@ export default async function DrugPage({ params, searchParams }: Props) {
           .filter(Boolean),
       ),
     ];
+    const prof = (profileRes.data?.[0] ?? null) as {
+      display_name: string; fragility: number | null; who_eml_list: "core" | "complementary" | null;
+      eu_critical: boolean; n_api_makers: number | null; n_finished_firms: number | null;
+      top_api_country: string | null; short_countries: string[];
+      geography: { countries?: Record<string, number> } | null;
+    } | null;
+    const profCountries = prof?.geography?.countries ?? null;
+    const profTotal = profCountries ? Object.values(profCountries).reduce((a, b) => a + b, 0) : 0;
+    const supplyProfile = prof
+      ? {
+          molecule: prof.display_name,
+          fragility: prof.fragility == null ? null : Number(prof.fragility),
+          whoList: prof.who_eml_list,
+          euCritical: prof.eu_critical,
+          nApiMakers: prof.n_api_makers,
+          nFinishedFirms: prof.n_finished_firms,
+          topApiCountry: prof.top_api_country,
+          topApiShare: prof.top_api_country && profTotal ? (profCountries![prof.top_api_country] ?? 0) / profTotal : null,
+          shortCountries: prof.short_countries,
+        }
+      : null;
     const apiConcentration =
       makerCount > 0
         ? {
@@ -1044,6 +1096,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         alternatives={alternatives}
         userCountry={userCountry}
         apiConcentration={apiConcentration}
+        supplyProfile={supplyProfile}
         recalls={recalls}
         approvalFootprint={approvalFootprint}
         eligibility={eligibility}
@@ -1054,6 +1107,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
         products={products}
         brandSkus={brandSkus}
         brandHint={brandHint}
+        freeViewsUsed={freeViewsUsed}
+        sourcedAlternatives={sourcedAlternatives}
       />
     );
   }
@@ -1296,7 +1351,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       // Real ATC-similarity from drug_alternatives, or null when unscored —
       // never a fabricated default (a made-up "70% match" is a safety claim).
       matchPercent: a.similarity_score != null ? Math.round(a.similarity_score * 100) : null,
-      isAvailable: true,
+      isAvailable: a.active_shortage_count === 0,
     }));
 
     const top = altsArr[0]
@@ -1555,7 +1610,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         {/* ── RIGHT COLUMN (70%) — Drug Detail ── */}
         <div className="v3-right" style={{ flex: 1, overflowY: "auto", background: "var(--app-bg)", color: "var(--app-text)" }}>
 
-          {/* ═══ 0. PHARMACIST ANSWER HERO — recommended substitute, ETA, trade price ═══ */}
+          {/* ═══ 0. PHARMACIST ANSWER HERO — same-class context, ETA, trade price ═══ */}
           {activeShortages.length > 0 && alternatives.length > 0 && (
             <div style={{ background: "var(--app-bg)", padding: "20px 32px 4px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
               <PharmacistAnswerCard
@@ -1575,9 +1630,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
                   return {
                     name: altName,
                     form: alt.relationship_type ? alt.relationship_type.replace(/_/g, " ") : "therapeutic alternative",
-                    isAvailable: true,
+                    isAvailable: alt.active_shortage_count === 0,
                     matchPercent: alt.similarity_score != null ? Math.round(alt.similarity_score * 100) : null,
-                    clinicalReasoning: alt.dose_conversion_notes ?? alt.availability_note ?? `Listed therapeutic alternative for ${drug.generic_name}. Confirm dosing and clinical fit with the prescriber before substituting.`,
+                    clinicalReasoning: ALTERNATIVES_CAVEAT,
                   };
                 })()}
                 expectedReturn={predictedReturnDate ? {
@@ -1907,16 +1962,17 @@ export default async function DrugPage({ params, searchParams }: Props) {
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
-                  What can I use instead?
+                  Same-class drugs (ATC)
                 </span>
                 <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                  {alternatives.length} alternative{alternatives.length !== 1 ? "s" : ""}
+                  {alternatives.length} drug{alternatives.length !== 1 ? "s" : ""}
                 </span>
               </div>
               {alternatives.length === 0 ? (
-                <p style={{ fontSize: 14, color: "var(--app-text-3)" }}>No alternatives on file.</p>
+                <p style={{ fontSize: 14, color: "var(--app-text-3)" }}>No same-class drugs on file.</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ fontSize: 12, color: "var(--app-text-3)", margin: 0 }}>{ALTERNATIVES_CAVEAT}</p>
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {alternatives.map((alt: any) => (
                     <Link
@@ -1937,21 +1993,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
                         <div style={{ fontSize: 12, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
                           {alt.relationship_type?.replace(/_/g, " ")}
                         </div>
-                        {alt.dose_conversion_notes && (
-                          <div style={{ fontSize: 11, color: "var(--app-text-3)", marginTop: 4 }}>
-                            {alt.dose_conversion_notes}
-                          </div>
-                        )}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
-                        {alt.clinical_evidence_level && (
-                          <span style={{
-                            fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 4,
-                            background: "var(--low-bg)", color: "var(--low)", border: "1px solid var(--low-b)",
-                          }}>
-                            {alt.clinical_evidence_level}
-                          </span>
-                        )}
                         {affinity(alt.similarity_score != null ? Math.round(alt.similarity_score * 100) : null) && (
                           <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
                             {affinity(Math.round(alt.similarity_score * 100))}

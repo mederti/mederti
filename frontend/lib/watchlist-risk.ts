@@ -2,6 +2,8 @@
 // (hospital-pharmacist feedback #5). Lives in lib/ so the API route and the
 // client component share one definition without cross-importing.
 
+import type { ConcentrationTier } from "@/lib/insights/dashboard-data-shared";
+
 export type RiskTier = "short_now" | "anticipated" | "early_warning" | "watching";
 
 export type RiskItem = {
@@ -15,6 +17,11 @@ export type RiskItem = {
   days_until: number | null;
   peer_count: number;
   peers: string[];
+  // Molecule-level supply facts (inn_risk_scores); "unknown" when the drug is
+  // outside the scored WHO/EU universe or has too little supplier data.
+  eu_critical: boolean;
+  supply_tier: ConcentrationTier;
+  n_api_makers: number | null;
 };
 
 export type RiskBoardResponse = {

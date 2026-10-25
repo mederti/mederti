@@ -107,6 +107,16 @@ export default function SignupClient({ stats }: { stats: SignupStats }) {
   const next = safeNext(searchParams.get("next"));
   const role = searchParams.get("role"); // e.g. "supplier"
   const supplier = role === "supplier";
+  // Why they landed here from the product (free-tier wall, chat, watchlist).
+  const reason = searchParams.get("reason");
+  const reasonCopy =
+    reason === "free-limit"
+      ? "You've used your 10 free medicine lookups. Create a free account to keep going — it takes 30 seconds."
+      : reason === "chat"
+        ? "Mederti AI is included free with an account."
+        : reason === "watchlist"
+          ? "Create a free account to watch medicines and get an email when their supply status changes."
+          : null;
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -192,6 +202,15 @@ export default function SignupClient({ stats }: { stats: SignupStats }) {
               ? <>Sign up to reach buyers — <b style={{ fontWeight: 700 }}>free</b></>
               : <>Sign up to search any medicine — <b style={{ fontWeight: 700 }}>free</b></>}
           </p>
+          {reasonCopy && (
+            <p style={{
+              margin: "14px 0 0", padding: "10px 14px", borderRadius: 8,
+              background: "var(--green-bg, #e8f6f0)", border: "1px solid #bce4d4",
+              fontSize: 13, lineHeight: 1.5, color: "var(--app-text)",
+            }}>
+              {reasonCopy}
+            </p>
+          )}
         </div>
 
         {/* Error */}

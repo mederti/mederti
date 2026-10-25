@@ -1,10 +1,14 @@
+import { type ConcentrationTier, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import Link from "next/link";
+import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import MobileTabBar from "@/app/components/v1/MobileTabBar";
 import { ContextChat } from "@/app/chat/components/ContextChat";
 import "@/app/chat/chat.css";
 import V1DrugSearch from "@/app/components/v1/V1DrugSearch";
+import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
+import { FreeViewBeacon } from "@/app/components/free-tier/FreeViewBeacon";
 import V1AiSummary from "./V1AiSummary";
 import V1ReportActions from "./V1ReportActions";
 import { FindSupplier } from "./find-supplier";
@@ -16,7 +20,7 @@ import { PriceTrendChart } from "./PriceTrendChart";
 import { ShortageTrendChart } from "@/app/chat/components/views/ShortageTrendChart";
 import { ShortageEpisodeTimeline } from "./ShortageEpisodeTimeline";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
-import { affinity, relationshipLabel } from "@/lib/alternatives";
+import { ALTERNATIVES_CAVEAT, affinity, relationshipLabel } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
 import { BAND_LABEL, type CompareResult } from "@/lib/pricing-compare";
 import { truncateDrugName } from "@/lib/utils";
@@ -103,8 +107,11 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
+  sourcedAlternatives?: SourcedAlternativesResult | null;
+  /** Anonymous free-tier views used (null = signed in). */
+  freeViewsUsed?: number | null;
   id: string;
   drug: any;
   shortages: any[];
@@ -117,6 +124,18 @@ export default function V1DrugView({
     makers: string[];
     countries: string[];
     whoPqCount?: number;
+  } | null;
+  // Molecule-level supply facts from inn_risk_scores (see lib/insights/dashboard-data.ts).
+  supplyProfile?: {
+    molecule: string;
+    fragility: number | null;
+    whoList: "core" | "complementary" | null;
+    euCritical: boolean;
+    nApiMakers: number | null;
+    nFinishedFirms: number | null;
+    topApiCountry: string | null;
+    topApiShare: number | null;
+    shortCountries: string[];
   } | null;
   recalls?: any[];
   approvalFootprint?: {
@@ -169,11 +188,18 @@ export default function V1DrugView({
 }) {
   // brand (lowercased) → SKU, for turning chips into links.
   const skuByBrand = new Map((brandSkus ?? []).map((s) => [s.brand.toLowerCase(), s]));
-  const CONC_LABEL: Record<string, string> = {
-    very_high: "Very high", high: "High", medium: "Moderate", low: "Low",
-  };
-  const CONC_CLS: Record<string, string> = {
-    very_high: "sp-crit", high: "sp-crit", medium: "sp-part", low: "sp-ok",
+  // Supply concentration tier — same definition as the National Shortage
+  // Dashboard (tierFor on the nightly molecule fragility). Falls back to the
+  // API-maker count with matching cut-offs when the drug isn't in the scored
+  // universe. Labelled as a description, not a risk: the backtest found
+  // concentration predicts neither shortage onset nor duration.
+  const supplyTier: ConcentrationTier = supplyProfile?.fragility != null
+    ? tierFor(supplyProfile.fragility)
+    : apiConcentration
+      ? apiConcentration.count <= 4 ? "highly_concentrated" : apiConcentration.count <= 9 ? "concentrated" : "broad"
+      : "unknown";
+  const TIER_CLS: Record<ConcentrationTier, string> = {
+    highly_concentrated: "sp-crit", concentrated: "sp-part", broad: "sp-ok", unknown: "sp-part",
   };
   const active = shortages.filter((s) => ["active", "anticipated"].includes((s.status || "").toLowerCase()));
   // Country-FIRST status: a shortage far away but fine in your market is NOT a
@@ -284,13 +310,13 @@ export default function V1DrugView({
       ? "TGA-approved overseas product"
       : null;
 
-  // Alternatives — real similarity only; null hides the %.
+  // Same-ATC-class drugs only — no clinical match, evidence or dose data exists.
   const alts = (alternatives || []).slice(0, 5).map((a) => ({
     id: a.alternative_drug_id ?? a.drugs?.id ?? null,
     name: a.drugs?.generic_name ?? "Therapeutic alternative",
     rel: relationshipLabel(a.relationship_type),
     pct: a.similarity_score != null ? Math.round(a.similarity_score * 100) : null,
-    note: a.dose_conversion_notes ?? a.availability_note ?? null,
+    note: null as string | null,
   }));
   const topAlt = alts[0] ?? null;
 
@@ -469,6 +495,13 @@ export default function V1DrugView({
                  the standard chat surface — clicking a product in an answer
                  opens its detail. ── */}
             <aside className="chat-col mederti-chat-root">
+              {freeViewsUsed != null ? (
+                <ChatSignupGate
+                  next={`/drugs/${id}`}
+                  headerLabel="Ask about this medicine"
+                  lead={<>Ask about <b>{drug.generic_name}</b> — substitutes, who&apos;s affected, or how long it may last — answered from live regulator data.</>}
+                />
+              ) : (
               <ContextChat
                 key={drug.generic_name}
                 contextKey={drug.generic_name}
@@ -490,10 +523,17 @@ export default function V1DrugView({
                   "How long did past shortages last?",
                 ]}
               />
+              )}
             </aside>
 
             {/* ── Right column: the drug record, full-width detail panel ── */}
             <div className="dg-main">
+          {freeViewsUsed != null && (
+            <>
+              <FreeViewBeacon drugId={id} />
+              <FreeViewBanner used={freeViewsUsed} next={`/drugs/${id}`} />
+            </>
+          )}
           <V1DrugSearch initial={drug.generic_name} />
 
           {brandHint && (
@@ -690,13 +730,13 @@ export default function V1DrugView({
             </div>
             {topAlt?.id != null ? (
               <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
-                <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
+                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
                 <div className="sw-v">{topAlt.name}</div>
                 <div className="sw-d">{`${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}`}</div>
               </Link>
             ) : (
               <div className="sw-card">
-                <div className="sw-h"><span className="sw-ic ok">⇄</span> Best alternative</div>
+                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
                 <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
                 <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
               </div>
@@ -959,7 +999,7 @@ export default function V1DrugView({
                     <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                    <span className={`status-pill ${CONC_CLS[apiConcentration.band]}`}><span className="d" />{CONC_LABEL[apiConcentration.band]} concentration risk</span>
+                    <span className={`status-pill ${TIER_CLS[supplyTier]}`}><span className="d" />{TIER_LABEL[supplyTier]} supply</span>
                     {(apiConcentration.whoPqCount ?? 0) > 0 && (
                       <span className="who-pq-badge">✓ {apiConcentration.whoPqCount} WHO-prequalified</span>
                     )}
@@ -971,6 +1011,19 @@ export default function V1DrugView({
                     {apiConcentration.count > apiConcentration.makers.length && (
                       <span className="d-tag">+{apiConcentration.count - apiConcentration.makers.length} more</span>
                     )}
+                  </div>
+                )}
+                {supplyProfile && (
+                  <div className="conc-d" style={{ marginTop: 10 }}>
+                    {[
+                      supplyProfile.whoList ? `WHO Model List (${supplyProfile.whoList})` : null,
+                      supplyProfile.euCritical ? "EU Union list of critical medicines" : null,
+                      supplyProfile.nFinishedFirms != null ? `${supplyProfile.nFinishedFirms} US finished-dose firm${supplyProfile.nFinishedFirms !== 1 ? "s" : ""}` : null,
+                      supplyProfile.topApiCountry && supplyProfile.topApiShare != null
+                        ? `${Math.round(supplyProfile.topApiShare * 100)}% of API makers in ${supplyProfile.topApiCountry}`
+                        : null,
+                      `all ${supplyProfile.molecule.toLowerCase()} products short in ${supplyProfile.shortCountries.length} countr${supplyProfile.shortCountries.length === 1 ? "y" : "ies"} now`,
+                    ].filter(Boolean).join(" · ")}
                   </div>
                 )}
                 <div className="conc-foot">
@@ -1011,10 +1064,14 @@ export default function V1DrugView({
             </div>
           )}
 
+          {/* Source-backed alternatives — hidden entirely when the data isn't loaded */}
+          {sourcedAlternatives?.available && <SourcedAlternativesSection alts={sourcedAlternatives.alternatives} country={userCountry} />}
+
           {/* Alternatives */}
           {alts.length > 0 && (
             <div className="sec">
-              <div className="sec-title">Related alternatives <span className="help">same class</span></div>
+              <div className="sec-title">Same-class drugs <span className="help">WHO ATC classification</span></div>
+              <div className="alt-note" style={{ marginBottom: 8 }}>{ALTERNATIVES_CAVEAT}</div>
               <div className="alt-list">
                 {alts.map((a, i) => {
                   const inner = (
@@ -1026,7 +1083,6 @@ export default function V1DrugView({
                       </div>
                       {affinity(a.pct) && (
                         <div className="alt-match">
-                          <div className="alt-bar"><span style={{ width: `${a.pct}%` }} /></div>
                           <div className="alt-pct">{affinity(a.pct)}</div>
                         </div>
                       )}
@@ -1248,7 +1304,86 @@ export default function V1DrugView({
   );
 }
 
+// The same verbatim statement can back several listings (e.g. one WHO
+// Committee sentence under two indications): quote it once, list each source.
+// Order: the viewer's own jurisdiction first (that's where a legal instrument
+// actually applies), then other legal instruments, then guidance/references.
+const AUTH_RANK: Record<string, number> = { regulator_legal: 0, regulator_guidance: 1, clinical_reference: 2 };
+function rankCitations(cites: AlternativeCitation[], country: string): AlternativeCitation[] {
+  return [...cites].sort((a, b) =>
+    Number(b.country_code === country) - Number(a.country_code === country) ||
+    (AUTH_RANK[a.authority_type] ?? 9) - (AUTH_RANK[b.authority_type] ?? 9));
+}
+
+function groupByStatement(cites: AlternativeCitation[]): { statement: string; refs: AlternativeCitation[] }[] {
+  const groups = new Map<string, AlternativeCitation[]>();
+  for (const c of cites) {
+    const k = `${c.publisher}|${c.statement}|${c.dose_statement ?? ""}`;
+    groups.set(k, [...(groups.get(k) ?? []), c]);
+  }
+  return [...groups.values()].map((refs) => ({ statement: refs[0].statement, refs }));
+}
+
+// Source-backed alternatives: status first, then every supporting statement,
+// verbatim and linked. single_source is labelled as exactly that.
+function SourcedAlternativesSection({ alts, country }: { alts: SourcedAlternative[]; country: string }) {
+  return (
+    <div className="sec">
+      <div className="sec-title">Alternatives with sources <span className="help">regulator instruments &amp; published lists</span></div>
+      {alts.length === 0 ? (
+        <div className="alt-note">No source-backed alternatives on file for this medicine.</div>
+      ) : (
+        <div className="alt-list">
+          {alts.map((a) => (
+            <div key={`${a.alternative_drug_id}-${a.kind}`} className="alt-card alt-rich sa-card">
+              <div className="alt-main">
+                <div className="sa-head">
+                  {a.same_drug
+                    ? <span className="alt-n sa-name">Other products of {a.name}</span>
+                    : <Link href={`/drugs/${a.alternative_drug_id}`} className="alt-n sa-name">{a.name}</Link>}
+                  <span className={`sa-badge sa-${a.status}`}>{a.status_label}</span>
+                </div>
+                <div className="alt-f">{a.kind === "same_molecule" ? "Same medicine — another product" : "Different medicine — prescriber decision"}</div>
+                <ul className="sa-cites">
+                  {groupByStatement(rankCitations(a.citations, country)).slice(0, 4).map((g, i) => (
+                    <li key={i}>
+                      {g.refs.map((c, j) => (
+                        <div key={j}>
+                          <a href={c.source_url} target="_blank" rel="noopener noreferrer">{SOURCE_LABELS[c.source_code] ?? c.publisher}</a>
+                          {c.country_code ? ` · ${c.country_code}` : ""}
+                          {c.indication ? ` · ${c.indication}` : ""}
+                          {c.valid_until ? ` · valid until ${c.valid_until}` : ""}
+                          {c.alternative_product ? <div className="sa-prod">{c.alternative_product}</div> : null}
+                        </div>
+                      ))}
+                      <blockquote className="sa-quote">{g.statement}</blockquote>
+                      {g.refs[0].dose_statement ? <div className="sa-prod">Dose per source: {g.refs[0].dose_statement}</div> : null}
+                    </li>
+                  ))}
+                </ul>
+                {groupByStatement(a.citations).length > 4 ? (
+                  <div className="alt-note">+ {groupByStatement(a.citations).length - 4} more source statements</div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CSS = `
+.sa-card{display:block}
+.sa-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:2px}
+.sa-name{text-decoration:none;color:var(--ink)}
+.sa-name:hover{text-decoration:underline}
+.sa-badge{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid var(--border);color:var(--text-3);background:var(--bg-3)}
+.sa-regulator_authorised,.sa-verified{color:var(--green);border-color:var(--green)}
+.sa-cites{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text-3)}
+.sa-cites a{color:var(--green)}
+.sa-quote{margin:4px 0 0;padding-left:10px;border-left:2px solid var(--border);font-size:11.5px;line-height:1.45;color:var(--text-3)}
+.sa-prod{font-size:11.5px;color:var(--text-2);margin-top:2px}
 /* Tuned design system: this surface's scoped token block now mirrors the
    global tuned palette (globals.css :root) and uses Geist. Kept component-
    local because V1DrugView was authored as a self-contained surface. */

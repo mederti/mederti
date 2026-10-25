@@ -3,14 +3,7 @@ import { unstable_cache } from "next/cache";
 import Anthropic from "@anthropic-ai/sdk";
 import { STRATEGIST_PERSONA } from "@/lib/ai/supplier-insights";
 import { recordAiUsage } from "@/lib/ai/usage-log";
-import {
-  type RangeKey,
-  DEFAULT_RANGE,
-  isRangeKey,
-  getSnapshot,
-  buildFallbackSummary,
-  snapshotToBrief,
-} from "@/lib/insights/dashboard-snapshot";
+import { buildDashboard, buildFallbackRead, dashboardToBrief } from "@/lib/insights/dashboard-data";
 
 export const runtime = "nodejs";
 
@@ -28,19 +21,20 @@ const SYSTEM = `${STRATEGIST_PERSONA}
 
 You are writing the market read that sits at the top of a national medicines-shortage dashboard, read by regulators, hospital procurement and policy staff. Given the dashboard's current figures, write 2–3 sentences of analyst commentary on the state of the market.
 
-Interpret, do not list. The numbers are already on the page below you — your job is to say what they mean: where the real pressure is, how this market compares with its peers, and what the leading signals suggest is coming. Lead with the single most important read. Name specific drugs, classes or countries only when they carry the point.
+Interpret, do not list. The numbers are already on the page below you — your job is to say what they mean: where the real pressure is, how this market compares with its peers, and which medicines are short in peer markets but not reported short here. Lead with the single most important read. Name specific drugs or countries only when they carry the point.
+
+Use only the figures given. Every number you write must appear in the figures exactly; never count the items in an example list and never write "several", "many" or "a handful" where a figure exists. Lists in the figures are examples; always use the stated totals, never the length of an example list. Do not state causes or explanations for why shortages persist or arise — none are in the figures. Do not claim trends (rising, building, worsening, faster than) — the figures are a snapshot, not a time series. Do not forecast dates or durations, do not call anything "predicted", and do not invent causes: Mederti's own backtest found supply concentration does not predict when a shortage starts or how long it lasts. "Short in peer markets, not reported here" is an observation, not a forecast: a market whose regulator publishes little will show many such medicines.
 
 Output strictly as JSON: {"summary": "<the 2-3 sentence commentary as one paragraph>"}. No prose outside the JSON.`;
 
-async function generateSummary(range: RangeKey): Promise<string> {
-  const snapshot = getSnapshot(range);
-  const brief = snapshotToBrief(snapshot);
+async function generateSummary(country: string): Promise<string> {
+  const brief = dashboardToBrief(await buildDashboard(country));
   const t0 = Date.now();
   const response = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 500,
     system: SYSTEM,
-    messages: [{ role: "user", content: `Dashboard (${snapshot.rangeLabel}):\n\n${brief}` }],
+    messages: [{ role: "user", content: `Dashboard figures (live):\n\n${brief}` }],
   });
   recordAiUsage({ route: "/api/insights/dashboard-summary", model: MODEL, response, latency_ms: Date.now() - t0 });
 
@@ -57,24 +51,29 @@ async function generateSummary(range: RangeKey): Promise<string> {
   return trimmed;
 }
 
-// Cache the generated prose per range so Claude is only called on a miss /
-// after revalidate. Each range keeps its own cached read.
-function getCachedSummary(range: RangeKey): Promise<string> {
-  return unstable_cache(() => generateSummary(range), ["dashboard-market-read", range], {
+// Cache the generated prose per market so Claude is only called on a miss /
+// after revalidate.
+function getCachedSummary(country: string): Promise<string> {
+  return unstable_cache(() => generateSummary(country), ["dashboard-market-read", "v3", country], {
     revalidate: REVALIDATE_SECONDS,
     tags: ["dashboard-market-read"],
   })();
 }
 
 export async function GET(req: NextRequest) {
-  const param = req.nextUrl.searchParams.get("range");
-  const range: RangeKey = isRangeKey(param) ? param : DEFAULT_RANGE;
+  const country = (req.nextUrl.searchParams.get("country") || "AU").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) return NextResponse.json({ error: "invalid country" }, { status: 400 });
   try {
-    const summary = await getCachedSummary(range);
-    return NextResponse.json({ summary, range, source: "ai" });
+    const summary = await getCachedSummary(country);
+    return NextResponse.json({ summary, country, source: "ai" });
   } catch (err) {
-    // No API key, model error, or invalid JSON — never leave the band empty.
-    console.error("[dashboard-summary] falling back to static read:", err);
-    return NextResponse.json({ summary: buildFallbackSummary(getSnapshot(range)), range, source: "fallback" });
+    // No API key, model error, or invalid JSON — fall back to a plain
+    // statement of the live figures. If those fail too, say nothing.
+    console.error("[dashboard-summary] falling back to deterministic read:", err);
+    try {
+      return NextResponse.json({ summary: buildFallbackRead(await buildDashboard(country)), country, source: "fallback" });
+    } catch {
+      return NextResponse.json({ summary: null, country, source: "unavailable" });
+    }
   }
 }

@@ -174,7 +174,11 @@ SHELL=/bin/bash
 0  21 1 * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.pbs_pricing_importer >> logs/cron.log 2>&1
 
 # ─── Pricing connectors (drug_pricing_history — migration 055) ───
-# NADAC: CMS refreshes Wednesdays → fetch Thursdays.
+# NADAC: CMS refreshes Wednesdays. Was weekly at Thu 07:15 local, which the
+# laptop slept through every week: no nadac run appears in cron.log from
+# 2026-08-09 onward and the last US rows landed 2026-07-02, so US pricing went
+# ~3.5 months stale. Same fix as NHS below: daily, afternoon slot. Re-runs are
+# idempotent (dedup_hash), so a run on an unchanged snapshot writes nothing.
 #
 # NHS tariff was weekly at Mon 06:50 local. On a laptop that is asleep at
 # 06:50 a weekly slot means one missed fire costs a full week, and it did:
@@ -188,7 +192,7 @@ SHELL=/bin/bash
 # week), and moved to an afternoon slot when the machine is actually awake.
 # The real fix is Railway — see cron/RAILWAY_SERVICES.md. This just stops the
 # laptop's sleep schedule deciding how fresh UK data is.
-15  7 * * 4  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nadac           >> logs/cron.log 2>&1
+20 15 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nadac           >> logs/cron.log 2>&1
 50 14 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nhs_drug_tariff >> logs/cron.log 2>&1
 # BDPM: ANSM refreshes the public medicines DB ~weekly → fetch Tuesdays.
 30  6 * * 2  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py france_bdpm    >> logs/cron.log 2>&1
@@ -202,3 +206,10 @@ SHELL=/bin/bash
 # active/anticipated → stale after 7 days without re-confirmation. Without this,
 # truly-gone shortages stay 'active' forever and the site over-reports. Idempotent.
 0   7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 cron/run_mark_stale.py >> logs/cron.log 2>&1
+
+# ─── Portfolio risk score (daily 16:00 local, after the last daily scraper) ───
+# Recomputes inn_risk_scores (clinical importance × supply vulnerability) for
+# every molecule on the WHO Model List / EU Union list and appends the day's
+# snapshot to inn_risk_score_history — the only record of what we flagged and
+# when. Full refresh, ~2 min, read-heavy. See docs/portfolio-risk-score-scope.md.
+0  16 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.analysis.risk_score >> logs/cron.log 2>&1

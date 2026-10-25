@@ -1,3 +1,4 @@
+import type { SourcedAlternativesResult } from "@/lib/alternatives-sources";
 export type DrugSummary = {
   drug_id: string;
   name: string;
@@ -131,17 +132,24 @@ export type DrugDetail = DrugSummary & {
   confidence?: Confidence;
 };
 
+// Alternatives on file are ATC-class pairings only (see lib/alternatives.ts).
+// similarity_score / clinical_evidence_level / dose_conversion_notes /
+// availability_note are ALWAYS null: the stored values were fixed lookups or
+// template text, not evidence. Kept on the type so old renderers degrade to
+// "not shown" instead of crashing.
 export type SubstituteRow = {
   drug_id: string;
   name: string;
   atc_code: string | null;
   drug_class: string | null;
-  similarity_score: number | null;
+  similarity_score: null;
   atc_match_level: number | null;
-  clinical_evidence_level: string | null;
-  requires_monitoring: boolean;
-  availability_note: string | null;
-  dose_conversion_notes: string | null;
+  match_basis: string | null;
+  source: string;
+  clinical_evidence_level: null;
+  requires_monitoring: false;
+  availability_note: null;
+  dose_conversion_notes: null;
   active_shortage_count: number;
 };
 
@@ -237,6 +245,8 @@ export type ShortageHistoryStats = {
 export type DrugDetailBundle = {
   drug: DrugDetail;
   substitutes: SubstituteWithSuppliers[];
+  /** Source-backed alternatives (migration 071); available=false hides the section. */
+  sourcedAlternatives?: SourcedAlternativesResult;
   recalls: RecallRow[];
   suppliers: SupplierStock[];
   manufacturers: ManufacturerRow[];

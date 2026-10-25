@@ -1,5 +1,6 @@
 "use client";
 
+import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { DrugDetailBundle, ShortageRow, SubstituteWithSuppliers } from "@/lib/chat/types";
@@ -251,9 +252,9 @@ function AltCard({
   alt: SubstituteWithSuppliers;
   onClick: (id: string) => void;
 }) {
+  // Absence of a listed shortage is not proof of stock — say what we know.
   const avail = alt.active_shortage_count > 0 ? "lim" : "yes";
-  const match =
-    alt.similarity_score != null ? `${Math.round(alt.similarity_score * 100)}% match` : "—";
+  const match = alt.match_basis ?? "Same ATC class";
   return (
     <button
       type="button"
@@ -277,7 +278,7 @@ function AltCard({
               : "bg-yellow-50 text-yellow-700 border-yellow-200"
           }`}
         >
-          {avail === "yes" ? "Available" : "Limited"}
+          {avail === "yes" ? "No shortage listed" : "In shortage"}
         </span>
         <span
           className="text-[9px] text-slate-400"
@@ -630,9 +631,10 @@ export function PreviewPane({
             {/* Alternatives */}
             {bundle.substitutes.length > 0 ? (
               <div className="mb-4.5" style={{ marginBottom: 18 }}>
-                <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
-                  Alternatives
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">
+                  Same-class drugs (ATC)
                 </div>
+                <div className="text-[10px] text-slate-400 mb-2">{ALTERNATIVES_CAVEAT}</div>
                 {bundle.substitutes.slice(0, 3).map((s) => (
                   <AltCard key={s.drug_id} alt={s} onClick={onOpenDrug} />
                 ))}

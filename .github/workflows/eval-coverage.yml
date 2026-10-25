@@ -82,6 +82,7 @@ jobs:
       # — same as the nightly job. Once a preview-URL step is added, swap
       # this expression to use the preview URL on pull_request runs.
       MEDERTI_CHAT_URL: ${{ vars.MEDERTI_PROD_CHAT_URL || 'https://mederti.vercel.app/api/chat' }}
+      MEDERTI_CHAT_EVAL_TOKEN: ${{ secrets.MEDERTI_CHAT_EVAL_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4

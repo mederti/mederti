@@ -135,6 +135,9 @@ export default async function Home() {
         <h1>Live shortage intelligence<br />for <span className="em">any medicine</span>.</h1>
         <p className="sub">Search any prescription medicine to see its shortage status across major markets, find substitutes, source it from suppliers, and get alerted the moment it&apos;s back — straight from official regulators.</p>
         <V1Search initialSamples={trendingSamples} />
+        <p className="free-note">
+          Try it now — <b>your first 10 medicine lookups are free</b>, no signup needed.
+        </p>
         <div className="hero-stats">
           <div className="stat"><div className="stat-n">{medicines}</div><div className="stat-l">Medicines tracked globally</div></div>
           <div className="stat"><div className="stat-n">{activeShortages}</div><div className="stat-l">Active shortages right now</div></div>
@@ -262,6 +265,7 @@ export default async function Home() {
         <h2>Built for the dispensary counter.</h2>
         <p>Free for individual pharmacists and clinicians. No credit card.</p>
         <Link href="/signup" className="btn btn-primary">Create a free account</Link>
+        <p className="cta-free"><Link href="/search">Or try 10 free medicine lookups first →</Link></p>
       </div>
 
       {/* ── Footer ── */}
@@ -320,6 +324,10 @@ const CSS = `
 @keyframes v1blink{0%,100%{opacity:1}50%{opacity:.25}}
 .hero h1{font-size:77px;line-height:1.04;letter-spacing:-.04em;font-weight:800;margin-bottom:18px}
 .hero h1 .em{background:linear-gradient(110deg,#0fa676,#0c1118 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.cta-band .cta-free{margin-top:14px;font-size:13.5px}
+.cta-band .cta-free a{color:inherit;opacity:.8;text-decoration:underline;text-underline-offset:3px}
+.hero .free-note{font-size:13.5px;color:var(--text-3);margin:14px auto 0}
+.hero .free-note b{color:var(--green-d);font-weight:600}
 .hero p.sub{font-size:18px;color:var(--text-3);max-width:580px;margin:0 auto 34px;font-weight:400;letter-spacing:-.01em}
 .searchbox{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-2);border-radius:16px;padding:9px 9px 9px 20px;box-shadow:0 18px 50px -22px rgba(10,15,26,.28);max-width:580px;margin:0 auto;transition:.15s}
 .searchbox:focus-within{border-color:var(--green);box-shadow:0 18px 50px -20px rgba(16,185,129,.4)}

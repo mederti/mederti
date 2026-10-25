@@ -15,6 +15,8 @@ import { SCHEME_COPY, FALLBACK_SCHEME_COPY } from "@/lib/substitution";
 import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
 import Chat2Client from "@/app/chat/Chat2Client";
 import { classifyQuery, looksLikeQuestion, type QueryIntent } from "@/lib/search/classify";
+import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
+import { useFreeTier } from "@/app/components/free-tier/useFreeTier";
 
 function statusOf(d: DrugHit): { cls: string; label: string } {
   if (d.source === "catalogue") return { cls: "sp-ok", label: "Registered product" };
@@ -473,7 +475,7 @@ function Results() {
                 <th className="c-med">Medicine</th>
                 <th className="c-mkt">{isGlobalMarket ? "Supply status" : <>In your market {mk.flag}</>}</th>
                 <th className="c-sub">Can I substitute?</th>
-                <th className="c-alt">Best alternative</th>
+                <th className="c-alt" title="WHO ATC classification only — not a reviewed substitute">Same-class drug</th>
                 <th className="c-n">Alts</th>
                 {hasTradePrice && <th className="c-price">Trade price</th>}
                 <th className="c-eb">Expected back</th>
@@ -607,7 +609,7 @@ function Results() {
                 {(() => { const bn = cleanBrandNames(d.brand_names, d.generic_name); return bn.length > 0 ? <div className="rg">{bn.slice(0, 3).join(" · ")}</div> : null; })()}
                 <div className="rmeta">
                   {d.atc_code ? `ATC ${d.atc_code}` : "—"}
-                  {d.alternatives_count ? ` · ${d.alternatives_count} alternative${d.alternatives_count > 1 ? "s" : ""}` : ""}
+                  {d.alternatives_count ? ` · ${d.alternatives_count} same-class drug${d.alternatives_count > 1 ? "s" : ""}` : ""}
                 </div>
               </div>
               <span className={`status-pill ${st.cls}`}><span className="d" />{st.label}</span>
@@ -679,6 +681,12 @@ function SearchChat() {
 // Product/drug lookup → the 3-column results layout (sidebar · results · grounded
 // chat). This is the original /search experience, now one branch of the surface.
 function ResultsShell() {
+  // Signed-out visitors: search is free, drug pages are metered (proxy.ts),
+  // chat is account-only.
+  const { anon, used } = useFreeTier();
+  const params = useSearchParams();
+  const qs = params.toString();
+  const here = `/search${qs ? `?${qs}` : ""}`;
   return (
     <div className="v1home v1search">
       <style>{CSS}</style>
@@ -689,12 +697,23 @@ function ResultsShell() {
         {/* ── Middle column: grounded chat. New template — chat drives,
              reading left-to-right as nav → conversation → detail. ── */}
         <aside className="chat-col mederti-chat-root">
-          <SearchChat />
+          {/* null = session check pending (a local read, near-instant): render
+              nothing rather than flash the wrong panel. */}
+          {anon === null ? null : anon ? (
+            <ChatSignupGate
+              next={here}
+              headerLabel="Ask about these results"
+              lead="Ask about these results — substitutes, which markets are affected, or what's coming back into supply."
+            />
+          ) : (
+            <SearchChat />
+          )}
         </aside>
 
         {/* ── Right column: results, the full-width detail panel ── */}
         <div className="shell-main">
           <div className="dg-main">
+            {anon && <FreeViewBanner used={used} next={here} />}
             <Results />
           </div>
         </div>

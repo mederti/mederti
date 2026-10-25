@@ -208,7 +208,7 @@ export default function PharmacistAnswerCard({
                   gap: 6,
                 }}
               >
-                <Sparkles size={11} /> Recommended substitute
+                <Sparkles size={11} /> Same-class drug (ATC) · not a reviewed substitute
               </div>
               <div
                 style={{
@@ -241,7 +241,7 @@ export default function PharmacistAnswerCard({
                 }}
               >
                 {topAlternative.isAvailable && (
-                  <Pill tone="positive">Available in AU</Pill>
+                  <Pill tone="neutral">No shortage listed</Pill>
                 )}
                 {affinity(topAlternative.matchPercent) && (
                   <Pill tone="neutral">
@@ -350,7 +350,7 @@ export default function PharmacistAnswerCard({
                     gap: 4,
                   }}
                 >
-                  <Check size={13} /> Available
+                  <Check size={13} /> No shortage listed
                 </div>
               )}
             </div>
@@ -379,7 +379,7 @@ export default function PharmacistAnswerCard({
               }}
             >
               {whyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              Why this recommendation? See clinical reasoning & source data
+              About this data
             </button>
           )}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import { useContext } from "react";
 import type { DrugDetail, DrugDetailBundle, Persona } from "@/lib/chat/types";
 import { LeadContext } from "../LeadContext";
@@ -129,7 +130,7 @@ function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }
 
       {subs.length > 0 ? (
         <div className="card-b-alts">
-          <div className="card-b-alts-label">Formulary alternatives</div>
+          <div className="card-b-alts-label" title={ALTERNATIVES_CAVEAT}>Same-class drugs (ATC) · not reviewed substitutes</div>
           {subs.slice(0, 4).map((s) => {
             const supplierCount = (s.suppliers?.length ?? 0);
             const names = (s.suppliers ?? []).map((x) => x.supplier_name).filter(Boolean).slice(0, 3).join(", ");
@@ -142,7 +143,7 @@ function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }
                   <div>
                     <span className="card-b-alt-name">{s.name}</span>
                     {s.drug_class ? <span className="card-b-alt-meta"> · {s.drug_class}</span> : null}
-                    {s.clinical_evidence_level ? <span className="card-b-alt-meta"> · evidence {s.clinical_evidence_level}</span> : null}
+                    {s.match_basis ? <span className="card-b-alt-meta"> · {s.match_basis}</span> : null}
                   </div>
                   {supplierCount > 0 ? (
                     <div className="card-b-alt-suppliers">

@@ -284,13 +284,8 @@ export function Chat2SubRow({
           {sub.atc_code ? `${sub.atc_code} · ` : ""}{sub.drug_class || "Alternative"}
         </div>
       </div>
-      {sub.similarity_score != null ? (
-        <span
-          className="text-[12px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded whitespace-nowrap"
-          style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
-        >
-          {Math.round(sub.similarity_score * 100)}% match
-        </span>
+      {sub.match_basis ? (
+        <span className="text-[12px] text-slate-500 whitespace-nowrap">{sub.match_basis}</span>
       ) : null}
     </button>
   );

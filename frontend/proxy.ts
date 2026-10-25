@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient as createSupabaseSsr } from "@supabase/ssr";
+import {
+  FREE_VIEW_COOKIE,
+  FREE_VIEW_COUNT_COOKIE,
+  FREE_VIEW_HEADER,
+  freeViewCountCookieOptions,
+  meterDrugView,
+  readFreeViews,
+} from "@/lib/free-views";
 
 const MOBILE_UA_REGEX =
   /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
@@ -104,11 +112,16 @@ const PUBLIC_PATHS: ReadonlyArray<string> = [
   "/governments",
   "/suppliers",           // supplier acquisition / discovery landing
   // ── Product data surfaces are GATED (closed-funnel launch decision, Jul 2026) ──
-  // /search, /drugs, /intelligence, /shortages and /freshness all require a
-  // signed-in user: every click off the landing page except About/Privacy/
-  // Contact must go through signup/login. This reverses the earlier
-  // "open-funnel" SEO decision — shared links and crawlers now hit the login
-  // wall. The `?next=` return URL preserves the destination through login.
+  // /intelligence, /shortages and /freshness require a signed-in user. The
+  // `?next=` return URL preserves the destination through login.
+  //
+  // ── EXCEPT the metered free tier (Oct 2026) ──
+  // /search and /drugs/[id] are NOT listed here but are handled by the meter
+  // in proxy() below: anonymous visitors get FREE_VIEW_LIMIT (10) distinct
+  // drug pages, then /signup. Search itself is unmetered. Watchlist, alerts
+  // and chat stay login-only. Decided by the CEO after the closed funnel
+  // yielded ~29 real signups — don't revert to the hard wall (or open it
+  // fully) without that same sign-off.
   //
   // ── Public SEO layer (Aug 2026) ──
   // /medicine, /country and /regulator are summary-level programmatic pages
@@ -216,6 +229,13 @@ export async function proxy(req: NextRequest) {
     }
   };
 
+  // One Supabase client + user lookup per request, shared by the checks below
+  // (the meter and the auth gate both need it on /search and /drugs).
+  let sharedClient: ReturnType<typeof makeSupabase> | null = null;
+  let userPromise: ReturnType<typeof getUserSafe> | null = null;
+  const sharedSupabase = () => (sharedClient ??= makeSupabase());
+  const currentUser = () => (userPromise ??= getUserSafe(sharedSupabase()));
+
   // Same-origin-only ?next= sanitiser (mirrors the auth pages' own checks).
   const safeNext = (raw: string | null): string | null => {
     if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return null;
@@ -256,6 +276,41 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
+  // ── Metered free tier: /search + /drugs/[id] ──
+  // Signed-in users fall through to the normal auth + onboarding flow below.
+  // Anonymous visitors: search is free; opening a drug they haven't viewed
+  // yet with all FREE_VIEW_LIMIT views used sends them to /signup (?next=
+  // preserved). Views are COUNTED by the page's beacon, not here — see
+  // lib/free-views.ts for why. The used count (including this page) goes to
+  // the page via a request header for the banner.
+  const isSearch = pathname === "/search" || pathname.startsWith("/search/");
+  const drugMatch = pathname.match(/^\/drugs\/([^/]+)\/?$/);
+  if ((isSearch || drugMatch) && supabaseUrl && supabaseAnonKey) {
+    const signedIn = hasAuthCookie && !!(await currentUser());
+    if (!signedIn) {
+      const viewed = await readFreeViews(req.cookies.get(FREE_VIEW_COOKIE)?.value);
+      let used = viewed.length;
+      if (drugMatch) {
+        let drugId = drugMatch[1];
+        try { drugId = decodeURIComponent(drugId); } catch { /* keep raw */ }
+        const m = meterDrugView(viewed, drugId);
+        if (!m.allowed) {
+          const url = new URL("/signup", req.url);
+          url.searchParams.set("next", pathname + req.nextUrl.search);
+          url.searchParams.set("reason", "free-limit");
+          return redirectWithCookies(url);
+        }
+        used = m.viewed.length;
+      }
+      const reqHeaders = new Headers(req.headers);
+      reqHeaders.set(FREE_VIEW_HEADER, String(used));
+      const out = NextResponse.next({ request: { headers: reqHeaders } });
+      res.cookies.getAll().forEach((c) => out.cookies.set(c));
+      if (isSearch) out.cookies.set(FREE_VIEW_COUNT_COOKIE, String(used), freeViewCountCookieOptions);
+      return out;
+    }
+  }
+
   // ── Skip auth gating for public paths ──
   if (isPublic(pathname)) {
     return res;
@@ -267,8 +322,8 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
-  const supabase = makeSupabase();
-  const user = await getUserSafe(supabase);
+  const supabase = sharedSupabase();
+  const user = await currentUser();
 
   if (!user) {
     // Build login redirect with return URL
@@ -322,6 +377,6 @@ export async function proxy(req: NextRequest) {
 export const config = {
   // Skip API routes, static, image optimisation, favicons, robots, sitemap, llms.txt
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|llms.txt|tiles/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf|otf|eot|pmtiles|css|js)).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|llms.txt|manifest.webmanifest|indexnow-key.txt|tiles/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf|otf|eot|pmtiles|css|js)).*)",
   ],
 };

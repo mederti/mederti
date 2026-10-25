@@ -22,6 +22,7 @@ Usage:
 
 Env:
   MEDERTI_CHAT_URL      — default http://localhost:3000/api/chat
+  MEDERTI_CHAT_EVAL_TOKEN — must match the app's CHAT_EVAL_TOKEN (/api/chat is login-only)
   MEDERTI_EVAL_GOLD_DIR — default evals/gold
   ANTHROPIC_API_KEY     — required for --judge (default)
 """
@@ -52,6 +53,7 @@ from grader_judge import grade_judge, summarise as judge_summarise  # noqa: E402
 
 
 CHAT_URL = os.environ.get("MEDERTI_CHAT_URL", "http://localhost:3000/api/chat")
+EVAL_TOKEN = os.environ.get("MEDERTI_CHAT_EVAL_TOKEN", "")
 GOLD_DIR = Path(os.environ.get("MEDERTI_EVAL_GOLD_DIR", str(ROOT / "evals" / "gold")))
 REPORT_DIR = ROOT / "evals" / "reports"
 
@@ -89,7 +91,11 @@ def ask_chat(question_text: str, *, timeout: int = 240) -> dict:
     req = urllib.request.Request(
         CHAT_URL,
         data=req_body,
-        headers={"content-type": "application/json"},
+        headers={
+            "content-type": "application/json",
+            # /api/chat is login-only; the eval authenticates with a shared token.
+            **({"x-mederti-eval-token": EVAL_TOKEN} if EVAL_TOKEN else {}),
+        },
         method="POST",
     )
     t0 = time.time()

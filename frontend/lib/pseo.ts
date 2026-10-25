@@ -190,10 +190,8 @@ export async function eventsForDrug(drugId: string): Promise<PseoShortageEvent[]
 export interface AlternativeRow {
   alternative_drug_id: string;
   relationship_type: string | null;
-  clinical_evidence_level: string | null;
-  similarity_score: number | null;
-  availability_note: string | null;
-  drugs: { generic_name: string; brand_names: string[] | null } | null;
+  atc_match_level: number | null;
+  drugs: { generic_name: string; brand_names: string[] | null; atc_code: string | null } | null;
 }
 
 export async function alternativesForDrug(drugId: string): Promise<AlternativeRow[]> {
@@ -201,11 +199,11 @@ export async function alternativesForDrug(drugId: string): Promise<AlternativeRo
   const { data } = await admin
     .from("drug_alternatives")
     .select(
-      "alternative_drug_id, relationship_type, clinical_evidence_level, similarity_score, availability_note, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name, brand_names)",
+      "alternative_drug_id, relationship_type, atc_match_level, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name, brand_names, atc_code)",
     )
     .eq("drug_id", drugId)
     .eq("is_approved", true)
-    .order("similarity_score", { ascending: false })
+    .order("atc_match_level", { ascending: false })
     .limit(6);
   return (data ?? []) as unknown as AlternativeRow[];
 }
@@ -437,9 +435,9 @@ export function buildDrugFaqs(
   if (alternativesCount > 0) {
     faqs.push({
       question: `What are the alternatives to ${name}?`,
-      answer: `Mederti lists ${alternativesCount} clinically related ${
-        alternativesCount === 1 ? "alternative" : "alternatives"
-      } for ${name} (see the alternatives section above). Alternatives require clinical judgement — always confirm suitability with a pharmacist or prescriber and your national guidance before substituting.`,
+      answer: `Mederti lists ${alternativesCount} ${
+        alternativesCount === 1 ? "drug" : "drugs"
+      } in the same WHO ATC class as ${name} (see above). These are classification context only — not clinically reviewed substitutes. Always confirm any switch with a pharmacist or prescriber and your national guidance.`,
     });
   }
 

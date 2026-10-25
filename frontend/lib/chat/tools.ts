@@ -1,3 +1,4 @@
+import { type ConcentrationTier, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "./supabase";
 import { coverageGate } from "./coverage";
@@ -14,6 +15,8 @@ import type {
   SupplierPriceRow,
 } from "./types";
 import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
+import { ALTERNATIVES_CAVEAT, ALTERNATIVES_SOURCE, atcMatchLabel } from "@/lib/alternatives";
+import { SOURCE_LABELS, fetchSourcedAlternatives } from "@/lib/alternatives-evidence";
 
 export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   // Anthropic server-side web search — used freely as a primary research tool
@@ -84,16 +87,29 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
     },
   },
   {
+    name: "get_sourced_alternatives",
+    description:
+      "Source-backed alternatives for a drug: each one comes with the statements that support it (publisher, link, verbatim text, indication, country, expiry). status is regulator_authorised (a current legal instrument permits the swap, e.g. TGA SSSI / UK SSP / FDA Orange Book), verified (2+ independent publishers), or single_source (one publisher, e.g. WHO EML only — never call it verified or confirmed). kind is same_molecule (another strength/form/brand/overseas product of the same medicine) or therapeutic (a different medicine). Call this BEFORE find_substitutes for any 'what can I use instead' question. available=false means the data isn't loaded in this environment — say so, don't say 'none exist'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "UUID of the drug being replaced." },
+        kind: { type: "string", enum: ["same_molecule", "therapeutic"], description: "Optional filter." },
+      },
+      required: ["drug_id"],
+    },
+  },
+  {
     name: "find_substitutes",
     description:
-      "Find substitution candidates for a drug based on ATC-class matching from the drug_alternatives table. Each candidate includes a similarity_score, clinical evidence level (A=RCT … D=expert opinion), and a flag for whether the alternative is itself in shortage. Returns empty if no alternatives are recorded — substitution data is only available for ~100 high-priority drugs.",
+      "Find drugs in the same WHO ATC class as a drug (drug_alternatives, ATC-prefix pairing for ~200 high-shortage drugs). These are NOT clinically reviewed substitutes: no evidence grade, match %, or dose conversion exists for them. Each row gives match_basis (which ATC level is shared), the alternative's ATC code, and its live active-shortage count. Present them only as same-class context to raise with a prescriber, and attach the returned caveat. Returns empty if none are on file.",
     input_schema: {
       type: "object",
       properties: {
         drug_id: { type: "string", description: "UUID of the drug to substitute." },
         country: {
           type: "string",
-          description: "Optional ISO-2 country code; rank alternatives by their availability in this country.",
+          description: "Optional ISO-2 country code; active_shortage_count counts only this country's shortages.",
         },
         limit: { type: "number", description: "Max results (default 5)" },
       },
@@ -130,7 +146,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "get_trade_prices",
     description:
-      "Get supplier-listed trade prices for a drug across countries. NOTE: per-drug pricing coverage is sparse — Mederti only has direct supplier listings for a small subset of drugs. Returns an empty array if no prices are on file. Do NOT invent prices when this returns nothing; tell the user pricing data is not yet available for that drug.",
+      "Get current prices for a drug across countries. Returns `reference_prices`: official published prices per market (GB NHS Drug Tariff, US CMS NADAC, FR/IT/ES national price lists) from each market's latest publication. Each product line is a verbatim source row with its unit_basis, price_type and effective_date. Also returns sparse `supplier_listings` from the Mederti marketplace. Use this for any price comparison question. `countries_without_data` lists requested markets with nothing on file (Australia has no price feed). Do NOT invent prices for missing markets; say which markets are covered and which are not.",
     input_schema: {
       type: "object",
       properties: {
@@ -243,15 +259,28 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "get_class_concentration_risk",
     description:
-      "Manufacturer concentration risk for an ATC class — surfaces how many distinct API/finished-dose suppliers serve each drug in the class, and which drugs are sole-sourced or hyper-concentrated. Backed by v_drug_manufacturer_concentration (PharmaCompass + drug_rxnorm). Use for SUP-24 (drug classes most exposed to upstream concentration), GOV-03 (therapeutic classes with highest concentration risk in our market), GOV-04 (proportion dependent on single API source), GOV-27 (most concentrated upstream exposure), HCL-08 (most fragile global supply chains).",
+      "Supply concentration for essential/critical medicines in an ATC class — API makers (FDA DMF + WHO PQ), US finished-dose firms, top API-making country and its share, which markets are short now. Covers only molecules on the WHO Model List or EU Union list (~560). Describes the supply base; it is NOT a shortage forecast (see caveat in the result). Use for SUP-24, GOV-03, GOV-04, GOV-27, HCL-08 (which classes depend on few manufacturers or one country).",
     input_schema: {
       type: "object",
       properties: {
         atc_prefix: { type: "string", description: "ATC code prefix to scope the class (e.g. 'J01' for antibiotics, 'L01' for oncology, 'A10' for diabetes). Required." },
-        country: { type: "string", description: "Optional ISO-2 country code to narrow to drugs registered in that market." },
-        limit: { type: "number", description: "Max drugs to return (default 20)." },
+        country: { type: "string", description: "Optional ISO-2 country code; adds whether each molecule is short there now." },
+        limit: { type: "number", description: "Max molecules to return (default 20)." },
       },
       required: ["atc_prefix"],
+    },
+  },
+  {
+    name: "get_supply_profile",
+    description:
+      "Supply profile for ONE essential/critical medicine: WHO Model List / EU critical status, supply concentration tier, number of API makers (FDA DMF + WHO PQ), US finished-dose firms, top API-making country and share, and the countries where it is short now. Use for 'how many manufacturers make X', 'where is X made', 'is X single-source', 'how fragile is X's supply'. Describes the supply base only; never present it as a prediction or a risk score.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID (preferred when known)." },
+        name: { type: "string", description: "INN of the medicine (e.g. 'cisplatin') when no drug_id." },
+        country: { type: "string", description: "Optional ISO-2 country; adds whether it is short there now." },
+      },
     },
   },
   {
@@ -354,7 +383,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "get_dose_conversion",
     description:
-      "Verified dose-conversion + monitoring notes between two specific drugs. HIGH STAKES — returns a refusal envelope when no verified entry exists rather than improvising from priors. Use for HCL-15 / RET-12 dose-conversion questions. Pair with refusal-template language when status=unanswerable.",
+      "Dose conversion between two drugs. HIGH STAKES. Mederti holds NO source-verified dose conversions today, so this always returns status=unanswerable with canonical references. Use the refusal-template language; never improvise a ratio.",
     input_schema: {
       type: "object",
       properties: {
@@ -1020,6 +1049,35 @@ export async function fetchRecallsForDrug(drugId: string, limit = 8): Promise<Re
   return (fuzzy.data ?? []) as RecallRow[];
 }
 
+async function getSourcedAlternatives(args: { drug_id: string; kind?: "same_molecule" | "therapeutic" }) {
+  const res = await fetchSourcedAlternatives(args.drug_id, { kind: args.kind, limit: 15 });
+  if (!res.available) {
+    return {
+      available: false,
+      reason: res.reason,
+      confidence: { level: "low", score: 0, basis: res.reason } satisfies Confidence,
+    };
+  }
+  const n = res.alternatives.length;
+  const authorised = res.alternatives.filter((a) => a.status === "regulator_authorised").length;
+  const verified = res.alternatives.filter((a) => a.status === "verified").length;
+  return {
+    available: true,
+    alternatives: res.alternatives.map((a) => ({
+      ...a,
+      // Trim citations for the model; the UI reads full rows itself.
+      citations: a.citations.slice(0, 4).map((c) => ({ ...c, source_name: SOURCE_LABELS[c.source_code] ?? c.source_code })),
+    })),
+    confidence: {
+      level: authorised + verified > 0 ? "high" : n > 0 ? "medium" : "low",
+      score: authorised + verified > 0 ? 0.85 : n > 0 ? 0.55 : 0,
+      basis: n === 0
+        ? "No source-backed alternatives on file for this drug."
+        : `${n} source-backed alternative${n === 1 ? "" : "s"}: ${authorised} regulator-authorised, ${verified} confirmed by 2+ sources, ${n - authorised - verified} single-source.`,
+    } satisfies Confidence,
+  };
+}
+
 async function findSubstitutes(args: {
   drug_id: string;
   country?: string;
@@ -1028,13 +1086,17 @@ async function findSubstitutes(args: {
   const sb = getSupabase();
   const limit = Math.min(args.limit ?? 5, 10);
 
+  // Order by ATC depth shared (deepest first). The stored similarity_score is a
+  // fixed function of atc_match_level, so it adds nothing and is not exposed.
   const alts = await sb
     .from("drug_alternatives")
-    .select("alternative_drug_id,similarity_score,atc_match_level,clinical_evidence_level,requires_monitoring,availability_note,dose_conversion_notes")
+    .select("alternative_drug_id,atc_match_level")
     .eq("drug_id", args.drug_id)
     .eq("is_approved", true)
-    .order("similarity_score", { ascending: false })
+    .order("atc_match_level", { ascending: false })
     .limit(limit);
+  // A failed query must not be reported as "none on file".
+  if (alts.error) throw alts.error;
 
   const altRows = alts.data ?? [];
   if (altRows.length === 0) {
@@ -1045,7 +1107,7 @@ async function findSubstitutes(args: {
       confidence: {
         level: "low",
         score: 0,
-        basis: "No ATC-matched alternatives on file for this drug.",
+        basis: "No same-ATC-class drugs on file for this drug.",
       } satisfies Confidence,
     }) as any;
   }
@@ -1069,57 +1131,42 @@ async function findSubstitutes(args: {
     shortageByDrug.set(row.drug_id, (shortageByDrug.get(row.drug_id) ?? 0) + 1);
   }
 
-  const out: SubstituteRow[] = altRows.map((a: any) => {
-    const drug = drugMap.get(a.alternative_drug_id) ?? {};
-    return {
-      drug_id: a.alternative_drug_id,
-      name: drug.generic_name ?? "Unknown",
-      atc_code: drug.atc_code ?? null,
-      drug_class: drug.drug_class ?? null,
-      similarity_score: a.similarity_score,
-      atc_match_level: a.atc_match_level,
-      clinical_evidence_level: a.clinical_evidence_level,
-      requires_monitoring: !!a.requires_monitoring,
-      availability_note: a.availability_note,
-      dose_conversion_notes: a.dose_conversion_notes,
-      active_shortage_count: shortageByDrug.get(a.alternative_drug_id) ?? 0,
-    };
-  });
+  const out: SubstituteRow[] = altRows.map((a: any) => toSubstituteRow(
+    a.alternative_drug_id,
+    drugMap.get(a.alternative_drug_id),
+    a.atc_match_level,
+    shortageByDrug.get(a.alternative_drug_id) ?? 0,
+  ));
 
   for (const s of out) ctx.subs[s.drug_id] = s;
-  // Confidence for the substitute set — backed by curated drug_alternatives
-  // rows, so reliability is high (Mederti pharmacists / WHO EML / FDA Orange
-  // Book sources). Use clinical_evidence_level as the per-row reliability:
-  // A → 0.95, B → 0.85, C → 0.7, D → 0.5, E → 0.4. Best-of-set drives the
-  // aggregate. signalCount = number of alternatives surfaced.
-  const evidenceScore = (lvl: string | null | undefined): number => {
-    if (!lvl) return 0.6;
-    const k = lvl.toUpperCase();
-    if (k === "A") return 0.95;
-    if (k === "B") return 0.85;
-    if (k === "C") return 0.7;
-    if (k === "D") return 0.5;
-    return 0.4;
-  };
-  const bestEvidence = out.reduce(
-    (best, s) => Math.max(best, evidenceScore(s.clinical_evidence_level)),
-    0
-  );
-  const confidence = computeConfidence({
-    sourceReliability: bestEvidence,
-    signalCount: out.length,
-    freshnessDays: 0, // drug_alternatives is curated reference data, not scraped
-  });
+  // Automated ATC-prefix pairing, never clinically reviewed: confidence that a
+  // row is a usable substitute is low no matter how many rows there are.
   return Object.assign(out, {
+    caveat: ALTERNATIVES_CAVEAT,
     confidence: {
-      ...confidence,
-      basis: `${out.length} substitute${out.length === 1 ? "" : "s"} (best evidence ${
-        out
-          .map((s) => s.clinical_evidence_level)
-          .filter(Boolean)[0] ?? "unspecified"
-      }) from Mederti's curated alternates table.`,
-    },
+      level: "low",
+      score: 0.3,
+      basis: `${out.length} same-ATC-class drug${out.length === 1 ? "" : "s"} from automated ${ALTERNATIVES_SOURCE} pairing — not clinically reviewed.`,
+    } satisfies Confidence,
   }) as any;
+}
+
+function toSubstituteRow(id: string, drug: any, atcMatchLevel: number | null, activeShortages: number): SubstituteRow {
+  return {
+    drug_id: id,
+    name: drug?.generic_name ?? "Unknown",
+    atc_code: drug?.atc_code ?? null,
+    drug_class: drug?.drug_class ?? null,
+    similarity_score: null,
+    atc_match_level: atcMatchLevel,
+    match_basis: atcMatchLabel(atcMatchLevel, drug?.atc_code ?? null),
+    source: ALTERNATIVES_SOURCE,
+    clinical_evidence_level: null,
+    requires_monitoring: false,
+    availability_note: null,
+    dose_conversion_notes: null,
+    active_shortage_count: activeShortages,
+  };
 }
 
 async function listActiveShortages(args: {
@@ -1268,21 +1315,148 @@ async function listActiveShortages(args: {
   } as any;
 }
 
-async function getTradePrices(args: { drug_id: string; countries?: string[] }): Promise<SupplierPriceRow[]> {
+// Markets with an official reference-price feed in drug_pricing_history.
+// AU is deliberately absent: only aggregate OECD rows exist there (no PBS feed).
+const REFERENCE_PRICE_MARKETS = ["GB", "US", "FR", "IT", "ES"];
+const MAX_PRODUCT_LINES = 40;
+
+// Each line is one source row, verbatim. No cross-product aggregates: strengths,
+// pack sizes, price types and units differ, so a min/median across them would
+// be a mismatched comparison.
+type ReferencePriceLine = {
+  product_name: string | null;
+  pack_description: string | null;
+  unit_price: number | null;
+  // What unit_price is per (GB: tablet/ml/…, US: EA/ML/GM). Null = unknown.
+  unit_basis: string | null;
+  pack_price: number | null;
+  price_type: string | null;
+  effective_date: string;
+};
+
+type ReferencePriceMarket = {
+  country: string;
+  authority: string | null;
+  source: string | null;
+  source_url: string | null;
+  currency: string | null;
+  // US: date of the NADAC file the lines come from. Others: newest effective_date on file.
+  latest_publication: string;
+  product_count: number;
+  products_shown: number;
+  products: ReferencePriceLine[];
+};
+
+const PRICE_COLS =
+  "country,authority,source,source_url,price_type,product_name,generic_name,pack_description,unit_price,pack_price,currency,effective_date,raw_unit:raw_data->>unit,pricing_unit:raw_data->>pricing_unit,as_of:raw_data->>as_of_date";
+
+async function getMarketReferencePrices(drugId: string, country: string): Promise<ReferencePriceMarket | null> {
   const sb = getSupabase();
-  const { data, error } = await sb
-    .from("supplier_inventory")
-    .select("countries,unit_price,currency,pack_size,available_until,status,notes")
-    .eq("drug_id", args.drug_id)
-    .eq("status", "available");
+  let rows: any[];
+  if (country === "US") {
+    // NADAC: effective_date is when each NDC's rate was set; a rate set months
+    // ago can still be current. "Current" = present in the newest NADAC file.
+    const { data: top, error: e1 } = await sb
+      .from("drug_pricing_history")
+      .select("as_of:raw_data->>as_of_date")
+      .eq("drug_id", drugId)
+      .eq("country", "US")
+      .order("raw_data->>as_of_date", { ascending: false })
+      .limit(1);
+    if (e1) throw e1;
+    const asOf = (top?.[0] as any)?.as_of;
+    if (!asOf) return null;
+    const { data, error } = await sb
+      .from("drug_pricing_history")
+      .select(PRICE_COLS)
+      .eq("drug_id", drugId)
+      .eq("country", "US")
+      .eq("raw_data->>as_of_date", asOf)
+      .order("effective_date", { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    rows = data ?? [];
+  } else {
+    // Snapshot lists (tariff / national price lists): only the newest
+    // publication of each price type (GB tariff and concessions publish separately).
+    const { data, error } = await sb
+      .from("drug_pricing_history")
+      .select(PRICE_COLS)
+      .eq("drug_id", drugId)
+      .eq("country", country)
+      .order("effective_date", { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    const newest = new Map<string, string>();
+    for (const r of data ?? []) if (!newest.has(r.price_type)) newest.set(r.price_type, r.effective_date);
+    rows = (data ?? []).filter((r: any) => r.effective_date === newest.get(r.price_type));
+  }
+  if (rows.length === 0) return null;
+
+  // Collapse only exact duplicates (NADAC repeats an identical line per NDC).
+  const seen = new Set<string>();
+  const lines: ReferencePriceLine[] = [];
+  for (const r of rows) {
+    const line: ReferencePriceLine = {
+      product_name: r.product_name ?? r.generic_name ?? null,
+      pack_description: r.pack_description,
+      unit_price: r.unit_price,
+      unit_basis: r.raw_unit ?? r.pricing_unit ?? null,
+      pack_price: r.pack_price,
+      price_type: r.price_type,
+      effective_date: r.effective_date,
+    };
+    const key = JSON.stringify([line.product_name, line.pack_description, line.unit_price, line.unit_basis, line.pack_price, line.price_type]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(line);
+  }
+  lines.sort((a, b) => (a.product_name ?? "").localeCompare(b.product_name ?? ""));
+
+  return {
+    country,
+    authority: rows[0].authority,
+    source: rows[0].source,
+    source_url: rows[0].source_url,
+    currency: rows[0].currency,
+    latest_publication: country === "US" ? rows[0].as_of : rows.reduce((d: string, r: any) => (r.effective_date > d ? r.effective_date : d), rows[0].effective_date),
+    product_count: lines.length,
+    products_shown: Math.min(lines.length, MAX_PRODUCT_LINES),
+    products: lines.slice(0, MAX_PRODUCT_LINES),
+  };
+}
+
+async function getReferencePrices(drugId: string, countries?: string[]): Promise<ReferencePriceMarket[]> {
+  const markets = countries && countries.length > 0
+    ? REFERENCE_PRICE_MARKETS.filter((c) => countries.includes(c))
+    : REFERENCE_PRICE_MARKETS;
+  const results = await Promise.all(markets.map((c) => getMarketReferencePrices(drugId, c)));
+  return results.filter((m): m is ReferencePriceMarket => m !== null);
+}
+
+async function getTradePrices(args: { drug_id: string; countries?: string[] }) {
+  const sb = getSupabase();
+  // Users say "UK"; the data says "GB".
+  const countries = args.countries
+    ?.map((c) => c.toUpperCase())
+    .map((c) => (c === "UK" ? "GB" : c));
+
+  const [{ data, error }, referencePrices] = await Promise.all([
+    sb
+      .from("supplier_inventory")
+      .select("countries,unit_price,currency,pack_size,available_until,status,notes")
+      .eq("drug_id", args.drug_id)
+      .eq("status", "available"),
+    getReferencePrices(args.drug_id, countries),
+  ]);
   if (error) throw error;
 
-  const rows: SupplierPriceRow[] = [];
+  const supplierListings: SupplierPriceRow[] = [];
   for (const row of data ?? []) {
-    const countries: string[] = row.countries ?? [];
-    for (const c of countries) {
-      if (args.countries && args.countries.length > 0 && !args.countries.includes(c)) continue;
-      rows.push({
+    const rowCountries: string[] = row.countries ?? [];
+    for (const c of rowCountries) {
+      if (countries && countries.length > 0 && !countries.includes(c)) continue;
+      supplierListings.push({
         country: c,
         unit_price: row.unit_price,
         currency: row.currency,
@@ -1293,23 +1467,41 @@ async function getTradePrices(args: { drug_id: string; countries?: string[] }): 
       });
     }
   }
-  // Supplier-listed prices are sparse — confidence reflects volume of evidence.
-  // Zero rows → low (audit §11 HPR-13/16 template territory). 1–2 → low-medium.
-  // 3+ rows → medium (still not procurement-grade — these are listed prices,
-  // not transacted ones).
+
+  const covered = new Set([...referencePrices.map((m) => m.country), ...supplierListings.map((r) => r.country)]);
+  const missing = (countries ?? []).filter((c) => !covered.has(c));
+  const oldestPublication = referencePrices.reduce<string | null>((o, m) => (!o || m.latest_publication < o ? m.latest_publication : o), null);
+
+  // Official reference prices (tariff / NADAC / national price lists) are
+  // regulator-published, so they carry more weight than supplier listings.
+  const signalCount = referencePrices.length * 3 + supplierListings.length;
   const confidence = computeConfidence({
-    sourceReliability: 0.6,
-    signalCount: rows.length,
-    freshnessDays: 0, // supplier_inventory has its own status field; trust the rows we get
+    sourceReliability: referencePrices.length > 0 ? 0.85 : 0.6,
+    signalCount,
+    freshnessDays: oldestPublication ? Math.floor((Date.now() - new Date(oldestPublication).getTime()) / 86400000) : 0,
   });
-  return Object.assign(rows, {
+
+  return {
+    reference_prices: referencePrices,
+    supplier_listings: supplierListings,
+    countries_without_data: missing,
+    coverage_note:
+      `Official reference prices are held for ${REFERENCE_PRICE_MARKETS.join(", ")} only ` +
+      "(GB = NHS Drug Tariff, mostly generics; US = CMS NADAC pharmacy acquisition cost; " +
+      "FR/IT/ES = national public price lists, pack prices only). Each product line is one source row, exactly as published. " +
+      "Price types differ by market (tariff reimbursement vs acquisition cost vs public retail) and so do units (see unit_basis), " +
+      "so only compare the same strength, form and unit across markets, and name the price type and date for each figure. " +
+      "If products_shown < product_count, the list is truncated, so don't state a range or the cheapest/most expensive for that market. " +
+      "Mederti has no Australian (PBS) price feed.",
     confidence: {
       ...confidence,
-      basis: rows.length === 0
-        ? "No supplier-listed prices on file for this drug."
-        : `${rows.length} supplier-listed price point${rows.length === 1 ? "" : "s"} from supplier_inventory.`,
+      basis:
+        referencePrices.length === 0 && supplierListings.length === 0
+          ? "No reference or supplier-listed prices on file for this drug."
+          : `${referencePrices.length} market${referencePrices.length === 1 ? "" : "s"} with official reference prices; ` +
+            `${supplierListings.length} supplier-listed price point${supplierListings.length === 1 ? "" : "s"}.`,
     },
-  }) as any;
+  };
 }
 
 async function searchRecalls(args: {
@@ -1367,16 +1559,13 @@ export async function hydrateReferencedIds(text: string, ctx: ToolContext): Prom
 
   if (subIds.size === 0) return;
 
+  // A <sub_card> carries only drug facts + live shortage count. The pair's
+  // ATC level isn't known here (no source drug), so match_basis stays null.
   const sb = getSupabase();
   const ids = [...subIds];
-  const [drugRes, shortageRes, altRes] = await Promise.all([
+  const [drugRes, shortageRes] = await Promise.all([
     sb.from("drugs").select("id,generic_name,atc_code,drug_class").in("id", ids),
     sb.from("shortage_events").select("drug_id").in("drug_id", ids).eq("status", "active"),
-    sb
-      .from("drug_alternatives")
-      .select("alternative_drug_id,similarity_score,atc_match_level,clinical_evidence_level,requires_monitoring,dose_conversion_notes,availability_note")
-      .in("alternative_drug_id", ids)
-      .order("similarity_score", { ascending: false }),
   ]);
 
   const drugMap = new Map<string, any>((drugRes.data ?? []).map((d: any) => [d.id, d]));
@@ -1384,28 +1573,11 @@ export async function hydrateReferencedIds(text: string, ctx: ToolContext): Prom
   for (const s of shortageRes.data ?? []) {
     shortageCounts.set(s.drug_id, (shortageCounts.get(s.drug_id) ?? 0) + 1);
   }
-  const altMap = new Map<string, any>();
-  for (const a of altRes.data ?? []) {
-    if (!altMap.has(a.alternative_drug_id)) altMap.set(a.alternative_drug_id, a);
-  }
 
   for (const id of ids) {
     const drug = drugMap.get(id);
     if (!drug) continue;
-    const alt = altMap.get(id);
-    ctx.subs[id] = {
-      drug_id: id,
-      name: drug.generic_name ?? "Unknown",
-      atc_code: drug.atc_code ?? null,
-      drug_class: drug.drug_class ?? null,
-      similarity_score: alt?.similarity_score ?? null,
-      atc_match_level: alt?.atc_match_level ?? null,
-      clinical_evidence_level: alt?.clinical_evidence_level ?? null,
-      requires_monitoring: !!alt?.requires_monitoring,
-      availability_note: alt?.availability_note ?? null,
-      dose_conversion_notes: alt?.dose_conversion_notes ?? null,
-      active_shortage_count: shortageCounts.get(id) ?? 0,
-    };
+    ctx.subs[id] = toSubstituteRow(id, drug, null, shortageCounts.get(id) ?? 0);
   }
 }
 
@@ -2359,111 +2531,112 @@ async function compareShortageBurden(args: { country: string; peer_set?: string[
 }
 
 // ── Tool 3: get_class_concentration_risk ──────────────────────────────────
+// Supply concentration from inn_risk_scores (nightly, backend/analysis/risk_score.py).
+// Replaces v_drug_manufacturer_concentration, which never existed in prod, so
+// this tool previously returned no data. Same tiers as the National Shortage
+// Dashboard and the drug page (lib/insights/dashboard-data-shared.ts).
+const SUPPLY_FIELDS =
+  "inn,display_name,fragility,who_eml_list,eu_critical,n_api_makers,n_finished_firms,top_api_country,short_countries,drug_ids,atc:components->atc_codes,geography:components->geography,computed_at";
+const SUPPLY_CAVEAT =
+  "Supply concentration describes the supply base (FDA Drug Master File + WHO prequalification API makers; US finished-dose firms). It is NOT a shortage prediction: Mederti's backtest found it predicts neither when a shortage starts nor how long it lasts. Breadth of current shortages across peer markets (get_predictive_signals) is the forward signal. Coverage is US-centric, so medicines not sold in the US often show 'unknown'.";
+
+interface SupplyScoreRow {
+  inn: string;
+  display_name: string;
+  fragility: number | null;
+  who_eml_list: "core" | "complementary" | null;
+  eu_critical: boolean;
+  n_api_makers: number | null;
+  n_finished_firms: number | null;
+  top_api_country: string | null;
+  short_countries: string[] | null;
+  drug_ids: string[];
+  atc: string[] | null;
+  geography: { countries?: Record<string, number> } | null;
+  computed_at: string;
+}
+
+const TIER_RANK: Record<ConcentrationTier, number> = { highly_concentrated: 3, concentrated: 2, broad: 1, unknown: 0 };
+
+function tierOf(r: SupplyScoreRow): ConcentrationTier {
+  return tierFor(r.fragility == null ? null : Number(r.fragility));
+}
+
+function supplyRow(r: SupplyScoreRow, country?: string) {
+  const c = r.geography?.countries;
+  const total = c ? Object.values(c).reduce((x, y) => x + y, 0) : 0;
+  return {
+    molecule: r.display_name,
+    atc_codes: r.atc ?? [],
+    who_model_list: r.who_eml_list ?? null,
+    eu_critical: !!r.eu_critical,
+    supply_concentration: TIER_LABEL[tierOf(r)],
+    api_makers: r.n_api_makers,
+    us_finished_dose_firms: r.n_finished_firms,
+    top_api_country: r.top_api_country,
+    top_api_country_share: r.top_api_country && total ? Math.round((100 * (c![r.top_api_country] ?? 0)) / total) + "%" : null,
+    countries_short_now: r.short_countries ?? [],
+    ...(country ? { short_in_country_now: (r.short_countries ?? []).includes(country) } : {}),
+  };
+}
+
 async function getClassConcentrationRisk(args: { atc_prefix: string; country?: string; limit?: number }) {
   const atc = (args.atc_prefix || "").toUpperCase().trim();
   if (!atc) {
     return { status: "unanswerable", reason: "missing_atc_prefix", hint: "Pass an ATC prefix (e.g. J01, L01, A10)." };
   }
-  const sb = getSupabase();
+  const country = args.country?.toUpperCase();
   const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
-
-  // 1. Drugs in class
-  const { data: drugs, error } = await sb
-    .from("drugs")
-    .select("id,generic_name,atc_code,who_essential_medicine")
-    .like("atc_code", `${atc}%`)
-    .limit(500);
+  const { data, error } = await getSupabase().from("inn_risk_scores").select(SUPPLY_FIELDS).limit(2000);
   if (error) throw new Error(error.message);
-  if (!drugs || drugs.length === 0) {
+  const rows = (data ?? []) as unknown as SupplyScoreRow[];
+  const inClass = rows.filter((r) => (r.atc ?? []).some((code) => code.startsWith(atc)));
+  if (inClass.length === 0) {
     return {
       status: "unanswerable",
-      reason: "no_drugs_in_class",
-      hint: `No drugs found with ATC prefix '${atc}'. Verify the prefix (e.g. J01 = antibacterials, L01 = oncology, A10 = diabetes).`,
+      reason: "no_essential_molecules_in_class",
+      hint: `No molecule on the WHO Model List or EU Union list has an ATC code starting '${atc}'. Supply profiles only cover those ~560 essential/critical molecules.`,
     };
   }
-
-  const drugIds = drugs.map((d: any) => d.id);
-
-  // 2. Concentration view (per-drug manufacturer count + risk tier).
-  // The audit cites v_drug_manufacturer_concentration. The view's exact shape
-  // can drift; tolerate alternative column names.
-  let concentration: any[] = [];
-  try {
-    const { data } = await sb
-      .from("v_drug_manufacturer_concentration")
-      .select("*")
-      .in("drug_id", drugIds)
-      .limit(500);
-    concentration = data ?? [];
-  } catch (e) {
-    // View may not exist on every DB; fall back to api_supply_summary if present.
-    concentration = [];
-  }
-
-  // Map by drug_id
-  const concentrationByDrug = new Map<string, any>();
-  for (const row of concentration) {
-    const id = row.drug_id ?? row.id;
-    if (id) concentrationByDrug.set(id, row);
-  }
-
-  // 3. Cross-reference with active shortages in country (if provided).
-  const shortageByDrug = new Map<string, number>();
-  let shortageQ = sb.from("shortage_events").select("drug_id").eq("status", "active").in("drug_id", drugIds);
-  if (args.country) shortageQ = shortageQ.eq("country_code", args.country.toUpperCase());
-  const { data: shorts } = await shortageQ;
-  for (const r of shorts ?? []) {
-    const id = (r as any).drug_id;
-    if (id) shortageByDrug.set(id, (shortageByDrug.get(id) ?? 0) + 1);
-  }
-
-  // 4. Assemble. Rank by concentration_risk (single-source first) then shortage count.
-  const tierRank: Record<string, number> = { high_risk: 4, moderate_risk: 3, low_risk: 2, unknown: 1 };
-  const items = drugs.map((d: any) => {
-    const c = concentrationByDrug.get(d.id) ?? {};
-    return {
-      drug_id: d.id,
-      name: d.generic_name,
-      atc_code: d.atc_code,
-      who_essential: !!d.who_essential_medicine,
-      manufacturer_count: c.manufacturer_count ?? c.total_suppliers ?? null,
-      concentration_risk: (c.concentration_risk as string) ?? "unknown",
-      currently_in_shortage_events: shortageByDrug.get(d.id) ?? 0,
-    };
-  });
-
-  items.sort((a, b) => {
-    const ar = tierRank[a.concentration_risk] ?? 1;
-    const br = tierRank[b.concentration_risk] ?? 1;
-    if (ar !== br) return br - ar;
-    return b.currently_in_shortage_events - a.currently_in_shortage_events;
-  });
-
-  // Class-level summary
-  const tierCounts: Record<string, number> = {};
-  for (const i of items) tierCounts[i.concentration_risk] = (tierCounts[i.concentration_risk] || 0) + 1;
-
-  const confidence = computeConfidence({
-    sourceReliability: 0.85, // PharmaCompass + reg data is good but not regulator-grade
-    signalCount: items.filter((i) => i.manufacturer_count != null).length,
-    freshnessDays: 7, // pharmacompass imports are quarterly-ish
-  });
-
+  const sorted = [...inClass].sort((x, y) =>
+    TIER_RANK[tierOf(y)] - TIER_RANK[tierOf(x)] || (y.short_countries ?? []).length - (x.short_countries ?? []).length);
+  const items = sorted.map((r) => supplyRow(r, country));
+  const distribution: Record<string, number> = {};
+  for (const i of items) distribution[i.supply_concentration] = (distribution[i.supply_concentration] ?? 0) + 1;
   return {
     atc_prefix: atc,
-    country: args.country?.toUpperCase() ?? null,
-    drugs_in_class: drugs.length,
-    tier_distribution: tierCounts,
+    country: country ?? null,
+    essential_molecules_in_class: items.length,
+    concentration_distribution: distribution,
     items: items.slice(0, limit),
-    confidence: {
-      ...confidence,
-      basis: `Manufacturer counts via v_drug_manufacturer_concentration (PharmaCompass + drug_rxnorm). ${items.filter((i) => i.manufacturer_count != null).length}/${items.length} drugs in this class have manufacturer-count coverage; the rest fall through as 'unknown'.`,
-    },
-    notes: [
-      "concentration_risk values: high_risk (≤2 suppliers), moderate_risk (≤5), low_risk (>5), unknown (no PharmaCompass data).",
-      args.country ? "currently_in_shortage_events is per-country (using the country filter)." : "currently_in_shortage_events is global (no country filter applied).",
-      "Manufacturer coverage is best for established generics; specialty/biologic drugs often show as 'unknown'.",
-    ],
+    computed_at: inClass[0]?.computed_at ?? null,
+    source: "inn_risk_scores (WHO Model List ∪ EU Union list; FDA DMF, WHO PQ, Drugs@FDA, recalls, shortage reports)",
+    caveat: SUPPLY_CAVEAT,
+  };
+}
+
+async function getSupplyProfile(args: { drug_id?: string; name?: string; country?: string }) {
+  const sb = getSupabase();
+  const country = args.country?.toUpperCase();
+  let q = sb.from("inn_risk_scores").select(SUPPLY_FIELDS).limit(3);
+  if (args.drug_id) q = q.contains("drug_ids", [args.drug_id]);
+  else if (args.name) q = q.ilike("inn", args.name.trim().toLowerCase());
+  else return { status: "unanswerable", reason: "missing_scope", hint: "Pass drug_id or the medicine's INN as name." };
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const r = (data?.[0] ?? null) as unknown as SupplyScoreRow | null;
+  if (!r) {
+    return {
+      status: "unanswerable",
+      reason: "not_in_supply_universe",
+      hint: "Supply profiles cover only molecules on the WHO Model List of Essential Medicines or the EU Union list of critical medicines. This medicine isn't one of them, or couldn't be matched by name.",
+    };
+  }
+  return {
+    ...supplyRow(r, country),
+    computed_at: r.computed_at,
+    source: "inn_risk_scores (nightly)",
+    caveat: SUPPLY_CAVEAT,
   };
 }
 
@@ -3016,33 +3189,15 @@ async function getRecentDeregistrations(args: { drug_id?: string; country?: stri
 }
 
 async function getDoseConversion(args: { from_drug_id: string; to_drug_id: string }) {
-  if (!args.from_drug_id || !args.to_drug_id) return { status: "unanswerable", reason: "missing_args", hint: "Both from_drug_id and to_drug_id required." };
-  const sb = getSupabase();
-  const { data: rows } = await sb.from("drug_alternatives")
-    .select("drug_id,alternative_drug_id,dose_conversion_notes,clinical_evidence_level,relationship_type,requires_monitoring,monitoring_notes,similarity_score")
-    .or(`and(drug_id.eq.${args.from_drug_id},alternative_drug_id.eq.${args.to_drug_id}),and(drug_id.eq.${args.to_drug_id},alternative_drug_id.eq.${args.from_drug_id})`)
-    .limit(2);
-  const r = (rows ?? [])[0] as any;
-  if (!r || (!r.dose_conversion_notes && !r.monitoring_notes)) {
-    return {
-      status: "unanswerable",
-      reason: "no_verified_conversion",
-      hint: "Mederti doesn't have a verified dose-conversion entry for this pair. Dose conversion depends on patient factors not visible to this system. Canonical references: Australian Medicines Handbook / BNF / Micromedex / hospital antimicrobial stewardship guideline.",
-      from_drug_id: args.from_drug_id, to_drug_id: args.to_drug_id,
-      confidence: { level: "low", score: 0, basis: "No verified dose-conversion entry on file." } satisfies Confidence,
-    };
-  }
-  const e = (r.clinical_evidence_level ?? "").toUpperCase();
-  const scoreByEvidence = e === "A" ? 0.9 : e === "B" ? 0.75 : 0.5;
+  // drug_alternatives.dose_conversion_notes is template text keyed on ATC level
+  // ("dose conversion is 1:1" for every level-5 pair), not a sourced conversion.
+  // Until a source-verified table exists, there is nothing safe to return.
   return {
+    status: "unanswerable",
+    reason: "no_verified_conversion",
+    hint: "Mederti doesn't hold source-verified dose conversions. Dose conversion depends on patient factors not visible to this system. Canonical references: Australian Medicines Handbook / BNF / Micromedex / hospital antimicrobial stewardship guideline.",
     from_drug_id: args.from_drug_id, to_drug_id: args.to_drug_id,
-    dose_conversion_notes: r.dose_conversion_notes,
-    monitoring_notes: r.monitoring_notes,
-    requires_monitoring: !!r.requires_monitoring,
-    clinical_evidence_level: r.clinical_evidence_level,
-    relationship_type: r.relationship_type,
-    similarity_score: r.similarity_score,
-    confidence: { level: levelFromScore(scoreByEvidence), score: scoreByEvidence, basis: `Mederti curated dose-conversion (evidence ${r.clinical_evidence_level ?? "unspecified"}). Final dose decision is yours — patient factors not visible to this system.` } satisfies Confidence,
+    confidence: { level: "low", score: 0, basis: "No source-verified dose-conversion data on file." } satisfies Confidence,
   };
 }
 
@@ -3525,6 +3680,8 @@ export async function executeTool(
       return await summarizeShortageLandscape(input as any, ctx);
     case "get_class_summary":
       return await getClassSummary(input as any, ctx);
+    case "get_sourced_alternatives":
+      return await getSourcedAlternatives(input as any);
     case "get_trade_prices":
       return await getTradePrices(input as any);
     case "search_recalls":
@@ -3538,6 +3695,8 @@ export async function executeTool(
       return await compareShortageBurden(input as any);
     case "get_class_concentration_risk":
       return await getClassConcentrationRisk(input as any);
+    case "get_supply_profile":
+      return await getSupplyProfile(input as any);
     case "get_resolution_time_stats":
       return await getResolutionTimeStats(input as any);
     case "get_predictive_signals":

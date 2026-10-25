@@ -71,8 +71,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     sb.from("manufacturing_facilities").select("facility_name, country, last_inspection_classification, oai_count_5y, warning_letter_count_5y").or("last_inspection_classification.eq.OAI,warning_letter_count_5y.gt.0").limit(8),
     sb.from("drug_approvals").select("authority, te_code").eq("drug_id", drugId).limit(20),
     safe(
-      sb.from("drug_alternatives").select("alternative_drug_name").eq("drug_id", drugId).limit(8) as unknown as PromiseLike<{ data: Array<{ alternative_drug_name: string }> | null }>,
-      [] as Array<{ alternative_drug_name: string }>,
+      sb.from("drug_alternatives").select("alternative_drug_id").eq("drug_id", drugId).eq("is_approved", true).limit(50) as unknown as PromiseLike<{ data: Array<{ alternative_drug_id: string }> | null }>,
+      [] as Array<{ alternative_drug_id: string }>,
     ),
   ]);
 
@@ -145,7 +145,7 @@ Orange Book TE codes present: ${teCodes.length} (${Array.from(new Set(teCodes)).
 
 ALTERNATIVES ON FILE
 =====================
-${(alternativesRes.data ?? []).length} therapeutic alternatives indexed
+${(alternativesRes.data ?? []).length} same-WHO-ATC-class drugs on file (automated classification pairing — NOT clinically reviewed substitutes; never describe them as recommended or equivalent)
 `;
 
   const systemPrompt = `You write Mederti's "So What" insight for a drug page. Strict house style: The Economist (2023).

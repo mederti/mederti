@@ -1,4 +1,6 @@
-import { type ConcentrationTier, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
+import { Fragment } from "react";
+import { type ConcentrationTier, PEER_GROUPS, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
+import type { SupplyInMarket, SupplyStatus } from "@/lib/supply-in-market";
 import Link from "next/link";
 import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
@@ -128,7 +130,7 @@ function namesBrand(published: string | null | undefined, brand: string): boolea
 const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Anonymous free-tier views used (null = signed in). */
@@ -158,6 +160,8 @@ export default function V1DrugView({
     topApiShare: number | null;
     shortCountries: string[];
   } | null;
+  // Registered products × open notices in the user's market (lib/supply-in-market.ts).
+  supplyInMarket?: SupplyInMarket | null;
   recalls?: any[];
   approvalFootprint?: {
     total: number;
@@ -885,7 +889,111 @@ export default function V1DrugView({
               covers, its sponsor, and its OWN return estimate. Events whose
               source reports at ingredient level only are labelled as such,
               never dressed up with the molecule's brand list. */}
-          {mineAll.length > 0 && (
+          {/* Supply in the user's market — the job-first answer: which registered
+              products are short here, which aren't, and when the short ones are
+              expected back. Upstream (API makers) sits collapsed beneath it.
+              Falls back to "Products affected" where we hold no register. */}
+          {supplyInMarket && (
+            <div className="sec" id="supply">
+              <div className="sec-title">
+                Supply in {cName}{" "}
+                <span className="help">{supplyInMarket.productCount} registered product{supplyInMarket.productCount !== 1 ? "s" : ""} · {supplyInMarket.registerSource} × {supplyInMarket.noticeSource}</span>
+              </div>
+              <div className="sim">
+                <div className="sim-ans">{supplyInMarket.answer}</div>
+                <table className="sim-table">
+                  <thead><tr><th>Product</th><th>Status</th><th className="sim-hide">Expected back</th></tr></thead>
+                  <tbody>
+                    {supplyInMarket.groups.map((g) => (
+                      <Fragment key={g.form}>
+                        <tr className="sim-form"><td colSpan={3}>{g.form}</td></tr>
+                        {g.products.filter((p) => p.status !== "none").map((p) => (
+                          <tr key={p.name}>
+                            <td>
+                              <div className="sim-name">{p.name}</div>
+                              <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
+                            </td>
+                            <td><SupplyPill status={p.status} since={p.since} /></td>
+                            <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} /></td>
+                          </tr>
+                        ))}
+                        {g.notices.map((n, i) => (
+                          <tr key={`n${i}`}>
+                            <td>
+                              <div className="sim-name">{n.label}</div>
+                              <div className="alt-f">Notice not matched to a registered product</div>
+                            </td>
+                            <td><SupplyPill status={n.status} since={n.since} /></td>
+                            <td className="sim-hide"><BackCell status={n.status} back={n.back} passed={n.backPassed} url={n.sourceUrl} /></td>
+                          </tr>
+                        ))}
+                        {g.products.filter((p) => p.status === "none").map((p, pi) => (
+                          <tr key={p.name} className={pi >= SIM_CLEAR_SHOWN ? "sim-extra" : undefined}>
+                            <td>
+                              <div className="sim-name">{p.name}</div>
+                              <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
+                            </td>
+                            <td><SupplyPill status={p.status} since={p.since} /></td>
+                            <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} /></td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+                {(() => {
+                  const extra = supplyInMarket.groups.reduce((n, g) => n + Math.max(0, g.products.filter((p) => p.status === "none").length - SIM_CLEAR_SHOWN), 0);
+                  return extra > 0 || supplyInMarket.combosExcluded > 0 ? (
+                    <>
+                    {extra > 0 && <label className="sim-all">
+                      <input type="checkbox" />
+                      <span className="sim-show">Show {extra} more product{extra !== 1 ? "s" : ""} with no shortage reported</span>
+                      <span className="sim-hidetxt">Show fewer</span>
+                    </label>}
+                    {supplyInMarket.combosExcluded > 0 && (
+                      <div className="sim-note">{supplyInMarket.combosExcluded} combination product{supplyInMarket.combosExcluded !== 1 ? "s or notices" : " or notice"} (with another active ingredient) not shown here.</div>
+                    )}
+                    </>
+                  ) : null;
+                })()}
+                <div className="sim-acts">
+                  <a href="#alternatives" className="sim-btn primary">What to use instead</a>
+                  <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+                  <WatchButton drugId={id} />
+                </div>
+                {supplyProfile && (() => {
+                  const elsewhere = supplyProfile.shortCountries.filter((c) => c !== userCountry);
+                  const peers = elsewhere.filter((c) => (PEER_GROUPS[userCountry] ?? []).includes(c));
+                  return (
+                    <div className="sim-ctx">
+                      <span>{elsewhere.length ? `Also short in ${elsewhere.length} other countr${elsewhere.length === 1 ? "y" : "ies"}` : "Not short in other markets we track"}</span>
+                      {peers.length > 0 && <span>Short in peer markets: {peers.join(", ")}</span>}
+                      {(supplyProfile.whoList || supplyProfile.euCritical) && (
+                        <span>{[supplyProfile.whoList ? "WHO essential" : null, supplyProfile.euCritical ? "EU critical" : null].filter(Boolean).join(" · ")}</span>
+                      )}
+                    </div>
+                  );
+                })()}
+                {apiConcentration && (
+                  <details className="sim-up">
+                    <summary>
+                      <span>Upstream supply base: <span className={`status-pill ${TIER_CLS[supplyTier]}`}><span className="d" />{TIER_LABEL[supplyTier]}</span> {apiConcentration.count} API maker{apiConcentration.count !== 1 ? "s" : ""}{apiConcentration.countries.length ? ` in ${apiConcentration.countries.slice(0, 4).join(", ")}` : ""}</span>
+                      <span className="sim-more"><span className="sim-show">Show</span><span className="sim-hidetxt">Hide</span></span>
+                    </summary>
+                    <table className="attr-table sim-uptable"><tbody>
+                      <tr><th scope="row">API makers</th><td>{apiConcentration.makers.join(", ")}{apiConcentration.count > apiConcentration.makers.length ? ` +${apiConcentration.count - apiConcentration.makers.length} more` : ""}</td></tr>
+                      {supplyProfile?.nFinishedFirms != null && <tr><th scope="row">US finished-dose firms</th><td>{supplyProfile.nFinishedFirms}</td></tr>}
+                      {supplyProfile?.topApiCountry && supplyProfile.topApiShare != null && <tr><th scope="row">Largest API country</th><td>{supplyProfile.topApiCountry}: {Math.round(supplyProfile.topApiShare * 100)}% of makers with a known country</td></tr>}
+                      {(apiConcentration.whoPqCount ?? 0) > 0 && <tr><th scope="row">WHO-prequalified</th><td>{apiConcentration.whoPqCount}</td></tr>}
+                      <tr><th scope="row">Sources</th><td className="attr-muted">FDA Drug Master Files, FDA DECRS, Drugs@FDA. US-centric; describes the supply base, doesn&apos;t forecast shortages.</td></tr>
+                    </tbody></table>
+                  </details>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!supplyInMarket && mineAll.length > 0 && (
             <div className="sec">
               <div className="sec-title">
                 Products affected in {cName}{" "}
@@ -1119,7 +1227,7 @@ export default function V1DrugView({
           )}
 
           {/* API supply-base concentration (FDA Drug Master Files) */}
-          {apiConcentration && (
+          {apiConcentration && !supplyInMarket && (
             <div className="sec">
               <div className="sec-title">Global API supply base <span className="help">🇺🇸 FDA Drug Master Files · active Type II</span></div>
               <div className="conc">
@@ -1458,7 +1566,7 @@ function groupByStatement(cites: AlternativeCitation[]): { statement: string; re
 // verbatim and linked. single_source is labelled as exactly that.
 function SourcedAlternativesSection({ alts, country }: { alts: SourcedAlternative[]; country: string }) {
   return (
-    <div className="sec">
+    <div className="sec" id="alternatives">
       <div className="sec-title">Alternatives with sources <span className="help">regulator instruments &amp; published lists</span></div>
       {alts.length === 0 ? (
         <div className="alt-note">No source-backed alternatives on file for this medicine.</div>
@@ -1782,6 +1890,30 @@ const CSS = `
 .stat-l{font-size:10.5px;color:var(--text-3);margin-top:5px;text-transform:uppercase;letter-spacing:.04em}
 .stat-foot{font-size:11.5px;color:var(--text-3);margin-top:11px;line-height:1.5}
 @media(max-width:620px){.stat-row{grid-template-columns:repeat(2,1fr)}}
+.sim{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--card,#fff)}
+.sim-ans{font-size:15px;font-weight:600;color:var(--ink);padding:14px 16px;border-bottom:1px solid var(--border);line-height:1.4}
+.sim-table{width:100%;border-collapse:collapse;font-size:13px}
+.sim-table th{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-4);text-align:left;padding:8px 16px;background:var(--bg-2)}
+.sim-table td{padding:10px 16px;border-top:1px solid var(--border);vertical-align:top}
+.sim-form td{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);background:var(--bg-2);padding:6px 16px}
+.sim-name{font-weight:600;color:var(--ink)}
+.sim-back{font-weight:500;color:var(--ink)}
+.sim-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 16px;border-top:1px solid var(--border)}
+.sim-btn{font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:8px;border:1px solid var(--border);text-decoration:none;color:var(--ink)}
+.sim-btn.primary{background:var(--teal,#0fa676);border-color:var(--teal,#0fa676);color:#fff}
+.sim-ctx{display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px;font-size:12px;color:var(--text-3);border-top:1px solid var(--border);background:var(--bg-2)}
+.sim-up{border-top:1px solid var(--border)}
+.sim-up summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;font-size:12.5px;color:var(--text-3);cursor:pointer;list-style:none}
+.sim-up summary::-webkit-details-marker{display:none}
+.sim-hidetxt{display:none}
+.sim-note{padding:8px 16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-4)}
+.sim-extra{display:none}.sim:has(.sim-all input:checked) .sim-extra{display:table-row}
+.sim-all{display:block;padding:9px 16px;border-top:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--teal,#0fa676);cursor:pointer}
+.sim-all input{position:absolute;opacity:0;pointer-events:none}
+.sim-all:has(input:checked) .sim-show{display:none}.sim-all:has(input:checked) .sim-hidetxt{display:inline}.sim-up[open] .sim-show{display:none}.sim-up[open] .sim-hidetxt{display:inline}
+.sim-more{font-size:12px;font-weight:600;color:var(--teal,#0fa676);white-space:nowrap}
+.sim-uptable{border-top:1px solid var(--border)}
+@media(max-width:560px){.sim-hide{display:none}.sim-table td,.sim-table th{padding-left:12px;padding-right:12px}}
 .status-pill{font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
 .status-pill .d{width:6px;height:6px;border-radius:50%;background:currentColor}
 .sp-crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
@@ -1883,3 +2015,35 @@ const CSS = `
   a[href]{text-decoration:none;color:inherit}
 }
 `;
+
+// Unaffected products shown per dose form before "Show all" — a market can
+// register ~100 presentations of a common molecule (GB amoxicillin).
+const SIM_CLEAR_SHOWN = 4;
+
+function SupplyPill({ status, since }: { status: SupplyStatus; since: string | null }) {
+  if (status === "none") return <span className="status-pill sp-ok"><span className="d" />No shortage reported</span>;
+  // Year shown unless it's the current one: "since 15 Dec" alone could be either.
+  const d = since ? new Date(since + "T00:00:00Z") : null;
+  const when = d
+    ? d.toLocaleDateString("en-AU", { day: "numeric", month: "short", timeZone: "UTC", ...(d.getUTCFullYear() !== new Date().getUTCFullYear() ? { year: "numeric" } : {}) })
+    : null;
+  return status === "short"
+    ? <span className="status-pill sp-crit"><span className="d" />Short{when ? ` since ${when}` : ""}</span>
+    : <span className="status-pill sp-part"><span className="d" />Anticipated{when ? ` from ${when}` : ""}</span>;
+}
+
+function BackCell({ status, back, passed, url }: { status: SupplyStatus; back: string | null; passed: boolean; url: string | null }) {
+  if (status === "none") return <span className="alt-f">—</span>;
+  const label = back
+    ? new Date(back + "T00:00:00Z").toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+    : passed ? "Estimate passed, not updated" : "No estimate";
+  return (
+    <div>
+      <div className="sim-back">{label}</div>
+      <div className="alt-f">
+        {back ? "sponsor estimate" : ""}
+        {url && <>{back ? " · " : ""}<a href={url} target="_blank" rel="noopener noreferrer">notice ↗</a></>}
+      </div>
+    </div>
+  );
+}

@@ -190,7 +190,7 @@ NEVER produce text like:
 
 PRODUCE text like:
 - "Cisplatin is short in nine countries, including Italy, France and Germany. The cause in most is reported as manufacturing failure, not demand. The European wholesale book will tighten further in the next 60 days."
-- "Amoxicillin supply is stable across the 22 markets Mederti monitors. The last European shortage cleared in February. Buyers face no obvious near-term risk on this molecule."`;
+- "Amoxicillin supply is stable across the markets Mederti monitors. The last European shortage cleared in February. Buyers face no obvious near-term risk on this molecule."`;
 
   const t0 = Date.now();
   const response = await client.messages.create({

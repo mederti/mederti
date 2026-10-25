@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
 import { X, Upload, CheckCircle2, AlertCircle, Download, FileText } from "lucide-react";
 
 interface BulkUploadModalProps {
@@ -163,7 +164,7 @@ export default function BulkUploadModal({ onClose, onComplete }: BulkUploadModal
           {!rows.length && !results && (
             <>
               <p style={{ fontSize: 14, color: "var(--app-text-3)", lineHeight: 1.5, marginTop: 0 }}>
-                Upload a CSV with your inventory. We&apos;ll match drug names to our catalogue of <strong>10,721 drugs</strong> automatically.
+                Upload a CSV with your inventory. We&apos;ll match drug names to our catalogue of <strong>{COVERAGE_COPY.medicines}</strong> automatically.
               </p>
               <button
                 onClick={downloadTemplate}

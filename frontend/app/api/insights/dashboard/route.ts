@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const getCached = (country: string) =>
-  unstable_cache(() => buildDashboard(country), ["insights-dashboard", "v3", country], {
+  unstable_cache(() => buildDashboard(country), ["insights-dashboard", "v4", country], {
     revalidate: 1800,
     tags: ["insights-dashboard"],
   })();

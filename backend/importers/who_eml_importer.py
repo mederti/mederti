@@ -31,10 +31,14 @@ the drugs-flag backfill — the columns it needs there already exist.
 
 Matching (WHO substance → canonical drugs row)
 ──────────────────────────────────────────────
-INN-primary, ATC-secondary (18k drugs carry generic_name_normalised; only ~1.1k
-carry atc_code). Both are EXACT matches — a WHO INN is already a clean canonical
-name, so exact matching cannot mis-resolve to an impurity/brand. Unmatched WHO
-entries are still stored (NULL drug_id) so the list stays complete and citable.
+INN-primary via the shared DrugResolver (alternatives_resolver.py: exact name,
+INN→USAN alias, strict salt form), then exact ATC code. Both steps require
+exactly one matching row — a name or code shared by several drugs rows stays
+unresolved rather than flagging an arbitrary one. Unmatched WHO entries are
+still stored (NULL drug_id) so the list stays complete and citable.
+
+Records are written every BATCH_SIZE medicines, so a run that dies part-way
+keeps its progress and `--resume` skips what is already in the table.
 
 Usage
 ─────
@@ -56,8 +60,9 @@ from typing import Any
 import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from backend.utils.db import get_supabase_client  # noqa: E402
-from backend.utils.logger import get_logger        # noqa: E402
+from backend.importers.alternatives_resolver import DrugResolver  # noqa: E402
+from backend.utils.db import get_supabase_client                  # noqa: E402
+from backend.utils.logger import get_logger                       # noqa: E402
 
 log = get_logger("mederti.importer.who_eml")
 
@@ -68,6 +73,7 @@ HEADERS = {
 }
 TIMEOUT = 90.0
 RATE_LIMIT_SECONDS = 0.4          # be polite to a public WHO service
+BATCH_SIZE = 50                   # write every N medicines so --resume has progress to skip
 SOURCE_PAGE = BASE_URL + "/medicines/{id}"
 
 # 23rd WHO Model List of Essential Medicines (2023). The eEML serves the current
@@ -204,7 +210,13 @@ def _build_record(client: httpx.Client, med_id: int) -> dict[str, Any] | None:
     }
 
 
-def fetch_all(limit: int | None = None, skip_ids: set[int] | None = None) -> list[dict[str, Any]]:
+def fetch_batches(limit: int | None = None, skip_ids: set[int] | None = None,
+                  size: int = 0):
+    """Yield lists of records, `size` at a time (0 = one list at the end).
+
+    Yielding in batches lets the caller write as it goes, so a multi-hour run
+    that dies part-way keeps what it fetched and `--resume` can skip it.
+    """
     skip_ids = skip_ids or set()
     with httpx.Client(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
         ids = _medicine_ids(client)
@@ -213,71 +225,70 @@ def fetch_all(limit: int | None = None, skip_ids: set[int] | None = None) -> lis
         if limit:
             ids = ids[:limit]
         log.info("eEML medicine ids", extra={"count": len(ids), "skipped": len(skip_ids)})
-        records: list[dict[str, Any]] = []
+        batch: list[dict[str, Any]] = []
         for i, mid in enumerate(ids, 1):
             time.sleep(RATE_LIMIT_SECONDS)
             rec = _build_record(client, mid)
             if rec:
-                records.append(rec)
+                batch.append(rec)
             if i % 100 == 0:
                 log.info("eEML progress", extra={"done": i, "total": len(ids)})
-        return records
+            if size and len(batch) >= size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
 
 
 # ── drug matching ────────────────────────────────────────────────────────────
-def _load_drug_index(supabase) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
-    """Build inn-name → (id, generic_name) and atc-code → (id, generic_name) maps."""
-    by_inn: dict[str, tuple[str, str]] = {}
-    by_atc: dict[str, tuple[str, str]] = {}
+def _load_atc_index(supabase) -> dict[str, str]:
+    """atc-code → drug id, only for codes carried by exactly one drugs row."""
+    by_atc: dict[str, set[str]] = {}
     page, size = 0, 1000
     while True:
         res = (
             supabase.table("drugs")
-            .select("id, generic_name, generic_name_normalised, atc_code")
+            .select("id, atc_code")
+            .not_.is_("atc_code", "null")
             .range(page * size, page * size + size - 1)
             .execute()
         )
         rows = res.data or []
-        if not rows:
-            break
         for r in rows:
-            norm = (r.get("generic_name_normalised") or r.get("generic_name") or "").strip().lower()
-            if norm:
-                by_inn.setdefault(norm, (r["id"], r["generic_name"]))
             atc = (r.get("atc_code") or "").strip().upper()
             if atc:
-                by_atc.setdefault(atc, (r["id"], r["generic_name"]))
+                by_atc.setdefault(atc, set()).add(r["id"])
         if len(rows) < size:
             break
         page += 1
-    log.info("Loaded drug index", extra={"by_inn": len(by_inn), "by_atc": len(by_atc)})
-    return by_inn, by_atc
+    return {k: next(iter(v)) for k, v in by_atc.items() if len(v) == 1}
 
 
-def _match(rec: dict, by_inn: dict, by_atc: dict) -> tuple[str | None, str | None]:
-    """Return (drug_id, match_method). INN-exact primary, ATC-exact secondary."""
-    inn = rec["inn"].strip().lower()
-    if inn in by_inn:
-        return by_inn[inn][0], "inn"
+def _match(rec: dict, resolver: DrugResolver, by_atc: dict[str, str]) -> tuple[str | None, str | None]:
+    """Return (drug_id, match_method). Exact INN via the shared DrugResolver
+    (exact name, INN→USAN alias, strict salt form; ambiguous names stay
+    unresolved), then exact ATC code where only one row carries it."""
+    drug_id, method = resolver.resolve(rec["inn"])
+    if drug_id:
+        return drug_id, method
     atc = (rec.get("atc_code") or "").strip().upper()
     if atc and atc in by_atc:
-        return by_atc[atc][0], "atc"
+        return by_atc[atc], "atc"
     return None, None
 
 
 # ── write ────────────────────────────────────────────────────────────────────
-def upsert(supabase, records: list[dict]) -> dict[str, int]:
+def upsert(supabase, records: list[dict], resolver: DrugResolver,
+           by_atc: dict[str, str]) -> dict[str, int]:
     counts = {"medicines": len(records), "raw_upserted": 0, "matched": 0,
               "drugs_flagged": 0, "raw_table_missing": 0, "errors": 0}
     if not records:
         return counts
 
-    by_inn, by_atc = _load_drug_index(supabase)
-
     raw_rows: list[dict] = []
     drug_updates: dict[str, dict] = {}   # drug_id → {section, year} (TRUE-flag set)
     for rec in records:
-        drug_id, method = _match(rec, by_inn, by_atc)
+        drug_id, method = _match(rec, resolver, by_atc)
         if drug_id:
             counts["matched"] += 1
             # First listing (most specific section) wins per drug.
@@ -347,14 +358,11 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             log.warning("Resume lookup failed (table missing?) — fetching all", extra={"error": str(exc)})
 
-    records = fetch_all(limit=args.limit, skip_ids=skip_ids)
-
-    matched_preview = sum(1 for r in records if r.get("atc_code") or r.get("inn"))
-    n_core = sum(1 for r in records if r.get("eml_list") == "core")
-    n_emlc = sum(1 for r in records if r.get("included_in_emlc"))
-    n_abx = sum(1 for r in records if r.get("aware_group"))
-
     if DRY_RUN:
+        records = [r for b in fetch_batches(limit=args.limit, skip_ids=skip_ids) for r in b]
+        n_core = sum(1 for r in records if r.get("eml_list") == "core")
+        n_emlc = sum(1 for r in records if r.get("included_in_emlc"))
+        n_abx = sum(1 for r in records if r.get("aware_group"))
         print("=" * 64)
         print("DRY RUN — WHO Essential Medicines List (eEML)")
         print("=" * 64)
@@ -370,13 +378,19 @@ def main() -> int:
         return 0
 
     supabase = get_supabase_client()
-    counts = upsert(supabase, records)
+    resolver = DrugResolver(supabase)
+    by_atc = _load_atc_index(supabase)
+    counts: dict[str, int] = {}
+    for batch in fetch_batches(limit=args.limit, skip_ids=skip_ids, size=BATCH_SIZE):
+        for k, v in upsert(supabase, batch, resolver, by_atc).items():
+            counts[k] = counts.get(k, 0) + v
+        log.info("eEML batch written", extra=dict(counts))
     print("=" * 64)
     print("WHO Essential Medicines import complete")
     print("=" * 64)
     for k, v in counts.items():
         print(f"  {k:18s}: {v}")
-    return 0 if counts["errors"] == 0 else 1
+    return 0 if counts.get("errors", 0) == 0 else 1
 
 
 if __name__ == "__main__":

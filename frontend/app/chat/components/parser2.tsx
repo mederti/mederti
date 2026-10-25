@@ -45,6 +45,11 @@ const KPIS_RE = /<kpis>([\s\S]*?)<\/kpis>/g;
 const KPIS_UNCLOSED_RE = /<kpis>([\s\S]*?)$/g;
 const SOURCES_RE = /<sources>([\s\S]*?)<\/sources>/g;
 const SOURCES_UNCLOSED_RE = /<sources>([\s\S]*?)$/g;
+// Safety net: any self-closing snake_case tag the renderer doesn't handle
+// (e.g. a legacy <class_card atc="J01" /> from the old /chat vocabulary, or a
+// tag the model invents) is stripped from prose — users must never see raw
+// markup. Recognised tags are consumed as hits before text is emitted.
+const UNKNOWN_SELF_CLOSING_TAG_RE = /<[a-z]+(?:_[a-z]+)+(?:\s[^<>]*)?\/>/g;
 
 function parseSourcesBody(inner: string): SourceChip[] {
   return inner
@@ -195,9 +200,13 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
   hits.sort((a, b) => a.index - b.index);
 
   const parts: ParsedPart[] = [];
+  const pushText = (text: string) => {
+    const clean = text.replace(UNKNOWN_SELF_CLOSING_TAG_RE, "");
+    if (clean.trim()) parts.push({ kind: "text", text: clean });
+  };
   let cursor = 0;
   for (const h of hits) {
-    if (h.index > cursor) parts.push({ kind: "text", text: raw.slice(cursor, h.index) });
+    if (h.index > cursor) pushText(raw.slice(cursor, h.index));
     if (h.kind === "drug") parts.push({ kind: "drug", id: h.data.id });
     else if (h.kind === "sub") parts.push({ kind: "sub", id: h.data.id, match: h.data.match });
     else if (h.kind === "alternates") parts.push({ kind: "alternates", items: h.data.items });
@@ -206,7 +215,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     else parts.push({ kind: "followups", items: h.data.items });
     cursor = h.index + h.length;
   }
-  if (cursor < raw.length) parts.push({ kind: "text", text: raw.slice(cursor) });
+  if (cursor < raw.length) pushText(raw.slice(cursor));
   return parts;
 }
 

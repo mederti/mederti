@@ -35,6 +35,13 @@ export function siteUrl(): string {
   return "https://mederti.com";
 }
 
+// Next.js merges metadata shallowly: a page that sets its own `openGraph`
+// replaces the layout's whole object, images included. Spread this into any
+// page-level openGraph that has no image of its own.
+export function defaultOgImages() {
+  return [{ url: `${siteUrl()}/api/og`, width: 1200, height: 630, alt: "Mederti — global medicine shortage intelligence" }];
+}
+
 export function canonicalUrl(path: string): string {
   const base = siteUrl().replace(/\/$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;

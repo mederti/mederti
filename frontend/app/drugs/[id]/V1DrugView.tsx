@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { type ConcentrationTier, PEER_GROUPS, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import type { SupplyInMarket, SupplyStatus } from "@/lib/supply-in-market";
 import Link from "next/link";
+import ApiHoldersByCountry from "./ApiHoldersByCountry";
 import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
 import AppShell from "@/app/components/v1/AppShell";
@@ -976,6 +977,7 @@ export default function V1DrugView({
                       {supplyProfile?.nFinishedFirms != null && <tr><th scope="row">US finished-dose firms</th><td>{supplyProfile.nFinishedFirms}</td></tr>}
                       {supplyProfile?.topApiCountry && supplyProfile.topApiShare != null && <tr><th scope="row">Largest API country</th><td>{supplyProfile.topApiCountry}: {Math.round(supplyProfile.topApiShare * 100)}% of makers with a known country</td></tr>}
                       {(apiConcentration.whoPqCount ?? 0) > 0 && <tr><th scope="row">WHO-prequalified</th><td>{apiConcentration.whoPqCount}</td></tr>}
+                      <tr><th scope="row">By country</th><td><ApiHoldersByCountry drugId={id} /></td></tr>
                       <tr><th scope="row">Sources</th><td className="attr-muted">FDA Drug Master Files, FDA DECRS, Drugs@FDA. US-centric; describes the supply base, doesn&apos;t forecast shortages.</td></tr>
                     </tbody></table>
                   </details>
@@ -1225,7 +1227,7 @@ export default function V1DrugView({
                 <div className="conc-head">
                   <div>
                     <div className="conc-n">{apiConcentration.count} API manufacturer{apiConcentration.count !== 1 ? "s" : ""}</div>
-                    <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
+                    <div className="conc-d">Manufacturers with an active Type II Drug Master File: they have filed manufacturing information for this active ingredient with FDA. A DMF is not an approval and shows no volumes; makers without a US DMF are not counted.</div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
                     <span className={`status-pill ${TIER_CLS[supplyTier]}`}><span className="d" />{TIER_LABEL[supplyTier]} supply</span>
@@ -1255,6 +1257,7 @@ export default function V1DrugView({
                     ].filter(Boolean).join(" · ")}
                   </div>
                 )}
+                <ApiHoldersByCountry drugId={id} />
                 <div className="conc-foot">
                   {apiConcentration.countries.length > 0
                     ? `Manufacturing countries: ${apiConcentration.countries.join(", ")} · `

@@ -864,1267 +864,270 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const usedHeader = (await headers()).get(FREE_VIEW_HEADER);
   const freeViewsUsed = !loggedIn && usedHeader != null ? Number(usedHeader) || 0 : null;
 
-  if (PHARMACIST_ONLY) {
-    // API supply-base concentration from FDA Drug Master Files (active Type II
-    // DMFs = manufacturers cleared to supply this API into the US market). This
-    // is the primary-source manufacturing-concentration signal — the headline
-    // feature of the Johns Hopkins supply-chain dashboard, sourced directly.
-    const inn = (drug.generic_name ?? "").toLowerCase();
-    // These five reads are mutually independent — fetch them concurrently so the
-    // page waits on the slowest one, not the sum. (Was a 5-deep await waterfall:
-    // api_suppliers → drug_approvals → regulatory_eligibility → drug_pricing →
-    // buildMarketPricing, ~5 serial round-trips before first paint.) supabase-js
-    // resolves (not rejects) on a query error, so a missing table still soft-fails
-    // to null without taking down the batch.
-    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing, profileRes] = await Promise.all([
-      supabase
-        .from("api_suppliers")
-        .select("manufacturer_name, country, source, who_pq")
-        .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
-        .limit(300),
-      supabase
-        .from("drug_approvals")
-        .select("authority, application_type, approval_date, brand_name")
-        .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
-        .order("approval_date", { ascending: false })
-        .limit(200),
-      supabase
-        .from("regulatory_eligibility")
-        .select(
-          "scheme, status, scheme_reference, description, brand_name, listed_at, expires_at, source_url, source_name, country_code",
-        )
-        .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
-        .eq("status", "active")
-        .limit(50),
-      supabase
-        .from("drug_pricing")
-        .select("price_amount, dispensed_amount, currency, pack_size, price_date, source")
-        .eq("drug_id", id)
-        .eq("country_code", userCountry)
-        .order("price_date", { ascending: false, nullsFirst: false })
-        .limit(1),
-      buildMarketPricing(supabase, id, drug.generic_name, userCountry),
-      buildAlternativePricingData(supabase, id, alternatives, userCountry, drug.generic_name),
-      // Molecule-level supply profile (inn_risk_scores, nightly): same figures
-      // as the National Shortage Dashboard, so the two pages agree.
-      supabase
-        .from("inn_risk_scores")
-        .select("display_name, fragility, who_eml_list, eu_critical, n_api_makers, n_finished_firms, top_api_country, short_countries, geography:components->geography")
-        .contains("drug_ids", [id])
-        .limit(1),
-    ]);
-    const apiSupplierRows = apiSupplierRes.data;
-    const approvalRows = approvalRes.data;
-    const eligRows = eligRes.data;
-    const priceRows = priceRes.data;
-    const { concession, priceMarkets } = marketPricing;
-    const supplierRows = (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null; who_pq: boolean | null }[];
-    const makerSet = new Map<string, string>();
-    const whoPqMakers = new Set<string>();
-    for (const r of supplierRows) {
-      const name = (r.manufacturer_name ?? "").trim();
-      if (name && !makerSet.has(name.toLowerCase())) makerSet.set(name.toLowerCase(), name);
-      if (name && r.who_pq) whoPqMakers.add(name.toLowerCase());
-    }
-    const makerNames = [...makerSet.values()];
-    const makerCount = makerNames.length;
-    const apiCountries = [
-      ...new Set(
-        ((apiSupplierRows ?? []) as { country: string | null }[])
-          .map((r) => (r.country ?? "").trim())
-          .filter(Boolean),
-      ),
-    ];
-    const prof = (profileRes.data?.[0] ?? null) as {
-      display_name: string; fragility: number | null; who_eml_list: "core" | "complementary" | null;
-      eu_critical: boolean; n_api_makers: number | null; n_finished_firms: number | null;
-      top_api_country: string | null; short_countries: string[];
-      geography: { countries?: Record<string, number> } | null;
-    } | null;
-    const profCountries = prof?.geography?.countries ?? null;
-    const profTotal = profCountries ? Object.values(profCountries).reduce((a, b) => a + b, 0) : 0;
-    const supplyProfile = prof
-      ? {
-          molecule: prof.display_name,
-          fragility: prof.fragility == null ? null : Number(prof.fragility),
-          whoList: prof.who_eml_list,
-          euCritical: prof.eu_critical,
-          nApiMakers: prof.n_api_makers,
-          nFinishedFirms: prof.n_finished_firms,
-          topApiCountry: prof.top_api_country,
-          topApiShare: prof.top_api_country && profTotal ? (profCountries![prof.top_api_country] ?? 0) / profTotal : null,
-          shortCountries: prof.short_countries,
-        }
-      : null;
-    const apiConcentration =
-      makerCount > 0
-        ? {
-            count: makerCount,
-            band: (
-              makerCount === 1 ? "very_high" :
-              makerCount <= 3 ? "high" :
-              makerCount <= 6 ? "medium" : "low"
-            ) as "very_high" | "high" | "medium" | "low",
-            makers: makerNames.slice(0, 6),
-            countries: apiCountries,
-            whoPqCount: whoPqMakers.size,
-          }
-        : null;
-
-    // FDA approval footprint — NDA (brand/innovator) vs ANDA (generic) is a
-    // market-depth signal: more approved generics = a more resilient supply.
-    // (Fetched above in the parallel batch.)
-    const approvals = (approvalRows ?? []) as { application_type: string | null; approval_date: string | null; brand_name: string | null }[];
-    const approvalFootprint =
-      approvals.length > 0
-        ? {
-            total: approvals.length,
-            generics: approvals.filter((a) => (a.application_type ?? "").toUpperCase() === "ANDA").length,
-            brands: approvals.filter((a) => ["NDA", "BLA"].includes((a.application_type ?? "").toUpperCase())).length,
-            latest: approvals.map((a) => a.approval_date).filter(Boolean)[0] ?? null,
-          }
-        : null;
-
-    // Structured regulatory-eligibility entries (TGA Section 19A et al) from the
-    // regulatory_eligibility table (migration 040), populated by the eligibility
-    // scrapers. This is the authoritative substitution-pathway signal — a real
-    // approval number a pharmacist can quote, with a verifiable source URL —
-    // replacing the brittle string-match on shortage notes. If the migration
-    // isn't applied yet the query errors softly (data → null) and the view
-    // falls back to notes-parsing, so this is safe to ship ahead of the DDL.
-    // (Fetched above in the parallel batch.)
-    const eligibility = (eligRows ?? []) as {
-      scheme: string;
-      status: string;
-      scheme_reference: string | null;
-      description: string | null;
-      brand_name: string | null;
-      listed_at: string | null;
-      expires_at: string | null;
-      source_url: string | null;
-      source_name: string | null;
-      country_code: string | null;
-    }[];
-
-    // PBS trade price (AEMP ex-manufacturer + DPMQ dispensed) for the user's
-    // market, from drug_pricing (populated by the PBS ingest). Defensive: if the
-    // dispensed_amount column / rows aren't there yet the query errors softly
-    // (data → null) and the view simply omits the price block. AU-only today.
-    // (Fetched above in the parallel batch.)
-    const pr = (priceRows ?? [])[0] as
-      | { price_amount: number | null; dispensed_amount: number | null; currency: string | null; pack_size: string | null; price_date: string | null; source: string | null }
-      | undefined;
-    const pricing =
-      pr && pr.price_amount != null
-        ? {
-            ex_manufacturer: Number(pr.price_amount),
-            dispensed: pr.dispensed_amount != null ? Number(pr.dispensed_amount) : null,
-            currency: pr.currency ?? "AUD",
-            pack: pr.pack_size ?? null,
-            price_date: pr.price_date ?? null,
-            source: pr.source ?? "PBS",
-          }
-        : null;
-
-    // Official multi-market pricing from drug_pricing_history (NHS Drug Tariff,
-    // CMS NADAC, …). Lights up GB/US prices the AU-only `pricing` above can't,
-    // and surfaces an active price concession as an early supply-pressure
-    // signal. Defensive: soft-errors to empty if the table isn't reachable.
-    // (concession + priceMarkets fetched above in the parallel batch.)
-
-    // ── Brand SKUs + search provenance ───────────────────────────────────
-    // Brands are catalogue rows that roll up to this molecule. Surface them as
-    // clickable chips (→ /drugs/{catId}?brand=1, the brand-distinct sourcing
-    // view) and, when the user arrived from a brand search, a "you searched X"
-    // hint. One light read; soft-fails to empty so the page never blocks on it.
-    const brandSkus: { brand: string; catId: string; country: string }[] = [];
-    let brandHint: { brand: string; country: string; catId: string } | null = null;
-    let brandFocus: BrandFocus | null = null;
-    {
-      const { data: catBrands } = await supabase
-        .from("drug_catalogue")
-        .select("id, brand_name, source_country, source_name, registration_number, registration_status, sponsor")
-        .eq("drug_id", id)
-        .not("brand_name", "is", null)
-        .limit(400);
-      const catRows = (catBrands ?? []) as CatBrandRow[];
-      // One SKU per cleaned brand; prefer the user-market registration for the
-      // chip's link so the brand page opens on the SKU that matters to them.
-      const bySku = new Map<string, { brand: string; catId: string; country: string }>();
-      for (const r of catRows) {
-        const clean = cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0];
-        if (!clean) continue;
-        const key = clean.toLowerCase();
-        const country = (r.source_country ?? "").toUpperCase();
-        const existing = bySku.get(key);
-        if (!existing || (country === userCountry && existing.country !== userCountry)) {
-          bySku.set(key, { brand: clean, catId: r.id, country });
-        }
-      }
-      brandSkus.push(...bySku.values());
-
-      const hintId = sp.brand_hint;
-      if (hintId) {
-        const fromList = brandSkus.find((b) => b.catId === hintId);
-        if (fromList) {
-          brandHint = { brand: fromList.brand, country: fromList.country, catId: fromList.catId };
-        } else {
-          const { data: hintRow } = await supabase
-            .from("drug_catalogue")
-            .select("id, brand_name, source_country")
-            .eq("id", hintId)
-            .single();
-          const hr = hintRow as { id: string; brand_name: string | null; source_country: string | null } | null;
-          const clean = hr ? (cleanBrandNames([hr.brand_name ?? ""], drug.generic_name)[0] ?? hr.brand_name) : null;
-          if (hr && clean) brandHint = { brand: clean, country: (hr.source_country ?? "").toUpperCase(), catId: hr.id };
-        }
-      }
-
-      // Brand focus: every registration of the focused brand under this
-      // molecule. Notices that name the brand are matched in the view from
-      // each event's regulator-published brand_name (never drugs.brand_names).
-      const focusId = sp.brand_focus;
-      if (focusId) {
-        const focusRow = catRows.find((r) => r.id === focusId);
-        const focusBrand = focusRow ? cleanBrandNames([focusRow.brand_name ?? ""], drug.generic_name)[0] : null;
-        if (focusRow && focusBrand) {
-          const key = focusBrand.toLowerCase();
-          const regs = catRows
-            .filter((r) => (cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0] ?? "").toLowerCase() === key)
-            .map((r) => ({
-              product: r.brand_name ?? focusBrand,
-              country: (r.source_country ?? "").toUpperCase(),
-              source: r.source_name,
-              regNo: r.registration_number,
-              status: r.registration_status,
-              sponsor: r.sponsor,
-            }))
-            .sort((a, b) => Number(b.country === userCountry) - Number(a.country === userCountry) || a.country.localeCompare(b.country) || a.product.localeCompare(b.product));
-          brandFocus = { brand: focusBrand, catId: focusRow.id, regs };
-          brandHint = null;
-        }
-      }
-    }
-
-    return (
-      <V1DrugView
-        id={id}
-        drug={drug}
-        shortages={shortages}
-        statusLog={statusLog}
-        alternatives={alternatives}
-        userCountry={userCountry}
-        apiConcentration={apiConcentration}
-        supplyProfile={supplyProfile}
-        recalls={recalls}
-        approvalFootprint={approvalFootprint}
-        eligibility={eligibility}
-        pricing={pricing}
-        concession={concession}
-        priceMarkets={priceMarkets}
-        altPricing={altPricing}
-        products={products}
-        brandSkus={brandSkus}
-        brandHint={brandHint}
-        brandFocus={brandFocus}
-        freeViewsUsed={freeViewsUsed}
-        sourcedAlternatives={sourcedAlternatives}
-      />
-    );
-  }
-
-  /* ── Risk Score ── */
-  const now = Date.now();
-  const d30ms = now - 30 * 86400000;
-  const d60ms = now - 60 * 86400000;
-  let riskLast30 = 0, riskPrior30 = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const s of shortages as any[]) {
-    const t = new Date(s.updated_at ?? s.created_at).getTime();
-    if (t >= d30ms) riskLast30++;
-    else if (t >= d60ms) riskPrior30++;
-  }
-  let riskEscalations = 0, riskLogEntries = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const log of statusLog as any[]) {
-    const t = new Date(log.changed_at).getTime();
-    if (t >= d30ms) {
-      riskLogEntries++;
-      if ((SEV_RANK[log.new_severity] ?? 0) > (SEV_RANK[log.old_severity] ?? 0)) riskEscalations++;
-    }
-  }
-  const maxSevRank = SEV_RANK[worstSeverity] ?? 0;
-  const drugRisk = calculateRiskScore({
-    last30: riskLast30, prior30: riskPrior30,
-    countryCount: affectedCountries.size,
-    logEntries: riskLogEntries, escalations: riskEscalations,
-    maxSev: maxSevRank,
-  });
-  const riskColors = riskStyle(drugRisk.riskLevel);
-
-  /* ── Country groups ── */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const countryGroups: Record<string, { country: string; countryCode: string; source: string; severity: string; lastUpdated: string; count: number }> = {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const s of activeShortages as any[]) {
-    const cc = s.country_code ?? "";
-    const src = abbreviateSource(s.data_sources?.name ?? "", s.data_sources?.abbreviation);
-    if (!countryGroups[cc]) {
-      countryGroups[cc] = { country: s.country ?? cc, countryCode: cc, source: src, severity: (s.severity ?? "low").toLowerCase(), lastUpdated: s.updated_at ?? s.last_verified_at ?? "", count: 0 };
-    }
-    countryGroups[cc].count++;
-    const existing = SEV_ORDER.indexOf(countryGroups[cc].severity as typeof SEV_ORDER[number]);
-    const current = SEV_ORDER.indexOf((s.severity ?? "low").toLowerCase() as typeof SEV_ORDER[number]);
-    if (current >= 0 && current < existing) countryGroups[cc].severity = (s.severity ?? "low").toLowerCase();
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const a of availability as any[]) {
-    const cc = a.country ?? "";
-    if (!countryGroups[cc] && a.status !== "available") {
-      countryGroups[cc] = { country: cc, countryCode: cc, source: a.source_agency ?? "", severity: a.severity ?? a.status ?? "medium", lastUpdated: a.last_verified_at ?? "", count: 1 };
-    }
-  }
-  const countries = Object.values(countryGroups).sort((a, b) => {
-    const ai = SEV_ORDER.indexOf(a.severity as typeof SEV_ORDER[number]);
-    const bi = SEV_ORDER.indexOf(b.severity as typeof SEV_ORDER[number]);
-    return ai - bi;
-  });
-  const userCountryInList = countries.some((c) => c.countryCode === userCountry);
-
-  const userShortage = activeShortages.find(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (s: any) => s.country_code?.toUpperCase() === userCountry,
-  );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const anticipatedShortages = activeShortages.filter((s: any) => s.status?.toLowerCase() === "anticipated");
-  const isAnticipatedOnly = activeShortages.length > 0 && anticipatedShortages.length === activeShortages.length;
-
-  /* ── My Country card data ── */
-  const myShortage = userShortage as { status?: string; severity?: string; estimated_resolution_date?: string; start_date?: string; end_date?: string; reason?: string; reason_category?: string; country_code?: string } | undefined;
-  const myStatus = myShortage ? (myShortage.status ?? "active").toLowerCase() : null;
-  const myIsAnticipated = myStatus === "anticipated";
-  const mySevRaw = myShortage?.severity ?? "medium";
-  const cName = COUNTRY_NAMES[userCountry] ?? userCountry;
-  const myTheme = myShortage
-    ? (myIsAnticipated
-      ? { color: "#d97706", bg: "#fef3c7", border: "#f59e0b44" }
-      : mySevRaw === "low"
-        ? { color: "var(--med)", bg: "var(--med-bg)", border: "var(--med-b)" }
-        : sevColor(mySevRaw))
-    : { color: "var(--low)", bg: "var(--low-bg)", border: "var(--low-b)" };
-  const myLabel = myIsAnticipated
-    ? "Anticipated shortage"
-    : myShortage
-      ? (mySevRaw.charAt(0).toUpperCase() + mySevRaw.slice(1)) + " shortage"
-      : "In supply";
-  const mySubtext = myShortage
-    ? (myIsAnticipated
-      ? "Supply disruption expected"
-      : (myShortage.reason?.replace(/^availability:\s*/i, "") ?? "Supply disruption"))
-    : "No shortage reported";
-
-  // Predicted return for My Country card
-  // No genuine confidence metric exists yet — the prior 74/61 heuristic was a
-  // fabricated score. Pinned to 0 so every "AI confidence" UI (each guarded on
-  // confidence > 0) stays hidden until a real metric is wired.
-  const confidence = 0;
-  let predictedReturnDate: string | null = null;
-  if (myShortage && myStatus !== "anticipated" && myShortage.estimated_resolution_date) {
-    predictedReturnDate = new Date(myShortage.estimated_resolution_date).toLocaleDateString("en-AU", { month: "short", year: "numeric" });
-  }
-
-  /* ── Timeline ── */
-  const timeline: TimelineEntry[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const shortageMap = new Map<string, any>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const s of shortages) shortageMap.set((s as any).id, s);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const s of shortages as any[]) {
-    const src = abbreviateSource(s.data_sources?.name ?? "", s.data_sources?.abbreviation);
-    const sev = (s.severity ?? "").toLowerCase();
-    const eventDate = s.start_date ?? s.created_at;
-    let type: TimelineEntry["type"] = "update";
-    if (s.status === "resolved") type = "resolved";
-    let desc = `${s.country ?? s.country_code} \u2014 `;
-    if (s.status === "resolved") {
-      desc += "Shortage resolved.";
-      if (s.end_date) desc += ` Ended ${formatDate(s.end_date)}.`;
-    } else if (s.status === "anticipated") {
-      desc += "Shortage anticipated.";
-      if (s.reason && !/^availability:/i.test(s.reason.trim())) desc += ` ${s.reason}`;
-    } else {
-      desc += `${sev ? sev.charAt(0).toUpperCase() + sev.slice(1) + " " : ""}shortage reported.`;
-      if (s.reason && !/^availability:/i.test(s.reason.trim())) desc += ` ${s.reason}`;
-      else if (s.reason_category) desc += ` ${s.reason_category.replace(/_/g, " ")}`;
-    }
-    timeline.push({ date: eventDate, source: src, description: desc, type, countryCode: s.country_code ?? "" });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const log of statusLog as any[]) {
-    const ms = shortageMap.get(log.shortage_event_id);
-    const src = ms ? abbreviateSource(ms.data_sources?.name ?? "", ms.data_sources?.abbreviation) : "";
-    const cc = ms?.country_code ?? "";
-    const country = ms?.country ?? cc;
-    let type: TimelineEntry["type"] = "update";
-    let desc = `${country} \u2014 `;
-    const oldI = SEV_ORDER.indexOf(log.old_severity as typeof SEV_ORDER[number]);
-    const newI = SEV_ORDER.indexOf(log.new_severity as typeof SEV_ORDER[number]);
-    if (log.new_status === "resolved") { type = "resolved"; desc += "Shortage resolved."; }
-    else if (newI >= 0 && oldI >= 0 && newI < oldI) { type = "escalation"; desc += `Escalated ${log.old_severity} \u2192 ${log.new_severity}.`; }
-    else if (newI >= 0 && oldI >= 0 && newI > oldI) { type = "de_escalation"; desc += `De-escalated ${log.old_severity} \u2192 ${log.new_severity}.`; }
-    else { desc += "Status updated."; }
-    timeline.push({ date: log.changed_at, source: src, description: desc, type, countryCode: cc });
-  }
-
-  timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const deduped: TimelineEntry[] = [];
-  for (const entry of timeline) {
-    if (!deduped.some((e) => Math.abs(new Date(e.date).getTime() - new Date(entry.date).getTime()) < 3600000 && e.countryCode === entry.countryCode && e.type === entry.type))
-      deduped.push(entry);
-  }
-
-  /* ── Verified sources ── */
-  const seenSources = new Map<string, { name: string; abbreviation: string; countryCode: string; sourceUrl: string | null; lastVerified: string | null }>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const s of shortages as any[]) {
-    const abbr = abbreviateSource(s.data_sources?.name ?? "", s.data_sources?.abbreviation);
-    if (!abbr || seenSources.has(abbr)) continue;
-    seenSources.set(abbr, {
-      name: s.data_sources?.name ?? abbr, abbreviation: abbr,
-      countryCode: s.data_sources?.country_code ?? s.country_code ?? "",
-      sourceUrl: s.source_url, lastVerified: s.last_verified_at ?? s.updated_at,
-    });
-  }
-
-  /* ── Mobile layout ── */
-  const device = await getDevice();
-  if (device === "mobile") {
-    const mobilePartner = getPartnerForCountry(userCountry);
-    return (
-      <MobileDrugPage
-        drug={drug}
-        activeShortages={activeShortages}
-        userCountry={userCountry}
-        partner={mobilePartner}
-        drugStrength={drugStrength}
-        predictedReturnDate={predictedReturnDate}
-        confidence={confidence}
-      />
-    );
-  }
-
-  /* ── SEO: JSON-LD + AI summary ── */
-  const affectedCountryNames = ([...affectedCountries] as string[]).map(c => COUNTRY_NAMES[c] ?? c);
-  const sourceNames = [...sourceSet];
-  const hasShortage = activeShortages.length > 0;
-  const lastVerified = latestUpdate ? new Date(latestUpdate).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }) : new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
-  const estimatedReturn = activeShortages[0]?.estimated_resolution_date
-    ? new Date(activeShortages[0].estimated_resolution_date).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
-    : null;
-
-  // Rich JSON-LD graph: Drug + WebPage + (up to 5) MedicalCondition
-  // nodes for active shortages. See lib/seo.ts.
-  const jsonLd = drugJsonLd(
-    {
-      id,
-      generic_name: drug.generic_name,
-      brand_names: cleanBrandNames((drug as { brand_names?: string[] | null }).brand_names, drug.generic_name),
-      atc_code: drug.atc_code ?? null,
-      atc_description: (drug as { atc_description?: string | null }).atc_description ?? null,
-      drug_class: drug.drug_class ?? null,
-      is_controlled_substance: (drug as { is_controlled_substance?: boolean | null }).is_controlled_substance ?? null,
-      who_essential_medicine: (drug as { who_essential_medicine?: boolean | null }).who_essential_medicine ?? null,
-      rxcui: (drug as { rxcui?: string | null }).rxcui ?? null,
-    },
-    activeShortages.slice(0, 8).map((s: { country_code: string; severity: string; status: string; start_date?: string | null }) => ({
-      country: s.country_code,
-      severity: s.severity,
-      status: s.status,
-      start_date: s.start_date ?? null,
-    })),
-    affectedCountries.size,
-  );
-
-  // Breadcrumb structured data — Google shows this above the page title
-  // in SERPs. Path: Home › Search › {drug.generic_name}
-  const breadcrumbLd = breadcrumbJsonLd([
-    { name: "Mederti",    path: "/" },
-    { name: "Drug search", path: "/search" },
-    { name: drug.generic_name, path: `/drugs/${id}` },
+  // API supply-base concentration from FDA Drug Master Files (active Type II
+  // DMFs = manufacturers cleared to supply this API into the US market). This
+  // is the primary-source manufacturing-concentration signal — the headline
+  // feature of the Johns Hopkins supply-chain dashboard, sourced directly.
+  const inn = (drug.generic_name ?? "").toLowerCase();
+  // These five reads are mutually independent — fetch them concurrently so the
+  // page waits on the slowest one, not the sum. (Was a 5-deep await waterfall:
+  // api_suppliers → drug_approvals → regulatory_eligibility → drug_pricing →
+  // buildMarketPricing, ~5 serial round-trips before first paint.) supabase-js
+  // resolves (not rejects) on a query error, so a missing table still soft-fails
+  // to null without taking down the batch.
+  const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing, profileRes] = await Promise.all([
+    supabase
+      .from("api_suppliers")
+      .select("manufacturer_name, country, source, who_pq")
+      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+      .limit(300),
+    supabase
+      .from("drug_approvals")
+      .select("authority, application_type, approval_date, brand_name")
+      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+      .order("approval_date", { ascending: false })
+      .limit(200),
+    supabase
+      .from("regulatory_eligibility")
+      .select(
+        "scheme, status, scheme_reference, description, brand_name, listed_at, expires_at, source_url, source_name, country_code",
+      )
+      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
+      .eq("status", "active")
+      .limit(50),
+    supabase
+      .from("drug_pricing")
+      .select("price_amount, dispensed_amount, currency, pack_size, price_date, source")
+      .eq("drug_id", id)
+      .eq("country_code", userCountry)
+      .order("price_date", { ascending: false, nullsFirst: false })
+      .limit(1),
+    buildMarketPricing(supabase, id, drug.generic_name, userCountry),
+    buildAlternativePricingData(supabase, id, alternatives, userCountry, drug.generic_name),
+    // Molecule-level supply profile (inn_risk_scores, nightly): same figures
+    // as the National Shortage Dashboard, so the two pages agree.
+    supabase
+      .from("inn_risk_scores")
+      .select("display_name, fragility, who_eml_list, eu_critical, n_api_makers, n_finished_firms, top_api_country, short_countries, geography:components->geography")
+      .contains("drug_ids", [id])
+      .limit(1),
   ]);
-
-  /* ── Persona-aware render: procurement and supplier views ───────────────── */
-  if (persona === "procurement" || persona === "supplier") {
-    const sev: "critical" | "high" | "medium" | "low" =
-      worstSeverity === "critical" || worstSeverity === "high" || worstSeverity === "medium" || worstSeverity === "low"
-        ? worstSeverity
-        : "medium";
-    const statusLabel = sev === "critical" ? "Not available" : sev === "high" ? "Very limited" : sev === "medium" ? "Limited" : "Available";
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const altsArr = (alternatives as any[]).slice(0, 4).map((a: any) => ({
-      name: a.drugs?.generic_name ?? "Alternative",
-      form: a.relationship_type ? String(a.relationship_type).replace(/_/g, " ") : "therapeutic alternative",
-      // Real ATC-similarity from drug_alternatives, or null when unscored —
-      // never a fabricated default (a made-up "70% match" is a safety claim).
-      matchPercent: a.similarity_score != null ? Math.round(a.similarity_score * 100) : null,
-      isAvailable: a.active_shortage_count === 0,
-    }));
-
-    const top = altsArr[0]
-      ? { name: altsArr[0].name, matchPercent: altsArr[0].matchPercent, isAvailable: altsArr[0].isAvailable, form: altsArr[0].form }
-      : null;
-
-    // Oldest start_date among active shortages → "since Feb '25"-style label
-    const firstStart = activeShortages
-      .map((s: { start_date?: string | null }) => s.start_date ? new Date(s.start_date).getTime() : null)
-      .filter((t: number | null): t is number => t !== null)
-      .sort((a: number, b: number) => a - b)[0];
-    const sinceLabel = firstStart
-      ? `since ${new Date(firstStart).toLocaleDateString("en-AU", { month: "short", year: "2-digit" }).replace(/(\d{2})$/, "'$1")}`
-      : undefined;
-    const firstReported = firstStart ? new Date(firstStart).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "2-digit" }).replace(/(\d{2})$/, "'$1") : undefined;
-
-    // Prior incidents = resolved/stale shortage_events for this drug (approx)
-    const priorIncidents = (shortages as Array<{ status: string }>).filter(
-      (s) => s.status === "resolved" || s.status === "stale"
-    ).length;
-
-    // Sources array for SupplierView (regulator, country, flag, hoursAgo)
-    const supplierSources = Array.from(seenSources.values())
-      .filter((s) => s.lastVerified)
-      .map((s) => {
-        const hoursAgo = (Date.now() - new Date(s.lastVerified!).getTime()) / 3_600_000;
-        return {
-          regulator: s.abbreviation,
-          country: s.countryCode,
-          flag: flagFor(s.countryCode),
-          hoursAgo: Math.max(0, hoursAgo),
-        };
-      })
-      .sort((a, b) => a.hoursAgo - b.hoursAgo)
-      .slice(0, 5);
-
-    const drugName = `${drug.generic_name}${drugStrength ? ` ${drugStrength}` : ""}`.trim();
-    const status = {
-      label: statusLabel,
-      severity: sev,
-      markets: affectedCountries.size > 0
-        ? `${affectedCountries.size} market${affectedCountries.size === 1 ? "" : "s"} affected`
-        : "no active shortages",
-    };
-
-    // ── Reference data (Paths A + B) — gracefully degrades if migrations not applied ──
-    let manufacturerConcentration: {
-      count: number;
-      band: "unknown" | "high_risk" | "moderate_risk" | "low_risk";
-      usdmf?: number;
-      cep?: number;
-      euWc?: number;
-    } | null = null;
-    try {
-      const mc = await supabase
-        .from("v_drug_manufacturer_concentration")
-        .select("manufacturer_count, concentration_risk, usdmf_count, aggregate_cep_count, eu_wc_count")
-        .eq("drug_id", id)
-        .maybeSingle();
-      const row = mc.data as {
-        manufacturer_count?: number;
-        concentration_risk?: string;
-        usdmf_count?: number;
-        aggregate_cep_count?: number;
-        eu_wc_count?: number;
-      } | null;
-      if (row && row.manufacturer_count && row.manufacturer_count > 0) {
-        manufacturerConcentration = {
-          count: row.manufacturer_count,
-          band: (row.concentration_risk as "unknown" | "high_risk" | "moderate_risk" | "low_risk") || "unknown",
-          usdmf: row.usdmf_count ?? undefined,
-          cep:   row.aggregate_cep_count ?? undefined,
-          euWc:  row.eu_wc_count ?? undefined,
-        };
+  const apiSupplierRows = apiSupplierRes.data;
+  const approvalRows = approvalRes.data;
+  const eligRows = eligRes.data;
+  const priceRows = priceRes.data;
+  const { concession, priceMarkets } = marketPricing;
+  const supplierRows = (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null; who_pq: boolean | null }[];
+  const makerSet = new Map<string, string>();
+  const whoPqMakers = new Set<string>();
+  for (const r of supplierRows) {
+    const name = (r.manufacturer_name ?? "").trim();
+    if (name && !makerSet.has(name.toLowerCase())) makerSet.set(name.toLowerCase(), name);
+    if (name && r.who_pq) whoPqMakers.add(name.toLowerCase());
+  }
+  const makerNames = [...makerSet.values()];
+  const makerCount = makerNames.length;
+  const apiCountries = [
+    ...new Set(
+      ((apiSupplierRows ?? []) as { country: string | null }[])
+        .map((r) => (r.country ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const prof = (profileRes.data?.[0] ?? null) as {
+    display_name: string; fragility: number | null; who_eml_list: "core" | "complementary" | null;
+    eu_critical: boolean; n_api_makers: number | null; n_finished_firms: number | null;
+    top_api_country: string | null; short_countries: string[];
+    geography: { countries?: Record<string, number> } | null;
+  } | null;
+  const profCountries = prof?.geography?.countries ?? null;
+  const profTotal = profCountries ? Object.values(profCountries).reduce((a, b) => a + b, 0) : 0;
+  const supplyProfile = prof
+    ? {
+        molecule: prof.display_name,
+        fragility: prof.fragility == null ? null : Number(prof.fragility),
+        whoList: prof.who_eml_list,
+        euCritical: prof.eu_critical,
+        nApiMakers: prof.n_api_makers,
+        nFinishedFirms: prof.n_finished_firms,
+        topApiCountry: prof.top_api_country,
+        topApiShare: prof.top_api_country && profTotal ? (profCountries![prof.top_api_country] ?? 0) / profTotal : null,
+        shortCountries: prof.short_countries,
       }
-    } catch { /* migration 032 not yet applied — silently skip */ }
-
-    let countryPharmaSpend: { country: string; year: number; usdPpp: number } | null = null;
-    if (userCountry) {
-      try {
-        const cs = await supabase
-          .from("v_country_pharma_spend_latest")
-          .select("country_code2, country_name, year, spending_usd_ppp_per_capita")
-          .eq("country_code2", userCountry)
-          .maybeSingle();
-        const row = cs.data as {
-          country_name?: string;
-          year?: number;
-          spending_usd_ppp_per_capita?: number;
-        } | null;
-        if (row && row.spending_usd_ppp_per_capita !== undefined && row.year) {
-          countryPharmaSpend = {
-            country: row.country_name ?? userCountry,
-            year: row.year,
-            usdPpp: row.spending_usd_ppp_per_capita,
-          };
+    : null;
+  const apiConcentration =
+    makerCount > 0
+      ? {
+          count: makerCount,
+          band: (
+            makerCount === 1 ? "very_high" :
+            makerCount <= 3 ? "high" :
+            makerCount <= 6 ? "medium" : "low"
+          ) as "very_high" | "high" | "medium" | "low",
+          makers: makerNames.slice(0, 6),
+          countries: apiCountries,
+          whoPqCount: whoPqMakers.size,
         }
-      } catch { /* migration 033 not yet applied — silently skip */ }
-    }
-    // Expected return is shown ONLY from a sponsor-declared resolution date
-    // carried on the regulator notice. We never compute/predict a date from
-    // severity — an invented "back in 3–6 months" is a clinical-safety error.
-    // confidence:0 hides the (previously fabricated) confidence meter.
-    const expectedReturn = predictedReturnDate
-      ? { label: "Expected return · sponsor estimate", range: predictedReturnDate, confidence: 0 }
       : null;
 
-    return (
-      <DrugShell loggedIn={loggedIn}>
-      <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }} />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbLd) }} />
+  // FDA approval footprint — NDA (brand/innovator) vs ANDA (generic) is a
+  // market-depth signal: more approved generics = a more resilient supply.
+  // (Fetched above in the parallel batch.)
+  const approvals = (approvalRows ?? []) as { application_type: string | null; approval_date: string | null; brand_name: string | null }[];
+  const approvalFootprint =
+    approvals.length > 0
+      ? {
+          total: approvals.length,
+          generics: approvals.filter((a) => (a.application_type ?? "").toUpperCase() === "ANDA").length,
+          brands: approvals.filter((a) => ["NDA", "BLA"].includes((a.application_type ?? "").toUpperCase())).length,
+          latest: approvals.map((a) => a.approval_date).filter(Boolean)[0] ?? null,
+        }
+      : null;
 
-        <style>{`
-          @media (max-width: 900px) {
-            .v3-cols { flex-direction: column !important; }
-            .v3-left { width: 100% !important; max-height: 320px; border-right: 0 !important; border-bottom: 1px solid var(--app-border) !important; }
-          }
-        `}</style>
+  // Structured regulatory-eligibility entries (TGA Section 19A et al) from the
+  // regulatory_eligibility table (migration 040), populated by the eligibility
+  // scrapers. This is the authoritative substitution-pathway signal — a real
+  // approval number a pharmacist can quote, with a verifiable source URL —
+  // replacing the brittle string-match on shortage notes. If the migration
+  // isn't applied yet the query errors softly (data → null) and the view
+  // falls back to notes-parsing, so this is safe to ship ahead of the DDL.
+  // (Fetched above in the parallel batch.)
+  const eligibility = (eligRows ?? []) as {
+    scheme: string;
+    status: string;
+    scheme_reference: string | null;
+    description: string | null;
+    brand_name: string | null;
+    listed_at: string | null;
+    expires_at: string | null;
+    source_url: string | null;
+    source_name: string | null;
+    country_code: string | null;
+  }[];
 
-        {!loggedIn && <SiteNav />}
-        {!PHARMACIST_ONLY && <PersonaSwitcher current={persona} drugId={id} />}
+  // PBS trade price (AEMP ex-manufacturer + DPMQ dispensed) for the user's
+  // market, from drug_pricing (populated by the PBS ingest). Defensive: if the
+  // dispensed_amount column / rows aren't there yet the query errors softly
+  // (data → null) and the view simply omits the price block. AU-only today.
+  // (Fetched above in the parallel batch.)
+  const pr = (priceRows ?? [])[0] as
+    | { price_amount: number | null; dispensed_amount: number | null; currency: string | null; pack_size: string | null; price_date: string | null; source: string | null }
+    | undefined;
+  const pricing =
+    pr && pr.price_amount != null
+      ? {
+          ex_manufacturer: Number(pr.price_amount),
+          dispensed: pr.dispensed_amount != null ? Number(pr.dispensed_amount) : null,
+          currency: pr.currency ?? "AUD",
+          pack: pr.pack_size ?? null,
+          price_date: pr.price_date ?? null,
+          source: pr.source ?? "PBS",
+        }
+      : null;
 
-        <div className="v3-cols" style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
+  // Official multi-market pricing from drug_pricing_history (NHS Drug Tariff,
+  // CMS NADAC, …). Lights up GB/US prices the AU-only `pricing` above can't,
+  // and surfaces an active price concession as an early supply-pressure
+  // signal. Defensive: soft-errors to empty if the table isn't reachable.
+  // (concession + priceMarkets fetched above in the parallel batch.)
 
-          {/* ── LEFT COLUMN — So What insight + Chat ── */}
-          <div className="v3-left" style={{ width: "25%", minWidth: 280, borderRight: "1px solid var(--app-border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <div style={{ padding: "14px 14px 0", flexShrink: 0 }}>
-              <SoWhatInsight drugId={id} />
-            </div>
-            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-              <AskMedertiCta drugName={drug.generic_name} />
-            </div>
-          </div>
+  // ── Brand SKUs + search provenance ───────────────────────────────────
+  // Brands are catalogue rows that roll up to this molecule. Surface them as
+  // clickable chips (→ /drugs/{catId}?brand=1, the brand-distinct sourcing
+  // view) and, when the user arrived from a brand search, a "you searched X"
+  // hint. One light read; soft-fails to empty so the page never blocks on it.
+  const brandSkus: { brand: string; catId: string; country: string }[] = [];
+  let brandHint: { brand: string; country: string; catId: string } | null = null;
+  let brandFocus: BrandFocus | null = null;
+  {
+    const { data: catBrands } = await supabase
+      .from("drug_catalogue")
+      .select("id, brand_name, source_country, source_name, registration_number, registration_status, sponsor")
+      .eq("drug_id", id)
+      .not("brand_name", "is", null)
+      .limit(400);
+    const catRows = (catBrands ?? []) as CatBrandRow[];
+    // One SKU per cleaned brand; prefer the user-market registration for the
+    // chip's link so the brand page opens on the SKU that matters to them.
+    const bySku = new Map<string, { brand: string; catId: string; country: string }>();
+    for (const r of catRows) {
+      const clean = cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0];
+      if (!clean) continue;
+      const key = clean.toLowerCase();
+      const country = (r.source_country ?? "").toUpperCase();
+      const existing = bySku.get(key);
+      if (!existing || (country === userCountry && existing.country !== userCountry)) {
+        bySku.set(key, { brand: clean, catId: r.id, country });
+      }
+    }
+    brandSkus.push(...bySku.values());
 
-          {/* ── RIGHT COLUMN — Persona view ── */}
-          <div className="v3-right" style={{ flex: 1, overflowY: "auto", background: "var(--app-bg)", color: "var(--app-text)" }}>
-            <div style={{ background: "var(--navy)", padding: "8px 24px", borderBottom: "1px solid var(--bd)" }}>
-              <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>
-                {"←"} Back to search
-              </Link>
-            </div>
+    const hintId = sp.brand_hint;
+    if (hintId) {
+      const fromList = brandSkus.find((b) => b.catId === hintId);
+      if (fromList) {
+        brandHint = { brand: fromList.brand, country: fromList.country, catId: fromList.catId };
+      } else {
+        const { data: hintRow } = await supabase
+          .from("drug_catalogue")
+          .select("id, brand_name, source_country")
+          .eq("id", hintId)
+          .single();
+        const hr = hintRow as { id: string; brand_name: string | null; source_country: string | null } | null;
+        const clean = hr ? (cleanBrandNames([hr.brand_name ?? ""], drug.generic_name)[0] ?? hr.brand_name) : null;
+        if (hr && clean) brandHint = { brand: clean, country: (hr.source_country ?? "").toUpperCase(), catId: hr.id };
+      }
+    }
 
-            <div style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 24px 60px", width: "100%" }}>
-              {persona === "procurement" ? (
-                <ProcurementView
-                  drugName={drugName}
-                  genericName={drug.generic_name}
-                  atcCode={drug.atc_code ?? undefined}
-                  drugClass={[drug.atc_description, drug.drug_class, drug.therapeutic_category].filter(Boolean).join(" · ") || undefined}
-                  status={status}
-                  expectedReturn={expectedReturn}
-                  topAlternative={top ? { name: top.name, matchPercent: top.matchPercent, isAvailable: top.isAvailable } : null}
-                  alternatives={altsArr}
-                  tradePrice={null}
-                  shortageDetails={{
-                    reason: activeShortages[0]?.reason_category || activeShortages[0]?.reason || undefined,
-                    firstReported,
-                    sourcesCount: seenSources.size || undefined,
-                    priorIncidents: priorIncidents || undefined,
-                  }}
-                  manufacturer={manufacturerConcentration}
-                  marketSpend={countryPharmaSpend}
-                />
-              ) : (
-                <SupplierView
-                  drugName={drugName}
-                  genericName={drug.generic_name}
-                  atcCode={drug.atc_code ?? undefined}
-                  status={{ ...status, sinceLabel }}
-                  expectedReturn={expectedReturn}
-                  topAlternative={top ? { name: top.name, form: top.form, matchPercent: top.matchPercent, isAvailable: top.isAvailable } : null}
-                  tradePrice={null}
-                  alternatives={altsArr.map((a) => ({ name: a.name, matchPercent: a.matchPercent, isAvailable: a.isAvailable }))}
-                  sources={supplierSources}
-                  manufacturer={manufacturerConcentration}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      </DrugShell>
-    );
+    // Brand focus: every registration of the focused brand under this
+    // molecule. Notices that name the brand are matched in the view from
+    // each event's regulator-published brand_name (never drugs.brand_names).
+    const focusId = sp.brand_focus;
+    if (focusId) {
+      const focusRow = catRows.find((r) => r.id === focusId);
+      const focusBrand = focusRow ? cleanBrandNames([focusRow.brand_name ?? ""], drug.generic_name)[0] : null;
+      if (focusRow && focusBrand) {
+        const key = focusBrand.toLowerCase();
+        const regs = catRows
+          .filter((r) => (cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0] ?? "").toLowerCase() === key)
+          .map((r) => ({
+            product: r.brand_name ?? focusBrand,
+            country: (r.source_country ?? "").toUpperCase(),
+            source: r.source_name,
+            regNo: r.registration_number,
+            status: r.registration_status,
+            sponsor: r.sponsor,
+          }))
+          .sort((a, b) => Number(b.country === userCountry) - Number(a.country === userCountry) || a.country.localeCompare(b.country) || a.product.localeCompare(b.product));
+        brandFocus = { brand: focusBrand, catId: focusRow.id, regs };
+        brandHint = null;
+      }
+    }
   }
 
-  /* ── Render ── */
   return (
-    <DrugShell loggedIn={loggedIn}>
-    <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--app-bg)", color: "var(--app-text)" }}>
-      {/* JSON-LD structured data — Drug graph + Breadcrumbs */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbLd) }} />
-      {/* AI-readable summary — visually hidden but crawlable */}
-      <div style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}>
-        <p>
-          {drug.generic_name} supply status as of {lastVerified}:{" "}
-          {hasShortage
-            ? `${drug.generic_name} is currently in ${worstSeverity} shortage in ${affectedCountryNames.join(", ")}. `
-            : `${drug.generic_name} is in normal supply with no active shortages reported. `}
-          {activeShortages.length > 0 && `${activeShortages.length} shortage events are currently active across ${affectedCountries.size} countries. `}
-          {estimatedReturn && `Expected return to normal supply (sponsor estimate via regulator notice): ${estimatedReturn}. `}
-          {sourceNames.length > 0 && `Data sourced from official regulatory authorities including ${sourceNames.join(", ")}. `}
-          Last verified: {lastVerified}. Source: Mederti ({canonicalUrl(`/drugs/${id}`)}).
-        </p>
-      </div>
-      <style>{`
-        @keyframes v3blink { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
-        @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
-        .drug-header-card { animation:fadeUp 0.3s ease both; }
-        .drug-answer-row  { animation:fadeUp 0.3s 0.05s ease both; }
-        .drug-two-col     { animation:fadeUp 0.3s 0.1s ease both; }
-        .tl-row:hover { background: var(--app-bg-2); }
-        @media (max-width: 768px) {
-          .v3-cols { flex-direction: column !important; }
-          .v3-left, .v3-right { width: 100% !important; min-width: 0 !important; height: 50vh !important; }
-          .drug-page { padding: 16px 16px 48px !important; }
-          .drug-header-card { flex-direction: column !important; padding: 20px !important; }
-          .drug-header-right { align-items: flex-start !important; min-width: unset !important; width: 100% !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 10px !important; }
-          .drug-answer-row { grid-template-columns: 1fr !important; }
-          .drug-two-col { grid-template-columns: 1fr !important; }
-          .drug-right-col { position: static !important; }
-        }
-      `}</style>
-
-      {!loggedIn && <SiteNav />}
-
-      {/* ═══ PERSONA SWITCHER ═══ */}
-      {!PHARMACIST_ONLY && <PersonaSwitcher current={persona} drugId={id} />}
-
-      {/* ═══ NAV BAR ═══ */}
-      <div style={{
-        background: "var(--navy)", padding: "8px 24px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        flexShrink: 0, borderBottom: "1px solid var(--bd)",
-      }}>
-        <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>
-          {"\u2190"} Back to search
-        </Link>
-      </div>
-
-      {/* ═══ TWO-COLUMN LAYOUT ═══ */}
-      <div className="v3-cols" style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
-
-        {/* ── LEFT COLUMN (30%) — So What insight + Chat ── */}
-        <div className="v3-left" style={{ width: "25%", minWidth: 280, borderRight: "1px solid var(--app-border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "14px 14px 0", flexShrink: 0 }}>
-            <SoWhatInsight drugId={id} />
-          </div>
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <AskMedertiCta drugName={drug.generic_name} />
-          </div>
-        </div>
-
-        {/* ── RIGHT COLUMN (70%) — Drug Detail ── */}
-        <div className="v3-right" style={{ flex: 1, overflowY: "auto", background: "var(--app-bg)", color: "var(--app-text)" }}>
-
-          {/* ═══ 0. PHARMACIST ANSWER HERO — same-class context, ETA, trade price ═══ */}
-          {activeShortages.length > 0 && alternatives.length > 0 && (
-            <div style={{ background: "var(--app-bg)", padding: "20px 32px 4px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
-              <PharmacistAnswerCard
-                drugName={`${drug.generic_name}${drugStrength ? ` ${drugStrength}` : ""}`.trim()}
-                genericName={drug.generic_name}
-                atcCode={drug.atc_code ?? undefined}
-                status={{
-                  label: worstSeverity === "critical" ? "Not available" : worstSeverity === "high" ? "Very limited" : "Limited",
-                  severity: (worstSeverity === "critical" || worstSeverity === "high" || worstSeverity === "medium" || worstSeverity === "low" ? worstSeverity : "medium") as "critical" | "high" | "medium" | "low",
-                  markets: `${affectedCountries.size} ${affectedCountries.size === 1 ? "market" : "markets"} affected`,
-                }}
-                topAlternative={(() => {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const alt = alternatives[0] as any;
-                  if (!alt) return null;
-                  const altName = alt.drugs?.generic_name ?? "Therapeutic alternative";
-                  return {
-                    name: altName,
-                    form: alt.relationship_type ? alt.relationship_type.replace(/_/g, " ") : "therapeutic alternative",
-                    isAvailable: alt.active_shortage_count === 0,
-                    matchPercent: alt.similarity_score != null ? Math.round(alt.similarity_score * 100) : null,
-                    clinicalReasoning: ALTERNATIVES_CAVEAT,
-                  };
-                })()}
-                expectedReturn={predictedReturnDate ? {
-                  label: "Expected return · sponsor estimate",
-                  range: predictedReturnDate,
-                  confidence: 0,
-                } : null}
-                tradePrice={null}
-                paediatricAlternative={null}
-              />
-            </div>
-          )}
-
-          {/* ═══ 1. HEADER ROW — Drug Identity left + My Country card right ═══ */}
-          <div style={{ background: "#fff", borderBottom: "1px solid var(--app-border)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-            <div
-              className="drug-header-card"
-              style={{
-                maxWidth: 1200,
-                margin: "0 auto",
-                padding: "28px 32px",
-                display: "flex",
-                alignItems: "stretch",
-                justifyContent: "space-between",
-                gap: 24,
-              }}
-            >
-              {/* LEFT — Drug Identity */}
-              <div style={{ flex: 1, display: "flex", gap: 20 }}>
-                <div style={{ flex: 1 }}>
-                {/* Badges */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                  {isCritical && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 5,
-                      padding: "4px 10px", borderRadius: 5,
-                      fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase",
-                      background: "var(--crit-bg)", color: "var(--crit)", border: "1px solid var(--crit-b)",
-                    }}>
-                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: "blink 1.6s ease-in-out infinite" }} />
-                      Critical Shortage
-                    </span>
-                  )}
-                  {activeClassIRecalls.length > 0 && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 5,
-                      padding: "4px 10px", borderRadius: 5,
-                      fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase",
-                      background: "var(--crit-bg)", color: "var(--crit)", border: "1px solid var(--crit-b)",
-                    }}>
-                      {"\u26A0"} {activeClassIRecalls.length} Class I Recall{activeClassIRecalls.length > 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-
-                {/* Drug name */}
-                <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.025em", color: "var(--app-text)", lineHeight: 1.15, marginBottom: 4 }}>
-                  {truncateDrugName(drug.generic_name, 120)}
-                  {drugStrength && (
-                    <span style={{ fontSize: 18, fontWeight: 400, color: "var(--app-text-3)", marginLeft: 8 }}>
-                      {drugStrength}
-                    </span>
-                  )}
-                </div>
-
-                {/* Subtitle */}
-                <div style={{ fontSize: 14, color: "var(--app-text-3)", marginBottom: 6 }}>
-                  {[truncateDrugName(drug.generic_name, 120).toLowerCase(), drugForm, drugStrength].filter(Boolean).join(" \u00b7 ")}
-                  {drugRoute && ` \u00b7 ${drugRoute}`}
-                </div>
-
-                {/* Meta line */}
-                <div style={{ fontSize: 12, color: "var(--app-text-4)", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
-                  {drug.atc_code && (
-                    <span style={{
-                      display: "inline-flex", padding: "2px 7px", borderRadius: 4,
-                      fontSize: 11, background: "var(--ind-bg)", color: "var(--indigo)",
-                      border: "1px solid var(--ind-b)",
-                      fontFamily: "var(--font-dm-mono), monospace",
-                    }}>
-                      ATC: {drug.atc_code}
-                    </span>
-                  )}
-                  <span>{" \u00b7 "}</span>
-                  {sourceSet.size > 0 && (
-                    <span>{Array.from(sourceSet).slice(0, 3).join(", ")}</span>
-                  )}
-                  <span>{" \u00b7 "}</span>
-                  <span>{latestUpdate ? `Updated ${timeAgo(latestUpdate)}` : "Updated today"}</span>
-                  <span>{" \u00b7 "}</span>
-                  <span><strong style={{ color: "var(--teal)" }}>{sourceSet.size}</strong> source{sourceSet.size !== 1 ? "s" : ""}</span>
-                </div>
-
-                {/* Tag pills — filter out scraper provenance strings */}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {drug.drug_class && !/scraper|auto.created/i.test(drug.drug_class) && (
-                    <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "var(--app-bg-2)", color: "var(--app-text-3)", border: "1px solid var(--app-border)" }}>
-                      {drug.drug_class}
-                    </span>
-                  )}
-                  {drug.therapeutic_category && !/scraper|auto.created/i.test(drug.therapeutic_category) && (
-                    <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "var(--app-bg-2)", color: "var(--app-text-3)", border: "1px solid var(--app-border)" }}>
-                      {drug.therapeutic_category}
-                    </span>
-                  )}
-                  {drug.dosage_forms?.filter((f: string) => !/scraper|auto.created/i.test(f)).slice(0, 2).map((f: string) => (
-                    <span key={f} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "var(--app-bg-2)", color: "var(--app-text-3)", border: "1px solid var(--app-border)" }}>
-                      {f}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Action buttons */}
-                <HeaderActions
-                  drugId={id}
-                  drugName={`${drug.generic_name}${drugStrength ? ` ${drugStrength}` : ""}`.trim()}
-                  userCountry={userCountry}
-                  severity={mySevRaw}
-                />
-                </div>
-              </div>
-
-              {/* RIGHT — My Country card with bell icon */}
-              <div className="drug-header-right" style={{
-                position: "relative",
-                background: myTheme.bg,
-                border: `1px solid ${myTheme.border}`,
-                borderRadius: 12,
-                padding: "16px 20px",
-                minWidth: 260,
-                maxWidth: 320,
-                display: "flex",
-                flexDirection: "column",
-              }}>
-                {/* Bell icon — top right */}
-                <V4BellButton drugId={id} hasShortage={!!userShortage} />
-
-                {/* Country label */}
-                <div style={{
-                  fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em",
-                  color: myTheme.color, marginBottom: 8, display: "flex", alignItems: "center", gap: 6,
-                }}>
-                  <FlagIcon code={userCountry} size={14} />
-                  {cName} &middot; NOW
-                </div>
-
-                {/* Status */}
-                <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 3 }}>
-                  {myLabel}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--app-text-3)", marginBottom: 12 }}>
-                  {mySubtext}
-                </div>
-
-                {/* Divider */}
-                <div style={{ height: 1, background: "var(--app-border)", marginBottom: 10 }} />
-
-                {/* Predicted return */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--app-text-4)", marginBottom: 4 }}>
-                      Expected return
-                    </div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: "var(--app-text)" }}>
-                      {predictedReturnDate ?? "No estimate provided"}
-                    </div>
-                  </div>
-                  {confidence > 0 && (
-                    <div style={{ fontSize: 12, fontFamily: "var(--font-dm-mono), monospace", color: "var(--teal)", fontWeight: 500 }}>
-                      {confidence} / 100
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="drug-page" style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 32px 64px" }}>
-
-            {/* ═══ 2.5 AVAILABLE SUPPLIERS (marketplace — actionable for pharmacist) ═══ */}
-            <AvailableSuppliers drugId={id} drugName={drug.generic_name} />
-
-            {/* ═══ 3. SHORTAGE REPORTS BY COUNTRY ═══ */}
-            <div id="country-list" style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Shortage reports by country</span>
-                <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                  {countries.length} countr{countries.length !== 1 ? "ies" : "y"} affected
-                </span>
-              </div>
-              <div style={{ background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden", padding: "16px 20px" }}>
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {!userCountryInList && (
-                    <div style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "10px 2px",
-                      borderBottom: countries.length > 0 ? "1px solid var(--app-border)" : "none",
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ width: 28, textAlign: "center", display: "inline-flex", justifyContent: "center" }}>
-                          <FlagIcon code={userCountry} size={14} />
-                        </span>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)" }}>
-                          {COUNTRY_NAMES[userCountry] ?? userCountry}
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--low)", display: "inline-block", flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--low)" }}>No shortage</span>
-                      </div>
-                    </div>
-                  )}
-                  {countries.map((g, i) => {
-                    const sc = g.severity === "low"
-                      ? { color: "var(--med)", bg: "var(--med-bg)", border: "var(--med-b)" }
-                      : sevColor(g.severity);
-                    const isUser = g.countryCode === userCountry;
-                    const availText = g.severity === "critical" ? "Not available" : g.severity === "high" ? "Very limited" : g.severity === "medium" ? "Limited" : "Supply disruption";
-                    return (
-                      <div key={g.countryCode} style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "10px 2px",
-                        borderBottom: i < countries.length - 1 ? "1px solid var(--app-border)" : "none",
-                        ...(isUser ? { order: -1 } : {}),
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span style={{ width: 28, textAlign: "center", display: "inline-flex", justifyContent: "center" }}>
-                            <FlagIcon code={g.countryCode} size={14} />
-                          </span>
-                          <span style={{ fontSize: 14, fontWeight: isUser ? 600 : 500, color: "var(--app-text)" }}>{g.country}</span>
-                          <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace", marginLeft: 6 }}>
-                            {g.source}{g.lastUpdated ? ` \u00b7 ${timeAgo(g.lastUpdated)}` : ""}
-                          </span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: sc.color, display: "inline-block", flexShrink: 0 }} />
-                          <span style={{ fontSize: 13, fontWeight: 500, color: sc.color }}>{availText}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* ═══ 4. AI INSIGHT TEXT ═══ */}
-            <p style={{ fontSize: 14, lineHeight: 1.75, color: "var(--app-text-2)", marginBottom: 20 }}>
-              {buildAiInsightText({
-                drugName: drug.generic_name,
-                activeShortages: activeShortages as { country_code?: string; status?: string; severity?: string; reason?: string; start_date?: string; estimated_resolution_date?: string; data_sources?: { name?: string; abbreviation?: string } }[],
-                userCountry,
-                affectedCountries: affectedCountries as Set<string>,
-              })}
-            </p>
-
-            {/* ═══ 5. SUPPLY TIMELINE — hidden in simplified pharmacist view ═══ */}
-            {false && deduped.length > 0 && (
-              <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden", marginBottom: 20 }}>
-                <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Supply Timeline</span>
-                  <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                    {deduped.length} event{deduped.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                <div style={{ padding: "16px 20px" }}>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {deduped.slice(0, 15).map((entry, i) => {
-                      const dotColor = DOT_COLORS[entry.type] ?? DOT_COLORS.update;
-                      const isFirst = i === 0;
-                      const isLast = i === Math.min(deduped.length, 15) - 1;
-                      return (
-                        <div key={`${entry.date}-${i}`} className="tl-row" style={{ display: "flex", gap: 14, paddingBottom: isLast ? 0 : 16, borderRadius: 6, transition: "background 0.1s" }}>
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 18, flexShrink: 0 }}>
-                            <div style={{
-                              width: 9, height: 9, borderRadius: "50%", flexShrink: 0, marginTop: 3,
-                              border: `2px solid ${dotColor}`,
-                              background: isFirst ? dotColor : "var(--app-bg)",
-                            }} />
-                            {!isLast && (
-                              <div style={{ flex: 1, width: 1, background: "var(--app-border)", marginTop: 3 }} />
-                            )}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                              <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                                {formatDate(entry.date)}
-                                {entry.date && ` \u00b7 ${timeAgo(entry.date)}`}
-                              </span>
-                              {entry.type !== "update" && (
-                                <span style={{
-                                  fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                                  textTransform: "uppercase", letterSpacing: "0.04em",
-                                  color: dotColor,
-                                  background: entry.type === "escalation" ? "var(--crit-bg)"
-                                    : entry.type === "resolved" ? "var(--low-bg)"
-                                    : entry.type === "de_escalation" ? "var(--med-bg)"
-                                    : "var(--app-bg-2)",
-                                  border: `1px solid ${entry.type === "escalation" ? "var(--crit-b)"
-                                    : entry.type === "resolved" ? "var(--low-b)"
-                                    : entry.type === "de_escalation" ? "var(--med-b)"
-                                    : "var(--app-border)"}`,
-                                }}>
-                                  {entry.type === "escalation" ? "Escalation"
-                                    : entry.type === "de_escalation" ? "De-escalation"
-                                    : entry.type === "resolved" ? "Resolved"
-                                    : entry.type === "initial" ? "Initial report"
-                                    : "Update"}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: 13, color: "var(--app-text-2)", lineHeight: 1.55 }}>
-                              {entry.source && (
-                                <strong style={{ color: "var(--app-text)", fontWeight: 500 }}>{entry.source}</strong>
-                              )}
-                              {entry.source ? " \u2014 " : ""}{entry.description}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ═══ 6. WHAT CAN I USE INSTEAD? ═══ */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>
-                  Same-class drugs (ATC)
-                </span>
-                <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                  {alternatives.length} drug{alternatives.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-              {alternatives.length === 0 ? (
-                <p style={{ fontSize: 14, color: "var(--app-text-3)" }}>No same-class drugs on file.</p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <p style={{ fontSize: 12, color: "var(--app-text-3)", margin: 0 }}>{ALTERNATIVES_CAVEAT}</p>
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {alternatives.map((alt: any) => (
-                    <Link
-                      key={alt.alternative_drug_id}
-                      href={`/drugs/${alt.alternative_drug_id}`}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "14px 20px",
-                        background: "#fff", border: "1px solid var(--app-border)",
-                        borderRadius: 12, textDecoration: "none",
-                        transition: "border-color 0.15s, background 0.15s",
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 500, color: "var(--app-text)", marginBottom: 2 }}>
-                          {alt.drugs?.generic_name ?? "Unknown"}
-                        </div>
-                        <div style={{ fontSize: 12, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                          {alt.relationship_type?.replace(/_/g, " ")}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
-                        {affinity(alt.similarity_score != null ? Math.round(alt.similarity_score * 100) : null) && (
-                          <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                            {affinity(Math.round(alt.similarity_score * 100))}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* ═══ 7. VERIFIED SOURCES ═══ */}
-            {shortages.length > 0 && (
-              <div style={{ background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 12, overflow: "hidden", marginBottom: 20 }}>
-                <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-3)" }}>Verified Sources</span>
-                  <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                    cross-checked {latestUpdate ? timeAgo(latestUpdate) : "today"}
-                  </span>
-                </div>
-                <div style={{ padding: "16px 20px" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {Array.from(seenSources.values()).map((src) => (
-                      <div key={src.abbreviation} style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "10px 16px", borderRadius: 8, background: "var(--app-bg-2)", border: "1px solid var(--app-border)",
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <FlagIcon code={src.countryCode} size={14} />
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)" }}>{src.abbreviation}</div>
-                            {src.sourceUrl && (
-                              <div style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                                {(() => { try { return new URL(src.sourceUrl).hostname; } catch { return ""; } })()}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {src.lastVerified && (
-                            <span style={{ fontSize: 11, color: "var(--app-text-4)", fontFamily: "var(--font-dm-mono), monospace" }}>
-                              {timeAgo(src.lastVerified)}
-                            </span>
-                          )}
-                          {src.sourceUrl && (
-                            <a href={src.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "var(--teal)", textDecoration: "none" }}>{"\u2197"}</a>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ═══ 8. GLOBAL STATUS + RISK SCORE (slim, below fold) ═══ */}
-            <div style={{
-              background: "#fff",
-              border: "1px solid var(--app-border)",
-              borderRadius: 12, padding: "16px 20px",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{
-                  fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em",
-                  color: "var(--app-text-3)", display: "flex", alignItems: "center", gap: 6,
-                }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: "var(--app-text-3)" }}>
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M2 12h20" />
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                  </svg>
-                  Global Status
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)" }}>
-                    {activeShortages.length > 0
-                      ? isAnticipatedOnly
-                        ? "Anticipated shortage"
-                        : (worstSeverity.charAt(0).toUpperCase() + worstSeverity.slice(1)) + " shortage"
-                      : "In supply"}
-                  </span>
-                  <span style={{ fontSize: 12, color: "var(--app-text-4)" }}>
-                    {affectedCountries.size > 0
-                      ? `${affectedCountries.size} countr${affectedCountries.size !== 1 ? "ies" : "y"} affected`
-                      : "0 countries affected"}
-                  </span>
-                </div>
-              </div>
-              {activeShortages.length > 0 && (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--app-text-4)" }}>Supply Risk Score</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.04em", background: riskColors.bg, color: riskColors.color, border: `1px solid ${riskColors.border}`, whiteSpace: "nowrap" }}>{drugRisk.riskLevel}</span>
-                      <span style={{ fontFamily: "var(--font-dm-mono), monospace", fontSize: 18, fontWeight: 700, color: riskColors.color }}>{drugRisk.riskScore}</span>
-                    </div>
-                  </div>
-                  <div style={{ height: 4, borderRadius: 2, background: "var(--app-bg-3, #e2e8f0)", overflow: "hidden", marginBottom: 6 }}>
-                    <div style={{ width: `${drugRisk.riskScore}%`, height: "100%", borderRadius: 2, background: drugRisk.riskScore >= 70 ? "var(--crit, #dc2626)" : drugRisk.riskScore >= 40 ? "var(--med, #ca8a04)" : "var(--low, #16a34a)" }} />
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--app-text-3)" }}>{drugRisk.primarySignal}</div>
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-      </div>
-    </div>
-    </DrugShell>
+    <V1DrugView
+      id={id}
+      drug={drug}
+      shortages={shortages}
+      statusLog={statusLog}
+      alternatives={alternatives}
+      userCountry={userCountry}
+      apiConcentration={apiConcentration}
+      supplyProfile={supplyProfile}
+      recalls={recalls}
+      approvalFootprint={approvalFootprint}
+      eligibility={eligibility}
+      pricing={pricing}
+      concession={concession}
+      priceMarkets={priceMarkets}
+      altPricing={altPricing}
+      products={products}
+      brandSkus={brandSkus}
+      brandHint={brandHint}
+      brandFocus={brandFocus}
+      freeViewsUsed={freeViewsUsed}
+      sourcedAlternatives={sourcedAlternatives}
+    />
   );
 }

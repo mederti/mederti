@@ -1,553 +1,398 @@
 """
 Taiwan TFDA Drug Supply Information Scraper
 --------------------------------------------
-Source:  Taiwan Food and Drug Administration (食品藥物管理署, TFDA)
-         Ministry of Health and Welfare (衛生福利部)
-URL:     https://www.fda.gov.tw/
+Source:  Taiwan Food and Drug Administration (食品藥物管理署, TFDA),
+         西藥供應資訊平台 (Western Medicine Supply Information Platform),
+         published as open data on data.fda.gov.tw:
+           104  shortages with a recommended alternative   → active, medium
+           105  shortages with no alternative              → active, high
+           106  shortages since resolved                   → resolved
+         plus dataset 36 (the full licence register) to look up each
+         product's active ingredients by licence number.
+URL:     https://data.fda.gov.tw/data/opendata/export/{104,105,106}/json
 
-IMPORTANT — fidelity note (read before touching this file)
-=================================================================
-Taiwan has THREE relevant systems. Only ONE of them is reachable by a
-plain HTTP client, and it is NOT the structured per-drug one:
+History: v1 parsed "spotlight" drugs out of a hand-maintained list of
+fortnightly narrative press bulletins (10 events / 7 drugs, 2023-24). The
+open-data feeds above carry the platform's full per-product list (~240
+active, ~400 resolved in Oct 2026) and replace that approach entirely.
 
-1. 西藥供應資訊平台 ("Western Medicine Supply Information Platform",
-   dsms.fda.gov.tw) — the REAL per-drug shortage database (live status,
-   named drugs, alternative products, project-import approvals). This is
-   the system that would give us high-fidelity structured data.
-   CONFIRMED UNREACHABLE from this scraper's network path: TCP connect
-   and TLS handshake both succeed (cert is valid, *.fda.gov.tw), but the
-   server never returns an HTTP response body — the request hangs until
-   client-side timeout with 0 bytes received. This is not a slow-JS
-   problem; it reproduces identically with curl, httpx, and raw sockets
-   with a real UA. Most likely a bot-detection/WAF layer that silently
-   drops non-browser clients, or an internal-only routing quirk. A
-   headless-browser (Playwright) fetch was NOT attempted here because
-   BaseScraper's HTTP surface (self._get/_get_json) is httpx-based and
-   introducing a browser dependency is out of scope for this file.
-   Flagged in supabase/migrations/064 as needing headless-browser support.
+How a feed row becomes a shortage event
+=======================================
+* The feeds name PRODUCTS (licence number + Chinese/English product name),
+  never ingredients. The ingredient comes from the licence register's
+  主成分略述 for that licence — never parsed out of a product name. A licence
+  missing from the register is skipped and logged.
+* One event per DRUG (ingredient set), aggregating every listed product of
+  that drug: active if any product is in 104/105; severity high if any is in
+  105. Each product (licence, names, feed, notice date, verbatim status) is
+  kept in raw_record["products"].
+* TFDA publishes NO shortage start date, only 公告更新時間 (the date the
+  notice was last updated). A new event's start_date is the EARLIEST notice
+  date among its products — the shortage began on or before it — and that is
+  stated in `notes` and raw_record["start_date_basis_detail"].
+* SNAPSHOT_IDENTITY: a drug's open event keeps its start_date (and so its
+  shortage_id) across runs even as TFDA edits notices. Carry-forward only
+  considers rows written by this feed (raw_data.feed = "tfda_opendata"), not
+  the v1 bulletin rows, whose dates come from a different method.
+* A drug whose products are ALL in 106 is written only if it already has an
+  open event from this feed (i.e. it closes that event, end_date = latest
+  restored date). A resolved-only drug we never saw open has no known start
+  date, so it is NOT written — counted in the run log instead.
+* estimated_resolution_date comes only from the MAH statement (item 1),
+  e.g. "預計115年11月底恢復" → 2026-11-30 with precision "month"; the
+  verbatim phrase and precision are kept in raw_record.
+* Drug matching is exact only (full name, then the salt/qualifier-stripped
+  name, then an explicit INN↔USAN alias), else a new drug row is created.
+  The base class's first-word prefix match is deliberately NOT used: it would
+  map "insulin aspart" or a combination product onto whichever drug shares
+  the first word.
 
-2. 藥品供應監測系統 ("Drug Supply Monitoring System", ddms.fda.gov.tw) —
-   distributor-inventory system for pharmacists/wholesalers. Not a public
-   query surface; not attempted.
-
-3. Biweekly narrative bulletins on fda.gov.tw ("本署新聞" / TFDA News,
-   news.aspx?cid=4) titled e.g.:
-       "西藥供應資訊平台112年6月14日至6月27日通報案件辦理情形"
-       (Western Medicine Supply Info Platform — case handling status for
-       the reporting period 2023-06-14 to 2023-06-27)
-   These ARE plain-HTML fetchable (confirmed working via httpx) and
-   publish real aggregate case-count statistics every ~2 weeks, PLUS a
-   "spotlight" section naming 1+ specific drugs with a narrative status
-   (e.g. "目前控貨中" = currently stock-controlled/short, "已恢復供應" =
-   supply restored, "啟動公開徵求" = soliciting alternative import/mfg).
-
-THIS SCRAPER IMPLEMENTS FALLBACK #3 (narrative bulletins). It is
-LOWER FIDELITY than the real per-drug platform would be:
-  - Aggregate case counts are NOT per-drug (they cover all drugs
-    reported in the 2-week window as one number).
-  - Only the "spotlight" drug(s) explicitly named in the bulletin text
-    become individual shortage_events rows; the rest of the aggregate
-    count is captured only as an informational note, not as
-    normalized per-drug records.
-  - Dates are ROC (Republic of China / Minguo) calendar dates embedded
-    in Traditional Chinese prose and must be converted (ROC year + 1911
-    = Gregorian year).
-  - There is no live index/listing endpoint that plain HTTP can read
-    (news.aspx list pages are populated by an ASP.NET client-side
-    postback/AJAX mechanism that returns nothing to a plain GET, and
-    TC/sitemap.xml is a stale cached snapshot that does not include
-    current article ids). Discovery of new bulletin ids therefore
-    can't be automated with an httpx-only client; NEW_BULLETIN_IDS
-    below is a maintained seed list and must be extended by hand
-    (or by wiring the id-discovery step into a headless-browser run)
-    as new fortnightly bulletins are published.
-
-Traditional Chinese terms relied on for parsing
-------------------------------------------------
-    藥品        = drug / medicine
-    短缺        = shortage (藥品短缺 = drug shortage)
-    供應        = supply (西藥供應資訊平台 = Western Medicine Supply Info Platform)
-    缺藥        = "lacking medicine" — colloquial/media term for shortage
-    通報        = report/notify (通報案件 = reported case)
-    控貨中      = "under stock control" — de facto active-shortage status
-    已恢復供應    = "supply restored" → resolved
-    恢復供應品項  = "items with restored supply" (aggregate count)
-    建議使用替代品項 = "alternative product recommended" (aggregate count)
-    無短缺案件    = "investigated, found not actually short" (aggregate count)
-    啟動公開徵求  = "launched a public solicitation" for alternative
-                    import/manufacture — a regulatory_action response
-    處理中案件數  = "cases still being processed" (aggregate count)
-    原料因素      = raw-material factor (reason)
-    自荒隷油战爭、供需失衡 = geopolitical/supply-demand imbalance (context, not
-                    a parsed field, but appears in bulletin preambles)
-    臨床用量增加、需求增加 = clinical demand increase (demand_surge reason)
-    生產品質問題    = production quality issue (manufacturing_issue reason)
-    全球性缺貨    = global shortage (supply_chain reason)
-    缺工          = labor shortage at manufacturer (raw_material/manufacturing_issue)
+Cited alternatives are written to alternative_evidence by
+backend/importers/tfda_alternatives_importer.py (same feeds, same register).
 
 Data source UUID:  10000000-0000-0000-0000-000000000116
-Country:           Taiwan
-Country code:      TW
-Confidence:        65/100 (per data_sources seed — narrative-bulletin fallback,
-                    not the structured per-drug platform)
-
-Cron:  Not yet wired (added by a separate integration pass).
+Country:           Taiwan (TW)
 """
 
 from __future__ import annotations
 
-import re
-from datetime import date, datetime, timezone
 from typing import Any
 
-from backend.scrapers.base_scraper import BaseScraper, ScraperError
+from backend.importers.alternatives_resolver import SALT_WORDS
+from backend.scrapers import tfda_opendata as tfda
+from backend.scrapers.base_scraper import BaseScraper, ScraperError, _chunks
 from backend.utils.reason_mapper import map_reason_category
+
+FEED_TAG = "tfda_opendata"
 
 
 class TaiwanTFDAScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000116"
     SOURCE_NAME: str  = "TFDA — Drug Supply Information Platform (Taiwan)"
-    BASE_URL: str     = "https://www.fda.gov.tw/"
+    BASE_URL: str     = tfda.PUBLIC_URL
     COUNTRY: str      = "Taiwan"
     COUNTRY_CODE: str = "TW"
 
     RATE_LIMIT_DELAY: float = 2.0
-    REQUEST_TIMEOUT: float  = 60.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    REQUEST_TIMEOUT: float  = 120.0
+    SCRAPER_VERSION: str    = "2.0.0"
+    SNAPSHOT_IDENTITY: bool = True
 
-    # TFDA "本署新聞" (official news) article endpoint. Individual bulletins are
-    # addressed by an opaque id (usually "t" + 6 digits for press releases).
-    NEWS_ARTICLE_URL: str = "https://www.fda.gov.tw/TC/newsContent.aspx"
-
-    # ── Known biweekly "西藥供應資訊平台...通報案件辦理情形" bulletin ids ──
-    # (plus a few adjacent ad-hoc press statements that also name specific
-    # drugs). fda.gov.tw's news list pages are rendered client-side (a
-    # plain GET returns an empty shell) and TC/sitemap.xml is a stale
-    # snapshot that predates these ids, so there is no httpx-reachable
-    # index to crawl automatically. This list is the discovery mechanism
-    # and must be extended by hand as new fortnightly bulletins are
-    # published (id format observed so far: "t" + 6 digits).
-    NEWS_ARTICLE_IDS: list[str] = [
-        "t601830",  # 112/6/14-6/27 biweekly bulletin (Etomidate spotlight)
-        "t601812",  # 112/5/31-6/13 biweekly bulletin (Basiliximab spotlight)
-        "t601790",  # 112/3/25-6/5 cumulative update (Entrectinib, Adenosine, Hep A vaccine, Basiliximab)
-        "t601694",  # ad-hoc press statement re: media shortage reports (Adenosine, magnesium oxide)
-        "t622409",  # 2024-01-22 press statement (莫鼻卡/ephedrine-class, artificial tears, magnesium oxide)
-        "t601541",  # ad-hoc press statement re: individual brand shortages
-        "t601510",  # general "TFDA continues to stabilise domestic drug supply" statement
+    # Manufacturer-statement phrase → canonical reason_category. Checked in
+    # order (discontinuation first: "因生產問題…將不再供應" is a discontinuation).
+    _REASON_MAP: list[tuple[str, str]] = [
+        ("不再供應",   "discontinuation"),
+        ("停止供應",   "discontinuation"),
+        ("停止生產",   "discontinuation"),
+        ("不製造",     "discontinuation"),
+        ("停止製造",   "discontinuation"),
+        ("停產",       "discontinuation"),
+        ("註銷",       "discontinuation"),
+        ("未申請展延", "discontinuation"),
+        ("藥證相關問題", "regulatory_action"),
+        ("原物料",     "raw_material"),
+        ("原料",       "raw_material"),
+        ("製造廠變更", "manufacturing_issue"),
+        ("生產問題",   "manufacturing_issue"),
+        ("製程",       "manufacturing_issue"),
+        ("品質",       "manufacturing_issue"),
+        ("缺工",       "manufacturing_issue"),
+        ("需求增加",   "demand_surge"),
+        ("需求量增加", "demand_surge"),
+        ("用量增加",   "demand_surge"),
+        ("全球性缺貨", "supply_chain"),
+        ("全球缺貨",   "supply_chain"),
+        ("國外原廠",   "supply_chain"),
+        ("供應問題",   "supply_chain"),
+        ("供應相關問題", "supply_chain"),
+        ("成本因素",   "other"),
+        ("運輸",       "distribution"),
+        ("物流",       "distribution"),
     ]
-
-    # Status phrases (Traditional Chinese) -> canonical status
-    _STATUS_KEYWORDS: list[tuple[str, str]] = [
-        ("已恢復供應", "resolved"),
-        ("恢復供應中", "resolved"),
-        ("穩定供應中", "resolved"),
-        ("預計.{0,20}恢復供應", "anticipated"),
-        ("控貨中", "active"),
-        ("短缺期間", "active"),
-        ("目前仍.{0,10}短缺", "active"),
-        ("從節中", "active"),
-    ]
-
-    # Free-text reason phrase -> canonical reason_category. Checked before
-    # falling back to the centralised map_reason_category().
-    _REASON_MAP: dict[str, str] = {
-        "原料因素":       "raw_material",
-        "原物料":         "raw_material",
-        "生產品質問題":   "manufacturing_issue",
-        "製造廠尚無法開始生產": "manufacturing_issue",
-        "缺工":           "manufacturing_issue",
-        "全球性缺貨":     "supply_chain",
-        "全球性缺货":     "supply_chain",
-        "臨床用量增加":   "demand_surge",
-        "需求增加":       "demand_surge",
-        "需求量增加":     "demand_surge",
-    }
 
     # -------------------------------------------------------------------------
     # fetch()
     # -------------------------------------------------------------------------
 
-    def fetch(self) -> list[dict]:
-        """
-        Fetch TFDA biweekly drug-supply bulletins and adjacent shortage
-        press statements from the TFDA News (本署新聞) section.
+    def fetch(self) -> dict:
+        """Fetch the three platform feeds and the (cached) licence register.
 
-        Strategy (fallback #3 — see module docstring):
-        1. For each known article id in NEWS_ARTICLE_IDS, GET
-           newsContent.aspx?cid=4&id=<id>.
-        2. Skip ids that 404 or don't contain a recognisable bulletin/
-           shortage-statement body (defensive — ids can be retired).
-        3. Return the raw HTML + extracted metadata per article; the bulk
-           of the parsing happens in normalize() so raw_scrapes keeps the
-           full source HTML for auditability.
-        """
-        self.log.info("Scrape started", extra={
-            "source": self.SOURCE_NAME,
-            "url": self.NEWS_ARTICLE_URL,
-        })
-
-        records: list[dict] = []
-
-        for article_id in self.NEWS_ARTICLE_IDS:
-            url = f"{self.NEWS_ARTICLE_URL}?cid=4&id={article_id}"
+        Only the feeds go to raw_scrapes: the register is ~72k licences and
+        changes slowly, so it is cached on disk (tfda_opendata.load_register)
+        and the ingredients used per product are copied into each event's
+        raw_record instead."""
+        feeds: dict[str, list[dict]] = {}
+        for n in tfda.FEEDS:
+            url = tfda.FEED_URL.format(n=n)
             try:
-                resp = self._get(url)
+                feeds[n] = tfda.parse_feed(self._get_json(url))
             except Exception as exc:
-                self.log.warning(
-                    "Failed to fetch TFDA news article — skipping",
-                    extra={"error": str(exc), "url": url, "article_id": article_id},
-                )
-                continue
+                # A missing feed would silently resolve or drop every drug in
+                # it — fail the run instead.
+                raise ScraperError(f"TFDA feed {n} failed: {exc}") from exc
+        if not any(feeds[n] for n in tfda.ACTIVE_FEEDS):
+            raise ScraperError("TFDA feeds 104 and 105 are both empty — refusing to treat that as 'no shortages'")
 
-            html = resp.text
-            if "本署新聞" not in html and "藥品" not in html:
-                self.log.warning(
-                    "Article id did not return recognisable TFDA news content — skipping",
-                    extra={"article_id": article_id, "url": url},
-                )
-                continue
-
-            records.append({
-                "article_id": article_id,
-                "url": url,
-                "html": html,
-            })
-
-        if not records:
-            raise ScraperError(
-                "TFDA fetch failed: no known bulletin ids returned usable content "
-                "(all skipped or errored)"
-            )
-
-        self.log.info("TFDA fetch complete", extra={"records": len(records)})
-        return records
+        self._register = tfda.load_register()
+        self.log.info("TFDA fetch complete", extra={
+            "feed_104": len(feeds["104"]), "feed_105": len(feeds["105"]),
+            "feed_106": len(feeds["106"]), "register": len(self._register),
+        })
+        return {"feeds": feeds}
 
     # -------------------------------------------------------------------------
     # normalize()
     # -------------------------------------------------------------------------
 
-    def normalize(self, raw: list[dict]) -> list[dict]:
-        """Normalize TFDA bulletin/press-statement HTML into shortage event dicts."""
-        self.log.info(
-            "Normalising TFDA records",
-            extra={"source": self.SOURCE_NAME, "raw_count": len(raw)},
-        )
+    def normalize(self, raw: dict) -> list[dict]:
+        register: dict[str, dict] = getattr(self, "_register", None) or tfda.load_register()
+        feeds = raw["feeds"]
 
-        normalised: list[dict] = []
-        skipped = 0
-
-        for rec in raw:
-            try:
-                results = self._normalise_article(rec)
-                if not results:
-                    skipped += 1
+        groups: dict[str, dict[str, Any]] = {}
+        unknown_licences: list[str] = []
+        for n, rows in feeds.items():
+            for row in rows:
+                lic = tfda.canonical_licence(row.get("許可證字號", ""))
+                entry = register.get(lic)
+                ingredients = tfda.split_ingredients(entry["ingredients"]) if entry else []
+                if not ingredients:
+                    unknown_licences.append(lic)
                     continue
-                normalised.extend(results)
-            except Exception as exc:
-                skipped += 1
-                self.log.warning(
-                    "Failed to normalise TFDA article",
-                    extra={"error": str(exc), "article_id": rec.get("article_id")},
-                )
+                name = tfda.generic_name(ingredients)
+                g = groups.setdefault(name, {"ingredients": ingredients, "products": []})
+                g["products"].append(self._product(n, row, lic, entry))
 
-        self.log.info(
-            "Normalisation done",
-            extra={"total": len(raw), "normalised": len(normalised), "skipped": skipped},
-        )
-        return normalised
-
-    def _normalise_article(self, rec: dict) -> list[dict]:
-        """
-        Parse a single TFDA news article into zero or more shortage event
-        dicts — one per explicitly named "spotlight" drug. The aggregate
-        biweekly case-count statistics (which cover many unnamed drugs)
-        are NOT expanded into per-drug rows; they're attached as context
-        in `notes` on whatever named-drug rows the same article produces,
-        since there is no drug identity to key them on individually.
-        """
-        import html as htmlmod
-
-        html_raw = rec["html"]
-        url = rec["url"]
-        article_id = rec["article_id"]
-
-        text = htmlmod.unescape(html_raw)
-
-        title_match = re.search(r"<title>\s*(.*?)\s*-\s*本署新聞", text, re.S)
-        title = title_match.group(1).strip() if title_match else ""
-
-        publish_date_match = re.search(r"發布日期：(\d{4}-\d{2}-\d{2})", text)
-        publish_date = publish_date_match.group(1) if publish_date_match else date.today().isoformat()
-
-        # Extract the article body (TFDA's CMS content panel)
-        body_idx = text.find("PnlCms")
-        if body_idx == -1:
-            return []
-        body_html = text[body_idx:body_idx + 8000]
-        body = re.sub(r"<script.*?</script>", " ", body_html, flags=re.S)
-        body = re.sub(r"<[^>]+>", "\n", body)
-        body = re.sub(r"[ \t]+", " ", body)
-        body = re.sub(r"\n\s*\n+", "\n", body).strip()
-
-        # ── Aggregate reporting-period stats (informational context only) ──
-        # Two date-range phrasings observed:
-        #   "112年6月14日至6月27日"        (year given once, shared by both ends)
-        #   "自112年3月25日至112年6月5日"   (year repeated on both ends)
-        period_match = re.search(
-            r"(\d{2,3})年(\d{1,2})月(\d{1,2})日至(?:\d{2,3}年)?(\d{1,2})月(\d{1,2})日", text
-        )
-        aggregate_note = ""
-        if period_match:
-            roc_year, m1, d1, m2, d2 = period_match.groups()
-            greg_year = int(roc_year) + 1911
-            # "共接獲"/"共計接獲" and "建議使用替代品項N件(共M項藥品)" vs plain
-            # "...N件" both appear across bulletins — tolerate both.
-            counts_match = re.search(
-                r"共(?:計)?接獲(\d+)件藥品短缺通報案件.*?"
-                r"無短缺案件(\d+)件、建議使用替代品項(\d+)件.*?"
-                r"恢復供應品項(\d+)件、處理中案件數(\d+)件",
-                body,
-            )
-            if counts_match:
-                received, no_shortage, alt_recommended, restored, in_progress = counts_match.groups()
-                aggregate_note = (
-                    f"Biweekly aggregate ({greg_year}-{int(m1):02d}-{int(d1):02d} to "
-                    f"{greg_year}-{int(m2):02d}-{int(d2):02d}): {received} cases reported, "
-                    f"{no_shortage} found not actually short, {alt_recommended} given "
-                    f"alternative recommendations, {restored} restored to supply, "
-                    f"{in_progress} still processing."
-                )
-
+        open_keys = self._open_feed_keys()
         events: list[dict] = []
+        resolved_unseen = 0
+        for name, g in sorted(groups.items()):
+            ev = self._build_event(name, g["ingredients"], g["products"])
+            if ev["status"] == "resolved" and name not in open_keys:
+                resolved_unseen += 1
+                continue
+            events.append(ev)
 
-        # ── Spotlight sections. Two shapes observed in the wild:
-        #
-        # Shape A — header names ONE drug, numbered sub-items are just
-        # supporting detail about that same drug:
-        #     "二、針對Etomidate注射劑型供應情形，...
-        #      (一)主要用於快速氣管插管...
-        #      (二)國內有一張藥品許可證...
-        #      (三)食藥署已於112年6月20日啟動公開徵求..."
-        #
-        # Shape B — header is a generic lead-in ("近期有短缺疑慮的藥品供應
-        # 情形"), and EACH numbered item itself names a different drug:
-        #     "三、針對近期有短缺疑慮的藥品供應情形：
-        #      (一)安室律注射劑 (Adenosine)：...
-        #      (二)氧化鎂錠劑：..."
-        #
-        # Disambiguate by checking whether the numbered sub-item text
-        # itself matches a "<name>[(English)]：" drug-label prefix — if it
-        # does, treat it as its own drug (Shape B); otherwise fall back to
-        # attributing the header phrase's drug name to the whole block
-        # (Shape A).
-        header_patterns = [
-            r"針對([^，。：]{2,40}?)供應情形",
-            r"有關([^，。：]{2,40}?)供應(?:情形|短缺情事)",
-        ]
-        # Generic lead-in phrases that name a category, not an actual drug —
-        # skip these as a header-drug candidate (Shape B relies on the
-        # numbered sub-items instead).
-        _GENERIC_HEADER_MARKERS = ("疑慮", "個別", "近期", "情事")
-
-        drug_item_re = re.compile(
-            r"^([一-鿿]{2,12}(?:\s*[（(][A-Za-z][A-Za-z\s;]{1,40}[）)])?"
-            r"|[A-Za-z][A-Za-z\-]{2,30})"
-            r"(?:注射劑?型?|錠劑?|口服藥?品?|膠囊|懸液|疫苗)?[：:]"
-        )
-
-        for header_match in re.finditer(
-            "|".join(f"(?:{p})" for p in header_patterns), body
-        ):
-            header_phrase = next(g for g in header_match.groups() if g)
-            header_is_generic = any(m in header_phrase for m in _GENERIC_HEADER_MARKERS)
-
-            # Grab the block of text from this header up to the next
-            # top-level 一/二/三 numeral marker or end of body.
-            block_start = header_match.end()
-            next_section = re.search(r"\n[一二三四五六七八九十]、", body[block_start:])
-            block_end = block_start + next_section.start() if next_section else len(body)
-            block = body[block_start:block_end]
-
-            # Split the block into numbered (一)/(二)/... sub-items.
-            sub_items = re.split(r"\n(?=[（(][一二三四五六七八九十][）)])", block)
-
-            per_item_drugs: list[tuple[str, str]] = []  # (drug_name, item_text)
-            for sub in sub_items:
-                sub_stripped = re.sub(r"^[（(][一二三四五六七八九十][）)]", "", sub).strip()
-                item_match = drug_item_re.match(sub_stripped)
-                if item_match:
-                    per_item_drugs.append((item_match.group(1), sub_stripped))
-
-            if per_item_drugs and (header_is_generic or len(per_item_drugs) > 1):
-                # Shape B — each numbered item is its own drug.
-                for raw_name, item_text in per_item_drugs:
-                    drug_name = self._extract_drug_name(raw_name)
-                    if not drug_name:
-                        continue
-                    events.append(self._build_event(
-                        drug_name, item_text, title, url, article_id,
-                        publish_date, aggregate_note, header_phrase,
-                    ))
-            elif not header_is_generic:
-                # Shape A — header itself names the drug; use the whole
-                # block as the status/reason window.
-                drug_name = self._extract_drug_name(header_phrase)
-                if drug_name:
-                    events.append(self._build_event(
-                        drug_name, block, title, url, article_id,
-                        publish_date, aggregate_note, header_phrase,
-                    ))
-
-        # ── "No alternative available, public solicitation launched" drugs.
-        # These sentences name the drugs with the SEVEREST shortages (no
-        # substitute exists) mid-prose, e.g.:
-        #   "...另無替代藥品啟動公開徵求案件共計4個品項...其中肺癌用藥
-        #    Entrectinib口服藥品、心律不整用藥Adenosine注射藥品及不活化
-        #    A型肝炎疫苗皆已核准...；另抗排斥用藥Basiliximab注射劑型..."
-        # Only fires when the phrase is immediately followed by "共計N個
-        # 品項" (i.e. this is the cumulative-report shape that actually
-        # goes on to name drugs) — the plain biweekly aggregate line
-        # ("...啟動公開徵求案件1件、恢復供應品項...") does NOT continue
-        # into a named-drug list and must not be matched here, since that
-        # would otherwise bleed into an unrelated spotlight section later
-        # in the same article and mint bogus drug names from prose
-        # (e.g. "Rapid Sequence Intubation" from an RSI acronym gloss).
-        # Only English/Latin drug names are reliably extractable from this
-        # free-prose shape (Chinese-only names like "不活化A型肝炎疫苗" are
-        # too ambiguous to safely split out) — that's an accepted gap in
-        # this fallback path, documented in the module docstring.
-        no_alt_match = re.search(
-            r"無替代藥品啟動公開徵求案件共計\d+個品項.{0,400}?(?=\n[一二三四五六七八九十]、|$)",
-            body, re.S,
-        )
-        if no_alt_match:
-            window = no_alt_match.group(0)
-            # Drop acronym/gloss parentheticals like "(Rapid Sequence
-            # Intubation; RSI)" before scanning for drug-name tokens —
-            # these are English but not drug names.
-            window_for_names = re.sub(r"[（(][^）)]*[；;][^）)]*[）)]", " ", window)
-            for latin_name in dict.fromkeys(re.findall(r"[A-Z][A-Za-z]{3,}", window_for_names)):
-                events.append(self._build_event(
-                    latin_name, window, title, url, article_id,
-                    publish_date, aggregate_note, "無替代藥品啟動公開徵求",
-                ))
-
-        # If no spotlight drug was named but the article is clearly a
-        # bulletin with aggregate stats, still surface it via a synthetic
-        # "platform-wide" note so the run isn't silently empty-handed for
-        # periods with no named drug — but skip that fallback if this is
-        # just a generic policy statement with no numbers at all.
-        if not events and aggregate_note:
-            events.append({
-                "generic_name":            "Multiple drugs (aggregate report)",
-                "status":                  "active",
-                "severity":                "low",
-                "reason":                  None,
-                "reason_category":         "unknown",
-                "start_date":              publish_date,
-                "source_url":              url,
-                "notes":                   f"{title} | {aggregate_note}",
-                "source_confidence_score": 55,
-                "raw_record": {
-                    "article_id": article_id,
-                    "title": title,
-                },
-            })
-
+        self.resolved_unseen = resolved_unseen
+        self.log.info("Normalisation done", extra={
+            "drugs": len(groups), "events": len(events),
+            "active": sum(1 for e in events if e["status"] == "active"),
+            "resolved_closing_open_rows": sum(1 for e in events if e["status"] == "resolved"),
+            "resolved_never_seen_open_skipped": resolved_unseen,
+            "licences_not_in_register": len(unknown_licences),
+        })
+        if unknown_licences:
+            self.log.warning("Licences not found in TFDA register — skipped",
+                             extra={"licences": unknown_licences[:50]})
         return events
 
-    def _build_event(
-        self,
-        drug_name: str,
-        window: str,
-        title: str,
-        url: str,
-        article_id: str,
-        publish_date: str,
-        aggregate_note: str,
-        spotlight_phrase: str,
-    ) -> dict:
-        """Build a single normalized shortage-event dict for a named drug
-        found in a TFDA bulletin/press-statement window of text."""
-        status = self._determine_status(window)
-        raw_reason = self._extract_reason(window)
-        reason_category = self._map_reason(raw_reason)
+    def _product(self, feed: str, row: dict, lic: str, entry: dict) -> dict:
+        status_text = (row.get("供應狀態") or "").strip()
+        restored, restored_precision = tfda.restored_date(status_text) if feed == "106" else (None, None)
+        return {
+            "feed": feed,
+            "feed_label": tfda.FEEDS[feed],
+            "licence": lic,
+            "product_name": (row.get("中文品名") or "").replace("\r", "").replace("\n", " | ").strip(),
+            "register_name_en": entry.get("name_en", ""),
+            "register_ingredients": entry.get("ingredients", ""),
+            "dosage_form": entry.get("dosage_form", ""),
+            "licence_cancelled": entry.get("cancelled", False),
+            "notice_updated": tfda.gregorian_slash_date(row.get("公告更新時間")),
+            "restored_date": restored,
+            "restored_precision": restored_precision,
+            "status_text": status_text,
+        }
 
-        notes_parts = [f"Spotlight in TFDA bulletin: {title}"]
-        if aggregate_note:
-            notes_parts.append(aggregate_note)
-        notes = " | ".join(notes_parts)
+    def _build_event(self, name: str, ingredients: list[str], products: list[dict]) -> dict:
+        active = [p for p in products if p["feed"] in tfda.ACTIVE_FEEDS]
+        status = "active" if active else "resolved"
+        basis = active or products
+
+        notice_dates = sorted(d for d in (p["notice_updated"] for p in basis) if d)
+        start_date = notice_dates[0] if notice_dates else None
+
+        if active:
+            severity = "high" if any(p["feed"] == "105" for p in active) else "medium"
+        else:
+            severity = "low"
+
+        # Reason + outlook from the MAH statement of the most recently updated
+        # listed product (the freshest statement about this drug).
+        lead = max(basis, key=lambda p: p["notice_updated"] or "")
+        statement = tfda.manufacturer_statement(lead["status_text"])
+        reason_category = self._map_reason(statement)
+
+        est, est_precision, est_phrase = (None, None, None)
+        if active:
+            est, est_precision, est_phrase = tfda.expected_recovery(statement)
+
+        end_date = None
+        if status == "resolved":
+            restored = sorted(d for d in (p["restored_date"] for p in products) if d)
+            end_date = restored[-1] if restored else None
+
+        brand_names = sorted({p["register_name_en"] for p in products if p["register_name_en"]})
+        listed = "; ".join(f"{p['product_name']} ({p['licence']})" for p in basis[:6])
+        more = f" (+{len(basis) - 6} more)" if len(basis) > 6 else ""
+        noun = "product" if len(basis) == 1 else "products"
+        notes = (
+            f"TFDA Drug Supply Information Platform lists {len(basis)} {noun} "
+            f"{'in shortage' if active else 'as restored'}: {listed}{more}. "
+            "TFDA does not publish shortage start dates; the start date shown is the "
+            "earliest notice-update date, so the shortage began on or before it."
+        )
+        if est_phrase:
+            notes += f" Expected recovery per MAH: {est_phrase}."
 
         return {
-            "generic_name":            drug_name,
-            "status":                  status,
-            "severity":                "medium",
-            "reason":                  raw_reason or None,
-            "reason_category":         reason_category,
-            "start_date":              publish_date,
-            "source_url":              url,
-            "notes":                   notes,
-            "source_confidence_score": 65,
+            "generic_name":              name,
+            "brand_names":               brand_names,
+            "status":                    status,
+            "severity":                  severity,
+            "reason":                    statement[:1000] or None,
+            "reason_category":           reason_category,
+            "start_date":                start_date,
+            "end_date":                  end_date,
+            "estimated_resolution_date": est,
+            "source_url":                tfda.PUBLIC_URL,
+            "notes":                     notes,
+            "source_confidence_score":   90,
             "raw_record": {
-                "article_id": article_id,
-                "title": title,
-                "spotlight_phrase": spotlight_phrase,
-                "window": window[:800],
+                "feed": FEED_TAG,
+                "tw_key": name,
+                "ingredients": ingredients,
+                "start_date_basis_detail": "earliest 公告更新時間 (notice last updated) among listed products",
+                "estimated_resolution_precision": est_precision,
+                "estimated_resolution_phrase": est_phrase,
+                "products": products,
             },
         }
+
+    # -------------------------------------------------------------------------
+    # Identity + drug resolution overrides
+    # -------------------------------------------------------------------------
+
+    def _open_feed_keys(self) -> set[str]:
+        """tw_keys of this feed's currently open events (resolved notices only
+        close these). Empty on a dry run (mock client) or a failed query."""
+        keys: set[str] = set()
+        offset = 0
+        try:
+            while True:
+                resp = (
+                    self.db.table("shortage_events")
+                    .select("tw_key:raw_data->>tw_key")
+                    .eq("data_source_id", self.SOURCE_ID)
+                    .eq("raw_data->>feed", FEED_TAG)
+                    .in_("status", ["active", "anticipated", "stale"])
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                rows = resp.data if isinstance(resp.data, list) else []
+                keys.update(r["tw_key"] for r in rows if r.get("tw_key"))
+                if len(rows) < 1000:
+                    break
+                offset += 1000
+        except Exception as exc:
+            self.log.warning("Open-event lookup failed; resolved notices won't close rows this run",
+                             extra={"error": str(exc)})
+        return keys
+
+    def _open_start_dates(self, drug_ids: list[str]) -> dict[str, str]:
+        """As BaseScraper, but only this feed's rows: v1 bulletin rows have
+        dates from a different method and must not be carried forward."""
+        out: dict[str, str] = {}
+        for chunk in _chunks(drug_ids, 100):
+            try:
+                resp = (
+                    self.db.table("shortage_events")
+                    .select("drug_id, start_date")
+                    .eq("data_source_id", self.SOURCE_ID)
+                    .eq("raw_data->>feed", FEED_TAG)
+                    .in_("status", ["active", "anticipated", "stale"])
+                    .in_("drug_id", chunk)
+                    .execute()
+                )
+            except Exception as exc:
+                self.log.warning("Open-row start_date lookup failed for chunk",
+                                 extra={"error": str(exc), "chunk_size": len(chunk)})
+                continue
+            for row in resp.data or []:
+                d, sd = row.get("drug_id"), row.get("start_date")
+                if d and sd and (d not in out or sd < out[d]):
+                    out[d] = sd
+        return out
+
+    def _find_or_create_drug(self, generic_name: str, brand_names: list[str] | None = None) -> str | None:
+        """Exact matches (tfda.name_candidates), then a strict salt-form match,
+        else auto-create. No first-word prefix match — see module docstring."""
+        normalised = generic_name.strip().lower()
+        if not normalised:
+            return None
+        for cand in tfda.name_candidates(normalised):
+            cached = self._drug_id_cache.get(cand)
+            if cached:
+                self._drug_id_cache[normalised] = cached
+                return cached
+            result = (
+                self.db.table("drugs").select("id")
+                .eq("generic_name_normalised", cand)
+                .order("id").limit(1).execute()
+            )
+            if result.data:
+                self._drug_id_cache[cand] = self._drug_id_cache[normalised] = result.data[0]["id"]
+                return result.data[0]["id"]
+
+        salt_match = self._salt_form_match(normalised)
+        if salt_match:
+            self._drug_id_cache[normalised] = salt_match
+            return salt_match
+
+        self.log.warning("Drug not in registry — auto-creating minimal record",
+                         extra={"generic_name": generic_name, "source": self.SOURCE_NAME})
+        insert_result = (
+            self.db.table("drugs").insert({
+                "generic_name":         generic_name.strip().title(),
+                "brand_names":          brand_names or [],
+                "therapeutic_category": f"Auto-created by {self.SOURCE_NAME} scraper",
+            }).execute()
+        )
+        new_id: str = insert_result.data[0]["id"]
+        self._drug_id_cache[normalised] = new_id
+        return new_id
+
+    def _salt_form_match(self, name: str) -> str | None:
+        """A single-ingredient name with no exact row may still exist as
+        "<name> <salt…>" ("dicloxacillin" → "dicloxacillin sodium"). Accept a
+        row only if everything after the base name is salt words — a strict
+        structural match, not a similarity one — and only if exactly one
+        distinct salt form exists (otherwise which salt is ambiguous)."""
+        if "; " in name:
+            return None
+        base = tfda.strip_salts(name)
+        if len(base) < 4:
+            return None
+        rows = (
+            self.db.table("drugs").select("id, generic_name_normalised")
+            .ilike("generic_name_normalised", f"{base} %")
+            .order("id").limit(50).execute()
+        ).data or []
+        forms: dict[str, str] = {}
+        for r in rows:
+            rest = (r.get("generic_name_normalised") or "")[len(base) + 1:].split()
+            if rest and all(w in SALT_WORDS for w in rest):
+                forms.setdefault(r["generic_name_normalised"], r["id"])
+        return next(iter(forms.values())) if len(forms) == 1 else None
 
     # -------------------------------------------------------------------------
     # Private helpers
     # -------------------------------------------------------------------------
 
-    def _extract_drug_name(self, phrase: str) -> str:
-        """
-        Extract a usable drug/product name from a spotlight phrase such as
-        "Etomidate注射劑型", "抗排斥用藥(Basiliximab注射劑型)",
-        or "莫鼻卡藥品".
-
-        Prefers the English INN/brand token (Latin letters) when present,
-        since that's what the drugs table keys on; otherwise falls back to
-        the Chinese product phrase itself, stripped of dosage-form suffixes.
-        """
-        # Prefer an embedded Latin drug name (INN or brand), e.g. "Etomidate"
-        # or "Basiliximab" out of "抗排斥用藥(Basiliximab注射劑型)"
-        latin_match = re.search(r"[A-Za-z][A-Za-z\-]{2,}", phrase)
-        if latin_match:
-            return latin_match.group(0).strip()
-
-        # No Latin token — use the Chinese phrase, stripping common
-        # dosage-form / packaging suffixes.
-        cleaned = phrase
-        for suffix in ("注射劑型", "錠劑", "口服藥品", "膠囊",
-                       "懸液", "藥品", "疫苗"):
-            cleaned = cleaned.replace(suffix, "")
-        cleaned = cleaned.strip("（）() ")
-        return cleaned or phrase.strip()
-
-    def _determine_status(self, text: str) -> str:
-        """Determine shortage status from bulletin narrative text."""
-        for pattern, status in self._STATUS_KEYWORDS:
-            if re.search(pattern, text):
-                return status
-        return "active"
-
-    def _map_reason(self, raw: str) -> str:
-        """Map TFDA reason phrase to canonical reason_category."""
-        if not raw:
-            return "unknown"
-        for key, cat in self._REASON_MAP.items():
-            if key in raw:
+    def _map_reason(self, statement: str) -> str:
+        for phrase, cat in self._REASON_MAP:
+            if phrase in statement:
                 return cat
-        return map_reason_category(raw)
-
-    def _extract_reason(self, text: str) -> str:
-        """Extract a shortage reason phrase from narrative bulletin text."""
-        for phrase in self._REASON_MAP:
-            if phrase in text:
-                return phrase
-        return ""
+        return map_reason_category(statement) if statement else "unknown"
 
 
 # -------------------------------------------------------------------------
@@ -558,6 +403,7 @@ if __name__ == "__main__":
     import json
     import os
     import sys
+    from collections import Counter
 
     from dotenv import load_dotenv
 
@@ -571,44 +417,29 @@ if __name__ == "__main__":
         print("=" * 60)
         print("DRY RUN MODE  (MEDERTI_DRY_RUN=1)")
         print("Fetches live TFDA data but makes NO database writes.")
-        print("Set MEDERTI_DRY_RUN=0 to run against Supabase.")
         print("=" * 60)
 
         scraper = TaiwanTFDAScraper(db_client=MagicMock())
-
-        print("\n-- Fetching from TFDA ...")
         raw = scraper.fetch()
-        print(f"-- Raw records received : {len(raw)}")
-
-        print("-- Normalising records ...")
+        for n, rows in raw["feeds"].items():
+            print(f"-- Feed {n} ({tfda.FEEDS[n]}): {len(rows)} rows")
         events = scraper.normalize(raw)
-        print(f"-- Normalised events    : {len(events)}")
+        print(f"-- Normalised events : {len(events)}")
+        print(f"-- Resolved-only drugs skipped (no open row to close; none on a dry run): {scraper.resolved_unseen}")
 
-        if events:
-            print("\n-- Sample event (first record, raw_record omitted):")
-            sample = {k: v for k, v in events[0].items() if k != "raw_record"}
-            print(json.dumps(sample, indent=2, default=str, ensure_ascii=False))
-
-            from collections import Counter
-
-            status_counts   = Counter(e["status"] for e in events)
-            severity_counts = Counter(e.get("severity") for e in events)
-            reason_counts   = Counter(e.get("reason_category") for e in events)
-
-            print("\n-- Status breakdown:")
-            for k, v in sorted(status_counts.items()):
+        for label, key in (("Status", "status"), ("Severity", "severity"), ("Reason", "reason_category")):
+            print(f"\n-- {label} breakdown:")
+            for k, v in sorted(Counter(str(e.get(key)) for e in events).items()):
                 print(f"   {k:25s} {v}")
-            print("\n-- Severity breakdown:")
-            for k, v in sorted(severity_counts.items()):
-                print(f"   {str(k):12s} {v}")
-            print("\n-- Reason category breakdown:")
-            for k, v in sorted(reason_counts.items()):
-                print(f"   {str(k):30s} {v}")
-
+        print(f"\n-- With estimated resolution date: {sum(1 for e in events if e['estimated_resolution_date'])}")
+        print(f"-- Combination products         : {sum(1 for e in events if '; ' in e['generic_name'])}")
+        if events:
+            sample = {k: v for k, v in events[0].items() if k != "raw_record"}
+            print("\n-- Sample event (raw_record omitted):")
+            print(json.dumps(sample, indent=2, default=str, ensure_ascii=False))
         print("\n-- Dry run complete. No writes made to Supabase.")
         sys.exit(0)
 
-    # -- Live run --
     print("=" * 60)
     print("LIVE RUN - writing to Supabase")
     print("=" * 60)

@@ -193,3 +193,36 @@ A pharmacist in GB sees the same molecule's global fragility plus its local traj
 1. Public or logged-in only? The metered-free-views model suggests the board itself is login-gated, with a teaser on drug pages.
 2. Should the per-market overlay default to the user's profile country?
 3. Is it OK to start Phase 0 now? It needs you to run the B1 `--execute` and apply 051 in the SQL editor.
+
+---
+
+## Phases 2–4 as built (2026-10-25)
+
+**Phase 2, backtest:** the gate failed. See `docs/risk-score-backtest.md`.
+- The risk band shows no lift over base, and its top 25 do no better than random (64–72% vs a 70–76% base).
+- Ranking by "already short in the most countries" reaches 96%.
+- Fragility doesn't predict shortage duration either.
+
+**The decision this forced:** no "risk" verdict anywhere in the product. Surfaces show the facts the score is built from, labelled as what they are:
+- **Supply concentration:** Highly concentrated / Concentrated / Broad / Unknown, from `fragility`.
+- **Essential status:** WHO Model List, EU Union list.
+- **Spread:** countries short now, and short in peers but not reported here.
+
+`inn_risk_scores.band` stays internal, for Phase 2b.
+
+**Phase 3, surfaces.** There's no separate `/insights/risk` page. Instead:
+- **National Shortage Dashboard:** rebuilt on live data via `lib/insights/dashboard-data.ts`. It previously rendered sample figures from an HTML mockup, including invented upstream events naming a real company.
+  - Live KPIs, essential medicines short here, a concentration × spread chart, short in peers / not reported here, peers, and where APIs are made.
+  - The AI read uses exact totals and is barred from counting examples, inferring causes or trends, or forecasting.
+- **Drug page:** the API supply tile uses the molecule profile and the same tiers. Its old "concentration risk" label is gone.
+- **Watchlist risk board:** EU-critical and concentrated-supply chips.
+
+**Phase 4, chat:**
+- New `get_supply_profile` tool.
+- `get_class_concentration_risk` rebuilt on `inn_risk_scores`. It previously read a view that doesn't exist in prod.
+- System-prompt rule: concentration is never a forecast.
+
+**Phase 2b (open):**
+- per-market onset test
+- severity test
+- leak-free re-run from `inn_risk_score_history` once it holds 6+ months

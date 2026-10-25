@@ -385,7 +385,7 @@ def band_for(ci: float, sv: float | None) -> str:
     return "low"
 
 
-def score(m: Molecule, d: dict) -> dict:
+def score(m: Molecule, d: dict, today: date = TODAY) -> dict:
     # Clinical importance
     points = 0
     ci_inputs = []
@@ -420,7 +420,7 @@ def score(m: Molecule, d: dict) -> dict:
     episodes = len(d["episodes"])
     recall_raw, recalls_5y = 0.0, 0
     for rd, cls in d["recalls"]:
-        age = (TODAY - rd).days
+        age = (today - rd).days
         if 0 <= age <= RECALL_LOOKBACK_D:
             recalls_5y += 1
             recall_raw += CLASS_WEIGHT.get(cls or "", 0.3) * 0.5 ** (age / RECALL_HALFLIFE_D)
@@ -494,11 +494,15 @@ def score(m: Molecule, d: dict) -> dict:
 
 
 # ── Data assembly ────────────────────────────────────────────────────────────
-def assemble(db, molecules: list[Molecule]) -> dict[int, dict]:
+def assemble(db, molecules: list[Molecule], as_of: date | None = None) -> dict[int, dict]:
+    """Collect every input per molecule. With `as_of`, shortage pressure and
+    recalls are rebuilt as they stood on that date (for the backtest, see
+    risk_backtest.py) and each molecule also carries its raw shortage rows.
+    Supplier inputs are always today's snapshot: there is no history of them."""
     idx = NameIndex(molecules)
     data: dict[int, dict] = defaultdict(lambda: {
         "drug_ids": set(), "api_firms": set(), "api_firm_country": {}, "fin_firms": set(),
-        "short_now": set(), "anticipated": set(), "episodes": set(), "recalls": []})
+        "short_now": set(), "anticipated": set(), "episodes": set(), "recalls": [], "rows": []})
     by_key = {m.key: m for m in molecules}
 
     drug_to_mol: dict[str, Molecule] = {}
@@ -531,13 +535,32 @@ def assemble(db, molecules: list[Molecule]) -> dict[int, dict]:
         m = idx.match(r.get("generic_name"))
         if m is not None:
             data[id(m)]["fin_firms"].add(norm_firm(r.get("manufacturer")))
-            if (rd := _to_date(r.get("announced_date"))):
+            if (rd := _to_date(r.get("announced_date"))) and (as_of is None or rd <= as_of):
                 data[id(m)]["recalls"].append((rd, r.get("recall_class")))
 
-    cutoff = (TODAY - timedelta(days=3 * 365)).isoformat()
+    cutoff = ((as_of or TODAY) - timedelta(days=3 * 365)).isoformat()
     ids = sorted(drug_to_mol)
     for i in range(0, len(ids), 100):
         chunk = ids[i:i + 100]
+        if as_of is not None:
+            rows = fetch_all(db, "shortage_events", "id,drug_id,status,country_code,start_date,end_date",
+                             lambda q, c=chunk: q.in_("drug_id", c))
+            for r in rows:
+                cc, sd = r.get("country_code"), _to_date(r.get("start_date"))
+                if not cc or not sd:
+                    continue
+                dd = data[id(drug_to_mol[r["drug_id"]])]
+                ed = _to_date(r.get("end_date"))
+                dd["rows"].append((cc, r["status"], sd, ed))
+                if sd > as_of or r["status"] == "anticipated":
+                    continue
+                # Short on as_of: started by then and not yet ended. A resolved
+                # row with no end date is unknown, so not counted.
+                if (ed is None and r["status"] != "resolved") or (ed is not None and ed > as_of):
+                    dd["short_now"].add(cc)
+                if sd.isoformat() >= cutoff:
+                    dd["episodes"].add((cc, sd.strftime("%Y-%m")))
+            continue
         rows = fetch_all(db, "shortage_events", "id,drug_id,status,country_code,start_date",
                          lambda q, c=chunk: q.in_("drug_id", c).or_(
                              f"status.in.(active,anticipated),start_date.gte.{cutoff}"))

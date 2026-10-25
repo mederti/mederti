@@ -1,75 +1,131 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  type RangeKey,
-  RANGE_OPTIONS,
-  DEFAULT_RANGE,
-  getSnapshot,
-  buildFallbackSummary,
-} from "@/lib/insights/dashboard-snapshot";
+  type DashboardData,
+  type BoardPoint,
+  COUNTRY_NAMES,
+  TIER_LABEL,
+} from "@/lib/insights/dashboard-data-shared";
 import { generateDashboardPdf } from "@/lib/insights/dashboard-pdf";
 import { ShortageTrendChart } from "./ShortageTrendChart";
 import { WatchlistRiskBoard } from "./WatchlistRiskBoard";
 
-// Generic search terms for the essential-medicines rows — resolved to a real
-// drug/product page via /api/drug-autocomplete so each name links only when a
-// page actually exists.
-const TABLE_DRUG_QUERIES = ["amoxicillin", "methotrexate", "salbutamol", "methylphenidate", "insulin glargine", "phenytoin"];
+// National Shortage Dashboard. Every figure is live (see
+// lib/insights/dashboard-data.ts). It previously rendered illustrative sample
+// figures from an HTML mockup, including invented "upstream" site events.
+
+const ESSENTIAL_PREVIEW = 8;
+
+const relTime = (iso: string | null): string => {
+  if (!iso) return "unknown";
+  const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (mins < 60) return `${Math.max(mins, 1)} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 48) return `${hrs} h ago`;
+  return `${Math.round(hrs / 24)} days ago`;
+};
+
+const drugHref = (name: string) => `/search?q=${encodeURIComponent(name)}`;
+
+function ConcentrationBoard({ points, country }: { points: BoardPoint[]; country: string }) {
+  const W = 640, H = 260, L = 40, R = 12, T = 12, B = 34;
+  const maxY = Math.max(5, ...points.map((p) => p.countriesShort));
+  const x = (v: number) => L + v * (W - L - R);
+  const y = (v: number) => H - B - (v / maxY) * (H - T - B);
+  const yTicks = [0, Math.round(maxY / 2), maxY];
+  return (
+    <>
+      <svg className="board-svg" viewBox={`0 0 ${W} ${H}`} role="img"
+        aria-label={`Essential medicines plotted by API supply concentration against number of countries short now; red dots are short in ${country}`}>
+        <rect x={x(0.6)} y={T} width={x(1) - x(0.6)} height={H - T - B} fill="var(--crit-bg)" />
+        {yTicks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="var(--bg-3)" />
+            <text x={L - 6} y={y(t) + 3} fontSize="10" textAnchor="end" fill="var(--text-4)">{t}</text>
+          </g>
+        ))}
+        {[0, 0.35, 0.6, 1].map((t) => (
+          <text key={t} x={x(t)} y={H - B + 14} fontSize="10" textAnchor={t === 1 ? "end" : t === 0 ? "start" : "middle"} fill="var(--text-4)">{t === 0 ? "Broad" : t === 1 ? "Single maker" : t}</text>
+        ))}
+        <text x={(L + W - R) / 2} y={H - 4} fontSize="10.5" textAnchor="middle" fill="var(--text-3)">API supply concentration →</text>
+        <text x={10} y={T + 4} fontSize="10.5" fill="var(--text-3)" transform={`rotate(-90 10 ${T + 4})`} textAnchor="end">Countries short now →</text>
+        {points.filter((p) => !p.shortHere).map((p) => (
+          <Link key={p.inn} href={drugHref(p.name)}>
+            <circle className="board-dot" cx={x(p.concentration)} cy={y(p.countriesShort)} r={3.5} fill="var(--text-4)" fillOpacity={0.45}>
+              <title>{`${p.name}: ${TIER_LABEL[p.tier]} (${p.nApiMakers ?? "?"} API makers), short in ${p.countriesShort} countries`}</title>
+            </circle>
+          </Link>
+        ))}
+        {points.filter((p) => p.shortHere).map((p) => (
+          <Link key={p.inn} href={drugHref(p.name)}>
+            <circle className="board-dot" cx={x(p.concentration)} cy={y(p.countriesShort)} r={4.5} fill="var(--crit)" stroke="#fff" strokeWidth={1}>
+              <title>{`${p.name}: ${TIER_LABEL[p.tier]} (${p.nApiMakers ?? "?"} API makers), short in ${p.countriesShort} countries incl. ${country}`}</title>
+            </circle>
+          </Link>
+        ))}
+      </svg>
+      <div className="board-legend">
+        <span><i style={{ background: "var(--crit)" }} />Short in {country} now</span>
+        <span><i style={{ background: "var(--text-4)", opacity: 0.45 }} />Not short in {country}</span>
+        <span><i style={{ background: "var(--crit-bg)", borderRadius: 2, border: "1px solid var(--crit-b)" }} />Highly concentrated (about 4 or fewer API makers)</span>
+      </div>
+    </>
+  );
+}
 
 export function GovDashboardView() {
-  const [activeRange, setActiveRange] = useState<RangeKey>(DEFAULT_RANGE);
+  const [country, setCountry] = useState("AU");
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
-  const [drugLinks, setDrugLinks] = useState<Record<string, string>>({});
+  const [summaryDone, setSummaryDone] = useState(false);
+  const [showAllEssential, setShowAllEssential] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
 
-  const snap = getSnapshot(activeRange);
-  const k = snap.kpis;
-  const moreEssential = Math.max(0, k.essentialShort.value - snap.topEssential.length);
-
-  // Resolve which table drugs have a product page, once on mount.
+  // Market from the sidebar country picker's cookie (same as the Intelligence page).
   useEffect(() => {
-    let alive = true;
-    Promise.all(
-      TABLE_DRUG_QUERIES.map(async (q) => {
-        try {
-          const r = await fetch(`/api/drug-autocomplete?q=${encodeURIComponent(q)}`);
-          const d = await r.json();
-          const item = Array.isArray(d?.items) ? d.items.find((it: { href?: string }) => it?.href) : null;
-          return [q, item?.href ?? null] as const;
-        } catch {
-          return [q, null] as const;
-        }
-      }),
-    ).then((pairs) => {
-      if (!alive) return;
-      const map: Record<string, string> = {};
-      for (const [q, href] of pairs) if (href) map[q] = href;
-      setDrugLinks(map);
-    });
-    return () => {
-      alive = false;
-    };
+    const m = document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/);
+    if (m) setCountry(m[1].toUpperCase());
   }, []);
 
-  // Render a drug name as a link to its product page when one exists.
-  const drugCell = (label: string, q: string) => {
-    const href = drugLinks[q];
-    return href ? (
-      <Link href={href} className="em-drug-link">
-        {label}
-      </Link>
-    ) : (
-      label
-    );
-  };
+  useEffect(() => {
+    let alive = true;
+    setData(null);
+    setError(false);
+    fetch(`/api/insights/dashboard?country=${country}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: DashboardData) => alive && setData(d))
+      .catch(() => alive && setError(true));
+    return () => { alive = false; };
+  }, [country]);
+
+  useEffect(() => {
+    let alive = true;
+    setSummary(null);
+    setSummaryDone(false);
+    fetch(`/api/insights/dashboard-summary?country=${country}`)
+      .then((r) => r.json())
+      .then((d) => alive && setSummary(typeof d?.summary === "string" ? d.summary : null))
+      .catch(() => {})
+      .finally(() => alive && setSummaryDone(true));
+    return () => { alive = false; };
+  }, [country]);
+
+  const market = COUNTRY_NAMES[country] ?? country;
+  const essentialShown = useMemo(
+    () => (data ? (showAllEssential ? data.essential : data.essential.slice(0, ESSENTIAL_PREVIEW)) : []),
+    [data, showAllEssential],
+  );
+  const peerMax = data ? Math.max(1, ...data.peers.map((p) => p.essentialShort)) : 1;
+  const apiMax = data ? Math.max(1, ...data.apiCountries.map((c) => c.molecules)) : 1;
 
   const downloadReport = async () => {
-    if (pdfBusy) return;
+    if (pdfBusy || !data) return;
     setPdfBusy(true);
     try {
-      await generateDashboardPdf(snap, summary ?? buildFallbackSummary(snap));
+      await generateDashboardPdf(data, summary);
     } catch (err) {
       console.error("[dashboard] PDF generation failed:", err);
     } finally {
@@ -77,21 +133,7 @@ export function GovDashboardView() {
     }
   };
 
-  useEffect(() => {
-    let alive = true;
-    setSummary(null); // show the skeleton while the new range's read loads
-    fetch(`/api/insights/dashboard-summary?range=${activeRange}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (alive) setSummary(typeof d?.summary === "string" ? d.summary : buildFallbackSummary(getSnapshot(activeRange)));
-      })
-      .catch(() => {
-        if (alive) setSummary(buildFallbackSummary(getSnapshot(activeRange)));
-      });
-    return () => {
-      alive = false;
-    };
-  }, [activeRange]);
+  const k = data?.kpis;
 
   return (
     <div className="govdash">
@@ -125,9 +167,6 @@ export function GovDashboardView() {
 .govdash .gov-title{font-size:24px;font-weight:600;letter-spacing:-0.025em;color:var(--text);line-height:1.1}
 .govdash .gov-sub{font-size:12px;color:var(--text-3);margin-top:5px}
 .govdash .gov-head-r{display:flex;align-items:center;gap:12px}
-.govdash .gov-range{display:flex;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:2px}
-.govdash .gr-opt{font-size:12px;padding:5px 11px;border-radius:6px;color:var(--text-3);cursor:pointer}
-.govdash .gr-opt.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
 .govdash .gov-report-btn{font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:8px;background:var(--teal);color:#fff;border:none;cursor:pointer;white-space:nowrap}
 .govdash .gov-report-btn:hover{background:var(--teal-l)}
 .govdash .gov-report-btn:disabled{opacity:0.6;cursor:default}
@@ -167,7 +206,7 @@ export function GovDashboardView() {
 
 /* essential medicines table */
 .govdash .emtable{font-size:12.5px}
-.govdash .em-h,.govdash .em-row{display:grid;grid-template-columns:2.1fr 1.4fr 1.1fr 0.8fr 1.2fr 0.9fr;gap:10px;align-items:center}
+.govdash .em-h,.govdash .em-row{display:grid;grid-template-columns:2.1fr 0.9fr 2.1fr 0.8fr;gap:10px;align-items:center}
 .govdash .em-h{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-4);font-weight:600;padding:0 8px 9px;border-bottom:1px solid var(--border)}
 .govdash .em-row{padding:11px 8px;border-bottom:1px solid var(--bg-3)}
 .govdash .em-row.crit{background:var(--crit-bg)}
@@ -184,21 +223,9 @@ export function GovDashboardView() {
 .govdash .ss-bad{color:var(--high);font-weight:600}
 .govdash .ss-bad.sole{color:var(--crit)}
 .govdash .em-dur{font-family:var(--font-geist-mono),ui-monospace,monospace;color:var(--text-2)}
-.govdash .em-risk{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-2)}
-.govdash .riskbar{width:34px;height:5px;border-radius:3px;background:var(--bg-3);overflow:hidden;flex-shrink:0}
-.govdash .riskbar i{display:block;height:100%;background:var(--crit)}
-.govdash .em-fc{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11px;color:var(--teal)}
 .govdash .em-foot{font-size:11.5px;color:var(--text-3);padding-top:11px}
 .govdash .em-link{color:var(--teal);font-weight:500;cursor:pointer}
 
-/* concentration */
-.govdash .conc-list{display:flex;flex-direction:column;gap:11px}
-.govdash .conc-row{display:grid;grid-template-columns:1.5fr 2fr 40px;gap:10px;align-items:center;font-size:12px}
-.govdash .conc-name{color:var(--text-2)}
-.govdash .conc-bar{height:8px;border-radius:4px;background:var(--bg-3);overflow:hidden}
-.govdash .conc-bar i{display:block;height:100%}
-.govdash .conc-bar i.crit{background:var(--crit)} .govdash .conc-bar i.high{background:var(--high)} .govdash .conc-bar i.med{background:var(--med)} .govdash .conc-bar i.low{background:var(--low)}
-.govdash .conc-pct{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11.5px;color:var(--text-2);text-align:right}
 
 /* peer */
 .govdash .peer-list{display:flex;flex-direction:column;gap:10px}
@@ -211,108 +238,114 @@ export function GovDashboardView() {
 .govdash .peer-val{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11.5px;color:var(--text-2);text-align:right}
 .govdash .peer-note{font-size:11.5px;color:var(--text-3);margin-top:12px;padding-top:11px;border-top:1px solid var(--bg-3)}
 
-/* upstream */
-.govdash .up-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
 /* Mobile: stack every multi-column block into a single column. */
 @media(max-width:768px){
   .govdash .kpi-row{grid-template-columns:1fr}
   .govdash .gov-grid{grid-template-columns:1fr}
-  .govdash .up-grid{grid-template-columns:1fr}
   .govdash .gov-head{flex-direction:column;align-items:flex-start;gap:12px}
   .govdash .gov-head-r{flex-wrap:wrap}
+  .govdash .em-h,.govdash .em-row{grid-template-columns:1.5fr 0.6fr 1.5fr}
+  .govdash .em-h>:nth-child(4),.govdash .em-row>:nth-child(4){display:none}
 }
-.govdash .up-card{border:1px solid var(--border);border-radius:10px;padding:13px;background:var(--bg-2)}
-.govdash .up-card.crit{border-color:var(--crit-b);background:var(--crit-bg)}
-.govdash .up-card.high{border-color:var(--high-b);background:var(--high-bg)}
-.govdash .up-top{display:flex;align-items:center;gap:7px;margin-bottom:8px}
-.govdash .up-flag{font-size:15px}
-.govdash .up-site{font-size:12px;font-weight:600;color:var(--text);flex:1;min-width:0}
-.govdash .up-sev{font-size:9px;font-weight:700;text-transform:uppercase;padding:2px 6px;border-radius:4px}
-.govdash .up-sev.crit{background:var(--crit);color:#fff}
-.govdash .up-sev.high{background:var(--high);color:#fff}
-.govdash .up-body{font-size:11.5px;color:var(--text-2);line-height:1.5}
-.govdash .up-foot{font-size:10px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:9px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.06)}
 
-@media(max-width:1500px){.govdash .kpi-row{grid-template-columns:repeat(5,1fr)}}
+
+
+/* live-data additions */
+.govdash .em-tag.eu{background:var(--teal-bg);color:var(--teal-l);border:1px solid var(--teal-b)}
+.govdash .tier{font-size:11px;font-weight:600}
+.govdash .tier.highly_concentrated{color:var(--crit)} .govdash .tier.concentrated{color:var(--high)}
+.govdash .tier.broad{color:var(--text-3)} .govdash .tier.unknown{color:var(--text-4);font-weight:500}
+.govdash .tier-sub{display:block;font-size:10.5px;color:var(--text-4);font-weight:400;margin-top:2px}
+.govdash .em-more{font-size:12px;color:var(--teal);font-weight:500;cursor:pointer;background:none;border:none;padding:11px 8px 0}
+.govdash .ew-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--bg-3);font-size:12px}
+.govdash .ew-row:last-child{border-bottom:none}
+.govdash .ew-name{font-weight:600;color:var(--text)}
+.govdash .ew-peers{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11px;color:var(--text-3);text-align:right}
+.govdash .gc-link{font-size:11.5px;color:var(--teal);font-weight:500;text-decoration:none}
+.govdash .board-svg{width:100%;height:auto;display:block}
+.govdash .board-dot{cursor:pointer}
+.govdash .board-legend{display:flex;gap:16px;font-size:11px;color:var(--text-3);margin-top:8px;flex-wrap:wrap}
+.govdash .board-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.govdash .gov-note{font-size:11px;color:var(--text-4);line-height:1.55;margin-top:16px}
+.govdash .gov-empty{font-size:12.5px;color:var(--text-3);padding:10px 0}
+.govdash .gov-err{background:#fff;border:1px solid var(--crit-b);border-radius:12px;padding:16px 18px;font-size:13px;color:var(--text-2)}
       `}</style>
 
       {/* PAGE HEADER */}
       <div className="gov-head">
         <div className="gov-head-l">
-          <div className="gov-crumb">National Medicines Supply · Australia</div>
+          <div className="gov-crumb">National Medicines Supply · {market}</div>
           <h1 className="gov-title">Shortage Dashboard</h1>
-          <div className="gov-sub">Live across TGA + 21 benchmarked regulators · updated 8 min ago</div>
+          <div className="gov-sub">
+            Live from regulator shortage reports
+            {data?.latestReportAt && ` · newest ${market} report updated ${relTime(data.latestReportAt)}`}
+          </div>
         </div>
         <div className="gov-head-r">
-          <div className="gov-range">
-            {RANGE_OPTIONS.map((opt) => (
-              <span
-                key={opt.key}
-                className={`gr-opt${activeRange === opt.key ? " on" : ""}`}
-                onClick={() => setActiveRange(opt.key)}
-              >
-                {opt.label}
-              </span>
-            ))}
-          </div>
-          <button className="gov-report-btn" onClick={downloadReport} disabled={pdfBusy}>
-            ↧ {pdfBusy ? "Preparing…" : "Download Report"}
+          <button className="gov-report-btn" onClick={downloadReport} disabled={pdfBusy || !data}>
+            ↧ {pdfBusy ? "Preparing…" : "Download report"}
           </button>
         </div>
       </div>
 
       <div className="gov-scroll">
-        {/* WATCHLIST RISK BOARD — signed-in users see their own medicines,
-            tiered by forward risk, above the broad national picture. Renders
-            nothing for anonymous visitors. (Feedback #5.) */}
+        {/* WATCHLIST RISK BOARD — signed-in users see their own medicines
+            first. Renders nothing for anonymous visitors. (Feedback #5.) */}
         <WatchlistRiskBoard />
 
-        {/* AI MARKET READ */}
-        <div className="gov-read">
-          <div className="gov-read-head">
-            <span className="gov-read-spark">✦</span>
-            <span className="gov-read-label">AI market read</span>
-            <span className="gov-read-meta">Generated by Mederti AI · refreshed periodically</span>
-          </div>
-          {summary === null ? (
-            <div aria-busy="true" aria-label="Generating market read">
-              <div className="gov-read-skel" />
-              <div className="gov-read-skel" />
-              <div className="gov-read-skel" />
+        {/* AI MARKET READ — hidden entirely if neither the model nor the
+            deterministic fallback produced text. */}
+        {!(summaryDone && !summary) && (
+          <div className="gov-read">
+            <div className="gov-read-head">
+              <span className="gov-read-spark">✦</span>
+              <span className="gov-read-label">AI market read</span>
+              <span className="gov-read-meta">Generated by Mederti AI from the figures below</span>
             </div>
-          ) : (
-            <p className="gov-read-body">{summary}</p>
-          )}
-        </div>
+            {summary === null ? (
+              <div aria-busy="true" aria-label="Generating market read">
+                <div className="gov-read-skel" />
+                <div className="gov-read-skel" />
+                <div className="gov-read-skel" />
+              </div>
+            ) : (
+              <p className="gov-read-body">{summary}</p>
+            )}
+          </div>
+        )}
+
+        {error && <div className="gov-err">The dashboard data couldn&apos;t be loaded. Try again in a minute.</div>}
 
         {/* KPI STRIP */}
-        <div className="kpi-row">
-          <div className="kpi crit">
-            <div className="kpi-label">Active shortages</div>
-            <div className="kpi-val">{k.activeShortages.value}</div>
-            <div className={`kpi-delta ${k.activeShortages.direction}`}>{k.activeShortages.delta}</div>
+        {k && data && (
+          <div className="kpi-row">
+            <div className="kpi crit">
+              <div className="kpi-label">Active shortage reports</div>
+              <div className="kpi-val">{k.activeReports.toLocaleString()}</div>
+              <div className="kpi-delta flat">{k.newLast30} started in the last 30 days</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Essential medicines short</div>
+              <div className="kpi-val">{k.essentialShort} <span className="kpi-of">/ {data.universeSize}</span></div>
+              <div className="kpi-delta flat">WHO Model List or EU critical list</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">…with concentrated API supply</div>
+              <div className="kpi-val">{k.essentialShortConcentrated}</div>
+              <div className="kpi-delta flat">few API makers or few finished-dose firms</div>
+            </div>
+            <div className="kpi good">
+              <div className="kpi-label">Median resolution</div>
+              <div className="kpi-val">{k.medianResolutionDays ?? "—"} {k.medianResolutionDays != null && <span className="kpi-of">days</span>}</div>
+              <div className="kpi-delta flat">{k.resolvedLast12mo} resolved in the last 12 months</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Short in peers, not reported here</div>
+              <div className="kpi-val">{k.earlyWarning}</div>
+              <div className="kpi-delta flat">essential medicines, 2+ peer markets</div>
+            </div>
           </div>
-          <div className="kpi">
-            <div className="kpi-label">Essential medicines short</div>
-            <div className="kpi-val">{k.essentialShort.value} <span className="kpi-of">/ {k.essentialShort.of}</span></div>
-            <div className={`kpi-delta ${k.essentialShort.direction}`}>{k.essentialShort.delta}</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-label">Single-source nationally</div>
-            <div className="kpi-val">{k.singleSource.value}</div>
-            <div className={`kpi-delta ${k.singleSource.direction}`}>{k.singleSource.delta}</div>
-          </div>
-          <div className="kpi good">
-            <div className="kpi-label">Median resolution</div>
-            <div className="kpi-val">{k.medianResolutionDays.value} <span className="kpi-of">days</span></div>
-            <div className={`kpi-delta ${k.medianResolutionDays.direction}`}>{k.medianResolutionDays.delta}</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-label">Upstream alerts</div>
-            <div className="kpi-val">{k.upstreamAlerts.value}</div>
-            <div className={`kpi-delta ${k.upstreamAlerts.direction}`}>{k.upstreamAlerts.delta}</div>
-          </div>
-        </div>
+        )}
 
         {/* SHORTAGE TREND — past changes + anticipated ahead */}
         <div className="gov-card span2" style={{ marginBottom: 16 }}>
@@ -320,133 +353,136 @@ export function GovDashboardView() {
             <div className="gc-title">Shortage trend</div>
             <div className="gc-meta">new &amp; active shortages over time · anticipated onsets ahead</div>
           </div>
-          <ShortageTrendChart country="AU" />
+          <ShortageTrendChart country={country} />
         </div>
 
-        {/* TWO-COLUMN: watch table + side panels */}
-        <div className="gov-grid">
-          {/* Essential medicines watch */}
-          <div className="gov-card span2">
-            <div className="gc-head">
-              <div className="gc-title">Essential medicines in shortage</div>
-              <div className="gc-meta">{k.essentialShort.value} active · sorted by clinical criticality × duration</div>
+        {data && (
+          <div className="gov-grid">
+            {/* Essential medicines short here */}
+            <div className="gov-card span2">
+              <div className="gc-head">
+                <div className="gc-title">Essential medicines short in {market}</div>
+                <div className="gc-meta">{data.essential.length} now · most concentrated supply first</div>
+              </div>
+              {data.essential.length === 0 ? (
+                <div className="gov-empty">No essential or critical medicines are recorded as short in {market} right now.</div>
+              ) : (
+                <div className="emtable">
+                  <div className="em-h">
+                    <div>Medicine</div>
+                    <div>Days since first report</div>
+                    <div>Supply base</div>
+                    <div>Countries short</div>
+                  </div>
+                  {essentialShown.map((e) => (
+                    <div key={e.inn} className={`em-row${e.tier === "highly_concentrated" ? " crit" : ""}`}>
+                      <div className="em-drug">
+                        <Link href={drugHref(e.name)} className="em-drug-link">{e.name}</Link>
+                        {e.whoList && <span className="em-tag who">WHO {e.whoList === "core" ? "core" : "compl."}</span>}
+                        {e.euCritical && <span className="em-tag eu">EU critical</span>}
+                      </div>
+                      <div className="em-dur">{e.daysShort ?? "—"}</div>
+                      <div>
+                        <span className={`tier ${e.tier}`}>{TIER_LABEL[e.tier]}</span>
+                        {e.tier !== "unknown" && (
+                          <span className="tier-sub">
+                            {[
+                              e.nApiMakers != null ? `${e.nApiMakers} API makers` : null,
+                              e.nFinishedFirms != null ? `${e.nFinishedFirms} US finished-dose firms` : null,
+                              e.topApiCountry && e.topApiShare != null ? `${Math.round(e.topApiShare * 100)}% of API makers in ${e.topApiCountry}` : null,
+                            ].filter(Boolean).join(" · ")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="em-dur">{e.countriesShort}</div>
+                    </div>
+                  ))}
+                  {data.essential.length > ESSENTIAL_PREVIEW && (
+                    <button className="em-more" onClick={() => setShowAllEssential((v) => !v)}>
+                      {showAllEssential ? "Show fewer" : `Show all ${data.essential.length}`}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="emtable">
-              <div className="em-h">
-                <span>Drug</span><span>Class</span><span>Suppliers</span><span>Duration</span><span>Risk</span><span>Forecast</span>
-              </div>
-              <div className="em-row crit">
-                <div className="em-drug">{drugCell("Amoxicillin 500mg", "amoxicillin")} <span className="em-tag who">WHO EML</span></div>
-                <div className="em-class">Antibiotic · J01CA</div>
-                <div className="em-sup"><span className="ss-bad">1 of 4 active</span></div>
-                <div className="em-dur">42 days</div>
-                <div className="em-risk"><span className="riskbar"><i style={{ width: "88%" }}></i></span>Critical</div>
-                <div className="em-fc">Aug–Oct 26</div>
-              </div>
-              <div className="em-row crit">
-                <div className="em-drug">{drugCell("Methotrexate inj", "methotrexate")} <span className="em-tag onc">Oncology</span></div>
-                <div className="em-class">Antineoplastic · L01BA</div>
-                <div className="em-sup"><span className="ss-bad sole">Sole supplier</span></div>
-                <div className="em-dur">96 days</div>
-                <div className="em-risk"><span className="riskbar"><i style={{ width: "95%" }}></i></span>Critical</div>
-                <div className="em-fc">Q1 27</div>
-              </div>
-              <div className="em-row high">
-                <div className="em-drug">{drugCell("Salbutamol CFC-free", "salbutamol")} <span className="em-tag who">WHO EML</span></div>
-                <div className="em-class">Bronchodilator · R03AC</div>
-                <div className="em-sup">2 of 5 active</div>
-                <div className="em-dur">28 days</div>
-                <div className="em-risk"><span className="riskbar"><i style={{ width: "64%" }}></i></span>High</div>
-                <div className="em-fc">Jul 26</div>
-              </div>
-              <div className="em-row high">
-                <div className="em-drug">{drugCell("Methylphenidate ER 36mg", "methylphenidate")} <span className="em-tag pae">Paediatric</span></div>
-                <div className="em-class">CNS stimulant · N06BA</div>
-                <div className="em-sup">2 of 3 active</div>
-                <div className="em-dur">61 days</div>
-                <div className="em-risk"><span className="riskbar"><i style={{ width: "70%" }}></i></span>High</div>
-                <div className="em-fc">Sep 26</div>
-              </div>
-              <div className="em-row">
-                <div className="em-drug">{drugCell("Insulin glargine", "insulin glargine")} <span className="em-tag who">WHO EML</span></div>
-                <div className="em-class">Antidiabetic · A10AE</div>
-                <div className="em-sup">3 of 4 active</div>
-                <div className="em-dur">14 days</div>
-                <div className="em-risk"><span className="riskbar"><i style={{ width: "42%" }}></i></span>Moderate</div>
-                <div className="em-fc">Jun 26</div>
-              </div>
-              <div className="em-row">
-                <div className="em-drug">{drugCell("Phenytoin 100mg", "phenytoin")}</div>
-                <div className="em-class">Anticonvulsant · N03AB</div>
-                <div className="em-sup"><span className="ss-bad sole">Sole supplier</span></div>
-                <div className="em-dur">73 days</div>
-                <div className="em-risk"><span className="riskbar"><i style={{ width: "55%" }}></i></span>Moderate</div>
-                <div className="em-fc">Aug 26</div>
-              </div>
-            </div>
-            <div className="em-foot">+ {moreEssential} more essential medicines affected · <span className="em-link">view full national list →</span></div>
-          </div>
 
-          {/* Concentration risk */}
-          <div className="gov-card">
-            <div className="gc-head">
-              <div className="gc-title">Concentration risk by class</div>
-              <div className="gc-meta">share dependent on a single API source</div>
+            {/* Concentration × spread */}
+            <div className="gov-card span2">
+              <div className="gc-head">
+                <div className="gc-title">Supply concentration and spread</div>
+                <div className="gc-meta">{data.board.length} essential medicines with supplier data</div>
+              </div>
+              <ConcentrationBoard points={data.board} country={country} />
             </div>
-            <div className="conc-list">
-              <div className="conc-row"><span className="conc-name">Beta-lactam antibiotics</span><span className="conc-bar"><i style={{ width: "82%" }} className="crit"></i></span><span className="conc-pct">82%</span></div>
-              <div className="conc-row"><span className="conc-name">Oncology injectables</span><span className="conc-bar"><i style={{ width: "74%" }} className="crit"></i></span><span className="conc-pct">74%</span></div>
-              <div className="conc-row"><span className="conc-name">ADHD stimulants</span><span className="conc-bar"><i style={{ width: "61%" }} className="high"></i></span><span className="conc-pct">61%</span></div>
-              <div className="conc-row"><span className="conc-name">Insulins</span><span className="conc-bar"><i style={{ width: "48%" }} className="high"></i></span><span className="conc-pct">48%</span></div>
-              <div className="conc-row"><span className="conc-name">Anticonvulsants</span><span className="conc-bar"><i style={{ width: "39%" }} className="med"></i></span><span className="conc-pct">39%</span></div>
-              <div className="conc-row"><span className="conc-name">Cardiovascular</span><span className="conc-bar"><i style={{ width: "22%" }} className="low"></i></span><span className="conc-pct">22%</span></div>
-            </div>
-          </div>
 
-          {/* Peer benchmarking */}
-          <div className="gov-card">
-            <div className="gc-head">
-              <div className="gc-title">Shortage burden vs peers</div>
-              <div className="gc-meta">active essential-medicine shortages per 1,000 listings</div>
+            {/* Early warning */}
+            <div className="gov-card">
+              <div className="gc-head">
+                <div className="gc-title">Short in peer markets, not reported here</div>
+                <Link href="/insights/intelligence" className="gc-link">Full radar →</Link>
+              </div>
+              {data.earlyWarning.length === 0 ? (
+                <div className="gov-empty">No essential medicines are short in two or more of {market}&apos;s peer markets without also being reported short here.</div>
+              ) : (
+                data.earlyWarning.slice(0, 8).map((e) => (
+                  <div key={e.inn} className="ew-row">
+                    <span>
+                      <Link href={drugHref(e.name)} className="em-drug-link ew-name">{e.name}</Link>
+                      <span className={`tier ${e.tier}`} style={{ marginLeft: 8 }}>{TIER_LABEL[e.tier]}</span>
+                    </span>
+                    <span className="ew-peers">{e.peers.join(" · ")}</span>
+                  </div>
+                ))
+              )}
             </div>
-            <div className="peer-list">
-              <div className="peer-row"><span className="peer-flag">🇦🇺</span><span className="peer-name">Australia</span><span className="peer-bar"><i style={{ width: "62%" }} className="self"></i></span><span className="peer-val">18.6</span></div>
-              <div className="peer-row"><span className="peer-flag">🇬🇧</span><span className="peer-name">United Kingdom</span><span className="peer-bar"><i style={{ width: "71%" }}></i></span><span className="peer-val">21.3</span></div>
-              <div className="peer-row"><span className="peer-flag">🇨🇦</span><span className="peer-name">Canada</span><span className="peer-bar"><i style={{ width: "55%" }}></i></span><span className="peer-val">16.4</span></div>
-              <div className="peer-row"><span className="peer-flag">🇺🇸</span><span className="peer-name">United States</span><span className="peer-bar"><i style={{ width: "88%" }}></i></span><span className="peer-val">26.1</span></div>
-              <div className="peer-row"><span className="peer-flag">🇪🇺</span><span className="peer-name">EU (EMA avg)</span><span className="peer-bar"><i style={{ width: "48%" }}></i></span><span className="peer-val">14.2</span></div>
-            </div>
-            <div className="peer-note">AU sits <strong>mid-pack</strong> — better than US/UK, worse than EU average.</div>
-          </div>
 
-          {/* Upstream signals */}
-          <div className="gov-card span2">
-            <div className="gc-head">
-              <div className="gc-title">Upstream early-warning signals <span className="gc-badge">moat</span></div>
-              <div className="gc-meta">India (CDSCO) &amp; China (NMPA) site-level distress feeding your market</div>
+            {/* Peers */}
+            <div className="gov-card">
+              <div className="gc-head">
+                <div className="gc-title">Essential medicines short, by market</div>
+                <div className="gc-meta">{market} and its peers</div>
+              </div>
+              <div className="peer-list">
+                {data.peers.map((p) => (
+                  <div key={p.country} className="peer-row">
+                    <span className="peer-flag" />
+                    <span className="peer-name">{COUNTRY_NAMES[p.country] ?? p.country}</span>
+                    <span className="peer-bar"><i className={p.self ? "self" : ""} style={{ width: `${(100 * p.essentialShort) / peerMax}%` }} /></span>
+                    <span className="peer-val">{p.essentialShort}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="peer-note">Counts depend on how much each regulator publishes, so they compare reporting as much as supply. A market that publishes little will look calm here and show many &quot;short in peers&quot; medicines.</div>
             </div>
-            <div className="up-grid">
-              <div className="up-card crit">
-                <div className="up-top"><span className="up-flag">🇮🇳</span><span className="up-site">Hyderabad — Sandoz API</span><span className="up-sev crit">High</span></div>
-                <div className="up-body">GMP inspection flag, 14 May. Feeds <strong>amoxicillin, cephalexin</strong> AU supply. 2 downstream sponsors exposed.</div>
-                <div className="up-foot">CDSCO · 6d ago · confidence 81</div>
+
+            {/* Where APIs are made */}
+            <div className="gov-card span2">
+              <div className="gc-head">
+                <div className="gc-title">Where essential-medicine APIs are made</div>
+                <div className="gc-meta">largest API-making country per medicine · FDA DMF + DECRS</div>
               </div>
-              <div className="up-card high">
-                <div className="up-top"><span className="up-flag">🇨🇳</span><span className="up-site">Zhejiang — API intermediate</span><span className="up-sev high">Watch</span></div>
-                <div className="up-body">Export volume down 34% QoQ. Single source for <strong>methotrexate</strong> precursor. No declared shortage yet.</div>
-                <div className="up-foot">NMPA + customs · 11d ago · confidence 67</div>
-              </div>
-              <div className="up-card high">
-                <div className="up-top"><span className="up-flag">🇮🇳</span><span className="up-site">Gujarat — stimulant API</span><span className="up-sev high">Watch</span></div>
-                <div className="up-body">Environmental closure order. Supplies <strong>methylphenidate</strong> base. Paediatric formulary exposure.</div>
-                <div className="up-foot">CDSCO · 3d ago · confidence 73</div>
+              <div className="peer-list">
+                {data.apiCountries.map((c) => (
+                  <div key={c.country} className="peer-row">
+                    <span className="peer-flag" />
+                    <span className="peer-name">{COUNTRY_NAMES[c.country] ?? c.country}</span>
+                    <span className="peer-bar"><i style={{ width: `${(100 * c.molecules) / apiMax}%` }} /></span>
+                    <span className="peer-val">{c.molecules}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
-        {/* /gov-grid */}
+        )}
+
+        <p className="gov-note">
+          Essential medicines are those on the WHO Model List of Essential Medicines or the EU Union list of critical
+          medicines. API supply concentration counts distinct API manufacturers in FDA Drug Master File and WHO
+          prequalification data, which under-covers medicines not sold in the US. Concentration describes the supply
+          base: Mederti&apos;s own backtest found it does not predict when a shortage starts or how long it lasts.
+          {data?.scoresComputedAt && ` Supply data recomputed ${relTime(data.scoresComputedAt)}.`}
+        </p>
       </div>
-      {/* /gov-scroll */}
     </div>
   );
 }

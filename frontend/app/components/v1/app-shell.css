@@ -41,7 +41,26 @@
 /* Middle chat column: holds the grounded ContextChat (or a stand-in such as
    the signed-out ChatSignupGate). Hidden below 1080px, where the mobile tab
    bar turns it into a full-screen overlay (mobile-tabs.css). */
-.v1app .chat-col { width: 380px; flex-shrink: 0; display: flex; background: var(--bg); }
+/* Width is user-resizable via ChatColumn's divider (--chat-w, remembered per
+   browser); max-width keeps ~480px for content beside an expanded sidebar. */
+.v1app .chat-col {
+  width: var(--chat-w, 380px); min-width: 300px; max-width: calc(100vw - 742px);
+  flex-shrink: 0; display: flex; position: relative; background: var(--bg);
+}
+.v1app .chat-col > .context-rail { width: 100%; }
+.v1app .chat-col-resize {
+  position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; z-index: 5;
+  cursor: col-resize; touch-action: none; outline: none;
+}
+.v1app .chat-col-resize::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px;
+  background: transparent; transition: background .15s;
+}
+.v1app .chat-col-resize:hover::after,
+.v1app .chat-col-resize:focus-visible::after,
+.v1app .chat-col--dragging .chat-col-resize::after { background: var(--green, #0fa676); }
+.v1app .chat-col--dragging { user-select: none; }
+.v1app .chat-col--dragging ~ * { pointer-events: none; user-select: none; }
 @media (max-width: 1079px) { .v1app .chat-col { display: none; } }
 /* Below 1024px nav + chat are overlays, so the 3-column template drops its
    viewport lock and the page scrolls normally (keeps mobile browser chrome

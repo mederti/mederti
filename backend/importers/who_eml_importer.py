@@ -284,6 +284,11 @@ def _match(rec: dict, resolver: DrugResolver, by_atc: dict[str, str]) -> tuple[s
     return None, None
 
 
+def _on_current_list(rec: dict) -> bool:
+    """Mirror of who_essential_medicines.on_current_list (migration 073)."""
+    return (rec.get("raw") or {}).get("status") == "AddedToEml" and bool(rec.get("eml_list"))
+
+
 # ── write ────────────────────────────────────────────────────────────────────
 def upsert(supabase, records: list[dict], resolver: DrugResolver,
            by_atc: dict[str, str]) -> dict[str, int]:
@@ -298,6 +303,11 @@ def upsert(supabase, records: list[dict], resolver: DrugResolver,
         drug_id, method = _match(rec, resolver, by_atc)
         if drug_id:
             counts["matched"] += 1
+        # The eEML index is not the Model List: it also carries removed and
+        # rejected applications (which still have a recommendation), AWaRe-only
+        # antibiotic classifications and square-box alternatives — ~560 of
+        # ~1,100. Same rule as migration 073's on_current_list column.
+        if drug_id and _on_current_list(rec):
             # First listing (most specific section) wins per drug.
             drug_updates.setdefault(drug_id, {
                 "who_essential_medicine": True,

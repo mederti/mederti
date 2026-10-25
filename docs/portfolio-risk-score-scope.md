@@ -62,6 +62,16 @@ Run these in order, from the repo root with `.env` loaded.
    - `python3 -m backend.importers.eu_critical_medicines_importer`
    - Verify with the queries at the bottom of migration 072.
 
+**Status (2026-10-25): all three done in prod.**
+
+| Step | Result |
+|---|---|
+| B1 dedupe | Active rows went 89,750 → 31,261. JP 37,826 → 1,495; CH 22,345 → 187. Backup: `logs/dedupe_snapshot_shortages_20261025T004249Z.json`. |
+| B2 WHO | 1,100 eEML records. Only **541** are on the current list: removed and rejected applications, AWaRe-only antibiotics and square-box alternatives are not (see migration 073, `on_current_list`). **305** drugs flagged, every one backed by a current listing. 174 bad flags cleared; backup at `logs/who_unflag_backup_20261025.json`, plus 4 stale hand-seeds. |
+| B3 EU | 299 entries; **182** drugs flagged. 115 drugs are on both lists. |
+
+**Rule for every consumer:** a WHO-essential input means `who_essential_medicines.on_current_list`, never "has a row in the table".
+
 Neither importer is in cron. Both lists change at most yearly; rerun them when EMA or WHO publish a new version.
 
 ## 3. The model

@@ -9,6 +9,7 @@ import {
   faqJsonLd,
   datasetJsonLd,
   canonicalUrl,
+  defaultOgImages,
 } from "@/lib/seo";
 import {
   countrySummary,
@@ -46,7 +47,7 @@ export async function generateMetadata(
     title,
     description,
     alternates: { canonical: `/country/${slug}/medicine-shortages` },
-    openGraph: { title, description, url: canonicalUrl(`/country/${slug}/medicine-shortages`), type: "website" },
+    openGraph: { title, description, url: canonicalUrl(`/country/${slug}/medicine-shortages`), type: "website", images: defaultOgImages() },
   };
 }
 

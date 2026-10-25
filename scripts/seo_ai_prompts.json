@@ -1,0 +1,15 @@
+{
+  "_note": "Fixed question set for the weekly AI-citation check (scripts/seo_ai_visibility.py). Keep it stable so week-over-week numbers compare like with like; add questions rather than rewording existing ones. Phrased the way a pharmacist or patient would type them, not the way we'd like them to.",
+  "questions": [
+    {"id": "amoxicillin-now", "q": "Is there a shortage of amoxicillin right now?"},
+    {"id": "semaglutide-countries", "q": "Which countries currently have a shortage of semaglutide (Ozempic)?"},
+    {"id": "glargine-au", "q": "Is insulin glargine in short supply in Australia at the moment?"},
+    {"id": "uk-list", "q": "What medicines are currently in shortage in the UK?"},
+    {"id": "methylphenidate-ca", "q": "Is methylphenidate in shortage in Canada?"},
+    {"id": "salbutamol-de", "q": "Gibt es aktuell einen Lieferengpass bei Salbutamol in Deutschland?"},
+    {"id": "paracetamol-it", "q": "C'è una carenza di paracetamolo in Italia in questo momento?"},
+    {"id": "europe-tracker", "q": "Where can I find a list of current drug shortages across Europe?"},
+    {"id": "global-tracker", "q": "What is the best website to track medicine shortages in multiple countries?"},
+    {"id": "is-it-just-us", "q": "Our pharmacy can't get cefalexin from any wholesaler. Is this a national shortage or just us?"}
+  ]
+}

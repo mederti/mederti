@@ -206,3 +206,10 @@ SHELL=/bin/bash
 # active/anticipated → stale after 7 days without re-confirmation. Without this,
 # truly-gone shortages stay 'active' forever and the site over-reports. Idempotent.
 0   7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 cron/run_mark_stale.py >> logs/cron.log 2>&1
+
+# ─── Portfolio risk score (daily 16:00 local, after the last daily scraper) ───
+# Recomputes inn_risk_scores (clinical importance × supply vulnerability) for
+# every molecule on the WHO Model List / EU Union list and appends the day's
+# snapshot to inn_risk_score_history — the only record of what we flagged and
+# when. Full refresh, ~2 min, read-heavy. See docs/portfolio-risk-score-scope.md.
+0  16 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.analysis.risk_score >> logs/cron.log 2>&1

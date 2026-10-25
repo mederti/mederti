@@ -124,6 +124,46 @@ SV and CI are global. Add a **market overlay**:
 
 A pharmacist in GB sees the same molecule's global fragility plus its local trajectory. A Canada-only tool can't build this.
 
+### Phase 1 as built (2026-10-25)
+
+`backend/analysis/risk_score.py` → `inn_risk_scores` + `inn_risk_score_history` (migration 074). Applied to prod and first run written. The module docstring is the source of truth; below are the changes from the design above, all found by checking the first dry runs against real data.
+
+**Universe and clinical importance**
+- **Universe:** 563 molecules, from WHO entries with `on_current_list` plus current EU entries. Entries sharing a name or ATC level-5 code are merged; combinations are skipped.
+- **Clinical importance** uses only the WHO and EU lists, normalised over the inputs available: CI = 10 × points / 6.
+  - The FDA EO 13944 list isn't imported.
+  - "No alternative" isn't scored: with only 714 verified pairs, absence would mean "no data".
+  - "Injectable only" isn't scored: `drugs` has no routes, and EMA's route column has errors.
+
+**Name matching**
+- **Exact-prefix only**, including foreign endings like "cisplatino".
+- **INN↔USAN aliases** (aciclovir/acyclovir and others) are needed, otherwise US data is lost.
+- **Parenthesised list names and class names** ("insulin", "ALBUMIN (Technetium…)") match exactly only.
+- **Upstream eEML error:** "mannitol hexanitrate" means mannitol (B05BC01) and is corrected in code.
+
+**Supply evidence (all the supply data is US)**
+- US repackagers and compounders aren't counted as manufacturers.
+- The finished-dose layer is ignored when there are 10+ API makers (dolutegravir, dabigatran).
+- Medical gases use the finished layer only.
+- No score unless at least one layer shows 3+ firms.
+- Result: 201 molecules (36%) are `insufficient_data`, mostly biologics, vaccines, classes and non-US products.
+
+**Bands:** caution requires a supply signal (SV ≥ 4, or CI ≥ 6 with SV ≥ 2.5), because every molecule in the universe is clinically important by construction.
+
+**First run:** 13 high_risk, 112 risk, 47 caution, 190 low, 201 insufficient_data.
+
+| Molecule | Band | Supply score |
+|---|---|---|
+| Morphine | high_risk | 7.2 (3 API makers) |
+| Vincristine | risk | 5.3 |
+| Cisplatin | risk | 5.2 |
+| Carboplatin | low | 2.3 |
+| Amoxicillin | low | 1.8 |
+| Metformin | low | 0.3 |
+| Dolutegravir | low | 0.3 |
+
+**Access and schedule:** the tables are service-role only (anon access is denied, verified). Cron runs daily at 16:00 local.
+
 ## 4. Backtest gate (before anything ships publicly)
 - Reconstruct the score **as of past dates** T, using only shortage and recall data before T.
   - Caveat: DMF/DECRS are current snapshots only, so structural inputs leak. State this in the write-up.

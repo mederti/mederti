@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import PersonaPage, { PersonaContent } from "../components/persona-page";
 import { getLivePreviewRows } from "@/lib/persona-preview";
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
 
 export const metadata: Metadata = {
   title: "Shortage demand intelligence for pharma suppliers — Mederti",
   description:
-    "See where medicine demand is unmet across 50+ countries. Mederti shows suppliers which drugs are in shortage, where, and where they can step in.",
+    `See where medicine demand is unmet across ${COVERAGE_COPY.countries}. Mederti shows suppliers which drugs are in shortage, where, and where they can step in.`,
   alternates: { canonical: "/suppliers" },
 };
 

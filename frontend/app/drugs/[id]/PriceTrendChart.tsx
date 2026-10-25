@@ -164,14 +164,24 @@ export function PriceTrendChart({
         .ptrend .pt-nowlab{fill:var(--now);font-size:9px;font-weight:700;letter-spacing:.06em}
         .ptrend .pt-conc{fill:var(--conc);stroke:#fff;stroke-width:1.5}
         .ptrend .pt-dot{fill:#fff;stroke:var(--line);stroke-width:2}
-        .ptrend .pt-skel{height:200px;border-radius:8px;background:linear-gradient(90deg,#eef2f5 25%,#f6f8fa 50%,#eef2f5 75%);background-size:200% 100%;animation:ptsk 1.3s ease-in-out infinite}
+        .ptrend .pt-skel{height:200px;border-radius:8px;background:linear-gradient(90deg,#eef2f5 25%,#f6f8fa 50%,#eef2f5 75%);background-size:200% 100%;animation:ptsk 1.3s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#6a7280;font-size:12.5px;font-weight:500}
+        .ptrend .pt-skel-bars{display:flex;align-items:flex-end;gap:5px;height:28px}
+        .ptrend .pt-skel-bars i{width:6px;border-radius:2px;background:#0fa676;opacity:.75;animation:ptbar 1s ease-in-out infinite}
+        .ptrend .pt-skel-bars i:nth-child(2){animation-delay:.15s}
+        .ptrend .pt-skel-bars i:nth-child(3){animation-delay:.3s}
+        .ptrend .pt-skel-bars i:nth-child(4){animation-delay:.45s}
+        @keyframes ptbar{0%,100%{height:10px}50%{height:28px}}
+        @media (prefers-reduced-motion:reduce){.ptrend .pt-skel,.ptrend .pt-skel-bars i{animation:none}.ptrend .pt-skel-bars i{height:18px}}
         @keyframes ptsk{0%{background-position:200% 0}100%{background-position:-200% 0}}
         .ptrend .pt-empty{padding:28px 8px;text-align:center;color:#6a7280;font-size:12px;line-height:1.6}
         .ptrend .pt-cap{font-size:11px;color:#98a1ac;margin-top:8px;line-height:1.5}
         .ptrend .pt-note{font-size:11px;color:#6a7280;margin-top:8px;line-height:1.5;background:#f6f8fa;border-radius:6px;padding:8px 10px}
       `}</style>
 
-      {state === "loading" && <div className="pt-skel" aria-busy="true" aria-label="Loading price trend" />}
+      {state === "loading" && <div className="pt-skel" aria-busy="true" aria-label="Loading price trend">
+          <div className="pt-skel-bars" aria-hidden><i /><i /><i /><i /></div>
+          Loading chart…
+        </div>}
 
       {state === "error" && (
         <div className="pt-empty">No price history recorded for this market yet.</div>

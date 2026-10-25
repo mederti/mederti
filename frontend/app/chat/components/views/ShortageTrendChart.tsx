@@ -240,7 +240,14 @@ export function ShortageTrendChart({
         .strend .st-tip b{font-weight:600}
         .strend .st-tip .k{color:#aab3bd;margin-right:6px}
         .strend .st-tip .fut{color:#a5b4fc}
-        .strend .st-skel{height:200px;border-radius:8px;background:linear-gradient(90deg,#eef2f5 25%,#f6f8fa 50%,#eef2f5 75%);background-size:200% 100%;animation:stsk 1.3s ease-in-out infinite}
+        .strend .st-skel{height:200px;border-radius:8px;background:linear-gradient(90deg,#eef2f5 25%,#f6f8fa 50%,#eef2f5 75%);background-size:200% 100%;animation:stsk 1.3s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#6a7280;font-size:12.5px;font-weight:500}
+        .strend .st-skel-bars{display:flex;align-items:flex-end;gap:5px;height:28px}
+        .strend .st-skel-bars i{width:6px;border-radius:2px;background:#0fa676;opacity:.75;animation:stbar 1s ease-in-out infinite}
+        .strend .st-skel-bars i:nth-child(2){animation-delay:.15s}
+        .strend .st-skel-bars i:nth-child(3){animation-delay:.3s}
+        .strend .st-skel-bars i:nth-child(4){animation-delay:.45s}
+        @keyframes stbar{0%,100%{height:10px}50%{height:28px}}
+        @media (prefers-reduced-motion:reduce){.strend .st-skel,.strend .st-skel-bars i{animation:none}.strend .st-skel-bars i{height:18px}}
         @keyframes stsk{0%{background-position:200% 0}100%{background-position:-200% 0}}
         .strend .st-empty{padding:34px 8px;text-align:center;color:#6a7280;font-size:12px;line-height:1.6}
         .strend .st-cap{font-size:11px;color:#98a1ac;margin-top:8px;line-height:1.5}
@@ -270,7 +277,10 @@ export function ShortageTrendChart({
         </div>
       </div>
 
-      {state === "loading" && <div className="st-skel" aria-busy="true" aria-label="Loading shortage trend" />}
+      {state === "loading" && <div className="st-skel" aria-busy="true" aria-label="Loading shortage trend">
+          <div className="st-skel-bars" aria-hidden><i /><i /><i /><i /></div>
+          Loading chart…
+        </div>}
 
       {state === "error" && (
         <div className="st-empty">Trend data isn&apos;t available for this {isDrug ? "medicine" : "market"} right now.</div>

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import V1Sidebar from "@/app/components/v1/V1Sidebar";
 import { ContextChat, type ContextChatProps } from "@/app/chat/components/ContextChat";
 import MobileTabBar from "@/app/components/v1/MobileTabBar";
+import ChatColumn from "@/app/components/v1/ChatColumn";
 import "@/app/chat/chat.css";
 import "./app-shell.css";
 
@@ -92,7 +93,7 @@ export default function AppShell({
       <div className={shellClass}>
         <V1Sidebar />
         {hasChat ? (
-          <aside className={`chat-col${panelScope ? " mederti-chat-root" : ""}`}>{middle}</aside>
+          <ChatColumn className={`chat-col${panelScope ? " mederti-chat-root" : ""}`}>{middle}</ChatColumn>
         ) : null}
         <div className={mainClass}>
           {fill ? children : <div className={`dg-main ${contentClassName}`.trim()}>{children}</div>}

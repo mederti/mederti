@@ -1,5 +1,5 @@
-import { LoadingSpinner } from "@/app/components/loading-spinner";
+import AppLoading from "@/app/components/v1/AppLoading";
 
 export default function Loading() {
-  return <LoadingSpinner label="Opening chat…" />;
+  return <AppLoading label="Opening chat" steps={[["Opening chat"], ["Loading your conversations"]]} />;
 }

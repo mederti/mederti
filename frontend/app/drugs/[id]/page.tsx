@@ -884,7 +884,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // buildMarketPricing, ~5 serial round-trips before first paint.) supabase-js
     // resolves (not rejects) on a query error, so a missing table still soft-fails
     // to null without taking down the batch.
-    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing] = await Promise.all([
+    const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing, profileRes] = await Promise.all([
       supabase
         .from("api_suppliers")
         .select("manufacturer_name, country, source, who_pq")
@@ -913,6 +913,13 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .limit(1),
       buildMarketPricing(supabase, id, drug.generic_name, userCountry),
       buildAlternativePricingData(supabase, id, alternatives, userCountry, drug.generic_name),
+      // Molecule-level supply profile (inn_risk_scores, nightly): same figures
+      // as the National Shortage Dashboard, so the two pages agree.
+      supabase
+        .from("inn_risk_scores")
+        .select("display_name, fragility, who_eml_list, eu_critical, n_api_makers, n_finished_firms, top_api_country, short_countries, geography:components->geography")
+        .contains("drug_ids", [id])
+        .limit(1),
     ]);
     const apiSupplierRows = apiSupplierRes.data;
     const approvalRows = approvalRes.data;
@@ -936,6 +943,27 @@ export default async function DrugPage({ params, searchParams }: Props) {
           .filter(Boolean),
       ),
     ];
+    const prof = (profileRes.data?.[0] ?? null) as {
+      display_name: string; fragility: number | null; who_eml_list: "core" | "complementary" | null;
+      eu_critical: boolean; n_api_makers: number | null; n_finished_firms: number | null;
+      top_api_country: string | null; short_countries: string[];
+      geography: { countries?: Record<string, number> } | null;
+    } | null;
+    const profCountries = prof?.geography?.countries ?? null;
+    const profTotal = profCountries ? Object.values(profCountries).reduce((a, b) => a + b, 0) : 0;
+    const supplyProfile = prof
+      ? {
+          molecule: prof.display_name,
+          fragility: prof.fragility == null ? null : Number(prof.fragility),
+          whoList: prof.who_eml_list,
+          euCritical: prof.eu_critical,
+          nApiMakers: prof.n_api_makers,
+          nFinishedFirms: prof.n_finished_firms,
+          topApiCountry: prof.top_api_country,
+          topApiShare: prof.top_api_country && profTotal ? (profCountries![prof.top_api_country] ?? 0) / profTotal : null,
+          shortCountries: prof.short_countries,
+        }
+      : null;
     const apiConcentration =
       makerCount > 0
         ? {
@@ -1068,6 +1096,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         alternatives={alternatives}
         userCountry={userCountry}
         apiConcentration={apiConcentration}
+        supplyProfile={supplyProfile}
         recalls={recalls}
         approvalFootprint={approvalFootprint}
         eligibility={eligibility}

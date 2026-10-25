@@ -22,6 +22,11 @@ const COUNTRIES: { code: string; name: string; flag: string }[] = [
   { code: "DK", name: "Denmark", flag: "🇩🇰" },
 ];
 
+// Module-level so the write isn't a mutation inside the component body.
+function saveCountry(c: string) {
+  document.cookie = `mederti-country=${c};path=/;max-age=${60 * 60 * 24 * 365}`;
+}
+
 export default function V1CountryPicker({ compact = false }: { compact?: boolean }) {
   // `compact` = flag-only button, for the collapsed V1Sidebar icon rail.
   const [code, setCode] = useState("AU");
@@ -29,8 +34,11 @@ export default function V1CountryPicker({ compact = false }: { compact?: boolean
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const m = document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/);
-    if (m) setCode(m[1].toUpperCase());
+    const restore = () => {
+      const m = document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/);
+      if (m) setCode(m[1].toUpperCase());
+    };
+    restore();
   }, []);
 
   useEffect(() => {
@@ -42,7 +50,7 @@ export default function V1CountryPicker({ compact = false }: { compact?: boolean
   }, []);
 
   function pick(c: string) {
-    document.cookie = `mederti-country=${c};path=/;max-age=${60 * 60 * 24 * 365}`;
+    saveCountry(c);
     setOpen(false);
     // Full reload so server components re-render with the new market.
     window.location.reload();

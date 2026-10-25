@@ -1,3 +1,4 @@
+import { TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "./supabase";
 import { coverageGate } from "./coverage";
@@ -258,15 +259,28 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   {
     name: "get_class_concentration_risk",
     description:
-      "Manufacturer concentration risk for an ATC class — surfaces how many distinct API/finished-dose suppliers serve each drug in the class, and which drugs are sole-sourced or hyper-concentrated. Backed by v_drug_manufacturer_concentration (PharmaCompass + drug_rxnorm). Use for SUP-24 (drug classes most exposed to upstream concentration), GOV-03 (therapeutic classes with highest concentration risk in our market), GOV-04 (proportion dependent on single API source), GOV-27 (most concentrated upstream exposure), HCL-08 (most fragile global supply chains).",
+      "Supply concentration for essential/critical medicines in an ATC class — API makers (FDA DMF + WHO PQ), US finished-dose firms, top API-making country and its share, which markets are short now. Covers only molecules on the WHO Model List or EU Union list (~560). Describes the supply base; it is NOT a shortage forecast (see caveat in the result). Use for SUP-24, GOV-03, GOV-04, GOV-27, HCL-08 (which classes depend on few manufacturers or one country).",
     input_schema: {
       type: "object",
       properties: {
         atc_prefix: { type: "string", description: "ATC code prefix to scope the class (e.g. 'J01' for antibiotics, 'L01' for oncology, 'A10' for diabetes). Required." },
-        country: { type: "string", description: "Optional ISO-2 country code to narrow to drugs registered in that market." },
-        limit: { type: "number", description: "Max drugs to return (default 20)." },
+        country: { type: "string", description: "Optional ISO-2 country code; adds whether each molecule is short there now." },
+        limit: { type: "number", description: "Max molecules to return (default 20)." },
       },
       required: ["atc_prefix"],
+    },
+  },
+  {
+    name: "get_supply_profile",
+    description:
+      "Supply profile for ONE essential/critical medicine: WHO Model List / EU critical status, supply concentration tier, number of API makers (FDA DMF + WHO PQ), US finished-dose firms, top API-making country and share, and the countries where it is short now. Use for 'how many manufacturers make X', 'where is X made', 'is X single-source', 'how fragile is X's supply'. Describes the supply base only; never present it as a prediction or a risk score.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "Drug UUID (preferred when known)." },
+        name: { type: "string", description: "INN of the medicine (e.g. 'cisplatin') when no drug_id." },
+        country: { type: "string", description: "Optional ISO-2 country; adds whether it is short there now." },
+      },
     },
   },
   {
@@ -2517,111 +2531,93 @@ async function compareShortageBurden(args: { country: string; peer_set?: string[
 }
 
 // ── Tool 3: get_class_concentration_risk ──────────────────────────────────
+// Supply concentration from inn_risk_scores (nightly, backend/analysis/risk_score.py).
+// Replaces v_drug_manufacturer_concentration, which never existed in prod, so
+// this tool previously returned no data. Same tiers as the National Shortage
+// Dashboard and the drug page (lib/insights/dashboard-data-shared.ts).
+const SUPPLY_FIELDS =
+  "inn,display_name,fragility,who_eml_list,eu_critical,n_api_makers,n_finished_firms,top_api_country,short_countries,drug_ids,atc:components->atc_codes,geography:components->geography,computed_at";
+const SUPPLY_CAVEAT =
+  "Supply concentration describes the supply base (FDA Drug Master File + WHO prequalification API makers; US finished-dose firms). It is NOT a shortage prediction: Mederti's backtest found it predicts neither when a shortage starts nor how long it lasts. Breadth of current shortages across peer markets (get_predictive_signals) is the forward signal. Coverage is US-centric, so medicines not sold in the US often show 'unknown'.";
+
+function supplyRow(r: any, country?: string) {
+  const c = r.geography?.countries as Record<string, number> | undefined;
+  const total = c ? Object.values(c).reduce((x, y) => x + y, 0) : 0;
+  const tier = tierFor(r.fragility == null ? null : Number(r.fragility));
+  return {
+    molecule: r.display_name,
+    atc_codes: r.atc ?? [],
+    who_model_list: r.who_eml_list ?? null,
+    eu_critical: !!r.eu_critical,
+    supply_concentration: TIER_LABEL[tier],
+    api_makers: r.n_api_makers,
+    us_finished_dose_firms: r.n_finished_firms,
+    top_api_country: r.top_api_country,
+    top_api_country_share: r.top_api_country && total ? Math.round((100 * (c![r.top_api_country] ?? 0)) / total) + "%" : null,
+    countries_short_now: r.short_countries ?? [],
+    ...(country ? { short_in_country_now: (r.short_countries ?? []).includes(country) } : {}),
+    _tier: tier,
+  };
+}
+
 async function getClassConcentrationRisk(args: { atc_prefix: string; country?: string; limit?: number }) {
   const atc = (args.atc_prefix || "").toUpperCase().trim();
   if (!atc) {
     return { status: "unanswerable", reason: "missing_atc_prefix", hint: "Pass an ATC prefix (e.g. J01, L01, A10)." };
   }
-  const sb = getSupabase();
+  const country = args.country?.toUpperCase();
   const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
-
-  // 1. Drugs in class
-  const { data: drugs, error } = await sb
-    .from("drugs")
-    .select("id,generic_name,atc_code,who_essential_medicine")
-    .like("atc_code", `${atc}%`)
-    .limit(500);
+  const { data, error } = await getSupabase().from("inn_risk_scores").select(SUPPLY_FIELDS).limit(2000);
   if (error) throw new Error(error.message);
-  if (!drugs || drugs.length === 0) {
+  const inClass = (data ?? []).filter((r: any) => (r.atc ?? []).some((code: string) => code.startsWith(atc)));
+  if (inClass.length === 0) {
     return {
       status: "unanswerable",
-      reason: "no_drugs_in_class",
-      hint: `No drugs found with ATC prefix '${atc}'. Verify the prefix (e.g. J01 = antibacterials, L01 = oncology, A10 = diabetes).`,
+      reason: "no_essential_molecules_in_class",
+      hint: `No molecule on the WHO Model List or EU Union list has an ATC code starting '${atc}'. Supply profiles only cover those ~560 essential/critical molecules.`,
     };
   }
-
-  const drugIds = drugs.map((d: any) => d.id);
-
-  // 2. Concentration view (per-drug manufacturer count + risk tier).
-  // The audit cites v_drug_manufacturer_concentration. The view's exact shape
-  // can drift; tolerate alternative column names.
-  let concentration: any[] = [];
-  try {
-    const { data } = await sb
-      .from("v_drug_manufacturer_concentration")
-      .select("*")
-      .in("drug_id", drugIds)
-      .limit(500);
-    concentration = data ?? [];
-  } catch (e) {
-    // View may not exist on every DB; fall back to api_supply_summary if present.
-    concentration = [];
-  }
-
-  // Map by drug_id
-  const concentrationByDrug = new Map<string, any>();
-  for (const row of concentration) {
-    const id = row.drug_id ?? row.id;
-    if (id) concentrationByDrug.set(id, row);
-  }
-
-  // 3. Cross-reference with active shortages in country (if provided).
-  const shortageByDrug = new Map<string, number>();
-  let shortageQ = sb.from("shortage_events").select("drug_id").eq("status", "active").in("drug_id", drugIds);
-  if (args.country) shortageQ = shortageQ.eq("country_code", args.country.toUpperCase());
-  const { data: shorts } = await shortageQ;
-  for (const r of shorts ?? []) {
-    const id = (r as any).drug_id;
-    if (id) shortageByDrug.set(id, (shortageByDrug.get(id) ?? 0) + 1);
-  }
-
-  // 4. Assemble. Rank by concentration_risk (single-source first) then shortage count.
-  const tierRank: Record<string, number> = { high_risk: 4, moderate_risk: 3, low_risk: 2, unknown: 1 };
-  const items = drugs.map((d: any) => {
-    const c = concentrationByDrug.get(d.id) ?? {};
-    return {
-      drug_id: d.id,
-      name: d.generic_name,
-      atc_code: d.atc_code,
-      who_essential: !!d.who_essential_medicine,
-      manufacturer_count: c.manufacturer_count ?? c.total_suppliers ?? null,
-      concentration_risk: (c.concentration_risk as string) ?? "unknown",
-      currently_in_shortage_events: shortageByDrug.get(d.id) ?? 0,
-    };
-  });
-
-  items.sort((a, b) => {
-    const ar = tierRank[a.concentration_risk] ?? 1;
-    const br = tierRank[b.concentration_risk] ?? 1;
-    if (ar !== br) return br - ar;
-    return b.currently_in_shortage_events - a.currently_in_shortage_events;
-  });
-
-  // Class-level summary
-  const tierCounts: Record<string, number> = {};
-  for (const i of items) tierCounts[i.concentration_risk] = (tierCounts[i.concentration_risk] || 0) + 1;
-
-  const confidence = computeConfidence({
-    sourceReliability: 0.85, // PharmaCompass + reg data is good but not regulator-grade
-    signalCount: items.filter((i) => i.manufacturer_count != null).length,
-    freshnessDays: 7, // pharmacompass imports are quarterly-ish
-  });
-
+  const rank: Record<string, number> = { highly_concentrated: 3, concentrated: 2, broad: 1, unknown: 0 };
+  const items = inClass
+    .map((r: any) => supplyRow(r, country))
+    .sort((x, y) => rank[y._tier] - rank[x._tier] || y.countries_short_now.length - x.countries_short_now.length);
+  const distribution: Record<string, number> = {};
+  for (const i of items) distribution[i.supply_concentration] = (distribution[i.supply_concentration] ?? 0) + 1;
   return {
     atc_prefix: atc,
-    country: args.country?.toUpperCase() ?? null,
-    drugs_in_class: drugs.length,
-    tier_distribution: tierCounts,
-    items: items.slice(0, limit),
-    confidence: {
-      ...confidence,
-      basis: `Manufacturer counts via v_drug_manufacturer_concentration (PharmaCompass + drug_rxnorm). ${items.filter((i) => i.manufacturer_count != null).length}/${items.length} drugs in this class have manufacturer-count coverage; the rest fall through as 'unknown'.`,
-    },
-    notes: [
-      "concentration_risk values: high_risk (≤2 suppliers), moderate_risk (≤5), low_risk (>5), unknown (no PharmaCompass data).",
-      args.country ? "currently_in_shortage_events is per-country (using the country filter)." : "currently_in_shortage_events is global (no country filter applied).",
-      "Manufacturer coverage is best for established generics; specialty/biologic drugs often show as 'unknown'.",
-    ],
+    country: country ?? null,
+    essential_molecules_in_class: items.length,
+    concentration_distribution: distribution,
+    items: items.slice(0, limit).map(({ _tier, ...rest }) => rest),
+    computed_at: (inClass[0] as any)?.computed_at ?? null,
+    source: "inn_risk_scores (WHO Model List ∪ EU Union list; FDA DMF, WHO PQ, Drugs@FDA, recalls, shortage reports)",
+    caveat: SUPPLY_CAVEAT,
+  };
+}
+
+async function getSupplyProfile(args: { drug_id?: string; name?: string; country?: string }) {
+  const sb = getSupabase();
+  const country = args.country?.toUpperCase();
+  let q = sb.from("inn_risk_scores").select(SUPPLY_FIELDS).limit(3);
+  if (args.drug_id) q = q.contains("drug_ids", [args.drug_id]);
+  else if (args.name) q = q.ilike("inn", args.name.trim().toLowerCase());
+  else return { status: "unanswerable", reason: "missing_scope", hint: "Pass drug_id or the medicine's INN as name." };
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const r = data?.[0];
+  if (!r) {
+    return {
+      status: "unanswerable",
+      reason: "not_in_supply_universe",
+      hint: "Supply profiles cover only molecules on the WHO Model List of Essential Medicines or the EU Union list of critical medicines. This medicine isn't one of them, or couldn't be matched by name.",
+    };
+  }
+  const { _tier, ...row } = supplyRow(r, country);
+  return {
+    ...row,
+    computed_at: (r as any).computed_at,
+    source: "inn_risk_scores (nightly)",
+    caveat: SUPPLY_CAVEAT,
   };
 }
 
@@ -3680,6 +3676,8 @@ export async function executeTool(
       return await compareShortageBurden(input as any);
     case "get_class_concentration_risk":
       return await getClassConcentrationRisk(input as any);
+    case "get_supply_profile":
+      return await getSupplyProfile(input as any);
     case "get_resolution_time_stats":
       return await getResolutionTimeStats(input as any);
     case "get_predictive_signals":

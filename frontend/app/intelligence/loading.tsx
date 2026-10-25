@@ -1,5 +1,10 @@
-import { LoadingSpinner } from "@/app/components/loading-spinner";
+import AppLoading from "@/app/components/v1/AppLoading";
 
 export default function Loading() {
-  return <LoadingSpinner label="Loading intelligence…" />;
+  return (
+    <AppLoading
+      label="Loading intelligence"
+      steps={[["Gathering intelligence"], ["Reading regulator updates"], ["Building insight"]]}
+    />
+  );
 }

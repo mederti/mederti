@@ -1893,7 +1893,7 @@ const CSS = `
 .sim-hidetxt{display:none}
 .sim-note{padding:8px 16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-4)}
 .sim-extra{display:none}.sim:has(.sim-all input:checked) .sim-extra{display:table-row}
-.sim-all{display:block;padding:9px 16px;border-top:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--teal,#0fa676);cursor:pointer}
+.sim-all{display:block;position:relative;padding:9px 16px;border-top:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--teal,#0fa676);cursor:pointer}
 .sim-all input{position:absolute;opacity:0;pointer-events:none}
 .sim-all:has(input:checked) .sim-show{display:none}.sim-all:has(input:checked) .sim-hidetxt{display:inline}.sim-up[open] .sim-show{display:none}.sim-up[open] .sim-hidetxt{display:inline}
 .sim-more{font-size:12px;font-weight:600;color:var(--teal,#0fa676);white-space:nowrap}

@@ -32,7 +32,11 @@
    grounded chat's composer stays pinned and each column scrolls on its own.
    align-items:stretch lets the ContextChat rail fill the viewport height. */
 .v1app .shell--chat { height: 100vh; min-height: 0; overflow: hidden; align-items: stretch; }
-.v1app .shell-main--scroll { height: 100vh; overflow-y: auto; }
+/* position:relative makes this scroll box the containing block for any
+   absolutely positioned descendant without a positioned ancestor (e.g. a
+   visually-hidden checkbox); otherwise it anchors to the page and stretches
+   the document past 100vh, leaving a blank band under all columns. */
+.v1app .shell-main--scroll { height: 100vh; overflow-y: auto; position: relative; }
 /* `fill`: the content column is a viewport-height flex row whose children
    own their scrolling (the /chat conversation + its inline preview pane, live
    dashboards, the article reader). */

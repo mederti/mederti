@@ -350,19 +350,13 @@ def main(keys: list[str] | None = None) -> int:
         except Exception as exc:
             log.error(f"Ops alert send failed: {exc}")
 
-    # ── Dispatch pending shortage alerts ──────────────────────────────────────
+    # Watchlist shortage emails are NOT sent here any more. dispatch_pending_alerts()
+    # emailed one message per shortage_status_log row across every country, and
+    # that log churns (~3,600 active→active rows and ~750 resolved↔active flips a
+    # week), so watchers would have been spammed. The daily digest
+    # (backend/alerts/watchlist_digest.py, its own cron line) emails a user once,
+    # only when a watched medicine changes tier in their market.
     if not dry_run:
-        try:
-            from backend.alerts.dispatcher import dispatch_pending_alerts
-            alert_summary = dispatch_pending_alerts()
-            log.info(
-                f"Alert dispatch: processed={alert_summary.get('processed', 0)}  "
-                f"sent={alert_summary.get('sent', 0)}  "
-                f"failed={alert_summary.get('failed', 0)}"
-            )
-        except Exception as exc:
-            log.error(f"Alert dispatcher failed: {exc}")
-
         # ── Intelligence linking — recalls → shortages ─────────────────────
         try:
             from backend.scrapers.recall_linker import link_unlinked_recalls

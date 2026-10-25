@@ -544,7 +544,7 @@ def assemble(db, molecules: list[Molecule], as_of: date | None = None) -> dict[i
         chunk = ids[i:i + 100]
         if as_of is not None:
             rows = fetch_all(db, "shortage_events", "id,drug_id,status,country_code,start_date,end_date",
-                             lambda q, c=chunk: q.in_("drug_id", c))
+                             lambda q, c=chunk: q.in_("drug_id", c).or_("synthetic.is.null,synthetic.eq.false"))
             for r in rows:
                 cc, sd = r.get("country_code"), _to_date(r.get("start_date"))
                 if not cc or not sd:
@@ -563,7 +563,8 @@ def assemble(db, molecules: list[Molecule], as_of: date | None = None) -> dict[i
             continue
         rows = fetch_all(db, "shortage_events", "id,drug_id,status,country_code,start_date",
                          lambda q, c=chunk: q.in_("drug_id", c).or_(
-                             f"status.in.(active,anticipated),start_date.gte.{cutoff}"))
+                             f"status.in.(active,anticipated),start_date.gte.{cutoff}")
+                         .or_("synthetic.is.null,synthetic.eq.false"))
         for r in rows:
             m = drug_to_mol[r["drug_id"]]
             cc = r.get("country_code")

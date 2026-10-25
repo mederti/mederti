@@ -1,5 +1,6 @@
 "use client";
 
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ChatApiResponse, ChatMessage, DrugDetail, SubstituteRow } from "@/lib/chat/types";
@@ -104,14 +105,14 @@ const VIEW_CONFIG: Record<
   },
   "early-warning": {
     title: "Early-warning radar",
-    category: "Predictive early-warning radar (global)",
+    category: "Early-warning radar (peer markets)",
     headerLabel: "Ask about the radar",
     bodyText:
-      "Mederti predictive early-warning radar (global). Forecasts which drugs are likely to go into shortage BEFORE official declaration, using upstream signals from 22 countries (e.g. India CDSCO GMP flags, China NMPA precursor export drops, environmental closures, recurring seasonal patterns, sponsor deregistrations). Drugs are ranked by probability × clinical impact, each with a signal driver, a predicted window, a probability, and a confidence score. Also surfaces a live upstream-site feed and the model's forecast-confidence / calibration.",
+      "Mederti early-warning radar. Lists drugs in active shortage in two or more of the user's peer markets but not yet reported short in the user's market, from official regulator shortage reports (" + COVERAGE_COPY.countries + "). Each row shows the peer markets short, the worst severity and how long the peers have been short. It is an observation, not a forecast: in Mederti's 2025–26 history such drugs were 2.5–6× more likely to be reported short in the user's market within six months (13–39% vs 3–11%), but most were not. There are no probabilities, predicted windows, confidence scores or upstream site feeds on this page.",
     starters: [
-      "Why is cephalexin flagged as high-risk?",
-      "What upstream signals feed amoxicillin supply?",
-      "How accurate are these forecasts historically?",
+      "Which of these are WHO essential medicines?",
+      "Which peer markets are short on the top flagged drug?",
+      "How often do these flags turn into local shortages?",
     ],
   },
 };

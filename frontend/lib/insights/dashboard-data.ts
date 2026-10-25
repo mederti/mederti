@@ -8,7 +8,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
  * samples ported from an HTML mockup (including invented "upstream" site
  * events naming real companies).
  *
- * Every figure here is computed from Supabase:
+ * Every figure here is computed from Supabase, excluding synthetic rows
+ * (shortage_events.synthetic — e.g. FDA MedWatch recalls stored as events):
  *   • shortage_events             — counts, new onsets, resolution times, days short
  *   • inn_risk_scores (mig. 074)  — the essential/critical universe (WHO Model
  *     List ∪ EU Union list), supply concentration, countries short now
@@ -71,9 +72,9 @@ export async function buildDashboard(countryRaw: string): Promise<DashboardData>
       .select("inn,display_name,fragility,who_eml_list,eu_critical,n_api_makers,n_finished_firms,top_api_country,short_countries,drug_ids,geography:components->geography,computed_at")
       .limit(2000),
     sb.from("shortage_events").select("id", { count: "exact", head: true })
-      .eq("country_code", country).eq("status", "active"),
+      .eq("country_code", country).eq("status", "active").or("synthetic.is.null,synthetic.eq.false"),
     sb.from("shortage_events").select("id", { count: "exact", head: true })
-      .eq("country_code", country).neq("status", "anticipated").gte("start_date", since30),
+      .eq("country_code", country).neq("status", "anticipated").gte("start_date", since30).or("synthetic.is.null,synthetic.eq.false"),
     sb.from("shortage_events").select("updated_at")
       .eq("country_code", country).order("updated_at", { ascending: false }).limit(1),
   ]);
@@ -84,7 +85,7 @@ export async function buildDashboard(countryRaw: string): Promise<DashboardData>
   const durations: number[] = [];
   for (let from = 0; from < 20000; from += 1000) {
     const { data, error } = await sb.from("shortage_events").select("start_date,end_date")
-      .eq("country_code", country).eq("status", "resolved").gte("end_date", since365)
+      .eq("country_code", country).eq("status", "resolved").gte("end_date", since365).or("synthetic.is.null,synthetic.eq.false")
       .not("start_date", "is", null).order("id").range(from, from + 999);
     if (error) throw error;
     for (const r of data ?? []) {
@@ -104,7 +105,7 @@ export async function buildDashboard(countryRaw: string): Promise<DashboardData>
   const ids = [...drugToInn.keys()];
   for (let i = 0; i < ids.length; i += 150) {
     const { data, error } = await sb.from("shortage_events").select("drug_id,start_date")
-      .eq("country_code", country).eq("status", "active").in("drug_id", ids.slice(i, i + 150));
+      .eq("country_code", country).eq("status", "active").in("drug_id", ids.slice(i, i + 150)).or("synthetic.is.null,synthetic.eq.false");
     if (error) throw error;
     for (const r of data ?? []) {
       if (!r.start_date) continue;

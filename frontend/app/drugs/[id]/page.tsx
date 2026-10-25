@@ -13,6 +13,7 @@ import SiteNav from "@/app/components/landing-nav";
 import AppShell from "@/app/components/v1/AppShell";
 import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand } from "@/lib/event-brand";
+import { buildSupplyInMarket, type CatalogueRow } from "@/lib/supply-in-market";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
 
@@ -678,7 +679,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // as the National Shortage Dashboard, so the two pages agree.
     supabase
       .from("inn_risk_scores")
-      .select("display_name, fragility, who_eml_list, eu_critical, n_api_makers, n_finished_firms, top_api_country, short_countries, geography:components->geography")
+      .select("display_name, fragility, who_eml_list, eu_critical, n_api_makers, n_finished_firms, top_api_country, short_countries, drug_ids, geography:components->geography")
       .contains("drug_ids", [id])
       .limit(1),
   ]);
@@ -725,6 +726,45 @@ export default async function DrugPage({ params, searchParams }: Props) {
         shortCountries: prof.short_countries,
       }
     : null;
+  // Supply in the user's market — registered products × open notices
+  // (lib/supply-in-market.ts). Notices are read for every drugs row of the
+  // molecule (drug_ids from the nightly profile), not just this one, because
+  // a market's notices often sit on a salt- or form-specific row.
+  const moleculeIds: string[] = [...new Set([id, ...((profileRes.data?.[0] as { drug_ids?: string[] } | undefined)?.drug_ids ?? [])])];
+  const [catRes, noticeRes] = await Promise.all([
+    supabase
+      .from("drug_catalogue")
+      .select("brand_name, strength, dosage_form, sponsor, registration_number, active_ingredients")
+      .in("drug_id", moleculeIds.slice(0, 150))
+      .eq("source_country", userCountry)
+      .eq("registration_status", "active")
+      .limit(1000),
+    supabase
+      .from("shortage_events")
+      .select("status, start_date, anticipated_start_date, estimated_resolution_date, source_url, data_source_id, artg:raw_data->>artg_numb, din:raw_data->>din, dose_form:raw_data->>dose_form, ca_form:raw_data->>dosage_form, ingredients:raw_data->>ingredients, raw_data")
+      .in("drug_id", moleculeIds.slice(0, 150))
+      .eq("country_code", userCountry)
+      .in("status", ["active", "anticipated"])
+      .or("synthetic.is.null,synthetic.eq.false")
+      .limit(200),
+  ]);
+  const supplyInMarket = buildSupplyInMarket(
+    userCountry,
+    (catRes.data ?? []) as CatalogueRow[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((noticeRes.data ?? []) as any[]).map((n) => ({
+      status: n.status,
+      start_date: n.start_date,
+      anticipated_start_date: n.anticipated_start_date,
+      estimated_resolution_date: n.estimated_resolution_date,
+      source_url: n.source_url,
+      regNo: n.artg ?? n.din ?? null,
+      productName: extractEventBrand(n.data_source_id ?? null, n.raw_data).brand_name,
+      doseForm: n.dose_form ?? n.ca_form ?? null,
+      ingredients: typeof n.ingredients === "string" ? n.ingredients.split(";").map((x: string) => x.trim()).filter(Boolean) : undefined,
+    })),
+  );
+
   const apiConcentration =
     makerCount > 0
       ? {
@@ -885,6 +925,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       userCountry={userCountry}
       apiConcentration={apiConcentration}
       supplyProfile={supplyProfile}
+      supplyInMarket={supplyInMarket}
       recalls={recalls}
       approvalFootprint={approvalFootprint}
       eligibility={eligibility}

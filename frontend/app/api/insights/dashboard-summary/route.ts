@@ -54,7 +54,7 @@ async function generateSummary(country: string): Promise<string> {
 // Cache the generated prose per market so Claude is only called on a miss /
 // after revalidate.
 function getCachedSummary(country: string): Promise<string> {
-  return unstable_cache(() => generateSummary(country), ["dashboard-market-read", "v3", country], {
+  return unstable_cache(() => generateSummary(country), ["dashboard-market-read", "v4", country], {
     revalidate: REVALIDATE_SECONDS,
     tags: ["dashboard-market-read"],
   })();

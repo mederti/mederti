@@ -89,3 +89,16 @@ Neither test supports a "High risk" verdict, so the UI shows the facts the score
 - **Spread now:** countries short now, and peers short but not yet in the user's market.
 
 `inn_risk_scores.band` stays in the database for the Phase 2b tests and isn't shown to users.
+
+## Peer-market early warning (2026-10-25)
+
+`backend/analysis/peer_signal_backtest.py` tests the signal the Intelligence radar and the dashboard use: an essential medicine short in two or more of a market's peers, but not short in the market itself.
+
+| Market | Flagged → reported here within 180 days | Everything else, same window | Within 90 days | Median lag |
+|---|---|---|---|---|
+| AU | 28–36% | 7–11% | 20–22% | 55–77 days |
+| CA | 29–39% | 5–11% | 18–19% | 65–98 days |
+| US | 13–15% | 3–5% | 9–15% | 43–48 days |
+| GB | ~0% | 0% | ~0% | — |
+
+**Reading:** the signal works. Flagged medicines are 2.5–6× more likely to be reported short in the market, but most are not. The old radar copy claimed shortages "typically reach the remaining markets within 60–90 days", which the data doesn't support, so it was replaced with these figures. GB can't be tested because the UK publishes too little shortage data.

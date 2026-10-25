@@ -168,11 +168,18 @@ def _build_record(client: httpx.Client, med_id: int) -> dict[str, Any] | None:
         rec = _get(client, ref if ref.startswith("/") else "/" + ref.split(BASE_URL)[-1])
         if not rec:
             continue
-        # ATC from guidelineSubject.code (codingSystem == 'ATC')
-        subj = rec.get("guidelineSubject") or {}
-        for code in _as_list(subj.get("code")):
-            if isinstance(code, dict) and (code.get("codingSystem") == "ATC") and code.get("codeValue"):
-                atc = atc or code["codeValue"]
+        # ATC from guidelineSubject.code (codingSystem == 'ATC'). Combination
+        # medicines carry a LIST of subjects, one per component; their codes
+        # differ, so only keep an ATC when every subject agrees on it — a
+        # component's code would mis-resolve the combination via the ATC match.
+        codes = {
+            code["codeValue"]
+            for subj in _as_list(rec.get("guidelineSubject")) if isinstance(subj, dict)
+            for code in _as_list(subj.get("code"))
+            if isinstance(code, dict) and code.get("codingSystem") == "ATC" and code.get("codeValue")
+        }
+        if len(codes) == 1:
+            atc = atc or codes.pop()
         # Section name (the most specific, leaf section)
         sec = rec.get("section")
         if isinstance(sec, dict) and sec.get("name") and not section:

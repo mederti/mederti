@@ -213,3 +213,10 @@ SHELL=/bin/bash
 # snapshot to inn_risk_score_history — the only record of what we flagged and
 # when. Full refresh, ~2 min, read-heavy. See docs/portfolio-risk-score-scope.md.
 0  16 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.analysis.risk_score >> logs/cron.log 2>&1
+
+# ─── Watchlist digest (daily 17:00 local, after scrapers + the 16:00 risk score) ───
+# One email per user, only when a watched medicine changes tier in their market
+# (short now / anticipated / short in peers / watching). Replaces per-row alerts
+# from run_all_scrapers' old dispatch_pending_alerts(). Needs a verified sending
+# domain in Resend — until then sends fail and are recorded as failed.
+0  17 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.alerts.watchlist_digest >> logs/cron.log 2>&1

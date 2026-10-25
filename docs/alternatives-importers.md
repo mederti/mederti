@@ -84,3 +84,20 @@ Migration 071 is **not applied to prod yet**, so only dry runs are possible unti
   - `same_molecule` only when the affected product's Wirkstoff exactly equals the alternative's active ingredient
   - `therapeutic` only when it's clearly a different named active ingredient
   - otherwise skip the row and list it as ambiguous
+
+### TFDA Drug Supply Information Platform: `tfda_alternatives_importer.py`
+
+- **Source:** data.fda.gov.tw open-data feeds 104 (shortages with a recommended alternative) and 105 (no alternative), the same feeds `backend/scrapers/taiwan_tfda_scraper.py` reads.
+  - Each notice's 供應狀態 text recommends substitutes and cites each one's TFDA licence number.
+  - Shared parsing lives in `backend/scrapers/tfda_opendata.py`.
+- **One row per (notice, cited substitute licence):**
+  - `publisher='TFDA'`, `source_code='tfda_supply_platform'`, `country_code='TW'`, `authority_type='regulator_guidance'` (TFDA recommends; it doesn't legally authorise)
+  - `source_ref` = the shortage product's licence; `product_ref` = the substitute's licence
+  - `statement` = the verbatim notice item; `alternative_name_raw` / `alternative_product` = the verbatim segment naming the product
+  - `dosage_form` comes from the licence register
+- **`kind`** is decided by comparing both licences' active ingredients in TFDA's licence register (open-data set 36), salts stripped. It is never decided from product names.
+  - The notice's own wording ("同成分" = same ingredient; "同藥理" / "其他成分" = different) must not contradict the register.
+  - Conflicts, near-spelling pairs (epoetin alfa/beta, testosterone esters) and licences missing from the register are skipped and listed.
+- **Expiry:** `valid_from` = the notice-update date. When a notice leaves 104/105, or stops citing a substitute, `valid_until` is set to TFDA's restored date from feed 106, or else to the run date.
+- **Cadence:** daily at 12:20 UTC, after the scraper.
+- **2026-10-26 dry run:** 381 statements (204 same-molecule, 177 therapeutic), 130 with both sides resolved, 83 skipped.

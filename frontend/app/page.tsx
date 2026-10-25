@@ -14,7 +14,7 @@ import BetaBanner from "@/app/components/v1/BetaBanner";
 export const metadata: Metadata = {
   title: "Mederti — Global Medicine Shortage Intelligence Platform",
   description:
-    `Check live drug shortage status for any medicine. Mederti tracks shortage and recall notices from ${COVERAGE_COPY.regulators} across ${COVERAGE_COPY.countries}, updated daily. Free for individual pharmacists and clinicians.`,
+    `Live drug shortage status for any medicine, from ${COVERAGE_COPY.regulators} across ${COVERAGE_COPY.countries}. Updated daily, free for pharmacists and clinicians.`,
   alternates: { canonical: canonicalUrl("/") },
 };
 

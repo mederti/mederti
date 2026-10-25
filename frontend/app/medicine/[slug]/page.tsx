@@ -114,8 +114,8 @@ export async function generateMetadata(
     active.length > 0
       ? `${drug.generic_name} has ${active.length} active shortage notice${
           active.length === 1 ? "" : "s"
-        } (${countries.slice(0, 4).join(", ")}${countries.length > 4 ? " and more" : ""}). Causes, regulator sources, history and alternatives — updated daily from official sources.`
-      : `${drug.generic_name}: no active shortage currently reported by the 40+ national medicines regulators Mederti tracks. Check live status, shortage history and alternatives.`;
+        } (${countries.slice(0, 4).join(", ")}${countries.length > 4 ? " and more" : ""}). Causes, official sources and alternatives, updated daily.`
+      : `${drug.generic_name}: no active shortage reported by the regulators Mederti tracks. Live status, shortage history and alternatives.`;
 
   return {
     title,

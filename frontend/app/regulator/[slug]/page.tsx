@@ -22,7 +22,7 @@ export async function generateMetadata(
   if (!reg) return { title: "Regulator not found — Mederti", robots: { index: false } };
   const cn = countryName(reg.country_code);
   const title = `${reg.abbreviation} medicine shortage reporting — ${cn} | Mederti`;
-  const description = `${reg.name} (${reg.abbreviation}) publishes official medicine shortage notices for ${cn}. See what it reports, how often Mederti checks it, and its latest shortage notices.`;
+  const description = `${reg.abbreviation} (${cn}) official medicine shortage notices: what it reports, how often Mederti checks it, and its latest notices.`;
   return {
     title,
     description,

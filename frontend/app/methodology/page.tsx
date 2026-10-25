@@ -3,7 +3,7 @@ import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
 import MinimalFooter from "@/app/components/minimal-footer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { liveCoverage } from "@/lib/coverage";
+import { COVERAGE_COPY, liveCoverage } from "@/lib/coverage";
 import SourceRegistry from "./SourceRegistry";
 
 // Public methodology page — the credibility lever from the known-issues list.
@@ -15,7 +15,7 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: "Our data & methodology — Mederti",
   description:
-    "Where Mederti's medicine-shortage data comes from: 50+ national regulators, collected daily, entity-resolved, audited against the source — with our coverage limits stated honestly.",
+    `Where Mederti's medicine-shortage data comes from: ${COVERAGE_COPY.regulators}, collected daily, entity-resolved, audited against the source — with our coverage limits stated honestly.`,
 };
 
 export default async function MethodologyPage() {

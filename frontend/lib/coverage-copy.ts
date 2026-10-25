@@ -13,10 +13,12 @@
  *     deliberately conservative FLOORS. Re-check them against liveCoverage()
  *     before raising — 2026-10-08: 38 countries + EU, 46 regulator feeds with
  *     open rows, 20,874 canonical medicines, 160,977 catalogue products.
+ *   2026-10-25: 38 countries + EU, 45 regulator feeds with open rows, 18,337
+ *   canonical medicines (after entity clean-ups), 160,977 catalogue products.
  */
 export const COVERAGE_COPY = {
   countries: "35+ countries",
   regulators: "40+ official regulators",
-  medicines: "20,000+ medicines",
+  medicines: "18,000+ medicines",
   products: "160,000+ registered products",
 } as const;

@@ -4,7 +4,7 @@ import { fetchSourcedAlternatives, type SourcedAlternativesResult } from "@/lib/
 import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { notFound, permanentRedirect } from "next/navigation";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canonicalUrl, siteUrl, pageTitle, pageDescription, drugJsonLd, breadcrumbJsonLd, jsonLdSafe } from "@/lib/seo";
 import { recordDemandSignal } from "@/lib/demand-signal";
@@ -31,7 +31,7 @@ import AvailableSuppliers from "./AvailableSuppliers";
 import SoWhatInsight from "./SoWhatInsight";
 import PersonaSwitcher from "./PersonaSwitcher";
 import PharmacistAnswerCard from "./PharmacistAnswerCard";
-import V1DrugView from "./V1DrugView";
+import V1DrugView, { type BrandFocus } from "./V1DrugView";
 import ProcurementView from "./ProcurementView";
 import SupplierView from "./SupplierView";
 
@@ -271,6 +271,11 @@ async function buildAlternativePricingData(
   return buildPriceComparison(drugId, rowsByDrug, altMeta, HEADLINE_PRIORITY, PRICE_TYPE_LABEL);
 }
 
+type CatBrandRow = {
+  id: string; brand_name: string | null; source_country: string | null; source_name: string | null;
+  registration_number: string | null; registration_status: string | null; sponsor: string | null;
+};
+
 interface Props {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{
@@ -281,6 +286,10 @@ interface Props {
     // brand_hint=<catalogueId> is set by /search when a brand query rolled up
     // to this molecule; drives the "you searched X" provenance banner.
     brand_hint?: string;
+    // brand_focus=<catalogueId> opens the molecule page scoped to one brand:
+    // the brand's registrations + the regulator notices that name it, inside
+    // the same V1 drug template (brand chips link here).
+    brand_focus?: string;
   }>;
 }
 
@@ -697,126 +706,109 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // ?brand=1 is the explicit escape hatch: a sourcing user wants THIS brand as
     // a distinct SKU (e.g. Fresofol, not Propofol), so skip the rollup redirect
     // and render the brand page below with a breadcrumb back to the molecule.
-    const wantBrand = sp.brand === "1";
-    if (catEntry.drug_id && catEntry.drug_id !== id && !wantBrand) {
+    // ?brand=1 (legacy brand-chip / search link) now opens the molecule page in
+    // brand-focus mode, so a brand never drops the user into a different
+    // template. Temporary redirect: the target carries per-user context.
+    if (catEntry.drug_id && catEntry.drug_id !== id) {
+      if (sp.brand === "1") redirect(`/drugs/${catEntry.drug_id}?brand_focus=${id}`);
       permanentRedirect(`/drugs/${catEntry.drug_id}`);
     }
 
-    // In brand mode, pull the parent molecule for the "Brand of …" breadcrumb.
-    let parentMolecule: { id: string; generic_name: string } | null = null;
-    if (wantBrand && catEntry.drug_id && catEntry.drug_id !== id) {
-      const { data: mol } = await supabase
-        .from("drugs")
-        .select("id, generic_name")
-        .eq("id", catEntry.drug_id)
-        .single();
-      if (mol) parentMolecule = mol as { id: string; generic_name: string };
-    }
-
-    /* Render a minimal stable-supply page for catalogue-only drugs */
-    const catCountry = catEntry.source_country ?? "AU";
-    const catFlag = COUNTRY_NAMES[catCountry] ?? catCountry;
-    return (
-      <DrugShell loggedIn={loggedIn}>
-      <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
-        {!loggedIn && <SiteNav />}
-        <div style={{ background: "var(--navy)", padding: "8px 24px", display: "flex", alignItems: "center", borderBottom: "1px solid var(--bd)" }}>
-          <Link href="/search" style={{ fontSize: 11, color: "var(--teal-l)", textDecoration: "none" }}>{"\u2190"} Back to search</Link>
-        </div>
-        <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px" }}>
-          {/* Brand-mode breadcrumb back to the canonical molecule */}
-          {parentMolecule && (
-            <div style={{ fontSize: 12, color: "var(--app-text-3)", marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-              <span>Brand of</span>
-              <Link href={`/drugs/${parentMolecule.id}`} style={{ color: "var(--teal-l)", textDecoration: "none", fontWeight: 600 }}>
-                {parentMolecule.generic_name}
-              </Link>
-              <span style={{ color: "var(--app-border)" }}>·</span>
-              <Link href={`/drugs/${parentMolecule.id}`} style={{ color: "var(--app-text-4)", textDecoration: "none" }}>
-                View molecule (shortages, alternatives, pricing) {"→"}
-              </Link>
-            </div>
+    /* Registration-only page for catalogue rows not yet linked to a molecule.
+       Deliberately makes NO supply claim: an unlinked row has no shortage
+       events attached, which is absence of data — not evidence of supply. */
+    const catCountry = (catEntry.source_country ?? "").toUpperCase();
+    const catCountryName = COUNTRY_NAMES[catCountry] ?? catCountry;
+    const catTitle = catEntry.brand_name ?? catEntry.generic_name;
+    const catBody = (
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "28px 24px 48px" }}>
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.03em", margin: 0 }}>
+            {catTitle}
+            {catEntry.strength && <span style={{ fontWeight: 400, color: "var(--app-text-3)", fontSize: 18, marginLeft: 8 }}>{catEntry.strength}</span>}
+          </h1>
+          {catEntry.brand_name && catEntry.generic_name && catEntry.brand_name !== catEntry.generic_name && (
+            <div style={{ fontSize: 13, color: "var(--app-text-3)", marginTop: 4 }}>{catEntry.generic_name}</div>
           )}
-          {/* Drug header */}
-          <div style={{ marginBottom: 24 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em", margin: 0 }}>
-              {parentMolecule && catEntry.brand_name ? catEntry.brand_name : catEntry.generic_name}
-              {catEntry.strength && <span style={{ fontWeight: 400, color: "var(--app-text-3)", fontSize: 18, marginLeft: 8 }}>{catEntry.strength}</span>}
-            </h1>
-            {parentMolecule && catEntry.brand_name && (
-              <div style={{ fontSize: 13, color: "var(--app-text-3)", marginTop: 4 }}>{catEntry.generic_name}</div>
-            )}
-            {!parentMolecule && catEntry.brand_name && catEntry.brand_name !== catEntry.generic_name && (
-              <div style={{ fontSize: 13, color: "var(--app-text-3)", marginTop: 4 }}>{catEntry.brand_name}</div>
-            )}
-            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-              {catEntry.dosage_form && <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: "1px solid var(--app-border)", color: "var(--app-text-3)" }}>{catEntry.dosage_form}</span>}
-              {catEntry.route && <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: "1px solid var(--app-border)", color: "var(--app-text-3)" }}>{catEntry.route}</span>}
-              <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: "1px solid var(--app-border)", color: "var(--app-text-3)" }}>{catEntry.source_name}</span>
-            </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            {[catEntry.dosage_form, catEntry.route, catEntry.source_name].filter(Boolean).map((t) => (
+              <span key={t as string} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 7, border: "1px solid var(--app-border)", color: "var(--app-text-3)" }}>{t}</span>
+            ))}
           </div>
+        </div>
 
-          {/* In supply card */}
-          <div style={{
-            background: "var(--low-bg)", border: "1px solid var(--low-b)", borderRadius: 14,
-            padding: "20px 24px", marginBottom: 20,
-          }}>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--low)", marginBottom: 6 }}>
-              {catFlag} &middot; Supply status
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 600, color: "var(--app-text)", marginBottom: 4 }}>In supply</div>
-            <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.6 }}>
-              No shortage has been reported for this drug. It is registered as <strong>{catEntry.registration_status ?? "active"}</strong> with {catEntry.source_name}.
-            </div>
+        <div style={{ background: "var(--app-bg-2)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "18px 22px", marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--app-text-4)", marginBottom: 6 }}>
+            {flagFor(catCountry)} {catCountryName} · Supply status
           </div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--app-text)", marginBottom: 4 }}>Not yet linked to shortage data</div>
+          <div style={{ fontSize: 13, color: "var(--app-text-3)", lineHeight: 1.6 }}>
+            This is a {catEntry.source_name} registration record. Mederti hasn&apos;t matched it to a molecule yet, so shortage
+            notices for {catEntry.generic_name ?? "this ingredient"} are not shown here — check the ingredient before relying on supply.
+          </div>
+          {catEntry.generic_name && (
+            <Link href={`/search?q=${encodeURIComponent(catEntry.generic_name)}`} style={{ display: "inline-block", marginTop: 10, fontSize: 13, color: "var(--teal-l)", textDecoration: "none", fontWeight: 600 }}>
+              Check {catEntry.generic_name} shortages {"→"}
+            </Link>
+          )}
+        </div>
 
-          {/* Registration details */}
-          <div style={{
-            background: "var(--app-bg-2)", border: "1px solid var(--app-border)", borderRadius: 12,
-            padding: "16px 20px", marginBottom: 20,
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-4)", marginBottom: 12 }}>
-              Registration
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px", fontSize: 13 }}>
-              {catEntry.registration_number && (
-                <div>
-                  <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Registration number</div>
-                  <div style={{ color: "var(--app-text)", fontFamily: "monospace", fontSize: 12 }}>{catEntry.registration_number}</div>
-                </div>
-              )}
+        <div style={{ background: "var(--app-bg-2)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "16px 22px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--app-text-4)", marginBottom: 12 }}>
+            Registration
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px 24px", fontSize: 13 }}>
+            {catEntry.registration_number && (
               <div>
-                <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Source</div>
-                <div style={{ color: "var(--app-text)" }}>{catEntry.source_name} ({catEntry.source_country})</div>
+                <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Registration number</div>
+                <div style={{ color: "var(--app-text)", fontFamily: "monospace", fontSize: 12 }}>{catEntry.registration_number}</div>
               </div>
-              {catEntry.sponsor && (
-                <div>
-                  <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Sponsor</div>
-                  <div style={{ color: "var(--app-text)" }}>{catEntry.sponsor}</div>
-                </div>
-              )}
+            )}
+            <div>
+              <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Source</div>
+              <div style={{ color: "var(--app-text)" }}>{catEntry.source_name} ({catCountry})</div>
+            </div>
+            {catEntry.sponsor && (
               <div>
-                <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Status</div>
-                <div style={{ color: "var(--low)", fontWeight: 500 }}>{catEntry.registration_status ?? "Active"}</div>
+                <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Sponsor</div>
+                <div style={{ color: "var(--app-text)" }}>{catEntry.sponsor}</div>
               </div>
-            </div>
-          </div>
-
-          {/* AI insight */}
-          <div style={{
-            background: "var(--ind-bg)", border: "1px solid var(--ind-b)", borderRadius: 12,
-            padding: "14px 18px",
-          }}>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--indigo)", marginBottom: 6 }}>
-              AI insight
-            </div>
-            <div style={{ fontSize: 13, color: "var(--app-text-2)", lineHeight: 1.6 }}>
-              No active shortages are currently reported for {catEntry.generic_name}. Supply appears stable. This drug is registered with {catEntry.source_name} and no disruptions have been flagged by any monitored regulatory source.
-            </div>
+            )}
+            {catEntry.registration_status && (
+              <div>
+                <div style={{ color: "var(--app-text-4)", fontSize: 11, marginBottom: 2 }}>Registration status</div>
+                <div style={{ color: "var(--app-text)" }}>{catEntry.registration_status}</div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-      </DrugShell>
+    );
+    if (loggedIn) {
+      return (
+        <AppShell
+          contentClassName="flush"
+          chat={{
+            contextKey: `cat:${id}`,
+            title: catTitle,
+            category: "Registration record",
+            bodyText: `The user is viewing the ${catEntry.source_name} registration record for ${catTitle} (${catEntry.generic_name}) in ${catCountryName}. It is not linked to a Mederti molecule record, so look up ${catEntry.generic_name} shortages before answering about supply.`,
+            headerLabel: "Ask about this medicine",
+            starters: [
+              `Is ${catEntry.generic_name} in shortage in ${catCountryName}?`,
+              `What can I substitute for ${catEntry.generic_name}?`,
+            ],
+          }}
+        >
+          {catBody}
+        </AppShell>
+      );
+    }
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
+        <SiteNav />
+        {catBody}
+      </div>
     );
   }
 
@@ -1087,17 +1079,19 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // hint. One light read; soft-fails to empty so the page never blocks on it.
     const brandSkus: { brand: string; catId: string; country: string }[] = [];
     let brandHint: { brand: string; country: string; catId: string } | null = null;
+    let brandFocus: BrandFocus | null = null;
     {
       const { data: catBrands } = await supabase
         .from("drug_catalogue")
-        .select("id, brand_name, source_country")
+        .select("id, brand_name, source_country, source_name, registration_number, registration_status, sponsor")
         .eq("drug_id", id)
         .not("brand_name", "is", null)
         .limit(400);
+      const catRows = (catBrands ?? []) as CatBrandRow[];
       // One SKU per cleaned brand; prefer the user-market registration for the
       // chip's link so the brand page opens on the SKU that matters to them.
       const bySku = new Map<string, { brand: string; catId: string; country: string }>();
-      for (const r of (catBrands ?? []) as { id: string; brand_name: string | null; source_country: string | null }[]) {
+      for (const r of catRows) {
         const clean = cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0];
         if (!clean) continue;
         const key = clean.toLowerCase();
@@ -1125,6 +1119,31 @@ export default async function DrugPage({ params, searchParams }: Props) {
           if (hr && clean) brandHint = { brand: clean, country: (hr.source_country ?? "").toUpperCase(), catId: hr.id };
         }
       }
+
+      // Brand focus: every registration of the focused brand under this
+      // molecule. Notices that name the brand are matched in the view from
+      // each event's regulator-published brand_name (never drugs.brand_names).
+      const focusId = sp.brand_focus;
+      if (focusId) {
+        const focusRow = catRows.find((r) => r.id === focusId);
+        const focusBrand = focusRow ? cleanBrandNames([focusRow.brand_name ?? ""], drug.generic_name)[0] : null;
+        if (focusRow && focusBrand) {
+          const key = focusBrand.toLowerCase();
+          const regs = catRows
+            .filter((r) => (cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0] ?? "").toLowerCase() === key)
+            .map((r) => ({
+              product: r.brand_name ?? focusBrand,
+              country: (r.source_country ?? "").toUpperCase(),
+              source: r.source_name,
+              regNo: r.registration_number,
+              status: r.registration_status,
+              sponsor: r.sponsor,
+            }))
+            .sort((a, b) => Number(b.country === userCountry) - Number(a.country === userCountry) || a.country.localeCompare(b.country) || a.product.localeCompare(b.product));
+          brandFocus = { brand: focusBrand, catId: focusRow.id, regs };
+          brandHint = null;
+        }
+      }
     }
 
     return (
@@ -1148,6 +1167,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         products={products}
         brandSkus={brandSkus}
         brandHint={brandHint}
+        brandFocus={brandFocus}
         freeViewsUsed={freeViewsUsed}
         sourcedAlternatives={sourcedAlternatives}
       />

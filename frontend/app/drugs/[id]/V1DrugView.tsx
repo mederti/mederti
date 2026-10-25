@@ -106,8 +106,29 @@ function monthYear(iso?: string | null) {
 const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR: "€", NZD: "NZ$", CAD: "C$" };
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
+/** A brand of this molecule the page is scoped to (?brand_focus=<catalogueId>). */
+export type BrandFocus = {
+  brand: string;
+  catId: string;
+  regs: {
+    product: string;
+    country: string;
+    source: string | null;
+    regNo: string | null;
+    status: string | null;
+    sponsor: string | null;
+  }[];
+};
+/** Whole-word match of a cleaned brand inside a regulator-published product name. */
+function namesBrand(published: string | null | undefined, brand: string): boolean {
+  if (!published) return false;
+  const esc = brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${esc}($|[^\\p{L}\\p{N}])`, "iu").test(published);
+}
+const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
+
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null, sourcedAlternatives = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Anonymous free-tier views used (null = signed in). */
@@ -185,6 +206,8 @@ export default function V1DrugView({
   // Set when the user arrived from a brand search (e.g. "Fresofol" → Propofol);
   // drives the "you searched X" provenance banner.
   brandHint?: { brand: string; country: string; catId: string } | null;
+  // Set when a brand chip was clicked: scopes the page to that brand.
+  brandFocus?: BrandFocus | null;
 }) {
   // brand (lowercased) → SKU, for turning chips into links.
   const skuByBrand = new Map((brandSkus ?? []).map((s) => [s.brand.toLowerCase(), s]));
@@ -206,6 +229,24 @@ export default function V1DrugView({
   // shortage for you. The headline reflects YOUR country only; shortages
   // elsewhere are surfaced as secondary context + the regulator breakdown.
   const cName = COUNTRY[userCountry] ?? userCountry;
+  // Active notices whose regulator-published product name names the focused
+  // brand. Ingredient-level sources publish no brand, so they never match.
+  const brandNoticeSeen = new Set<string>();
+  const brandNotices = brandFocus
+    ? active
+        .filter((s) => namesBrand(s.brand_name, brandFocus.brand))
+        // Collapse notices that would render identically (same as mineAll).
+        .filter((s) => {
+          const k = [s.country_code, s.brand_name, s.sponsor, s.status, s.severity, s.estimated_resolution_date].join("|").toLowerCase();
+          if (brandNoticeSeen.has(k)) return false;
+          brandNoticeSeen.add(k);
+          return true;
+        })
+        .sort((a, b) =>
+          Number((b.country_code || "").toUpperCase() === userCountry) - Number((a.country_code || "").toUpperCase() === userCountry) ||
+          (SEV[(b.severity || "").toLowerCase()] ?? 0) - (SEV[(a.severity || "").toLowerCase()] ?? 0),
+        )
+    : [];
   const mine = active.find((s) => (s.country_code || "").toUpperCase() === userCountry) || null;
   // ALL events in the user's market — one row per regulator-reported product,
   // so multi-brand shortages stop collapsing into a single ingredient line.
@@ -503,11 +544,15 @@ export default function V1DrugView({
                 />
               ) : (
               <ContextChat
-                key={drug.generic_name}
-                contextKey={drug.generic_name}
-                title={drug.generic_name}
+                key={brandFocus ? `${drug.generic_name}:${brandFocus.brand}` : drug.generic_name}
+                contextKey={brandFocus ? `${drug.generic_name}:${brandFocus.brand}` : drug.generic_name}
+                title={brandFocus ? `${brandFocus.brand} (${drug.generic_name})` : drug.generic_name}
                 category="Drug record"
-                bodyText={`The user is viewing the Mederti drug record for ${drug.generic_name}. Answer about this medicine — its shortages, substitutes, suppliers, and regulatory status.`}
+                bodyText={
+                  brandFocus
+                    ? `The user is viewing the Mederti drug record for ${drug.generic_name}, focused on the brand ${brandFocus.brand} (${brandFocus.regs.length} registration${brandFocus.regs.length === 1 ? "" : "s"}; ${brandNotices.length} active regulator notice${brandNotices.length === 1 ? "" : "s"} name it). Answer about this brand first, then the molecule — its shortages, substitutes, suppliers, and regulatory status.`
+                    : `The user is viewing the Mederti drug record for ${drug.generic_name}. Answer about this medicine — its shortages, substitutes, suppliers, and regulatory status.`
+                }
                 headerLabel="Ask about this medicine"
                 placement="left"
                 emptyLead={
@@ -551,7 +596,7 @@ export default function V1DrugView({
                 {brandHint.country ? ` (${brandHint.country})` : ""}.
               </span>
               <a
-                href={`/drugs/${brandHint.catId}?brand=1`}
+                href={brandHref(id, brandHint.catId)}
                 style={{ color: "var(--teal-l)", textDecoration: "none", fontWeight: 600 }}
               >
                 View {brandHint.brand} registrations {"→"}
@@ -612,9 +657,15 @@ export default function V1DrugView({
                         <a
                           key={b}
                           className="d-tag"
-                          href={`/drugs/${sku.catId}?brand=1`}
-                          title={`View ${b}${sku.country ? ` (${sku.country})` : ""} — registrations & sourcing`}
-                          style={{ textDecoration: "none", cursor: "pointer" }}
+                          href={brandFocus?.catId === sku.catId ? `/drugs/${id}` : brandHref(id, sku.catId)}
+                          title={brandFocus?.catId === sku.catId ? `Clear ${b} focus` : `Focus on ${b} — its registrations and shortage notices`}
+                          aria-current={brandFocus?.catId === sku.catId ? "true" : undefined}
+                          style={{
+                            textDecoration: "none", cursor: "pointer",
+                            ...(brandFocus?.catId === sku.catId
+                              ? { background: "var(--ink)", color: "var(--bg)", borderColor: "var(--ink)" }
+                              : null),
+                          }}
                         >
                           {b}
                         </a>
@@ -628,6 +679,85 @@ export default function V1DrugView({
               })()}
             </div>
           </div>
+
+          {brandFocus && (() => {
+            const bf = brandFocus;
+            const regsShown = bf.regs.slice(0, 8);
+            const markets = [...new Set(bf.regs.map((r) => r.country).filter(Boolean))];
+            const noticeMarkets = [...new Set(brandNotices.map((s) => (s.country_code || "").toUpperCase()))];
+            return (
+              <div className="brand-focus">
+                <div className="bf-head">
+                  <div>
+                    <div className="bf-eyebrow">Brand of {drug.generic_name}</div>
+                    <div className="bf-name">{bf.brand}</div>
+                    <div className="alt-f">
+                      {bf.regs.length} registration{bf.regs.length === 1 ? "" : "s"} on file
+                      {markets.length ? ` · ${markets.map((c) => flag(c)).join(" ")}` : ""}
+                    </div>
+                  </div>
+                  <a className="bf-clear" href={`/drugs/${id}`}>Show all brands ×</a>
+                </div>
+
+                <div className="bf-block">
+                  <div className="bf-label">
+                    Regulator notices naming {bf.brand}
+                    {noticeMarkets.length > 0 && <span className="help"> · {noticeMarkets.map((c) => `${flag(c)} ${COUNTRY[c] ?? c}`).join(", ")}</span>}
+                  </div>
+                  {brandNotices.length === 0 ? (
+                    <div className="bf-empty">
+                      No active notice names {bf.brand}. Most regulators publish at ingredient level, so a shortage of{" "}
+                      {drug.generic_name} below can still affect this brand.
+                    </div>
+                  ) : (
+                    <div className="country-list">
+                      {brandNotices.slice(0, 6).map((s, i) => {
+                        const anticip = (s.status || "").toLowerCase() === "anticipated";
+                        const r = SEV[(s.severity || "").toLowerCase()] ?? 0;
+                        const back = monthYear(s.estimated_resolution_date);
+                        return (
+                          <div key={i} className="country-row">
+                            <div style={{ minWidth: 0 }}>
+                              <div className="cn">{flag(s.country_code)} {s.brand_name}</div>
+                              <div className="alt-f">
+                                {[s.sponsor, abbr(s.data_sources?.name, s.data_sources?.abbreviation), s.start_date ? `since ${monthYear(s.start_date)}` : null]
+                                  .filter(Boolean).join(" · ")}
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                              <span className={`status-pill ${anticip ? "sp-part" : r >= 2 ? "sp-crit" : "sp-part"}`}>
+                                <span className="d" />
+                                {anticip ? "Anticipated" : s.severity ? `${s.severity[0].toUpperCase()}${s.severity.slice(1)}` : "Shortage"}
+                              </span>
+                              <span className="alt-f">{back ? `back ~${back}` : "no return estimate"}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {brandNotices.length > 6 && <div className="alt-f">+{brandNotices.length - 6} more notices</div>}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bf-block">
+                  <div className="bf-label">Registrations</div>
+                  <div className="bf-regs">
+                    {regsShown.map((r, i) => (
+                      <div key={i} className="bf-reg">
+                        <span className="bf-reg-p">{flag(r.country)} {r.product}</span>
+                        <span className="alt-f">
+                          {[r.regNo, r.sponsor, r.source, r.status].filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                    ))}
+                    {bf.regs.length > regsShown.length && (
+                      <div className="alt-f">+{bf.regs.length - regsShown.length} more registrations</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Status card */}
           <div className={`status-card ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
@@ -778,7 +908,7 @@ export default function V1DrugView({
                           <div className="cn">
                             {s.brand_name
                               ? sku
-                                ? <a href={`/drugs/${sku.catId}?brand=1`}>{s.brand_name}</a>
+                                ? <a href={brandHref(id, sku.catId)}>{s.brand_name}</a>
                                 : s.brand_name
                               : "Ingredient-level notice — brand not published"}
                           </div>
@@ -1609,6 +1739,21 @@ const CSS = `
 .band-much_higher,.band-far_higher{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
 @media(max-width:620px){.cmp-row{grid-template-columns:1fr auto;gap:6px}.cmp-band{grid-column:1/-1;justify-content:flex-start;min-width:0}}
 .country-list{display:flex;flex-direction:column;gap:9px}
+.brand-focus{margin-top:14px;padding:18px 20px;border:1px solid var(--border);border-radius:18px;background:var(--bg);box-shadow:var(--sh-card),var(--hi-inset)}
+.bf-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.bf-eyebrow{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-4);margin-bottom:2px}
+.bf-name{font-size:20px;font-weight:600;letter-spacing:-.02em;color:var(--ink);margin-bottom:2px}
+.bf-clear{font-size:12px;color:var(--text-3);text-decoration:none;white-space:nowrap;padding:4px 10px;border:1px solid var(--border);border-radius:8px}
+.bf-clear:hover{color:var(--ink);border-color:var(--text-4)}
+.bf-block{margin-top:16px}
+.bf-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.078em;color:var(--ink);margin-bottom:9px}
+.bf-label .help{color:var(--text-4);font-weight:400;text-transform:none;letter-spacing:0}
+.bf-empty{font-size:13px;color:var(--text-3);line-height:1.55;padding:11px 14px;border-radius:12px;background:var(--bg-2);border:1px dashed var(--border)}
+.bf-regs{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.bf-reg{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 14px;border-top:1px solid var(--border)}
+.bf-reg:first-child{border-top:0}
+.bf-reg-p{font-size:13px;font-weight:500;color:var(--ink)}
+@media(max-width:680px){.bf-reg{flex-direction:column;gap:2px}.brand-focus .country-row{flex-direction:column;align-items:flex-start;gap:8px}}
 .country-row{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-radius:13px;background:var(--bg);border:1px solid var(--border);box-shadow:var(--sh-card),var(--hi-inset);}
 .cl{display:flex;align-items:center;gap:11px}
 .cn{font-size:14px;font-weight:600}

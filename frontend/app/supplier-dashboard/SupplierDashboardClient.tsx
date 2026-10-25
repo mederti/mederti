@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import SiteNav from "@/app/components/landing-nav";
-import SiteFooter from "@/app/components/site-footer";
+import AppShell from "@/app/components/v1/AppShell";
 import MarketSidebar from "@/app/intelligence/MarketSidebar";
 import MorningBriefing from "./MorningBriefing";
 import { useUserProfile } from "@/lib/hooks/use-user-profile";
@@ -797,8 +796,8 @@ export default function SupplierDashboardClient() {
   const isLoading = authed === null || profileLoading;
 
   return (
+    <AppShell contentClassName="flush">
     <div style={{ background: "#fff", minHeight: "100vh" }}>
-      <SiteNav />
 
       {/* Header */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0" }}>
@@ -939,8 +938,6 @@ export default function SupplierDashboardClient() {
         </div>
       </div>
 
-      <SiteFooter />
-
       <style>{`
         @media (max-width: 1024px) {
           .supplier-two-col { flex-direction: column !important; }
@@ -959,5 +956,6 @@ export default function SupplierDashboardClient() {
         }
       `}</style>
     </div>
+    </AppShell>
   );
 }

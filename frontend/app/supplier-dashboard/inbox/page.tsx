@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import SiteNav from "@/app/components/landing-nav";
+import AppShell from "@/app/components/v1/AppShell";
 import SupplierInboxClient from "./SupplierInboxClient";
 
 export const metadata: Metadata = {
@@ -9,9 +9,10 @@ export const metadata: Metadata = {
 
 export default function SupplierInboxPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
-      <SiteNav />
-      <SupplierInboxClient />
-    </div>
+    <AppShell contentClassName="flush">
+      <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
+        <SupplierInboxClient />
+      </div>
+    </AppShell>
   );
 }

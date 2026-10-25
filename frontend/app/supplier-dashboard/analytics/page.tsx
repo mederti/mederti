@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import SiteNav from "@/app/components/landing-nav";
+import AppShell from "@/app/components/v1/AppShell";
 import SupplierAnalyticsClient from "./SupplierAnalyticsClient";
 
 export const metadata: Metadata = {
@@ -9,9 +9,10 @@ export const metadata: Metadata = {
 
 export default function SupplierAnalyticsPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
-      <SiteNav />
-      <SupplierAnalyticsClient />
-    </div>
+    <AppShell contentClassName="flush">
+      <div style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
+        <SupplierAnalyticsClient />
+      </div>
+    </AppShell>
   );
 }

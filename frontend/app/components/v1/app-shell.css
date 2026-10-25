@@ -33,6 +33,23 @@
    align-items:stretch lets the ContextChat rail fill the viewport height. */
 .v1app .shell--chat { height: 100vh; min-height: 0; overflow: hidden; align-items: stretch; }
 .v1app .shell-main--scroll { height: 100vh; overflow-y: auto; }
+/* `fill`: the content column is a viewport-height flex row whose children
+   own their scrolling (the /chat conversation + its inline preview pane, live
+   dashboards, the article reader). */
+.v1app .shell--fill { font-family: var(--font-inter), Inter, system-ui, sans-serif; }
+.v1app .shell-main--fill { height: 100vh; min-height: 0; overflow: hidden; display: flex; }
+/* Middle chat column: holds the grounded ContextChat (or a stand-in such as
+   the signed-out ChatSignupGate). Hidden below 1080px, where the mobile tab
+   bar turns it into a full-screen overlay (mobile-tabs.css). */
+.v1app .chat-col { width: 380px; flex-shrink: 0; display: flex; background: var(--bg); }
+@media (max-width: 1079px) { .v1app .chat-col { display: none; } }
+/* Below 1024px nav + chat are overlays, so the 3-column template drops its
+   viewport lock and the page scrolls normally (keeps mobile browser chrome
+   collapsing as the user scrolls). `fill` surfaces stay locked. */
+@media (max-width: 1023px) {
+  .v1app .shell--chat:not(.shell--fill) { height: auto; min-height: 100vh; overflow: visible; }
+  .v1app .shell--chat:not(.shell--fill) .shell-main--scroll { height: auto; overflow: visible; }
+}
 .v1app .dg-main {
   flex: 1;
   min-width: 0;
@@ -50,4 +67,11 @@
 @media (max-width: 820px) {
   .v1app .sb { display: none; }
   .v1app .dg-main { padding: 24px 20px 80px; margin: 0 auto; }
+}
+
+/* Print / Export PDF: release the viewport lock so the whole content column
+   prints, and drop the app chrome. */
+@media print {
+  .v1app .shell--chat, .v1app .shell-main--scroll, .v1app .shell-main--fill { height: auto; overflow: visible; }
+  .v1app .sb, .v1app .chat-col, .v1app .mtabbar { display: none !important; }
 }

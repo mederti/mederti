@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
-import SiteNav from "@/app/components/landing-nav";
+import AppShell from "@/app/components/v1/AppShell";
 import { createBrowserClient } from "@/lib/supabase/client";
 
 // ─── Question definitions ────────────────────────────────────────────────────
@@ -328,8 +328,8 @@ function OnboardingInner() {
   }
 
   return (
+    <AppShell contentClassName="flush">
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <SiteNav />
 
       <main style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "40px 20px 60px" }}>
         <div style={{
@@ -562,6 +562,7 @@ function OnboardingInner() {
         </div>
       </main>
     </div>
+    </AppShell>
   );
 }
 

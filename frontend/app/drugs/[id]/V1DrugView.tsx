@@ -1,3 +1,4 @@
+import { type ConcentrationTier, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import Link from "next/link";
 import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
@@ -106,7 +107,7 @@ const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR:
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null, sourcedAlternatives = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Anonymous free-tier views used (null = signed in). */
@@ -123,6 +124,18 @@ export default function V1DrugView({
     makers: string[];
     countries: string[];
     whoPqCount?: number;
+  } | null;
+  // Molecule-level supply facts from inn_risk_scores (see lib/insights/dashboard-data.ts).
+  supplyProfile?: {
+    molecule: string;
+    fragility: number | null;
+    whoList: "core" | "complementary" | null;
+    euCritical: boolean;
+    nApiMakers: number | null;
+    nFinishedFirms: number | null;
+    topApiCountry: string | null;
+    topApiShare: number | null;
+    shortCountries: string[];
   } | null;
   recalls?: any[];
   approvalFootprint?: {
@@ -175,11 +188,18 @@ export default function V1DrugView({
 }) {
   // brand (lowercased) → SKU, for turning chips into links.
   const skuByBrand = new Map((brandSkus ?? []).map((s) => [s.brand.toLowerCase(), s]));
-  const CONC_LABEL: Record<string, string> = {
-    very_high: "Very high", high: "High", medium: "Moderate", low: "Low",
-  };
-  const CONC_CLS: Record<string, string> = {
-    very_high: "sp-crit", high: "sp-crit", medium: "sp-part", low: "sp-ok",
+  // Supply concentration tier — same definition as the National Shortage
+  // Dashboard (tierFor on the nightly molecule fragility). Falls back to the
+  // API-maker count with matching cut-offs when the drug isn't in the scored
+  // universe. Labelled as a description, not a risk: the backtest found
+  // concentration predicts neither shortage onset nor duration.
+  const supplyTier: ConcentrationTier = supplyProfile?.fragility != null
+    ? tierFor(supplyProfile.fragility)
+    : apiConcentration
+      ? apiConcentration.count <= 4 ? "highly_concentrated" : apiConcentration.count <= 9 ? "concentrated" : "broad"
+      : "unknown";
+  const TIER_CLS: Record<ConcentrationTier, string> = {
+    highly_concentrated: "sp-crit", concentrated: "sp-part", broad: "sp-ok", unknown: "sp-part",
   };
   const active = shortages.filter((s) => ["active", "anticipated"].includes((s.status || "").toLowerCase()));
   // Country-FIRST status: a shortage far away but fine in your market is NOT a
@@ -979,7 +999,7 @@ export default function V1DrugView({
                     <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                    <span className={`status-pill ${CONC_CLS[apiConcentration.band]}`}><span className="d" />{CONC_LABEL[apiConcentration.band]} concentration risk</span>
+                    <span className={`status-pill ${TIER_CLS[supplyTier]}`}><span className="d" />{TIER_LABEL[supplyTier]} supply</span>
                     {(apiConcentration.whoPqCount ?? 0) > 0 && (
                       <span className="who-pq-badge">✓ {apiConcentration.whoPqCount} WHO-prequalified</span>
                     )}
@@ -991,6 +1011,19 @@ export default function V1DrugView({
                     {apiConcentration.count > apiConcentration.makers.length && (
                       <span className="d-tag">+{apiConcentration.count - apiConcentration.makers.length} more</span>
                     )}
+                  </div>
+                )}
+                {supplyProfile && (
+                  <div className="conc-d" style={{ marginTop: 10 }}>
+                    {[
+                      supplyProfile.whoList ? `WHO Model List (${supplyProfile.whoList})` : null,
+                      supplyProfile.euCritical ? "EU Union list of critical medicines" : null,
+                      supplyProfile.nFinishedFirms != null ? `${supplyProfile.nFinishedFirms} US finished-dose firm${supplyProfile.nFinishedFirms !== 1 ? "s" : ""}` : null,
+                      supplyProfile.topApiCountry && supplyProfile.topApiShare != null
+                        ? `${Math.round(supplyProfile.topApiShare * 100)}% of API makers in ${supplyProfile.topApiCountry}`
+                        : null,
+                      `all ${supplyProfile.molecule.toLowerCase()} products short in ${supplyProfile.shortCountries.length} countr${supplyProfile.shortCountries.length === 1 ? "y" : "ies"} now`,
+                    ].filter(Boolean).join(" · ")}
                   </div>
                 )}
                 <div className="conc-foot">

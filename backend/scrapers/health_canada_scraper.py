@@ -52,12 +52,45 @@ Status filters fetched:
     active_confirmed      → "Actual shortage"    (~1,771 records)
     anticipated_shortage  → "Anticipated shortage" (~75 records)
     (resolved is ~22,000 records and times out on export; skip for now)
+
+Cloudflare (since 2026-09-13):
+    The whole site, /search/export included, now sits behind a Cloudflare
+    managed challenge (403 + `cf-mitigated: challenge`) that only a real
+    browser can pass. Headers, cookies or a different UA do not help, and we
+    do not try to defeat the challenge. The authenticated JSON API under
+    /api/v1 is NOT challenged, so fetch() uses it when credentials are set:
+
+        HEALTH_CANADA_API_EMAIL / HEALTH_CANADA_API_PASSWORD
+            A free healthproductshortages.ca account (register on the site).
+
+        POST /api/v1/login  (form: email, password) → `auth-token` header
+        GET  /api/v1/search?filter_status=<status>&limit=&offset=
+             (header auth-token) → {"total": n, "data": [ {...}, ... ]}
+
+    Each API item is mapped onto the CSV column names below so normalize() is
+    shared by both paths. The API item shape could not be observed without an
+    account (probed 2026-10-26: login answers "Missing email or password"), so
+    _api_item_to_row() reads several candidate field names and
+    _fetch_api() refuses a payload it cannot map rather than writing garbage.
+    Without credentials the CSV export is still tried, and a challenge fails
+    the run loudly with the fix in the message.
+
+Identity:
+    HC's Report ID identifies one shortage event (a DIN gets a new report for
+    each new shortage), so it is the event's product_key and, for this source,
+    the whole identity: see _shortage_id(). Keyed on drug + start date, 382 of
+    the 1,996 reports in the 2026-09-13 feed collapsed onto a sibling's row
+    (JAMP-IRBESARTAN 75 / 150 / 300 mg share molecule and start), and reports
+    were re-minted whenever drug resolution re-mapped their ingredient or the
+    start moved from anticipated to actual.
 """
 
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
+import os
 import zipfile
 from datetime import datetime, timezone
 from typing import Any
@@ -126,16 +159,24 @@ class HealthCanadaScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        POST to the Health Canada bulk CSV export endpoint for each status
-        filter and combine the results.
+        Fetch every report for each status filter and combine the results.
 
-        Each POST returns a ZIP file containing shortage_report_export.csv.
-        No authentication required.
+        With HEALTH_CANADA_API_EMAIL / _PASSWORD set, uses the authenticated
+        JSON API (not behind the Cloudflare challenge). Otherwise POSTs to the
+        bulk CSV export, which returns a ZIP containing
+        shortage_report_export.csv when the site is not challenging us.
         """
+        email = os.environ.get("HEALTH_CANADA_API_EMAIL", "").strip()
+        password = os.environ.get("HEALTH_CANADA_API_PASSWORD", "").strip()
+        token = self._api_login(email, password) if email and password else None
+
         all_records: list[dict] = []
 
         for status_filter in self._EXPORT_STATUSES:
-            records = self._fetch_export(status_filter)
+            records = (
+                self._fetch_api(token, status_filter) if token
+                else self._fetch_export(status_filter)
+            )
             self.log.info(
                 "Fetched HC export page",
                 extra={
@@ -182,6 +223,15 @@ class HealthCanadaScraper(BaseScraper):
             follow_redirects=True,
         ) as client:
             response = client.post(self.EXPORT_URL, data=form_data)
+            if response.headers.get("cf-mitigated") == "challenge":
+                # Not an HTTPError, so the backoff decorator does not retry:
+                # a browser challenge never clears on its own.
+                raise RuntimeError(
+                    "Health Canada export is behind a Cloudflare browser "
+                    "challenge (403, cf-mitigated: challenge). Set "
+                    "HEALTH_CANADA_API_EMAIL / HEALTH_CANADA_API_PASSWORD "
+                    "(a healthproductshortages.ca account) to use the JSON API."
+                )
             response.raise_for_status()
 
         self.log.debug(
@@ -207,6 +257,144 @@ class HealthCanadaScraper(BaseScraper):
 
         reader = csv.DictReader(io.StringIO(csv_body))
         return list(reader)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # JSON API  (authenticated, not behind the Cloudflare challenge)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    API_URL: str = "https://healthproductshortages.ca/api/v1"
+    API_PAGE_SIZE: int = 500
+
+    # API status slug → the export's "Shortage status" label (_STATUS_MAP keys)
+    _API_STATUS_LABELS: dict[str, str] = {
+        "active_confirmed":     "Actual shortage",
+        "anticipated_shortage": "Anticipated shortage",
+        "avoided_shortage":     "Avoided shortage",
+        "resolved":             "Resolved",
+    }
+
+    def _api_login(self, email: str, password: str) -> str:
+        self._enforce_rate_limit()
+        with httpx.Client(headers=self.DEFAULT_HEADERS, timeout=self.REQUEST_TIMEOUT) as client:
+            response = client.post(
+                f"{self.API_URL}/login", data={"email": email, "password": password},
+            )
+        token = response.headers.get("auth-token")
+        if response.status_code != 200 or not token:
+            raise RuntimeError(
+                f"Health Canada API login failed ({response.status_code}): "
+                f"{response.text[:200]}"
+            )
+        return token
+
+    @with_exponential_backoff(
+        max_attempts=3,
+        base_delay=3.0,
+        max_delay=60.0,
+        exceptions=(httpx.HTTPError, httpx.TimeoutException, httpx.NetworkError),
+    )
+    def _api_page(self, token: str, status_filter: str, offset: int) -> dict:
+        self._enforce_rate_limit()
+        with httpx.Client(
+            headers={**self.DEFAULT_HEADERS, "auth-token": token},
+            timeout=self.EXPORT_TIMEOUT,
+        ) as client:
+            response = client.get(f"{self.API_URL}/search", params={
+                "filter_status": status_filter,
+                "limit":         self.API_PAGE_SIZE,
+                "offset":        offset,
+            })
+            response.raise_for_status()
+        return response.json()
+
+    def _fetch_api(self, token: str, status_filter: str) -> list[dict]:
+        """Page through /search for one status; return export-shaped rows."""
+        items: list[dict] = []
+        total: int | None = None
+        while total is None or len(items) < total:
+            page = self._api_page(token, status_filter, len(items))
+            data = page.get("data") or []
+            total = int(page.get("total") or 0)
+            if not data:
+                break
+            items.extend(data)
+        if total and len(items) < total:
+            raise RuntimeError(
+                f"Health Canada API returned {len(items)} of {total} "
+                f"{status_filter} reports"
+            )
+
+        if items:
+            self.log.info("HC API item keys", extra={"keys": sorted(items[0])})
+        rows = [self._api_item_to_row(item, status_filter) for item in items]
+        # The item shape was not observable before credentials existed (see
+        # module docstring). If the mapping misses, stop here — a run of
+        # nameless, id-less rows would overwrite good data.
+        usable = sum(
+            1 for r in rows
+            if r["Report ID"] and (r["Ingredients"] or r["Common or Proper name"])
+        )
+        if items and usable < 0.95 * len(items):
+            raise RuntimeError(
+                f"Health Canada API items not recognised: {usable}/{len(items)} "
+                f"mapped to a report id + name. Item keys: {sorted(items[0])}"
+            )
+        return rows
+
+    @staticmethod
+    def _pick(item: dict, *paths: str) -> str:
+        """First non-empty value among dotted paths, as a string."""
+        for path in paths:
+            cur: Any = item
+            for part in path.split("."):
+                cur = cur.get(part) if isinstance(cur, dict) else None
+            if isinstance(cur, dict):
+                cur = cur.get("en") or cur.get("en_name") or cur.get("label")
+            if isinstance(cur, bool):
+                return "Yes" if cur else "No"
+            if cur not in (None, "", []):
+                return str(cur).strip()
+        return ""
+
+    def _api_item_to_row(self, item: dict, status_filter: str) -> dict:
+        """Map one API report onto the CSV export's column names."""
+        p = self._pick
+        drug = item.get("drug") if isinstance(item.get("drug"), dict) else {}
+        ingredients = drug.get("drug_ingredients") or item.get("drug_ingredients") or []
+        names = [
+            p(i, "ingredient.en_name", "ingredient_en_name", "en_name", "name")
+            for i in ingredients if isinstance(i, dict)
+        ]
+        strengths = [
+            " ".join(filter(None, [p(i, "strength"), p(i, "strength_unit")]))
+            for i in ingredients if isinstance(i, dict)
+        ]
+        status = p(item, "status")
+        return {
+            "Report ID":                  p(item, "id", "report_id"),
+            "Drug Identification Number": p(item, "din", "drug.din"),
+            "Brand name":                 p(item, "en_drug_brand_name", "drug_brand_name", "drug.brand_name"),
+            "Company Name":               p(item, "company_name", "company.name", "drug.company.name"),
+            "Common or Proper name":      p(item, "en_drug_common_name", "drug_common_name", "drug.common_name"),
+            "Ingredients":                "; ".join(filter(None, names)) or p(item, "ingredients", "drug.ingredients"),
+            "Strength(s)":                "; ".join(filter(None, strengths)) or p(item, "drug_strength", "strength"),
+            "Packaging size":             p(item, "drug_package_quantity", "packaging_size"),
+            "Route of administration":    p(item, "route.en_name", "drug_route", "route", "drug.route"),
+            "Shortage status":            self._API_STATUS_LABELS.get(status, status)
+                                          or self._API_STATUS_LABELS[status_filter],
+            "Dosage form(s)":             p(item, "dosage_form.en_name", "drug_dosage_form", "dosage_form", "drug.dosage_form"),
+            "ATC Code":                   p(item, "atc_number", "drug.atc_number"),
+            "ATC description":            p(item, "atc_description", "drug.atc_description"),
+            # API dates may carry a time/offset; the export's are YYYY-MM-DD.
+            "Anticipated start date":     p(item, "anticipated_start_date")[:10],
+            "Actual start date":          p(item, "actual_start_date")[:10],
+            "Estimated end date":         p(item, "estimated_end_date")[:10],
+            "Actual end date":            p(item, "actual_end_date")[:10],
+            "Reason":                     p(item, "shortage_reason.en_reason", "en_reason", "reason"),
+            "Date Created":               p(item, "created_date", "date_created")[:10],
+            "Date Updated":               p(item, "updated_date", "date_updated")[:10],
+            "Tier 3":                     p(item, "tier_3", "tier3") or "No",
+        }
 
     # ─────────────────────────────────────────────────────────────────────────
     # normalize()
@@ -366,6 +554,8 @@ class HealthCanadaScraper(BaseScraper):
             ),
             "source_url":                source_url,
             "notes":                     notes,
+            # HC's own event identifier — see _shortage_id().
+            "product_key":               report_id or None,
             # Original record stored verbatim
             "raw_record": {
                 "report_id":         report_id or None,
@@ -390,6 +580,23 @@ class HealthCanadaScraper(BaseScraper):
                 "date_updated":      rec.get("Date Updated") or None,
             },
         }
+
+    def _shortage_id(
+        self, drug_id: str, start_date: str, product_key: str | None = None
+    ) -> str:
+        """
+        One row per HC report: md5(SOURCE_ID | COUNTRY_CODE | report:<id>).
+
+        Unlike the base per-product formula, start_date is left out too: a
+        Report ID already names one shortage event, while its start_date moves
+        from the anticipated to the actual date when the shortage materialises
+        and would otherwise mint a second, never-closed row.
+        Rows without a Report ID fall back to the base drug-keyed formula.
+        """
+        if not product_key:
+            return super()._shortage_id(drug_id, start_date)
+        raw = f"{self.SOURCE_ID}|{self.COUNTRY_CODE}|report:{product_key}"
+        return hashlib.md5(raw.encode()).hexdigest()
 
     # ─────────────────────────────────────────────────────────────────────────
     # Field-level helpers

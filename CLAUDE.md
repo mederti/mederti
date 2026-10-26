@@ -137,6 +137,8 @@ Against ~195 UN-recognized countries, that's **~26% direct national coverage** (
 SUPABASE_URL=https://mleblwjozjvpbuztggxp.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service role JWT>
 MEDERTI_DRY_RUN=0
+HEALTH_CANADA_API_EMAIL=<healthproductshortages.ca account — the CSV export is Cloudflare-challenged since 2026-09-13>
+HEALTH_CANADA_API_PASSWORD=<same account>
 ```
 
 **Frontend (`frontend/.env.local`, gitignored — also set in Vercel):**

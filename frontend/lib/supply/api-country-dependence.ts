@@ -300,7 +300,7 @@ function expand(c: CompactIndex): DependenceIndex {
 
 // DMF holders change quarterly; shortage status daily. An hour is well inside
 // both, and a cold build pages ~15k supplier rows plus every open shortage row.
-const cachedIndex = unstable_cache(buildIndex, ["api-country-dependence-v7"], { revalidate: 3600 });
+const cachedIndex = unstable_cache(buildIndex, ["api-country-dependence-v8"], { revalidate: 3600 });
 export const getDependenceIndex = async (): Promise<DependenceIndex> => expand(await cachedIndex());
 
 // ── Country names ──────────────────────────────────────────────────────────

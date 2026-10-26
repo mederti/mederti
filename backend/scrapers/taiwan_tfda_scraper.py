@@ -22,8 +22,8 @@ How a feed row becomes a shortage event
   never ingredients. The ingredient comes from the licence register's
   主成分略述 for that licence — never parsed out of a product name. A licence
   missing from the register is skipped and logged.
-* One event per DRUG (ingredient set), aggregating every listed product of
-  that drug: active if any product is in 104/105; severity high if any is in
+* One event per DRUG (molecule set, salts stripped and order ignored),
+  aggregating every listed product of that drug: active if any product is in 104/105; severity high if any is in
   105. Each product (licence, names, feed, notice date, verbatim status) is
   kept in raw_record["products"].
 * TFDA publishes NO shortage start date, only 公告更新時間 (the date the
@@ -158,14 +158,25 @@ class TaiwanTFDAScraper(BaseScraper):
                 if not ingredients:
                     unknown_licences.append(lic)
                     continue
+                # Group by MOLECULE, not by the register's spelling: products
+                # listed as "QUETIAPINE" and "QUETIAPINE FUMARATE" (or a combo
+                # in a different order) are one drug's shortage. Keying on the
+                # raw name split them into two events on one drug_id.
+                molecules = list(dict.fromkeys(tfda.strip_salts(i) for i in ingredients))
+                key = tuple(sorted(molecules))
                 name = tfda.generic_name(ingredients)
-                g = groups.setdefault(name, {"ingredients": ingredients, "products": []})
+                g = groups.setdefault(key, {"names": set(), "ingredients": ingredients, "products": []})
+                g["names"].add(name)
                 g["products"].append(self._product(n, row, lic, entry))
 
         open_keys = self._open_feed_keys()
         events: list[dict] = []
         resolved_unseen = 0
-        for name, g in sorted(groups.items()):
+        for _, g in sorted(groups.items()):
+            # The event keeps a real register name: the shortest spelling in
+            # the group (deterministic), so an unmerged group's name — and so
+            # its drug_id and shortage_id — is unchanged.
+            name = min(g["names"], key=lambda x: (len(x), x))
             ev = self._build_event(name, g["ingredients"], g["products"])
             if ev["status"] == "resolved" and name not in open_keys:
                 resolved_unseen += 1

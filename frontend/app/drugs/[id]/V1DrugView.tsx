@@ -103,6 +103,14 @@ function monthYear(iso?: string | null) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? null : d.toLocaleDateString("en-AU", { month: "short", year: "numeric" });
 }
+function isFuture(iso?: string | null) {
+  return !!iso && new Date(iso).getTime() > Date.now();
+}
+function dayMonthYear(iso?: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
 const CUR_SYM: Record<string, string> = { AUD: "A$", USD: "US$", GBP: "£", EUR: "€", NZD: "NZ$", CAD: "C$" };
 const fmtPrice = (amt: number, cur: string) => `${CUR_SYM[cur] ?? cur + " "}${amt.toFixed(2)}`;
 
@@ -249,7 +257,12 @@ export default function V1DrugView({
           (SEV[(b.severity || "").toLowerCase()] ?? 0) - (SEV[(a.severity || "").toLowerCase()] ?? 0),
         )
     : [];
-  const mine = active.find((s) => (s.country_code || "").toUpperCase() === userCountry) || null;
+  // Headline notice for the user's market. Prefer an ongoing shortage over a
+  // single product's discontinuation: one discontinued brand must not make
+  // the whole molecule read as leaving the market.
+  const isDisc = (s: any) => (s.reason_category || "").toLowerCase() === "discontinuation";
+  const inMarket = active.filter((s) => (s.country_code || "").toUpperCase() === userCountry);
+  const mine = inMarket.find((s) => !isDisc(s)) || inMarket[0] || null;
   // ALL events in the user's market — one row per regulator-reported product,
   // so multi-brand shortages stop collapsing into a single ingredient line.
   // Events that would render identically (same product, sponsor, status,
@@ -292,6 +305,20 @@ export default function V1DrugView({
   const sev = (mine?.severity || "").toLowerCase();
   const isCrit = sev === "critical" || sev === "high";
   const anticipated = (mine?.status || "").toLowerCase() === "anticipated";
+
+  // Discontinuation is a market exit, not a supply gap — it is never "back",
+  // so it must not read as a "Critical shortage". The regulator-stated
+  // withdrawal date (TGA ARTG cancellation) is the headline fact; TGA's own
+  // impact rating, availability and guidance are quoted verbatim from the
+  // notice, plus a link to any regulator statement it cites.
+  const discontinued = inMarket.length > 0 && inMarket.every(isDisc);
+  const withdrawalDate: string | null = mine?.withdrawal_date ?? null;
+  const withdrawalFuture = isFuture(withdrawalDate);
+  const noticeNotes = String(mine?.notes || "");
+  const regAvailability = /TGA availability:\s*(.+)/i.exec(noticeNotes)?.[1]?.trim() || null;
+  const regGuidanceRaw = /TGA guidance:\s*([\s\S]+?)(?:\n\n|$)/i.exec(noticeNotes)?.[1]?.trim() || null;
+  const regStatementUrl = regGuidanceRaw?.match(/https:\/\/www\.tga\.gov\.au\/\S+/)?.[0]?.replace(/[.,)]+$/, "") ?? null;
+  const regGuidance = regGuidanceRaw?.replace(/\s*A TGA web statement is available at:?\s*\S+/i, "").trim() || null;
 
   // ── Pricing: headline price per market + active-concession signal ──────────
   const mkts = priceMarkets ?? [];
@@ -763,7 +790,9 @@ export default function V1DrugView({
             <div className="sc-label">
               <span className="d" />
               <span className="sc-label-t">
-                {localShortage ? (anticipated ? "Anticipated · " : "In declared shortage · ") : "In supply · "}
+                {localShortage
+                  ? anticipated ? "Anticipated · " : discontinued ? (withdrawalFuture ? "Being discontinued · " : "Discontinued · ") : "In declared shortage · "
+                  : "In supply · "}
                 {flag(userCountry)} {cName}
                 {elsewhereCount > 0 ? (localShortage ? " & also short in" : " · short in") : ""}
               </span>
@@ -782,8 +811,34 @@ export default function V1DrugView({
                 </span>
               )}
             </div>
-            <div className="sc-title">{localShortage ? (anticipated ? "Anticipated shortage" : isCrit ? "Critical shortage" : "Limited supply") : `In supply in ${cName}`}</div>
-            {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
+            <div className="sc-title">
+              {localShortage
+                ? anticipated ? "Anticipated shortage"
+                  : discontinued ? (withdrawalFuture ? `Leaving the market in ${cName}` : `Discontinued in ${cName}`)
+                  : isCrit ? "Critical shortage" : "Limited supply"
+                : `In supply in ${cName}`}
+            </div>
+            {localShortage && discontinued ? (
+              <>
+                <div className="sc-sub">
+                  {withdrawalDate
+                    ? `Registration ${withdrawalFuture ? "ends" : "ended"} ${dayMonthYear(withdrawalDate)}`
+                    : "Product discontinued"}
+                  {regAvailability ? ` · ${regAvailability}` : ""}
+                  {mine?.regulator_impact ? ` · ${expSource} impact rating: ${mine.regulator_impact}` : ""}
+                </div>
+                {(regGuidance || regStatementUrl) && (
+                  <div className="sc-guid">
+                    {regGuidance && <span>{expSource} advice: &ldquo;{regGuidance}&rdquo;</span>}
+                    {regStatementUrl && (
+                      <a href={regStatementUrl} target="_blank" rel="noopener noreferrer">Read the {expSource} statement →</a>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>
+            )}
             {!localShortage && elsewhereCount === 0 && <div className="sc-sub">No active shortage reported.</div>}
 
             {/* AI commentary — embedded under the heading, above the as-of line */}
@@ -866,13 +921,21 @@ export default function V1DrugView({
                 <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
               </div>
             )}
-            <div className="sw-card">
-              <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
-              <div className="sw-v">{expected ?? "No estimate"}</div>
-              {/* Ingredient-level date — the event may cover a different brand
-                  than the one the user stocks. */}
-              <div className="sw-d">{expected ? `Sponsor est. via ${expSource} — may differ by brand` : "No estimate provided"}</div>
-            </div>
+            {discontinued ? (
+              <div className="sw-card">
+                <div className="sw-h"><span className="sw-ic neutral">◷</span> Market exit</div>
+                <div className="sw-v">{withdrawalDate ? dayMonthYear(withdrawalDate) : "Not expected back"}</div>
+                <div className="sw-d">{withdrawalDate ? `Registration cancelled — via ${expSource}` : "Discontinued by sponsor"}</div>
+              </div>
+            ) : (
+              <div className="sw-card">
+                <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
+                <div className="sw-v">{expected ?? "No estimate"}</div>
+                {/* Ingredient-level date — the event may cover a different brand
+                    than the one the user stocks. */}
+                <div className="sw-d">{expected ? `Sponsor est. via ${expSource} — may differ by brand` : "No estimate provided"}</div>
+              </div>
+            )}
           </div>
 
           {/* Products affected — brand-level rows for the user's market.
@@ -1748,6 +1811,9 @@ const CSS = `
 .sc-label .d{width:7px;height:7px;border-radius:50%;background:currentColor}
 .sc-title{font-size:24px;font-weight:700;letter-spacing:-.028em;margin-bottom:5px}
 .sc-sub{font-size:13px;color:var(--text-3)}
+.sc-guid{font-size:13px;color:var(--text-2);margin-top:8px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.sc-guid a{color:var(--green-d);font-weight:500;text-decoration:none;white-space:nowrap}
+.sc-guid a:hover{text-decoration:underline}
 .sc-asof{font-size:11px;color:var(--text-4);font-family:var(--font-geist-mono),ui-monospace,monospace;margin-top:12px}
 .sc-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid rgba(12,17,24,.07)}
 .sc-footer .sc-asof{margin-top:0}

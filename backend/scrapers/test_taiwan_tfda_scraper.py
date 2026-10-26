@@ -123,6 +123,23 @@ class TestScraperNormalize(unittest.TestCase):
         self.assertEqual(e["raw_record"]["estimated_resolution_precision"], "quarter")
         self.assertEqual(len(e["raw_record"]["products"]), 2)
 
+    def test_salt_and_order_variants_are_one_drug(self):
+        reg = dict(REGISTER)
+        reg["衛署藥製字第000002號"] = {**REGISTER["衛部藥輸字第027053號"], "ingredients": "QUETIAPINE"}
+        s = self._scraper()
+        s._register = reg
+        feeds = {"104": [_row("衛部藥輸字第027053號", "1.甲。", "2025-05-02".replace("-", "/")),
+                         _row("衛署藥製字第000002號", "1.乙。", "2024/01/08"),
+                         _row("衛署藥製字第040794號", "1.丙。"),
+                         _row("衛署藥製字第014277號", "1.丁。")],
+                 "105": [], "106": []}
+        events = {e["generic_name"]: e for e in s.normalize({"feeds": feeds})}
+        # Shortest register spelling wins (ties broken alphabetically).
+        self.assertEqual(sorted(events), ["codeine phosphate; terpin hydrate", "quetiapine"])
+        self.assertEqual(events["quetiapine"]["start_date"], "2024-01-08")
+        self.assertEqual(len(events["quetiapine"]["raw_record"]["products"]), 2)
+        self.assertEqual(len(events["codeine phosphate; terpin hydrate"]["raw_record"]["products"]), 2)
+
     def test_no_alternative_feed_is_high_severity(self):
         feeds = {"104": [], "105": [_row("衛署藥輸字第022124號", "1.乙表示，因廠商停止供應，待庫存售罄。")], "106": []}
         e = self._scraper().normalize({"feeds": feeds})[0]

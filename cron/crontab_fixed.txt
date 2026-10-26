@@ -164,6 +164,14 @@ SHELL=/bin/bash
 15  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_decrs      >> logs/cron.log 2>&1
 30  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_inspections >> logs/cron.log 2>&1
 
+# EU/UK counterparts (wired 2026-10-26). edqm_cep = valid EDQM CEP holders per
+# substance (EU API-supplier census, ~1,200 queries / ~40 min); it queries the
+# substances fda_dmf + who_pq already resolved, so it runs after them — monthly
+# on the 1st at 10:00. mhra_gmdp = MHRA GMP certificate / non-compliance
+# register, updated continuously by MHRA — weekly, Wed 09:20.
+0  10 1 * *         cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py edqm_cep       >> logs/cron.log 2>&1
+20  9 * * 3         cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py mhra_gmdp      >> logs/cron.log 2>&1
+
 # ─── Log rotation (weekly: Sun 18:30 UTC, before the 19:00 scraper cycle) ───
 # Rotates cron.log past 50MB, gzips >7-day scraper logs, drops archives >60d.
 # cron.log had reached 500MB+ unrotated before this existed.

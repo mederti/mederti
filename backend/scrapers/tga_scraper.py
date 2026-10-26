@@ -73,6 +73,10 @@ class TGAScraper(BaseScraper):
     # TGA is polite about scraping; 2 s gives comfortable headroom
     RATE_LIMIT_DELAY: float = 2.0
 
+    # raw_data field holding product_key on stored rows: a re-dated ARTG moves
+    # its open row forward instead of leaving it open beside the new one.
+    PRODUCT_KEY_RAW_FIELD: str = "artg_numb"
+
     # ─────────────────────────────────────────────────────────────────────────
     # Status mapping
     # ─────────────────────────────────────────────────────────────────────────

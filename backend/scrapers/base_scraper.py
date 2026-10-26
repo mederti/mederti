@@ -214,6 +214,15 @@ class BaseScraper(ABC):
     # run — 58k phantom shortages across JP + CH by Sep 2026.
     SNAPSHOT_IDENTITY: bool = False
 
+    # Per-product sources (normalize() sets product_key) re-date a product's
+    # shortage: TGA shifts anticipated onsets and re-dates current ones. A new
+    # start_date is a new shortage_id, so the product's old row was never
+    # written again and stayed open beside the new one, frozen at whatever
+    # status and mapping it last had. Naming the raw_data field that holds the
+    # product key on stored rows (TGA: "artg_numb") makes upsert() move the
+    # product's open row onto the new identity instead of inserting a second.
+    PRODUCT_KEY_RAW_FIELD: str | None = None
+
     DEFAULT_HEADERS: dict[str, str] = {
         "User-Agent": (
             "Mederti-Scraper/1.0 (+https://mederti.com/bot; "
@@ -238,6 +247,9 @@ class BaseScraper(ABC):
         # resolves each distinct drug name at most once instead of once per
         # event. Cleared implicitly per process; keyed on the normalised name.
         self._drug_id_cache: dict[str, str] = {}
+        # Set by _log_raw_scrape when the payload matches the last processed
+        # scrape: when that scrape started (scopes the duplicate-path refresh).
+        self._duplicate_of_processed_at: str | None = None
 
         if not all([self.SOURCE_ID, self.SOURCE_NAME, self.BASE_URL,
                     self.COUNTRY, self.COUNTRY_CODE]):
@@ -348,21 +360,31 @@ class BaseScraper(ABC):
         Write an initial raw_scrapes row and return its id.
         If content_hash matches the most recent successful scrape for this
         source, the row is marked 'duplicate' immediately (no upsert needed).
+
+        Only the LATEST processed scrape counts. Matching any earlier one (the
+        old behaviour) skipped a payload that had changed back (A → B → A):
+        the DB still held B, and the duplicate path then re-verified B's rows.
         """
         content_hash = self._content_hash(raw)
+        self._duplicate_of_processed_at = None
 
         # Duplicate detection — same payload as last processed scrape?
-        existing = (
+        latest = (
             self.db.table("raw_scrapes")
-            .select("id")
+            .select("id, content_hash, processing_started_at, scraped_at")
             .eq("data_source_id", self.SOURCE_ID)
-            .eq("content_hash", content_hash)
             .eq("status", "processed")
+            .order("scraped_at", desc=True)
             .limit(1)
             .execute()
         )
-        if existing.data:
+        prev = (latest.data or [None])[0]
+        if prev and prev.get("content_hash") == content_hash:
             status = "duplicate"
+            # Every row that run wrote has last_verified_at at or after this.
+            self._duplicate_of_processed_at = (
+                prev.get("processing_started_at") or prev.get("scraped_at")
+            )
             self.log.info(
                 "Source payload unchanged since last scrape",
                 extra={"source": self.SOURCE_NAME, "content_hash": content_hash},
@@ -588,6 +610,85 @@ class BaseScraper(ABC):
                 if key and key not in self._drug_id_cache:
                     self._drug_id_cache[key] = row["id"]
 
+    def _carry_forward_product_rows(
+        self,
+        pending: list[dict[str, Any]],
+        existing: dict[str, dict],
+        failed: set[str],
+    ) -> int:
+        """
+        For each event of a product whose shortage_id has no row yet, move that
+        product's open (active / anticipated) row onto the new shortage_id and
+        start_date, so the upsert updates it in place: one row per product
+        episode, with its status log and links kept. Rows the batch itself
+        writes are never candidates; with several open rows for the product
+        (legacy duplicates) the latest-starting one moves and the rest are
+        left unverified for mark_stale. Stale rows are not moved: the source
+        already stopped listing them, so a product that comes back is a new
+        episode. Mutates `existing` and returns how many rows moved; a failed
+        lookup or update just means that product gets a new row as before.
+        """
+        field = self.PRODUCT_KEY_RAW_FIELD
+        if not field:
+            return 0
+        new: dict[str, dict[str, Any]] = {}
+        for p in pending:
+            key = p["ev"].get("product_key")
+            sid = p["shortage_id"]
+            if key and sid not in existing and sid not in failed:
+                new[str(key)] = p
+        if not new:
+            return 0
+
+        batch_ids = {p["shortage_id"] for p in pending}
+        candidates: dict[str, list[dict]] = {}
+        for chunk in _chunks(sorted(new), 100):
+            try:
+                resp = (
+                    self.db.table("shortage_events")
+                    .select("id, shortage_id, status, severity, end_date, start_date, "
+                            f"product_key:raw_data->>{field}")
+                    .eq("data_source_id", self.SOURCE_ID)
+                    .in_("status", ["active", "anticipated"])
+                    .in_(f"raw_data->>{field}", chunk)
+                    .execute()
+                )
+            except Exception as exc:
+                self.log.warning(
+                    "Open-row lookup by product failed for chunk",
+                    extra={"error": str(exc), "chunk_size": len(chunk)},
+                )
+                continue
+            for row in resp.data or []:
+                if row["shortage_id"] not in batch_ids:
+                    candidates.setdefault(str(row["product_key"]), []).append(row)
+
+        moved = 0
+        for key, p in new.items():
+            rows = candidates.get(key)
+            if not rows:
+                continue
+            row = max(rows, key=lambda r: (r.get("start_date") or "", r["id"]))
+            try:
+                self.db.table("shortage_events").update({
+                    "shortage_id": p["shortage_id"],
+                    "start_date":  p["start_date"],
+                }).eq("id", row["id"]).execute()
+            except Exception as exc:
+                self.log.warning(
+                    "Could not carry product row forward; inserting new row",
+                    extra={"error": str(exc), "product_key": key, "row_id": row["id"]},
+                )
+                continue
+            existing[p["shortage_id"]] = {**row, "shortage_id": p["shortage_id"]}
+            moved += 1
+            self.log.info(
+                "Carried product row forward to new start_date",
+                extra={"product_key": key, "row_id": row["id"],
+                       "from_start": row.get("start_date"), "to_start": p["start_date"]},
+            )
+        return moved
+
     # ─────────────────────────────────────────────────────────────────────────
     # Upsert
     # ─────────────────────────────────────────────────────────────────────────
@@ -709,6 +810,10 @@ class BaseScraper(ABC):
                 continue
             for row in resp.data or []:
                 existing_by_shortage_id[row["shortage_id"]] = row
+
+        counts["carried_forward"] = self._carry_forward_product_rows(
+            pending, existing_by_shortage_id, failed_lookup_ids
+        )
 
         # ── Phase 3: build records + collect status-change log entries ──────
         records: list[dict[str, Any]] = []
@@ -888,10 +993,12 @@ class BaseScraper(ABC):
         *,
         statuses: list[str],
         patch: dict[str, Any],
+        verified_since: str | None = None,
     ) -> int:
         """
         Apply `patch` to this source's rows in the given statuses, in id-keyed
-        chunks, and return how many rows were updated.
+        chunks, and return how many rows were updated. With `verified_since`,
+        only rows whose last_verified_at is at or after it are touched.
 
         A single UPDATE filtered only by data_source_id exceeds the statement
         timeout on large sources (AIFA 5,385 rows; PMDA 37,138), and PostgREST
@@ -910,11 +1017,16 @@ class BaseScraper(ABC):
         max_iterations = 400
         for _ in range(max_iterations):
             try:
-                page = (
+                q = (
                     self.db.table("shortage_events")
                     .select("id")
                     .eq("data_source_id", self.SOURCE_ID)
                     .in_("status", statuses)
+                )
+                if verified_since:
+                    q = q.gte("last_verified_at", verified_since)
+                page = (
+                    q.order("id")
                     .range(offset, offset + self._VERIFY_PAGE - 1)
                     .execute()
                 )
@@ -946,6 +1058,28 @@ class BaseScraper(ABC):
             if "status" not in patch:
                 offset += self._VERIFY_PAGE
         return updated
+
+    def _count_stale_verified_since(self, since: str) -> int:
+        """Stale rows of this source last verified at or after `since`.
+        A failed count returns 0 — the duplicate path then just skips them,
+        as it would have before they existed."""
+        try:
+            resp = (
+                self.db.table("shortage_events")
+                .select("id", count="exact")
+                .eq("data_source_id", self.SOURCE_ID)
+                .eq("status", "stale")
+                .gte("last_verified_at", since)
+                .limit(1)
+                .execute()
+            )
+            return resp.count or 0
+        except Exception as exc:
+            self.log.warning(
+                "Could not count stale rows of unchanged payload",
+                extra={"error": str(exc), "source": self.SOURCE_NAME},
+            )
+            return 0
 
     # ─────────────────────────────────────────────────────────────────────────
     # Outcome grading
@@ -1010,22 +1144,43 @@ class BaseScraper(ABC):
                 .single()
                 .execute()
             )
-            if scrape_row.data and scrape_row.data["status"] == "duplicate":
+            is_duplicate = bool(scrape_row.data and scrape_row.data["status"] == "duplicate")
+            # None when a subclass's own _log_raw_scrape flagged the duplicate
+            # (pricing, parallel trade — they don't write shortage_events).
+            cutoff = self._duplicate_of_processed_at
+            stale_in_payload = 0
+            if is_duplicate and cutoff:
+                # Rows of the unchanged payload that mark_stale demoted (its
+                # refreshes lapsed for 7+ days). Their pre-stale status isn't
+                # recorded anywhere, and re-activating them all as 'active'
+                # (the old behaviour) turned anticipated shortages into
+                # current ones. Re-processing the payload restores exactly
+                # what the source says, so do that instead.
+                stale_in_payload = self._count_stale_verified_since(cutoff)
+                if stale_in_payload:
+                    self.log.info(
+                        "Unchanged payload but some of its rows went stale — re-processing",
+                        extra={"source": self.SOURCE_NAME, "stale": stale_in_payload},
+                    )
+            if is_duplicate and not stale_in_payload:
                 summary["status"] = "duplicate"
                 self.log.info(
                     "Skipping normalisation — payload unchanged",
                     extra={"source": self.SOURCE_NAME},
                 )
-                # Still refresh last_verified_at so records don't go stale.
-                # Also re-activate any records that went stale while the
-                # scraper was returning duplicate payloads.
+                # Still refresh last_verified_at so records don't go stale —
+                # but only the rows the unchanged payload actually contains,
+                # i.e. those the last processed run wrote (last_verified_at at
+                # or after it started). Refreshing every open row of the
+                # source re-confirmed rows the regulator had dropped, so
+                # mark_stale could never retire them (1,478 of 2,380 TGA rows
+                # matched no live record on 2026-10-26).
                 now_iso = datetime.now(timezone.utc).isoformat()
                 try:
-                    # Refresh active/anticipated records, then re-activate any
-                    # that cleanup_stale.py demoted while this source was
-                    # returning duplicate payloads.
-                    #
-                    # Both used to be ONE bulk UPDATE filtered by
+                    if not cutoff:
+                        # No scope → refresh nothing rather than everything.
+                        return summary
+                    # This used to be ONE bulk UPDATE filtered by
                     # data_source_id. For a large source that is an update over
                     # tens of thousands of rows in a single statement, and
                     # PostgREST returns 500 (statement timeout) — observed on
@@ -1040,18 +1195,11 @@ class BaseScraper(ABC):
                     refreshed = self._refresh_verified_chunked(
                         statuses=["active", "anticipated"],
                         patch={"last_verified_at": now_iso},
-                    )
-                    reactivated = self._refresh_verified_chunked(
-                        statuses=["stale"],
-                        patch={"status": "active", "last_verified_at": now_iso},
+                        verified_since=cutoff,
                     )
                     self.log.info(
-                        "Refreshed last_verified_at and re-activated stale records (duplicate payload)",
-                        extra={
-                            "source":      self.SOURCE_NAME,
-                            "refreshed":   refreshed,
-                            "reactivated": reactivated,
-                        },
+                        "Refreshed last_verified_at (duplicate payload)",
+                        extra={"source": self.SOURCE_NAME, "refreshed": refreshed},
                     )
                 except Exception as refresh_exc:
                     self.log.warning(
@@ -1076,6 +1224,7 @@ class BaseScraper(ABC):
                 "skipped":           counts["skipped"],
                 "write_failures":    counts.get("write_failures", 0),
                 "status_changes":    counts.get("status_changes", 0),
+                "carried_forward":   counts.get("carried_forward", 0),
             })
 
             # ── 4b. A scrape that wrote nothing is NOT a success ──────────────

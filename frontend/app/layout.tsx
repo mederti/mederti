@@ -37,7 +37,7 @@ export const metadata: Metadata = {
         url: `${SITE_URL}/api/og`,
         width: 1200,
         height: 630,
-        alt: "Mederti — The world's pharma intelligence platform",
+        alt: "Mederti — Every drug shortage. Every regulator. One verified view.",
       },
     ],
   },

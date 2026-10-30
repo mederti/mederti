@@ -51,6 +51,9 @@ import httpx
 from backend.scrapers.base_scraper import BaseScraper
 
 
+# DECRS country names that contain a comma, by ISO-3.
+_COMMA_COUNTRY_NAMES = {"KOR": "South Korea", "PRK": "North Korea"}
+
 class FDADECRSScraper(BaseScraper):
     SOURCE_ID:    str = "10000000-0000-0000-0000-000000000093"
     SOURCE_NAME:  str = "FDA Drug Establishments Current Registration Site"
@@ -229,7 +232,10 @@ class FDADECRSScraper(BaseScraper):
         """ADDRESS tail looks like '..., France (FRA)'. Return (name, ISO3)."""
         m = re.search(r"([A-Za-z .'\-]+?)\s*\(([A-Z]{3})\)\s*$", addr)
         if m:
-            return m.group(1).strip(", "), m.group(2)
+            iso = m.group(2)
+            # Names with a comma ("Korea, South (KOR)") don't fit the pattern
+            # above, which captured just "South".
+            return _COMMA_COUNTRY_NAMES.get(iso, m.group(1).strip(", ")), iso
         return None, None
 
     @staticmethod

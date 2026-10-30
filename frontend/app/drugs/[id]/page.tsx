@@ -16,6 +16,7 @@ import { extractEventBrand } from "@/lib/event-brand";
 import { buildSupplyInMarket, type CatalogueRow } from "@/lib/supply-in-market";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
+import { moleculeKey, moleculeNameVariants, normFirm } from "@/lib/supply/molecule-key";
 
 /** Tiny ISO-3166 → emoji-flag map for the country chips. */
 const FLAG: Record<string, string> = {
@@ -636,10 +637,18 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const freeViewsUsed = !loggedIn && usedHeader != null ? Number(usedHeader) || 0 : null;
 
   // API supply-base concentration from FDA Drug Master Files (active Type II
-  // DMFs = manufacturers cleared to supply this API into the US market). This
+  // DMFs = manufacturers that have filed this API's manufacturing file with FDA). This
   // is the primary-source manufacturing-concentration signal — the headline
   // feature of the Johns Hopkins supply-chain dashboard, sourced directly.
   const inn = (drug.generic_name ?? "").toLowerCase();
+  // API supplier rows for this molecule are filed under salt, ester and US
+  // names ("olmesartan medoxomil", "acetaminophen"), so match on each name
+  // prefix and keep the rows whose molecule key is this drug's — the same
+  // grouping as /api/api-country-dependence, so the page's counts agree.
+  const molKey = moleculeKey(inn);
+  const supplierFilter = molKey
+    ? [`drug_id.eq.${id}`, ...moleculeNameVariants(molKey).map((v) => `generic_name.ilike.${v}%`)].join(",")
+    : `drug_id.eq.${id},generic_name.ilike.${inn}`;
   // These five reads are mutually independent — fetch them concurrently so the
   // page waits on the slowest one, not the sum. (Was a 5-deep await waterfall:
   // api_suppliers → drug_approvals → regulatory_eligibility → drug_pricing →
@@ -649,9 +658,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const [apiSupplierRes, approvalRes, eligRes, priceRes, marketPricing, altPricing, profileRes] = await Promise.all([
     supabase
       .from("api_suppliers")
-      .select("manufacturer_name, country, source, who_pq")
-      .or(`drug_id.eq.${id},generic_name.ilike.${inn}`)
-      .limit(300),
+      .select("manufacturer_name, country, source, who_pq, drug_id, generic_name, created_at, dmf:raw_data->>dmf_number")
+      .or(supplierFilter)
+      .limit(1000),
     supabase
       .from("drug_approvals")
       .select("authority, application_type, approval_date, brand_name")
@@ -688,19 +697,29 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const eligRows = eligRes.data;
   const priceRows = priceRes.data;
   const { concession, priceMarkets } = marketPricing;
-  const supplierRows = (apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null; who_pq: boolean | null }[];
+  const supplierRows = ((apiSupplierRows ?? []) as { manufacturer_name: string | null; country: string | null; who_pq: boolean | null; drug_id: string | null; generic_name: string | null; created_at: string; dmf: string | null }[])
+    .filter((r) => !molKey || r.drug_id === id || moleculeKey(r.generic_name) === molKey)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
   const makerSet = new Map<string, string>();
   const whoPqMakers = new Set<string>();
+  // A DMF moved to a renamed holder is stored under both names (insert-only
+  // ingest); count it once, under the newest name.
+  const seenDmf = new Set<string>();
   for (const r of supplierRows) {
     const name = (r.manufacturer_name ?? "").trim();
-    if (name && !makerSet.has(name.toLowerCase())) makerSet.set(name.toLowerCase(), name);
-    if (name && r.who_pq) whoPqMakers.add(name.toLowerCase());
+    const firm = normFirm(name) || name.toLowerCase();
+    if (r.dmf) {
+      if (seenDmf.has(r.dmf)) continue;
+      seenDmf.add(r.dmf);
+    }
+    if (name && !makerSet.has(firm)) makerSet.set(firm, name);
+    if (name && r.who_pq) whoPqMakers.add(firm);
   }
   const makerNames = [...makerSet.values()];
   const makerCount = makerNames.length;
   const apiCountries = [
     ...new Set(
-      ((apiSupplierRows ?? []) as { country: string | null }[])
+      supplierRows
         .map((r) => (r.country ?? "").trim())
         .filter(Boolean),
     ),

@@ -17,7 +17,19 @@ shortage_id = MD5(drug_id + "|" + SOURCE_ID + "|" + COUNTRY_CODE + "|" + start_d
 
 This mirrors the set_shortage_id() Postgres trigger in 001_initial_schema.sql.
 Keeping them identical is CRITICAL — if you change the formula here, update the
-trigger too (and vice versa).
+trigger too (and vice versa). (The trigger only fills a NULL shortage_id; every
+scraper supplies one, so it is a fallback for manual inserts.)
+
+Per-product sources: when normalize() sets `product_key` on an event (TGA: the
+ARTG number), the id is keyed on the product instead of the drug:
+
+    shortage_id = MD5(SOURCE_ID + "|" + COUNTRY_CODE + "|product:" + product_key + "|" + start_date)
+
+Without it, two products of one molecule sharing a start date (RISPA vs
+APO-RISPERIDONE, 25 mg vs 50 mg packs) hash to the same id and the last record
+in the feed silently overwrites the others' status, severity and raw_data.
+drug_id is left out on purpose: a product's identity must not change when
+drug resolution re-maps its ingredient to a different drugs row.
 """
 
 from __future__ import annotations
@@ -497,15 +509,23 @@ class BaseScraper(ABC):
     # Deterministic shortage_id
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _shortage_id(self, drug_id: str, start_date: str) -> str:
+    def _shortage_id(
+        self, drug_id: str, start_date: str, product_key: str | None = None
+    ) -> str:
         """
         Replicates the Postgres trigger formula from 001_initial_schema.sql:
             md5(drug_id || '|' || data_source_id || '|' || country_code || '|' || start_date)
 
+        With a product_key (per-product sources, see module docstring) the id
+        is keyed on the source's product identifier instead of drug_id.
+
         WARNING: If you change this formula, update set_shortage_id() in the
         migration as well, otherwise duplicate events will be inserted.
         """
-        raw = f"{drug_id}|{self.SOURCE_ID}|{self.COUNTRY_CODE}|{start_date}"
+        if product_key:
+            raw = f"{self.SOURCE_ID}|{self.COUNTRY_CODE}|product:{product_key}|{start_date}"
+        else:
+            raw = f"{drug_id}|{self.SOURCE_ID}|{self.COUNTRY_CODE}|{start_date}"
         return hashlib.md5(raw.encode()).hexdigest()
 
     def _open_start_dates(self, drug_ids: list[str]) -> dict[str, str]:
@@ -655,7 +675,9 @@ class BaseScraper(ABC):
                 "ev": ev,
                 "drug_id": drug_id,
                 "start_date": start_date,
-                "shortage_id": self._shortage_id(drug_id, start_date),
+                "shortage_id": self._shortage_id(
+                    drug_id, start_date, ev.get("product_key")
+                ),
             })
 
         if not pending:
@@ -800,6 +822,9 @@ class BaseScraper(ABC):
         # Postgres raise 21000 ("ON CONFLICT DO UPDATE cannot affect row a
         # second time") and fail the whole chunk to the slow per-row path.
         # Keep the last occurrence (latest wins), matching per-row upsert order.
+        # This is only safe where the rows really are the same shortage: a
+        # source whose rows are distinct products with their own status must
+        # set product_key in normalize() so they never share an id here.
         if records:
             records = list({r["shortage_id"]: r for r in records}.values())
         if status_log_entries:

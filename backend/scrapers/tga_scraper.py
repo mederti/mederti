@@ -349,6 +349,10 @@ class TGAScraper(BaseScraper):
         )
 
         return {
+            # One MSI record per ARTG product: key the shortage on the product,
+            # not the molecule, so e.g. RISPA (active) and APO-RISPERIDONE
+            # (resolved) with the same start date stay two rows.
+            "product_key":                str(artg).strip() if artg else None,
             # Drug resolution
             "generic_name":               generic_name,
             "brand_names":                brand_names,

@@ -375,6 +375,12 @@ class TGAScraper(BaseScraper):
                 "shortage_end":   rec.get("shortage_end"),
                 "last_updated":   rec.get("last_updated"),
                 "availability":   rec.get("availability"),
+                # deleted_date on 'D' records is the ARTG cancellation date —
+                # the day the product legally leaves the market (often future).
+                "deleted_date":   rec.get("deleted_date"),
+                # TGA's own impact rating, kept verbatim: severity above is
+                # availability-led and can disagree with it.
+                "shortage_impact": rec.get("shortage_impact"),
             },
         }
 

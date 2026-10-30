@@ -12,7 +12,7 @@ import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
 import AppShell from "@/app/components/v1/AppShell";
 import { cleanBrandNames } from "@/lib/brand";
-import { extractEventBrand } from "@/lib/event-brand";
+import { extractEventBrand, extractEventMarketExit } from "@/lib/event-brand";
 import { buildSupplyInMarket, type CatalogueRow } from "@/lib/supply-in-market";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
@@ -442,6 +442,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const shortages = shortagesRaw.map(({ raw_data, ...ev }: any) => ({
     ...ev,
     ...extractEventBrand(ev.data_source_id ?? null, raw_data),
+    ...extractEventMarketExit(ev.data_source_id ?? null, raw_data),
   }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const statusLog = logRes.status === "fulfilled" ? ((logRes.value as any).data ?? []) : [];

@@ -428,7 +428,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
       type: "object",
       properties: {
         country: { type: "string", description: "Optional ISO-2 country of the facility." },
-        drug_id: { type: "string", description: "Optional drug UUID to scope to facilities supplying this drug." },
+        drug_id: { type: "string", description: "Not supported: facilities are not linked to the drugs they make. Passing a drug_id returns no facilities rather than an unrelated list." },
         limit: { type: "number", description: "Max results (default 25)." },
       },
     },
@@ -3289,6 +3289,15 @@ async function getSupplierShortageRecord(args: { manufacturer_or_sponsor: string
 }
 
 async function getFacilityDistressSignals(args: { country?: string; drug_id?: string; limit?: number }) {
+  // manufacturing_facilities has no drug link, so a drug-scoped call used to
+  // return the same unrelated global list for every drug — which then got
+  // narrated as "this drug's facilities". Refuse the scope instead.
+  if (args.drug_id) {
+    return {
+      country: args.country?.toUpperCase() ?? null, drug_id: args.drug_id, items: [],
+      confidence: { level: "low", score: 0, basis: "Facility inspection data is not mapped to the drugs each site makes; Mederti cannot say which facilities supply this drug. Do not attribute any facility or inspection finding to it." } satisfies Confidence,
+    };
+  }
   const sb = getSupabase();
   const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
   let q = sb.from("manufacturing_facilities")

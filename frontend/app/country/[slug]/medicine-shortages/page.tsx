@@ -41,7 +41,7 @@ export async function generateMetadata(
   const code = countryCodeFromSlug(slug);
   if (!code) return { title: "Country not found — Mederti", robots: { index: false } };
   const name = countryName(code);
-  const title = `Medicine shortages in ${name} — live list & daily updates | Mederti`;
+  const title = `${name} medicine shortages — live list | Mederti`;
   const description = `Current drug shortages in ${name}: live register of active and anticipated shortage notices, severity, causes and official regulator sources. Updated daily.`;
   return {
     title,

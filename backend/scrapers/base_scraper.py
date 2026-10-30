@@ -156,6 +156,98 @@ def grade_write_outcome(
     return "success"
 
 
+def newest_source_date(records: list[dict], fields: tuple[str, ...]) -> date | None:
+    """
+    Newest date the SOURCE itself published across `records`, for the
+    upstream-staleness signal on /freshness (migration 076).
+
+    Dates on or after the run date are dropped: dozens of scrapers default a
+    missing start/announced date to date.today(), which would look like the
+    upstream advancing on every single run and hide a stalled register. The
+    min() of local and UTC "today" covers the Mac (UTC+8) and Railway (UTC)
+    runners. A genuine same-day date is only counted from the next run on —
+    a one-day lag, in the conservative direction.
+    """
+    cutoff = min(date.today(), datetime.now(timezone.utc).date())
+    newest: date | None = None
+    for rec in records:
+        for field in fields:
+            value = rec.get(field)
+            if not value:
+                continue
+            try:
+                d = date.fromisoformat(str(value)[:10])
+            except ValueError:
+                continue
+            if d.year < 1990 or d >= cutoff:
+                continue
+            if newest is None or d > newest:
+                newest = d
+    return newest
+
+
+def record_source_freshness(
+    db: Client,
+    source_id: str,
+    *,
+    finished_at: datetime,
+    status: str,
+    observed: date | None,
+    payload_unchanged: bool = False,
+    log: Any,
+) -> None:
+    """
+    Write the per-run freshness state on data_sources (migration 076).
+
+    Every run records last_run_at/last_run_status — failures included, since
+    last_scraped_at deliberately skips them. A non-failed run then advances or
+    extends the newest-source-date streak:
+      • first date ever seen  → store it as a baseline (first_seen_at NULL)
+      • newer date than stored → store it, stamp first_seen_at, reset streak
+      • same/older date, or a byte-identical payload → streak + 1
+      • no source dates at all → leave the streak alone (nothing to measure)
+    Best-effort: a missing migration or a write error must never fail a scrape.
+    """
+    patch: dict[str, Any] = {
+        "last_run_at":     finished_at.isoformat(),
+        "last_run_status": status,
+    }
+    try:
+        if status != "failed" and (observed is not None or payload_unchanged):
+            row = (
+                db.table("data_sources")
+                .select("newest_source_date, newest_source_date_unchanged_runs")
+                .eq("id", source_id)
+                .single()
+                .execute()
+            ).data or {}
+            stored_raw = row.get("newest_source_date")
+            stored = date.fromisoformat(stored_raw) if stored_raw else None
+            streak = row.get("newest_source_date_unchanged_runs") or 0
+            if observed is not None and stored is None:
+                # Baseline: first tracked run. first_seen_at stays NULL so
+                # /freshness never calls a source "advancing" until a later
+                # run has actually watched the date move.
+                patch.update({
+                    "newest_source_date":                observed.isoformat(),
+                    "newest_source_date_unchanged_runs": 0,
+                })
+            elif observed is not None and observed > stored:
+                patch.update({
+                    "newest_source_date":                observed.isoformat(),
+                    "newest_source_date_first_seen_at":  finished_at.isoformat(),
+                    "newest_source_date_unchanged_runs": 0,
+                })
+            elif stored is not None:
+                patch["newest_source_date_unchanged_runs"] = streak + 1
+        db.table("data_sources").update(patch).eq("id", source_id).execute()
+    except Exception as exc:
+        log.warning(
+            "Could not record source freshness (migration 076 applied?)",
+            extra={"error": str(exc), "source_id": source_id},
+        )
+
+
 class ScraperError(Exception):
     """Raised when a scraper encounters an unrecoverable error."""
 
@@ -960,6 +1052,9 @@ class BaseScraper(ABC):
         )
 
         raw_scrape_id: str | None = None
+        # Upstream-staleness inputs for record_source_freshness (migration 076)
+        observed_source_date: date | None = None
+        payload_unchanged = False
         summary: dict[str, Any] = {
             "source":            self.SOURCE_NAME,
             "started_at":        started_at.isoformat(),
@@ -987,6 +1082,7 @@ class BaseScraper(ABC):
             )
             if scrape_row.data and scrape_row.data["status"] == "duplicate":
                 summary["status"] = "duplicate"
+                payload_unchanged = True
                 self.log.info(
                     "Skipping normalisation — payload unchanged",
                     extra={"source": self.SOURCE_NAME},
@@ -1038,6 +1134,8 @@ class BaseScraper(ABC):
             # ── 3. Normalize ──────────────────────────────────────────────────
             events = self.normalize(raw)
             summary["records_found"] = len(events)
+            # Before upsert(), which adds derived dates (anticipated onset).
+            observed_source_date = newest_source_date(events, ("start_date", "end_date"))
             self.log.info(
                 "Normalisation complete",
                 extra={"source": self.SOURCE_NAME, "records": len(events)},
@@ -1122,6 +1220,14 @@ class BaseScraper(ABC):
             # stale gap in the public freshness dashboard.
             if summary["status"] != "failed":
                 self._touch_data_source(finished_at)
+            record_source_freshness(
+                self.db, self.SOURCE_ID,
+                finished_at=finished_at,
+                status=summary["status"],
+                observed=observed_source_date,
+                payload_unchanged=payload_unchanged,
+                log=self.log,
+            )
 
         return summary
 

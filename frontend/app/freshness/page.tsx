@@ -1,173 +1,294 @@
-// Public freshness dashboard — credibility lever for "world's leading source"
-// positioning per audit §12 open #5.
+// Source freshness — per-source, two independent staleness signals.
 //
-// Lists every regulator Mederti scrapes, the last_scraped_at timestamp, the
-// honest freshness label (matches what the chat surfaces in <sources> chips),
-// and a reliability weight. Stale sources are visually flagged.
+//   Our job     — did Mederti's collector run successfully within cadence?
+//   Upstream    — is the regulator still publishing anything new? (suspicion)
+//
+// Rules live in lib/freshness.ts. The page never calls a source fresh on
+// anything but recorded evidence: no last_scraped_at → "never", no observed
+// date advance → not "advancing".
 
-import { Suspense } from "react";
+import type { Metadata } from "next";
+import AppShell from "@/app/components/v1/AppShell";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  buildFreshnessReport,
+  fmtAge,
+  type FreshnessReport,
+  type JobState,
+  type SourceFreshness,
+  type UpstreamState,
+} from "@/lib/freshness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
-type Regulator = {
-  code: string;
-  name: string;
-  country_code: string;
-  region: string | null;
-  last_scraped_at: string | null;
-  hours_since_scrape: number | null;
-  is_stale: boolean;
-  freshness_label: string;
-  reliability_weight: number | null;
-  scrape_frequency_hours: number | null;
-  is_active: boolean;
-  source_url: string | null;
+export const metadata: Metadata = {
+  title: "Source freshness — Mederti",
+  description:
+    "Per-source collection health and upstream publication signals for every regulator Mederti tracks.",
 };
 
-type FreshnessResponse = {
-  generated_at: string;
-  stale_threshold_hours: number;
-  regulators: Regulator[];
-  summary: { total: number; active: number; stale: number; fresh_today: number };
+const JOB: Record<JobState, { label: string; tone: string }> = {
+  on_schedule: { label: "On schedule", tone: "ok" },
+  failing:     { label: "Failing", tone: "crit" },
+  not_running: { label: "Not running", tone: "crit" },
+  never:       { label: "Never succeeded", tone: "crit" },
 };
 
-async function fetchFreshness(): Promise<FreshnessResponse | null> {
-  // Server-side fetch against same-origin /api/freshness. Use NEXT_PUBLIC_*
-  // base URL when running in Vercel; fall back to localhost in dev.
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  try {
-    const res = await fetch(`${base}/api/freshness`, {
-      next: { revalidate: 300 },
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as FreshnessResponse;
-  } catch {
-    return null;
-  }
+const UPSTREAM: Record<UpstreamState, { label: string; tone: string }> = {
+  advancing:       { label: "Advancing", tone: "ok" },
+  suspected_stall: { label: "Suspected stall", tone: "med" },
+  measuring:       { label: "Measuring", tone: "mute" },
+  no_source_dates: { label: "No source dates", tone: "mute" },
+  not_measured:    { label: "Not yet measured", tone: "mute" },
+  not_assessable:  { label: "Not assessed", tone: "mute" },
+};
+
+const fmtDate = (iso: string | null) =>
+  iso
+    ? new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : "—";
+
+const fmtDateTime = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "UTC",
+        timeZoneName: "short",
+      })
+    : "—";
+
+const daysOld = (iso: string | null) =>
+  iso ? Math.floor((Date.now() - Date.parse(`${iso}T00:00:00Z`)) / 86_400_000) : null;
+
+function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
+  return <span className={`pill ${tone}`}>{children}</span>;
 }
 
-function FreshnessBadge({ reg }: { reg: Regulator }) {
-  if (!reg.is_active) {
-    return <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">inactive</span>;
-  }
-  if (reg.is_stale) {
-    return <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-700">stale</span>;
-  }
-  if (reg.hours_since_scrape != null && reg.hours_since_scrape < 24) {
-    return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">fresh</span>;
-  }
-  return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">ok</span>;
-}
-
-function FreshnessTable({ data }: { data: FreshnessResponse }) {
-  // Sort: active first, then by region, then by code
-  const sorted = [...data.regulators].sort((a, b) => {
-    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
-    if ((a.region ?? "") !== (b.region ?? "")) return (a.region ?? "").localeCompare(b.region ?? "");
-    return a.code.localeCompare(b.code);
-  });
+function Row({ s }: { s: SourceFreshness }) {
+  const job = JOB[s.job_state];
+  const up = UPSTREAM[s.upstream_state];
+  const age = daysOld(s.newest_source_date);
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
-      <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-slate-600">
-          <tr>
-            <th className="text-left px-4 py-3 font-medium">Regulator</th>
-            <th className="text-left px-4 py-3 font-medium">Country</th>
-            <th className="text-left px-4 py-3 font-medium">Last scraped</th>
-            <th className="text-left px-4 py-3 font-medium">Freshness</th>
-            <th className="text-right px-4 py-3 font-medium">Reliability</th>
-            <th className="text-right px-4 py-3 font-medium">Cadence</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((r) => (
-            <tr key={`${r.code}-${r.country_code}`} className="border-t border-slate-100">
-              <td className="px-4 py-3">
-                {r.source_url ? (
-                  <a className="text-slate-900 hover:underline font-medium" href={r.source_url} target="_blank" rel="noreferrer">
-                    {r.code}
-                  </a>
-                ) : (
-                  <span className="text-slate-900 font-medium">{r.code}</span>
-                )}
-                <div className="text-xs text-slate-500">{r.name}</div>
-              </td>
-              <td className="px-4 py-3 text-slate-700 tabular-nums">{r.country_code}</td>
-              <td className="px-4 py-3 text-slate-700 tabular-nums">{r.freshness_label}</td>
-              <td className="px-4 py-3">
-                <FreshnessBadge reg={r} />
-              </td>
-              <td className="px-4 py-3 text-right text-slate-700 tabular-nums">
-                {r.reliability_weight != null ? r.reliability_weight.toFixed(2) : "—"}
-              </td>
-              <td className="px-4 py-3 text-right text-slate-700 tabular-nums">
-                {r.scrape_frequency_hours != null ? `${r.scrape_frequency_hours}h` : "—"}
-              </td>
+    <tr>
+      <td>
+        {s.source_url ? (
+          <a href={s.source_url} target="_blank" rel="noreferrer" className="code">
+            {s.code}
+          </a>
+        ) : (
+          <span className="code">{s.code}</span>
+        )}
+        <div className="sub">{s.name}</div>
+      </td>
+      <td>
+        <div>{s.country ?? "—"}</div>
+        <div className="sub mono">{s.country_code ?? ""}</div>
+      </td>
+      <td>
+        <Pill tone={job.tone}>{job.label}</Pill>
+        <div className="sub">
+          Last success: <span className="mono">{fmtDateTime(s.last_success_at)}</span>
+        </div>
+        <div className="sub">{s.job_detail}</div>
+        <div className="sub faint">
+          Expected every {s.cadence_hours}h
+          {s.declared_cadence_hours != null && s.declared_cadence_hours !== s.cadence_hours
+            ? ` (declared ${s.declared_cadence_hours}h; 24h minimum applied)`
+            : ""}
+          {s.recent_failures ? ` · ${s.recent_failures} failed of last ${s.runs_examined} runs` : ""}
+        </div>
+      </td>
+      <td>
+        <Pill tone={up.tone}>{up.label}</Pill>
+        <div className="sub">
+          Newest source date: <span className="mono">{fmtDate(s.newest_source_date)}</span>
+          {age != null ? <span className="faint"> ({age}d old)</span> : null}
+        </div>
+        {s.newest_source_date_basis === "stored_records" ? (
+          <div className="sub faint">From stored source-dated records, not per-run tracking.</div>
+        ) : null}
+        <div className="sub">{s.upstream_detail}</div>
+      </td>
+    </tr>
+  );
+}
+
+function Body({ data }: { data: FreshnessReport }) {
+  return (
+    <>
+      <div className="stats">
+        <div className="stat">
+          <div className="n">{data.summary.active}</div>
+          <div className="l">Active sources</div>
+        </div>
+        <div className="stat">
+          <div className="n ok">{data.summary.on_schedule}</div>
+          <div className="l">Our job on schedule</div>
+        </div>
+        <div className="stat">
+          <div className="n crit">{data.summary.job_stopped}</div>
+          <div className="l">Our job stopped or failing</div>
+        </div>
+        <div className="stat">
+          <div className="n med">{data.summary.suspected_upstream_stall}</div>
+          <div className="l">Suspected upstream stall</div>
+        </div>
+      </div>
+
+      {!data.run_tracking_available ? (
+        <div className="note">
+          Per-run source-date tracking is not live yet (migration 076 pending, or no run since it
+          was applied). Until it is, the upstream signal relies only on identical-payload streaks,
+          and the newest source date shown comes from stored records.
+        </div>
+      ) : null}
+
+      <div className="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Country</th>
+              <th>Our job</th>
+              <th>Upstream</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {data.sources.map((s) => (
+              <Row key={s.id} s={s} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="method">
+        <h2>How to read this</h2>
+        <p>
+          <strong>Our job</strong> compares the last successful collection run with the source&apos;s
+          cadence (at least 24h, plus a grace period). <em>Failing</em> means we can see recent
+          attempts that failed; <em>not running</em> means there were no attempts at all.
+        </p>
+        <p>
+          <strong>Upstream</strong> asks whether the regulator is still publishing. It is flagged
+          as a <em>suspected stall</em> when the fetched payload was byte-identical for{" "}
+          {data.stall_runs}+ consecutive runs covering at least {data.stall_runs} collection intervals, or the newest date the source itself published has
+          not advanced for {data.stall_runs}+ runs. This is a suspicion, not proof — a quiet register
+          may simply have had nothing new to report. Dates on or after the day of a run are
+          ignored, because several collectors default a missing date to the run date.{" "}
+          <em>Advancing</em> is only shown after a run has actually watched the date move.
+        </p>
+        <p className="faint">
+          Generated {fmtDateTime(data.generated_at)} · cached 5 minutes ·{" "}
+          {data.inactive_sources_excluded} inactive source records excluded. Times in UTC.
+        </p>
+      </div>
+    </>
   );
 }
 
 export default async function FreshnessPage() {
-  const data = await fetchFreshness();
+  let data: FreshnessReport | null = null;
+  try {
+    data = await buildFreshnessReport(getSupabaseAdmin());
+  } catch (err) {
+    console.error("freshness page:", err instanceof Error ? err.message : err);
+  }
+  const stopped = data?.sources.filter((s) => s.job_state !== "on_schedule") ?? [];
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-slate-900">Source freshness</h1>
-        <p className="mt-2 text-slate-600 max-w-2xl">
-          Mederti scrapes every regulator on this list daily. The timestamps below are{" "}
-          <strong>not</strong> claimed cadences — they're the real{" "}
-          <code className="px-1 py-0.5 bg-slate-100 rounded text-xs">last_scraped_at</code> values
-          from the database. Sources past our 7-day stale threshold are flagged in red.
-        </p>
-      </div>
-
-      {!data ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
-          Freshness data is unavailable right now. Try again in a minute.
+    <AppShell
+      contentClassName="flush"
+      chat={{
+        contextKey: "freshness",
+        title: "Source freshness",
+        category: "Data freshness",
+        bodyText:
+          "The user is viewing Mederti's per-source freshness page: for each regulator, whether Mederti's collection job is on schedule, and whether the regulator's own publication appears to have stalled (a suspicion, not proof)." +
+          (stopped.length
+            ? ` Sources whose job is stopped or failing right now: ${stopped
+                .map((s) => `${s.code} (${s.country ?? s.country_code}, last success ${fmtAge(s.hours_since_success)})`)
+                .join("; ")}.`
+            : ""),
+        headerLabel: "Ask about data freshness",
+        emptyLead: "Ask how current a country's shortage data is, or why a source is flagged.",
+        starters: [
+          "Which sources are stale right now?",
+          "How fresh is the Canadian data?",
+          "What does a suspected upstream stall mean?",
+        ],
+      }}
+    >
+      <style>{CSS}</style>
+      <div className="fresh">
+        <div className="head">
+          <h1>Source freshness</h1>
+          <p>
+            Two separate questions for every regulator we collect from: is <strong>our</strong>{" "}
+            collector running, and is the <strong>source</strong> still publishing? All values are
+            read live from our run records — nothing here is a claimed cadence.
+          </p>
         </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-xs uppercase tracking-wider text-slate-500">Total regulators</div>
-              <div className="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{data.summary.total}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-xs uppercase tracking-wider text-slate-500">Active</div>
-              <div className="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{data.summary.active}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-xs uppercase tracking-wider text-slate-500">Fresh today</div>
-              <div className="mt-1 text-2xl font-semibold text-emerald-700 tabular-nums">{data.summary.fresh_today}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-xs uppercase tracking-wider text-slate-500">Stale</div>
-              <div className="mt-1 text-2xl font-semibold text-red-700 tabular-nums">{data.summary.stale}</div>
-            </div>
-          </div>
-
-          <Suspense fallback={<div className="text-slate-500">Loading…</div>}>
-            <FreshnessTable data={data} />
-          </Suspense>
-
-          <div className="mt-6 text-xs text-slate-500 max-w-3xl">
-            Generated {new Date(data.generated_at).toLocaleString()}. Cached 5 minutes.
-            The stale threshold is {Math.round(data.stale_threshold_hours / 24)} days — past this,
-            shortage data from that regulator is excluded from default chat answers and the source
-            chip carries an explicit "stale" flag. The reliability weight is the per-source factor
-            used by Mederti's confidence calibration (0–1, higher is more trustworthy).
-          </div>
-        </>
-      )}
-    </main>
+        {data ? (
+          <Body data={data} />
+        ) : (
+          <div className="note">Freshness data is unavailable right now. Try again in a minute.</div>
+        )}
+      </div>
+    </AppShell>
   );
 }
+
+const CSS = `
+.fresh{max-width:1200px;margin:0 auto;padding:28px 24px 64px;color:var(--tx)}
+.fresh .head h1{font-size:22px;font-weight:700;margin:0 0 6px;letter-spacing:-.02em}
+.fresh .head p{font-size:14px;color:var(--tx-3);margin:0;max-width:720px;line-height:1.55}
+.fresh .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0 16px}
+.fresh .stat{background:var(--surf);border:1px solid var(--border);border-radius:var(--r-tile);padding:14px 16px}
+.fresh .stat .n{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.fresh .stat .n.ok{color:var(--ok)}.fresh .stat .n.crit{color:var(--crit)}.fresh .stat .n.med{color:var(--med)}
+.fresh .stat .l{font-size:12px;color:var(--tx-3);margin-top:2px}
+.fresh .note{background:var(--med-bg);border:1px solid var(--med-b);color:var(--tx-2);border-radius:var(--r-tile);padding:12px 14px;font-size:13px;margin-bottom:16px;line-height:1.5}
+.fresh .tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-tile);background:var(--surf)}
+.fresh table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
+.fresh th{text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--tx-4);background:var(--surf-2);padding:10px 14px;border-bottom:1px solid var(--border)}
+.fresh td{padding:12px 14px;border-top:1px solid var(--hair);vertical-align:top}
+.fresh td:nth-child(3),.fresh td:nth-child(4){width:34%}
+.fresh .code{font-weight:600;color:var(--tx);text-decoration:none}
+.fresh a.code:hover{text-decoration:underline}
+.fresh .sub{font-size:12px;color:var(--tx-3);margin-top:4px;line-height:1.45}
+.fresh .faint{color:var(--tx-4)}
+.fresh .mono{font-family:var(--font-geist-mono),ui-monospace,monospace;font-size:11.5px}
+.fresh .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:var(--r-pill);border:1px solid}
+.fresh .pill.ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-b)}
+.fresh .pill.crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-b)}
+.fresh .pill.med{color:var(--med);background:var(--med-bg);border-color:var(--med-b)}
+.fresh .pill.mute{color:var(--tx-3);background:var(--surf-2);border-color:var(--border)}
+.fresh .method{margin-top:28px;max-width:760px}
+.fresh .method h2{font-size:15px;font-weight:700;margin:0 0 8px}
+.fresh .method p{font-size:13px;color:var(--tx-2);line-height:1.6;margin:0 0 10px}
+@media(max-width:720px){
+  .fresh{padding:20px 16px 48px}.fresh .stats{grid-template-columns:repeat(2,1fr)}
+  .fresh .tablewrap{overflow:visible}
+  .fresh table{min-width:0}
+  .fresh table,.fresh tbody,.fresh tr,.fresh td{display:block;width:auto!important}
+  .fresh thead{display:none}
+  .fresh tr{border-top:1px solid var(--hair);padding:8px 0}
+  .fresh tr:first-child{border-top:none}
+  .fresh td{border-top:none;padding:6px 14px}
+  .fresh td:nth-child(2){display:flex;gap:6px;align-items:baseline}
+  .fresh td:nth-child(2) .sub{margin-top:0}
+  .fresh td:nth-child(3)::before,.fresh td:nth-child(4)::before{display:block;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--tx-4);margin-bottom:4px}
+  .fresh td:nth-child(3)::before{content:"Our job"}
+  .fresh td:nth-child(4)::before{content:"Upstream"}
+}
+`;

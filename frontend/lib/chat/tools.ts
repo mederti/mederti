@@ -17,6 +17,7 @@ import type {
 import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
 import { ALTERNATIVES_CAVEAT, ALTERNATIVES_SOURCE, atcMatchLabel } from "@/lib/alternatives";
 import { SOURCE_LABELS, fetchSourcedAlternatives } from "@/lib/alternatives-evidence";
+import { resolveSubstitution } from "@/lib/substitution/resolve";
 
 export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   // Anthropic server-side web search — used freely as a primary research tool
@@ -97,6 +98,20 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
         kind: { type: "string", enum: ["same_molecule", "therapeutic"], description: "Optional filter." },
       },
       required: ["drug_id"],
+    },
+  },
+  {
+    name: "get_substitution_answer",
+    description:
+      "The ranked answer to 'X is out — what can I dispense instead?' for one drug in one market. Call this FIRST for any substitute / what-instead / can't-get-it question once you have the drug UUID and the user's country. Options come pre-ranked by tier, decided in code: authorised_swap (a current legal source in this market: a TGA SSSI / UK SSP lets the pharmacist swap without a new prescription and may carry the instrument's verbatim dose_statement; an FDA Orange Book rating is an equivalence finding that state law acts on — repeat legal_basis and needs_prescriber exactly as returned), same_medicine (the regulator's own notice guidance, e.g. TGA 'Alternative brands are available.', or a registered same-strength product with no shortage notice — never say 'available' or 'in stock' for these, say 'no shortage notice on file'), import_pathway (s19A etc.), therapeutic (different medicine — prescriber decides, never a dose). Lead with `recommendation`, quote `quote` verbatim, give `legal_basis` as written, and use `dose.statement` only if non-null — otherwise repeat `dose.note`. If `refusal` is set, say so and name its references; do not fill the gap from general knowledge.",
+    input_schema: {
+      type: "object",
+      properties: {
+        drug_id: { type: "string", description: "UUID of the drug that is short (from search_drugs)." },
+        country: { type: "string", description: "ISO-2 market the user dispenses in, e.g. AU, GB, US." },
+        include_other_presentations: { type: "boolean", description: "Also list other strengths/forms (need the prescriber). Default false; set true only if the user asks about other strengths or forms." },
+      },
+      required: ["drug_id", "country"],
     },
   },
   {
@@ -1074,6 +1089,25 @@ async function getSourcedAlternatives(args: { drug_id: string; kind?: "same_mole
       basis: n === 0
         ? "No source-backed alternatives on file for this drug."
         : `${n} source-backed alternative${n === 1 ? "" : "s"}: ${authorised} regulator-authorised, ${verified} confirmed by 2+ sources, ${n - authorised - verified} single-source.`,
+    } satisfies Confidence,
+  };
+}
+
+async function getSubstitutionAnswer(args: { drug_id: string; country: string; include_other_presentations?: boolean }) {
+  if (!args.drug_id || !args.country) return { status: "unanswerable", reason: "missing_args", hint: "Pass drug_id (UUID) and country (ISO-2)." };
+  const a = await resolveSubstitution(args.drug_id, args.country, { includeOtherPresentations: !!args.include_other_presentations });
+  if (!a) return { status: "unanswerable", reason: "drug_not_found", hint: "Verify drug_id via search_drugs." };
+  const swaps = a.options.filter((o) => o.tier === "authorised_swap").length;
+  return {
+    ...a,
+    // Keep the model's context lean; the ranking is already done.
+    options: a.options.slice(0, 8),
+    options_total: a.options.length,
+    situation: { ...a.situation, notices: a.situation.notices.slice(0, 5) },
+    confidence: {
+      level: swaps ? "high" : a.options.length ? "medium" : "low",
+      score: swaps ? 0.85 : a.options.length ? 0.6 : 0,
+      basis: a.refusal ? a.refusal.reason : `${a.options.length} option${a.options.length === 1 ? "" : "s"} for ${a.country}: ${swaps} authorised by a current instrument.`,
     } satisfies Confidence,
   };
 }
@@ -3682,6 +3716,8 @@ export async function executeTool(
       return await getClassSummary(input as any, ctx);
     case "get_sourced_alternatives":
       return await getSourcedAlternatives(input as any);
+    case "get_substitution_answer":
+      return await getSubstitutionAnswer(input as any);
     case "get_trade_prices":
       return await getTradePrices(input as any);
     case "search_recalls":

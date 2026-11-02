@@ -88,6 +88,24 @@ Ranking is **deterministic server code**, not model judgement. The model phrases
 - New chat tool `get_substitution_answer`, which supersedes calling `get_sourced_alternatives` + `find_substitutes` + `get_eligibility_status` separately for this question shape. Update `system-prompt.ts` pharmacist JTBD to call it first.
 - `substitution_card` render block in chat.
 
+#### Phase B status (2 Nov 2026)
+
+**Built** (`frontend/lib/substitution/`): `rank.ts` (pure ranking, 20 unit tests: `node --test lib/substitution/rank.test.mts`), `molecule.ts` (strict salt-form grouping), `resolve.ts` (loads data), plus chat tool `get_substitution_answer` and prompt changes.
+
+**The biggest AU lever wasn't on the plan.** Every TGA shortage record carries TGA's own management advice (`tga_shortage_management_action`, already stored in `shortage_events.notes` as "TGA guidance: …"). Of 523 current/anticipated TGA records, ~330 say "Alternative brand(s) available" and ~45 say an s19A approval exists. The engine quotes these verbatim as tier 2/3. And that feed isn't behind the bot check.
+
+**Prod sweep, 40 active-shortage drugs per market:**
+
+| Market | Authorised swap | Same medicine | Import pathway | Therapeutic | Refusal |
+|---|---|---|---|---|---|
+| AU | 0 | 25 | 6 | 0 | 9 |
+| US | 11 (Orange Book: equivalence, "check") | 0 | 0 | 1 | 28 |
+| GB | 0 | 0 | 0 | 1 | 5 (only 6 active GB drugs) |
+
+Checked by hand: diltiazem AU (SSSI swap + TGA's verbatim "two capsules … equivalent to one capsule"), estradiol GB (SSPs with verbatim supply quantities), dantrolene AU (s19A matched by name in TGA's title), amoxicillin AU (TGA guidance + same-strength registered brands with no notice).
+
+**Known gaps:** US notices are ingredient-level, so tier 2 can't say which strength is short and stays empty. Other strengths/forms stay behind `includeOtherPresentations` until open decision 1 is made.
+
 ### Phase C — front doors (≈1 week)
 
 - **/search row:** "What instead?" opens the card in the drawer (the existing "Can I substitute?" column becomes the entry point).

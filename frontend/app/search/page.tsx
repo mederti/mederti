@@ -530,11 +530,19 @@ function Results() {
                       ) : isCat ? (
                         <span className="t-muted">—</span>
                       ) : inShortage ? (
-                        // Absence of a pathway is stated as absence — never
-                        // inverted into "substitution allowed".
+                        // The ranked answer (authorised swaps, the regulator's
+                        // notice guidance, import approvals) lives on the drug
+                        // page; computing it per row would cost ~1s each.
+                        // Never claim "no pathway" here without having looked.
                         <>
-                          <div className="t-norm">No substitution pathway on record</div>
-                          <div className="t-sub2">prescriber decision required</div>
+                          <a
+                            href={`/drugs/${d.drug_id}#instead`}
+                            className="t-instead"
+                            onClick={(e) => { e.stopPropagation(); addRecentMedicine({ id: String(d.drug_id), name: d.generic_name }); }}
+                          >
+                            What can I use instead? →
+                          </a>
+                          <div className="t-sub2">authorised swaps, notice guidance, import approvals</div>
                         </>
                       ) : (
                         <>
@@ -910,6 +918,8 @@ const CSS = `
 .t-mktsub{font-size:10.5px;margin-top:5px;color:var(--text-4)}
 .t-mktsub.warn{color:var(--med)}
 .t-subyes{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#6366f1;background:#eef0ff;border:1px solid #d7daff;padding:4px 9px;border-radius:8px}
+.t-instead{font-size:12px;font-weight:600;color:var(--green-d,#0c8a62);text-decoration:none}
+.t-instead:hover{text-decoration:underline}
 .t-norm{font-size:12.5px;font-weight:600;color:var(--text-2)}
 .t-alt{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.3}
 .t-sub2{font-size:10.5px;color:var(--text-4);margin-top:3px}

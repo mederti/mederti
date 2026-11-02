@@ -2,7 +2,7 @@
 // Reads everything rank.ts needs for one medicine in one market, then ranks.
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { extractEventBrand } from "@/lib/event-brand";
-import { buildSupplyInMarket, type CatalogueRow } from "@/lib/supply-in-market";
+import { buildSupplyInMarket, isCombo, type CatalogueRow } from "@/lib/supply-in-market";
 import {
   rankSubstitution,
   type EligibilityRow,
@@ -110,7 +110,15 @@ export async function resolveSubstitution(
     })),
   );
   const publisher = NOTICE_PUBLISHER[market] ?? "The regulator";
-  const notices: NoticeRow[] = rawNotices.map((n) => ({
+  // Combination products (amoxicillin + clavulanic acid) are linked to the
+  // single molecule in some feeds; their guidance is about a different
+  // medicine, so they're left out here as they are in the supply table.
+  const notices: NoticeRow[] = rawNotices
+    .filter((n) => !isCombo(
+      extractEventBrand(n.data_source_id ?? null, n.raw_data).brand_name,
+      typeof n.ingredients === "string" ? n.ingredients.split(";").map((x: string) => x.trim()).filter(Boolean) : undefined,
+    ))
+    .map((n) => ({
     product: extractEventBrand(n.data_source_id ?? null, n.raw_data).brand_name,
     status: n.status,
     start_date: n.status === "anticipated" ? n.anticipated_start_date ?? n.start_date : n.start_date,

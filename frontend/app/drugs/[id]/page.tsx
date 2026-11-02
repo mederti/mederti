@@ -14,6 +14,7 @@ import AppShell from "@/app/components/v1/AppShell";
 import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand } from "@/lib/event-brand";
 import { buildSupplyInMarket, type CatalogueRow } from "@/lib/supply-in-market";
+import { resolveSubstitution } from "@/lib/substitution/resolve";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
 
@@ -731,7 +732,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // molecule (drug_ids from the nightly profile), not just this one, because
   // a market's notices often sit on a salt- or form-specific row.
   const moleculeIds: string[] = [...new Set([id, ...((profileRes.data?.[0] as { drug_ids?: string[] } | undefined)?.drug_ids ?? [])])];
-  const [catRes, noticeRes] = await Promise.all([
+  const [catRes, noticeRes, substitution] = await Promise.all([
     supabase
       .from("drug_catalogue")
       .select("brand_name, strength, dosage_form, sponsor, registration_number, active_ingredients")
@@ -747,6 +748,12 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .in("status", ["active", "anticipated"])
       .or("synthetic.is.null,synthetic.eq.false")
       .limit(200),
+    // "What to dispense instead" (lib/substitution). A failure hides the
+    // section rather than the page; it never renders as "nothing on file".
+    resolveSubstitution(id, userCountry).catch((e) => {
+      console.error("[drug page] substitution engine failed", id, userCountry, e);
+      return null;
+    }),
   ]);
   const supplyInMarket = buildSupplyInMarket(
     userCountry,
@@ -926,6 +933,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       apiConcentration={apiConcentration}
       supplyProfile={supplyProfile}
       supplyInMarket={supplyInMarket}
+      substitution={substitution}
       recalls={recalls}
       approvalFootprint={approvalFootprint}
       eligibility={eligibility}

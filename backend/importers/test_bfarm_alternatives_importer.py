@@ -7,7 +7,7 @@ Run from the repo root (no pytest needed):
 
 import unittest
 
-from backend.importers.bfarm_alternatives_importer import build_rows, parse_csv
+from backend.importers.bfarm_alternatives_importer import _expire_missing, build_rows, parse_csv
 
 HEADER = ("PZN;ENR;Bearbeitungsnummer;Referenzierte Erstmeldung;Meldungsart;Beginn;Ende;"
           "Arzneimittlbezeichnung;Atc Code;Wirkstoffe;Alternativpräparat")
@@ -81,6 +81,56 @@ class TestBuildRows(unittest.TestCase):
     def test_na_alternative_produces_nothing(self):
         rows, amb = build_rows(_csv("1;100;LE1;N/A;Erstmeldung;01.09.2026;N/A;A;A01;Foo;N/A"))
         self.assertEqual((rows, amb), ([], []))
+
+
+class _FakeTable:
+    def __init__(self, stored):
+        self.stored, self.updated = stored, []
+
+    def select(self, *_):
+        return self
+
+    def eq(self, *_):
+        return self
+
+    def or_(self, *_):
+        return self
+
+    def execute(self):
+        return type("R", (), {"data": self.stored})()
+
+    def update(self, values):
+        self._values = values
+        return self
+
+    def in_(self, _col, ids):
+        self.updated += ids
+        return self
+
+
+class _FakeDB:
+    def __init__(self, stored):
+        self.t = _FakeTable(stored)
+
+    def table(self, _):
+        return self.t
+
+
+def _key(ref):
+    return {"source_code": "bfarm_alternativpraeparat", "source_ref": ref,
+            "drug_name_raw": "A", "alternative_name_raw": "B", "indication": ""}
+
+
+class TestExpireMissing(unittest.TestCase):
+    def test_expires_rows_that_left_the_csv(self):
+        db = _FakeDB([{"id": "keep", **_key("LE1")}, {"id": "gone", **_key("LE2")}])
+        self.assertEqual(_expire_missing(db, [_key("LE1")]), 1)
+        self.assertEqual(db.t.updated, ["gone"])
+
+    def test_truncated_csv_expires_nothing(self):
+        db = _FakeDB([{"id": str(i), **_key(f"LE{i}")} for i in range(10)])
+        self.assertEqual(_expire_missing(db, [_key("LE0")]), 0)
+        self.assertEqual(db.t.updated, [])
 
 
 if __name__ == "__main__":

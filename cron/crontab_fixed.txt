@@ -147,6 +147,19 @@ SHELL=/bin/bash
 # "in force" state honest. Requires migration 040 applied in prod first.
 45  7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m cron.run_eligibility_scrapers >> logs/cron.log 2>&1
 
+# ─── Cited alternatives → alternative_evidence (Substitution Agent tiers 1/2) ───
+# Added 2026-11-02. These were run once (2026-10-17) and never scheduled, so
+# new SSSIs/SSPs and BfArM notifications were never picked up. Each statement
+# carries its own valid_from/valid_until; BfArM and Orange Book also expire
+# rows that leave the source file (tfda_alternatives is scheduled above).
+# Afternoon slots: early-morning slots get missed while the laptop sleeps
+# (see the NHS tariff note below). Daily where the source changes daily; the
+# Orange Book data files are republished monthly, so weekly is enough.
+0  14 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.bfarm_alternatives_importer >> logs/cron.log 2>&1
+10 14 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.tga_sssi_alternatives_importer >> logs/cron.log 2>&1
+20 14 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.uk_ssp_alternatives_importer >> logs/cron.log 2>&1
+30 14 * * 3  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.fda_orange_book_alternatives_importer >> logs/cron.log 2>&1
+
 # ─── Daily data-health digest (08:00 UTC = 18:00 AEST + 1). Emails OPS_ALERT_EMAIL ───
 # only when something is actionable (use --force-email to override).
 0   8 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.health.daily_check >> logs/health.log 2>&1

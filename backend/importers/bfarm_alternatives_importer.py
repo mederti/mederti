@@ -50,7 +50,8 @@ Usage
     MEDERTI_DRY_RUN=1 python3 -m backend.importers.bfarm_alternatives_importer
     python3 -m backend.importers.bfarm_alternatives_importer
 
-Cadence: daily alongside the bfarm scraper. Idempotent upsert.
+Cadence: daily alongside the bfarm scraper. Idempotent upsert; stored rows
+whose notification has left the CSV are expired (valid_until = yesterday).
 """
 from __future__ import annotations
 
@@ -61,7 +62,7 @@ import os
 import re
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -80,6 +81,11 @@ PUBLISHER = "BfArM"
 DRY_RUN = os.environ.get("MEDERTI_DRY_RUN", "0") == "1"
 STATEMENT_MAX = 500
 EMPTY = {"", "N/A"}   # the CSV writes "N/A" for unfilled cells
+
+# Refuse to expire stored rows if the CSV yields far fewer pairs than are
+# currently open: that signals a truncated download or format change.
+EXPIRE_MIN_RATIO = 0.5
+KEY_FIELDS = ("source_code", "source_ref", "drug_name_raw", "alternative_name_raw", "indication")
 
 ALT_RE = re.compile(r"^(?P<product>.*?)\s+-\s+Einreichungsnummer:\s*(?P<enr>\d+)\s*$")
 
@@ -202,6 +208,32 @@ def build_rows(records: list[dict[str, str]]) -> tuple[list[dict[str, Any]], lis
     return rows, ambiguous
 
 
+def _expire_missing(supabase, rows: list[dict]) -> int:
+    """valid_until = yesterday for stored, still-valid rows whose notification left the CSV.
+
+    The public CSV lists open notifications only, and `Ende` is the expected
+    end date. When BfArM closes a shortage early the row disappears with a
+    future `Ende`, so it would otherwise keep counting until that date.
+    """
+    current = {tuple(r[k] for k in KEY_FIELDS) for r in rows}
+    today = date.today().isoformat()
+    stored = (supabase.table("alternative_evidence")
+              .select("id, valid_until, " + ", ".join(KEY_FIELDS))
+              .eq("source_code", SOURCE_CODE)
+              .or_(f"valid_until.is.null,valid_until.gte.{today}")
+              .execute().data or [])
+    stale = [r["id"] for r in stored if tuple(r[k] for k in KEY_FIELDS) not in current]
+    if stored and len(rows) < len(stored) * EXPIRE_MIN_RATIO:
+        print(f"  WARNING: {len(rows)} pairs vs {len(stored)} open stored; not expiring anything (check the CSV)")
+        return 0
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    for i in range(0, len(stale), 200):
+        supabase.table("alternative_evidence").update(
+            {"valid_until": yesterday, "updated_at": datetime.now(timezone.utc).isoformat()}
+        ).in_("id", stale[i:i + 200]).execute()
+    return len(stale)
+
+
 def main() -> int:
     try:
         from dotenv import load_dotenv
@@ -263,6 +295,8 @@ def main() -> int:
             errors += 1
             log.error("Upsert failed", extra={"offset": i, "error": str(exc)})
     print(f"  Upserted: {len(rows)} rows, {errors} failed batches")
+    if errors == 0:
+        print(f"  Expired (left the CSV)      : {_expire_missing(supabase, rows)}")
     return 0 if errors == 0 else 1
 
 

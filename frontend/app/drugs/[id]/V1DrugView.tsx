@@ -252,7 +252,15 @@ export default function V1DrugView({
           (SEV[(b.severity || "").toLowerCase()] ?? 0) - (SEV[(a.severity || "").toLowerCase()] ?? 0),
         )
     : [];
-  const mine = active.find((s) => (s.country_code || "").toUpperCase() === userCountry) || null;
+  // The headline notice for the user's market: a current shortage beats an
+  // anticipated one, then the most severe. (Notices come from every salt-form
+  // row of the molecule, so query order alone isn't meaningful.)
+  const mine = active
+    .filter((s) => (s.country_code || "").toUpperCase() === userCountry)
+    .sort((a, b) =>
+      Number((b.status || "").toLowerCase() === "active") - Number((a.status || "").toLowerCase() === "active") ||
+      (SEV[(b.severity || "").toLowerCase()] ?? 0) - (SEV[(a.severity || "").toLowerCase()] ?? 0),
+    )[0] || null;
   // ALL events in the user's market — one row per regulator-reported product,
   // so multi-brand shortages stop collapsing into a single ingredient line.
   // Events that would render identically (same product, sponsor, status,

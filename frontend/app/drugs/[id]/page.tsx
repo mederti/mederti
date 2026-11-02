@@ -14,7 +14,8 @@ import AppShell from "@/app/components/v1/AppShell";
 import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand } from "@/lib/event-brand";
 import { buildSupplyInMarket, type CatalogueRow } from "@/lib/supply-in-market";
-import { resolveSubstitution } from "@/lib/substitution/resolve";
+import { resolveSubstitution, strictSiblingIds } from "@/lib/substitution/resolve";
+import { searchableMolecule } from "@/lib/substitution/molecule";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
 
@@ -411,6 +412,16 @@ export default async function DrugPage({ params, searchParams }: Props) {
   } catch { /* anonymous */ }
   const supabase = getSupabaseAdmin();
 
+  // Shortage notices are read for every drugs row that is exactly this
+  // molecule in another salt form, so the hero agrees with "What to dispense
+  // instead": TGA files diltiazem's notices under "Diltiazem-Hydrochloride".
+  // Strict name equality only (lib/substitution/molecule.ts) — never combos.
+  const { data: nameRow } = await supabase.from("drugs").select("generic_name").eq("id", id).maybeSingle();
+  const shortageDrugIds = [
+    id,
+    ...(await strictSiblingIds(searchableMolecule(nameRow?.generic_name ?? null)).catch(() => [] as string[])),
+  ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 100);
+
   /* ── Parallel data fetching ── */
   const [drugRes, shortagesRes, logRes, alternativesRes, recallsRes] =
     await Promise.allSettled([
@@ -419,7 +430,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .eq("id", id).single(),
       supabase.from("shortage_events")
         .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, raw_data, data_source_id, data_sources(name, abbreviation, country_code)")
-        .eq("drug_id", id).order("updated_at", { ascending: false }),
+        .in("drug_id", shortageDrugIds).order("updated_at", { ascending: false }),
       supabase.from("shortage_status_log")
         .select("id, shortage_event_id, drug_id, old_status, new_status, old_severity, new_severity, changed_at")
         .eq("drug_id", id).order("changed_at", { ascending: false }),

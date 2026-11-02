@@ -50,6 +50,12 @@ _EXPIRY_RE = re.compile(r"until\s+(\d{1,2}/\d{1,2}/\d{4})")
 _PAGE_PARAM_RE = re.compile(r"[?&]page=(\d+)")
 _TAGS_RE = re.compile(r"<[^>]+>")
 _COUNTRY_RE = re.compile(r"\(([^()]+)\)\s*$")
+# TGA keeps a card listed after its approval changes state and says so in the
+# title, e.g. "(Approval lapsed 06/07/2026) NATRILIX SR …" or
+# "Approval commences 1 December 2026 - BIOGARAN …". The until-date alone
+# would mark both as active.
+_LAPSED_PREFIX_RE = re.compile(r"^\(\s*Approval lapsed\s+(\d{1,2}/\d{1,2}/\d{4})\s*\)\s*", re.I)
+_COMMENCES_PREFIX_RE = re.compile(r"^Approval commences\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s*[-–—]\s*", re.I)
 
 
 class TgaSection19A(EligibilityScraper):
@@ -73,6 +79,13 @@ class TgaSection19A(EligibilityScraper):
         is the safe failure mode.
         """
         first = self._get_with_retry(self.SOURCE_URL)
+        if "node--s19aa node--summary" not in first:
+            # Since ~2026-10-28 tga.gov.au answers with an Akamai bot-check
+            # interstitial (bm-verify) instead of the register. That parsed to
+            # 0 rows and logged as a clean run; fail loudly instead so the
+            # staleness is visible. Data stays at its last verified state.
+            why = "bot-check interstitial (bm-verify)" if "bm-verify" in first else "no approval cards on page 1"
+            raise RuntimeError(f"TGA s19A register not returned: {why}; last verified data kept unchanged")
         pages = [first]
         # The pager exposes the highest page index; fall back to "until empty".
         page_nums = [int(n) for n in _PAGE_PARAM_RE.findall(first)]
@@ -124,6 +137,14 @@ class TgaSection19A(EligibilityScraper):
                 if not title:
                     continue
 
+                lapsed_on = commences_on = None
+                if m := _LAPSED_PREFIX_RE.match(title):
+                    lapsed_on = self._parse_date(m.group(1))
+                    title = title[m.end():].strip()
+                elif m := _COMMENCES_PREFIX_RE.match(title):
+                    commences_on = self._parse_date(m.group(1))
+                    title = title[m.end():].strip()
+
                 # Country sits in trailing parentheses on the title.
                 country_name = None
                 m_country = _COUNTRY_RE.search(title)
@@ -143,8 +164,20 @@ class TgaSection19A(EligibilityScraper):
                         status = "active"
                 else:
                     status = "active"
+                if lapsed_on:
+                    status = "lapsed"
+                    expires = lapsed_on
+                elif commences_on and datetime.fromisoformat(commences_on).date() > today:
+                    # Not in force yet. The schema has no "pending" state, so
+                    # keep it out of "active" until the commencement date; the
+                    # daily run flips it once that date arrives.
+                    status = "historical"
 
                 origin = f" Origin: {country_name}." if country_name else ""
+                if lapsed_on:
+                    origin += f" TGA lists this approval as lapsed on {lapsed_on}."
+                elif commences_on:
+                    origin += f" Approval commences {commences_on}."
                 rows.append(EligibilityRow(
                     # generic_name is a best-effort here; the base resolver
                     # canonicalises it to the matched INN and sets drug_id.
@@ -162,14 +195,18 @@ class TgaSection19A(EligibilityScraper):
                     expires_at=expires,
                     source_url=f"https://www.tga.gov.au{slug}",
                     source_name=self.SOURCE_NAME,
-                    raw_data={"title": title, "slug": slug, "country_origin": country_name},
+                    raw_data={"title": title, "slug": slug, "country_origin": country_name,
+                              "lapsed_on": lapsed_on, "commences_on": commences_on},
                 ))
         return rows
 
     # ── helpers ──
     @staticmethod
     def _text(s: str) -> str:
-        return re.sub(r"\s+", " ", _html.unescape(_TAGS_RE.sub(" ", s or ""))).strip()
+        # TGA titles carry zero-width spaces (U+200B), which \s doesn't match;
+        # left in, they hide the trailing "(Country)" from _COUNTRY_RE.
+        text = _html.unescape(_TAGS_RE.sub(" ", s or "")).replace("\u200b", "")
+        return re.sub(r"\s+", " ", text).strip()
 
     @staticmethod
     def _first(rx: re.Pattern[str], s: str) -> str:

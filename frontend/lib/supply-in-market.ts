@@ -135,7 +135,7 @@ function regDigits(s: string | null): string | null {
 // unit before the slash, so it doesn't match).
 const COMBO_NAME = /\s(and|&|\+)\s|&|\bcomposite\b|\d\s*\/\s*\d/i;
 
-function isCombo(name: string | null, ingredients?: unknown): boolean {
+export function isCombo(name: string | null, ingredients?: unknown): boolean {
   if (Array.isArray(ingredients) && ingredients.filter(Boolean).length > 1) return true;
   return !!name && COMBO_NAME.test(name);
 }

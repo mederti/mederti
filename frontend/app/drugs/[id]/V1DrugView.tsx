@@ -1,6 +1,8 @@
 import { Fragment } from "react";
 import { type ConcentrationTier, PEER_GROUPS, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import type { SupplyInMarket, SupplyStatus } from "@/lib/supply-in-market";
+import type { SubstitutionAnswer } from "@/lib/substitution/rank";
+import { SubstitutionSection } from "./SubstitutionSection";
 import Link from "next/link";
 import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
@@ -128,7 +130,7 @@ function namesBrand(published: string | null | undefined, brand: string): boolea
 const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket = null, substitution = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Anonymous free-tier views used (null = signed in). */
@@ -160,6 +162,7 @@ export default function V1DrugView({
   } | null;
   // Registered products × open notices in the user's market (lib/supply-in-market.ts).
   supplyInMarket?: SupplyInMarket | null;
+  substitution?: SubstitutionAnswer | null;
   recalls?: any[];
   approvalFootprint?: {
     total: number;
@@ -249,7 +252,15 @@ export default function V1DrugView({
           (SEV[(b.severity || "").toLowerCase()] ?? 0) - (SEV[(a.severity || "").toLowerCase()] ?? 0),
         )
     : [];
-  const mine = active.find((s) => (s.country_code || "").toUpperCase() === userCountry) || null;
+  // The headline notice for the user's market: a current shortage beats an
+  // anticipated one, then the most severe. (Notices come from every salt-form
+  // row of the molecule, so query order alone isn't meaningful.)
+  const mine = active
+    .filter((s) => (s.country_code || "").toUpperCase() === userCountry)
+    .sort((a, b) =>
+      Number((b.status || "").toLowerCase() === "active") - Number((a.status || "").toLowerCase() === "active") ||
+      (SEV[(b.severity || "").toLowerCase()] ?? 0) - (SEV[(a.severity || "").toLowerCase()] ?? 0),
+    )[0] || null;
   // ALL events in the user's market — one row per regulator-reported product,
   // so multi-brand shortages stop collapsing into a single ingredient line.
   // Events that would render identically (same product, sponsor, status,
@@ -345,6 +356,7 @@ export default function V1DrugView({
   const s19aNotesText = s19aEvt ? getS19AText(s19aEvt.notes) : null;
 
   // Short detail line for the "Can I substitute?" tile.
+  const tile = substitutionTile(substitution);
   const s19aTileDetail = s19aStructured
     ? s19aStructured.scheme_reference
       ? `TGA s19A · ${s19aStructured.scheme_reference}`
@@ -846,6 +858,15 @@ export default function V1DrugView({
 
           {/* So-what tiles */}
           <div className="sw-cards">
+            {substitution ? (
+              // Driven by the substitution engine: the tile names the top
+              // option's tier, and links to the full answer below.
+              <a href="#instead" className="sw-card sw-card-link">
+                <div className="sw-h"><span className={`sw-ic ${tile.ok ? "ok" : "neutral"}`}>{tile.ok ? "✓" : "•"}</span> Can I substitute?</div>
+                <div className="sw-v">{tile.value}</div>
+                <div className="sw-d">{tile.detail}</div>
+              </a>
+            ) : (
             <div className="sw-card">
               {/* "Yes" only when a real pathway is on file; absence of data is
                   stated as absence, never inverted into permission. */}
@@ -853,6 +874,7 @@ export default function V1DrugView({
               <div className="sw-v">{s19aTileDetail ? "Yes — approved substitute available" : mine ? "No pathway on record" : "In supply"}</div>
               <div className="sw-d">{s19aTileDetail ?? (mine ? "prescriber decision required" : "no shortage substitution needed")}</div>
             </div>
+            )}
             {topAlt?.id != null ? (
               <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
                 <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
@@ -948,7 +970,7 @@ export default function V1DrugView({
                   ) : null;
                 })()}
                 <div className="sim-acts">
-                  <a href="#alternatives" className="sim-btn primary">What to use instead</a>
+                  <a href={substitution ? "#instead" : "#alternatives"} className="sim-btn primary">What to use instead</a>
                   <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
                   <WatchButton drugId={id} />
                 </div>
@@ -983,6 +1005,8 @@ export default function V1DrugView({
               </div>
             </div>
           )}
+
+          {substitution && <SubstitutionSection answer={substitution} countryName={cName} />}
 
           {!supplyInMarket && mineAll.length > 0 && (
             <div className="sec">
@@ -1550,6 +1574,23 @@ function groupByStatement(cites: AlternativeCitation[]): { statement: string; re
 
 // Source-backed alternatives: status first, then every supporting statement,
 // verbatim and linked. single_source is labelled as exactly that.
+// The "Can I substitute?" tile, from the engine's top option. Only an
+// authorised swap or the regulator's own guidance earns the ✓.
+function substitutionTile(a: SubstitutionAnswer | null): { ok: boolean; value: string; detail: string } {
+  const r = a?.recommendation;
+  if (!a || !r) return { ok: false, value: "No substitute on file", detail: a?.refusal ? `check ${a.refusal.references[0]?.name ?? "your formulary"}` : "" };
+  switch (r.tier) {
+    case "authorised_swap":
+      return { ok: true, value: "Yes — authorised swap", detail: `${r.source.publisher} ${r.source.ref ?? ""}`.trim() };
+    case "same_medicine":
+      return { ok: true, value: "Another brand or product", detail: r.quote ? `${r.source.publisher} notice guidance` : "registered, no shortage notice on file" };
+    case "import_pathway":
+      return { ok: true, value: "Overseas product approved", detail: r.source.label };
+    default:
+      return { ok: false, value: "Prescriber decision", detail: "different medicine only" };
+  }
+}
+
 function SourcedAlternativesSection({ alts, country }: { alts: SourcedAlternative[]; country: string }) {
   return (
     <div className="sec" id="alternatives">

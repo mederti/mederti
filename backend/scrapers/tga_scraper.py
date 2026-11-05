@@ -73,6 +73,10 @@ class TGAScraper(BaseScraper):
     # TGA is polite about scraping; 2 s gives comfortable headroom
     RATE_LIMIT_DELAY: float = 2.0
 
+    # The MSI search API returns the full current list in one payload, so a
+    # row it stops listing is no longer current (see BaseScraper docs).
+    RECONCILE_ABSENT: bool = True
+
     # ─────────────────────────────────────────────────────────────────────────
     # Status mapping
     # ─────────────────────────────────────────────────────────────────────────

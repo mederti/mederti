@@ -323,8 +323,17 @@ export default function V1DrugView({
     : null;
 
   // Expected back — sponsor-declared only, else "No estimate provided" (never computed).
-  const expected = monthYear(mine?.estimated_resolution_date);
-  const expSource = abbr(mine?.data_sources?.name, mine?.data_sources?.abbreviation) || "regulator";
+  // Earliest estimate still in the future across this market's notices. A
+  // passed estimate is never shown as "expected back" (Propofol showed
+  // "Apr 2026" in Nov 2026) — it's reported as passed instead.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const futureEst = mineAll
+    .filter((s) => s.estimated_resolution_date && s.estimated_resolution_date.slice(0, 10) >= todayIso)
+    .sort((a, b) => a.estimated_resolution_date!.localeCompare(b.estimated_resolution_date!))[0] ?? null;
+  const estPassed = !futureEst && mineAll.some((s) => !!s.estimated_resolution_date);
+  const expected = monthYear(futureEst?.estimated_resolution_date);
+  const expEvent = futureEst ?? mine;
+  const expSource = abbr(expEvent?.data_sources?.name, expEvent?.data_sources?.abbreviation) || "regulator";
 
   // Substitution pathways — prefer the STRUCTURED regulatory_eligibility feed
   // (real approval references, expiry dates, verifiable source URLs). Filter to
@@ -868,10 +877,10 @@ export default function V1DrugView({
             )}
             <div className="sw-card">
               <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
-              <div className="sw-v">{expected ?? "No estimate"}</div>
+              <div className="sw-v">{expected ?? (estPassed ? "Estimate passed" : "No estimate")}</div>
               {/* Ingredient-level date — the event may cover a different brand
                   than the one the user stocks. */}
-              <div className="sw-d">{expected ? `Sponsor est. via ${expSource} — may differ by brand` : "No estimate provided"}</div>
+              <div className="sw-d">{expected ? `Earliest sponsor est. via ${expSource} — may differ by brand` : estPassed ? "Sponsor's date passed, not updated" : "No estimate provided"}</div>
             </div>
           </div>
 
@@ -904,7 +913,7 @@ export default function V1DrugView({
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
                             </td>
-                            <td><SupplyPill status={p.status} since={p.since} /></td>
+                            <td><SupplyPill status={p.status} since={p.since} history={p.history} /></td>
                             <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} /></td>
                           </tr>
                         ))}
@@ -924,7 +933,7 @@ export default function V1DrugView({
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
                             </td>
-                            <td><SupplyPill status={p.status} since={p.since} /></td>
+                            <td><SupplyPill status={p.status} since={p.since} history={p.history} /></td>
                             <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} /></td>
                           </tr>
                         ))}
@@ -2004,8 +2013,27 @@ const CSS = `
 // register ~100 presentations of a common molecule (GB amoxicillin).
 const SIM_CLEAR_SHOWN = 4;
 
-function SupplyPill({ status, since }: { status: SupplyStatus; since: string | null }) {
-  if (status === "none") return <span className="status-pill sp-ok"><span className="d" />No shortage reported</span>;
+function SupplyPill({ status, since, history }: {
+  status: SupplyStatus; since: string | null;
+  history?: { count: number; last: string | null } | null;
+}) {
+  if (status === "none") {
+    // A clean pill alone hid a product that had been short on and off — say
+    // when the regulator last listed it (past notices, last 2 years).
+    const last = history?.last
+      ? new Date(history.last + "T00:00:00Z").toLocaleDateString("en-AU", { month: "short", year: "numeric", timeZone: "UTC" })
+      : null;
+    return (
+      <>
+        <span className="status-pill sp-ok"><span className="d" />No current shortage</span>
+        {history && last && (
+          <div style={{ fontSize: 10.5, marginTop: 4, color: "var(--med)" }}>
+            Short {history.count === 1 ? "once" : `${history.count}×`} in past 2 yrs · last {last}
+          </div>
+        )}
+      </>
+    );
+  }
   // Year shown unless it's the current one: "since 15 Dec" alone could be either.
   const d = since ? new Date(since + "T00:00:00Z") : null;
   const when = d

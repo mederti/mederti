@@ -493,13 +493,6 @@ export default function V1DrugView({
   const marketLabel = `${cName} market`;
 
   // Product-card top-line status pill.
-  const statusPill = localShortage
-    ? anticipated
-      ? { cls: "sp-part", txt: `Anticipated · ${cName}` }
-      : isCrit
-        ? { cls: "sp-crit", txt: `In shortage · ${cName}` }
-        : { cls: "sp-part", txt: `Limited supply · ${cName}` }
-    : { cls: "sp-ok", txt: `In supply · ${cName}` };
 
 
   // Detailed product-attribute table (2-col label/value). Only emits rows with
@@ -628,7 +621,25 @@ export default function V1DrugView({
                 <div className="pc-titles">
                   <div className="pc-name-row">
                     <div className="d-name">{drug.generic_name}</div>
-                    <span className={`status-pill ${statusPill.cls}`}><span className="d" />{statusPill.txt}</span>
+                      {drug.who_essential_medicine ? (
+                        <a
+                          className="d-eml"
+                          href="https://list.essentialmeds.org/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={
+                            drug.who_eml_section
+                              ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
+                              : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+                          }
+                        >
+                          <span className="d-eml-dot" />
+                          WHO Essential Medicine
+                        </a>
+                      ) : null}
+                      {drug.is_controlled_substance === true ? (
+                        <span className="d-ctrl">Controlled substance</span>
+                      ) : null}
                   </div>
                   <div className="d-generic">
                     {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
@@ -646,27 +657,6 @@ export default function V1DrugView({
                 </div>
               </div>
 
-              <div className="pc-badges">
-                {drug.who_essential_medicine ? (
-                  <a
-                    className="d-eml"
-                    href="https://list.essentialmeds.org/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={
-                      drug.who_eml_section
-                        ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
-                        : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
-                    }
-                  >
-                    <span className="d-eml-dot" />
-                    WHO Essential Medicine
-                  </a>
-                ) : null}
-                {drug.is_controlled_substance === true ? (
-                  <span className="d-ctrl">Controlled substance</span>
-                ) : null}
-              </div>
 
               {(() => {
                 const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
@@ -719,8 +709,10 @@ export default function V1DrugView({
                 <div className="hq-title">
                   {localShortage ? (anticipated ? "Anticipated shortage" : isCrit ? "Critical shortage" : "Limited supply") : "In supply"} in {cName}
                 </div>
-                {localShortage && mine?.reason && <div className="hq-reason">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
-                <div className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
+                <div className="hq-sub">
+                  {localShortage && mine?.reason && <span className="hq-reason">{String(mine.reason).replace(/^availability:\s*/i, "")}</span>}
+                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</span>
+                </div>
               </div>
             </div>
 
@@ -1926,6 +1918,18 @@ const CSS = `
 .hq-ai summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--green-d);min-height:32px;display:flex;align-items:center}
 .hq-ai .ai-sum.embedded{border-top:0;padding-top:4px;margin-top:0}
 @container hero (max-width:700px){.hq-qs{grid-template-columns:1fr}.hq-q + .hq-q{border-left:0;border-top:1px solid var(--border)}}
+.hero-card .pc-body{padding:18px 22px 16px}
+.pc-name-row .d-eml,.pc-name-row .d-ctrl{margin-top:0}
+.hero-card .d-generic,.hero-card .d-localcode{display:inline}
+.hero-card .d-localcode::before{content:" · "}
+.hero-card .d-tags{margin-top:10px}
+.hq-head{padding:14px 22px;gap:12px;align-items:center}
+.hq-ic{width:36px;height:36px;border-radius:10px}
+.hq-ic svg{width:18px;height:18px}
+.hq-title{font-size:19px}
+.hq-reason,.hq-src{display:inline;margin-top:0}
+.hq-sub{margin-top:3px;font-size:13px;color:var(--text-2);line-height:1.4}
+.hq-reason + .hq-src::before{content:" · "}
 .sc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:14px;border-top:1px solid rgba(12,17,24,.07)}
 .sc-fact{padding:12px 14px 2px 0;min-width:0;text-decoration:none;color:inherit;display:block}
 .sc-fact + .sc-fact{padding-left:14px;border-left:1px solid rgba(12,17,24,.07)}

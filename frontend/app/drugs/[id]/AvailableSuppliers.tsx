@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ShieldCheck, Globe, Package, ExternalLink } from "lucide-react";
 
 const FLAGS: Record<string, string> = {
@@ -160,7 +161,7 @@ export default function AvailableSuppliers({ drugId, drugName }: AvailableSuppli
         marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--app-border)",
         fontSize: 12, color: "var(--app-text-4)", textAlign: "center",
       }}>
-        Are you a wholesaler? <a href="/suppliers" style={{ color: "var(--teal)", fontWeight: 600, textDecoration: "none" }}>List your stock free →</a>
+        Are you a wholesaler? <Link href="/suppliers" style={{ color: "var(--teal)", fontWeight: 600, textDecoration: "none" }}>List your stock free →</Link>
       </div>
     </div>
   );

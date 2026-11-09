@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- 165 sites over untyped Supabase rows (getSupabase() has no generated DB types) and dynamic tool-input JSON. Typing them needs a db.ts-backed client; tracked as follow-up, not a lint-cleanup change. */
 import { type ConcentrationTier, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "./supabase";
@@ -428,7 +429,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
       type: "object",
       properties: {
         country: { type: "string", description: "Optional ISO-2 country of the facility." },
-        drug_id: { type: "string", description: "Optional drug UUID to scope to facilities supplying this drug." },
+        drug_id: { type: "string", description: "Not supported: facilities are not linked to the drugs they make. Passing a drug_id returns no facilities rather than an unrelated list." },
         limit: { type: "number", description: "Max results (default 25)." },
       },
     },
@@ -2098,8 +2099,8 @@ async function getClassSummary(
     string,
     { drug_id: string; name: string; atc_code: string | null; countries: Set<string>; events: number; who_essential: boolean }
   >();
-  let whoEssentialDrugs = new Set<string>();
-  let euCriticalDrugs = new Set<string>();
+  const whoEssentialDrugs = new Set<string>();
+  const euCriticalDrugs = new Set<string>();
 
   for (const r of rows) {
     const sev = r.severity || "untagged";
@@ -2352,7 +2353,7 @@ async function getSoleSourceEssentials(args: {
     }
   }
 
-  let sponsorNameById = new Map<string, string>();
+  const sponsorNameById = new Map<string, string>();
   if (sponsorIdsToResolve.size > 0) {
     const { data: sps } = await sb
       .from("sponsors")
@@ -2495,7 +2496,7 @@ async function compareShortageBurden(args: { country: string; peer_set?: string[
 
   // Hydrate the top drug names for unique_to_focal + short_in_peers_not_focal (cap 10 each).
   const idsToName = [...unique_to_focal.slice(0, 10), ...short_in_peers_not_focal.slice(0, 10)];
-  let drugNames = new Map<string, string>();
+  const drugNames = new Map<string, string>();
   if (idsToName.length > 0) {
     const { data: drugRows } = await sb.from("drugs").select("id,generic_name").in("id", idsToName);
     for (const r of drugRows ?? []) drugNames.set((r as any).id, (r as any).generic_name);
@@ -3289,6 +3290,15 @@ async function getSupplierShortageRecord(args: { manufacturer_or_sponsor: string
 }
 
 async function getFacilityDistressSignals(args: { country?: string; drug_id?: string; limit?: number }) {
+  // manufacturing_facilities has no drug link, so a drug-scoped call used to
+  // return the same unrelated global list for every drug — which then got
+  // narrated as "this drug's facilities". Refuse the scope instead.
+  if (args.drug_id) {
+    return {
+      country: args.country?.toUpperCase() ?? null, drug_id: args.drug_id, items: [],
+      confidence: { level: "low", score: 0, basis: "Facility inspection data is not mapped to the drugs each site makes; Mederti cannot say which facilities supply this drug. Do not attribute any facility or inspection finding to it." } satisfies Confidence,
+    };
+  }
   const sb = getSupabase();
   const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
   let q = sb.from("manufacturing_facilities")

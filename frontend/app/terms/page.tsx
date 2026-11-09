@@ -69,7 +69,7 @@ export default function TermsPage() {
         <Section title="5. Intellectual property">
           The Mederti platform, including its design, code, and presentation of data, is owned by
           Mederti and protected by applicable intellectual property laws. Underlying shortage data
-          sourced from regulatory bodies is in the public domain in its raw form; Mederti's
+          sourced from regulatory bodies is in the public domain in its raw form; Mederti&apos;s
           normalisation, enrichment, and presentation of that data is proprietary.
         </Section>
 
@@ -94,7 +94,7 @@ export default function TermsPage() {
         </Section>
 
         <Section title="9. Service availability">
-          Mederti is provided "as is" without warranty of any kind. We do not guarantee uninterrupted
+          Mederti is provided &quot;as is&quot; without warranty of any kind. We do not guarantee uninterrupted
           availability. We may modify or discontinue features at any time with reasonable notice.
         </Section>
 

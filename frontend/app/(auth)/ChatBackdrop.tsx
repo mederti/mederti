@@ -120,13 +120,13 @@ export default function ChatBackdrop() {
             textAlign: "center", lineHeight: 1.55, marginBottom: 28,
           }}>
             Ask about drug shortages, recalls, or substitutes across the markets
-            Mederti indexes. Live regulator data — and honest about what's not covered.
+            Mederti indexes. Live regulator data — and honest about what&apos;s not covered.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
-            <Chip highlight>How will Iran's Strait of Hormuz closure affect critical injectable shortages?</Chip>
+            <Chip highlight>How will Iran&apos;s Strait of Hormuz closure affect critical injectable shortages?</Chip>
             <Chip>Is amoxicillin in shortage in Australia?</Chip>
             <Chip>Show me critical antibiotic shortages globally</Chip>
-            <Chip>What's substitutable for hydrochlorothiazide?</Chip>
+            <Chip>What&apos;s substitutable for hydrochlorothiazide?</Chip>
           </div>
         </div>
 

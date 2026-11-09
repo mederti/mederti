@@ -33,6 +33,7 @@ export default function SoWhatInsight({ drugId }: { drugId: string }) {
       .finally(() => { setLoading(false); setRefreshing(false); });
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
   useEffect(() => { load(false); }, [drugId]);
 
   if (loading) {
@@ -45,7 +46,7 @@ export default function SoWhatInsight({ drugId }: { drugId: string }) {
           </span>
         </div>
         <div style={{ marginTop: 8, fontSize: 12, color: "var(--app-text-4)", fontStyle: "italic" }}>
-          Reading today's signals…
+          Reading today&apos;s signals…
         </div>
       </div>
     );

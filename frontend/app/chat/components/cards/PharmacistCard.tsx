@@ -120,7 +120,7 @@ function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }
 
       <div className="card-a-preorder">
         <div className="card-a-preorder-text">
-          <strong>Pre-order {drug.name}</strong> — we'll match a verified supplier when stock returns.
+          <strong>Pre-order {drug.name}</strong> — we&apos;ll match a verified supplier when stock returns.
         </div>
         <button
           type="button"
@@ -244,7 +244,7 @@ function StateA({ drug, bundle }: { drug: DrugDetail; bundle: DrugDetailBundle }
         </div>
       ) : (
         <div className="card-a-context">
-          Mederti doesn't have a same-class drug on file for {drug.name} yet. The pre-order signal will route a supplier match when one becomes available.
+          Mederti doesn&apos;t have a same-class drug on file for {drug.name} yet. The pre-order signal will route a supplier match when one becomes available.
         </div>
       )}
 

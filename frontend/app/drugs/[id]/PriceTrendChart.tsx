@@ -61,6 +61,7 @@ export function PriceTrendChart({
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setState("loading");
     fetch(`/api/insights/price-trends?drug_id=${encodeURIComponent(drugId)}&country=${encodeURIComponent(country)}&months=${months}&forward=${forward}`)
       .then((r) => (r.ok ? r.json() : null))

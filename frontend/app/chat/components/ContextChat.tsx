@@ -203,7 +203,7 @@ export function ContextChat({
 
         const assistantId = ++idRef.current;
         let assistantTurn: Turn = { id: assistantId, role: "assistant", text: "", tool_steps: [] };
-        let working = [...nextTurns, assistantTurn];
+        const working = [...nextTurns, assistantTurn];
         setTurns(working);
 
         let done: { content: string; drugs?: Record<string, DrugDetail>; subs?: Record<string, SubstituteRow> } | null = null;

@@ -20,14 +20,16 @@ interface Payload {
   error?: string;
 }
 
-export default function V1AiSummary({ id, embedded = false }: { id: string; embedded?: boolean }) {
+export default function V1AiSummary({ id, embedded = false, clamp = true }: { id: string; embedded?: boolean; clamp?: boolean }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const wrapCls = embedded ? "ai-sum embedded" : "ai-sum";
 
   useEffect(() => {
     let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setLoading(true);
     setUnavailable(false);
     fetch(`/api/drugs/${id}/so-what`)
@@ -79,7 +81,12 @@ export default function V1AiSummary({ id, embedded = false }: { id: string; embe
   return (
     <div className={wrapCls}>
       {data.headline && <div className="ai-sum-hl">{data.headline}</div>}
-      <div className="ai-sum-body">{data.body}</div>
+      <div className={`ai-sum-body${embedded && clamp && !expanded ? " clamp" : ""}`}>{data.body}</div>
+      {embedded && clamp && (
+        <button type="button" className="ai-sum-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Show less" : "Read full summary →"}
+        </button>
+      )}
     </div>
   );
 }

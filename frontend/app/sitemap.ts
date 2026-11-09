@@ -19,7 +19,7 @@ const SOFT_LAUNCH =
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
 
-  let medicinePages: MetadataRoute.Sitemap = [];
+  const medicinePages: MetadataRoute.Sitemap = [];
   let regulatorPages: MetadataRoute.Sitemap = [];
   try {
     if (

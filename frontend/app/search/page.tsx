@@ -26,6 +26,34 @@ function statusOf(d: DrugHit): { cls: string; label: string } {
 }
 
 // ── Table-view display helpers ──────────────────────────────────────────
+/**
+ * Brands to show under a result. When the row was promoted from a brand the
+ * user typed (search "fresofol" → Propofol), that brand leads — otherwise the
+ * row showed whatever brand sorted first ("Provive"), which a hospital
+ * pharmacist read as us returning the wrong, non-interchangeable product.
+ */
+function resultBrands(d: DrugHit): { matched: string | null; others: string[] } {
+  const matched = d.matched_brand ? cleanBrandNames([d.matched_brand], d.generic_name)[0] ?? null : null;
+  const others = cleanBrandNames(d.brand_names, d.generic_name)
+    .filter((b) => !matched || b.toLowerCase() !== matched.toLowerCase());
+  return { matched, others };
+}
+/** Brand hits open the molecule page scoped to that brand's products. */
+function resultHref(d: DrugHit): string {
+  return d.matched_brand && d.matched_catalogue_id
+    ? `/drugs/${d.drug_id}?brand_focus=${d.matched_catalogue_id}`
+    : `/drugs/${d.drug_id}`;
+}
+function BrandLine({ d, className }: { d: DrugHit; className: string }) {
+  const { matched, others } = resultBrands(d);
+  if (!matched && others.length === 0) return null;
+  return (
+    <div className={className}>
+      {matched && <><strong>{matched}</strong>{others.length > 0 ? " · also " : ""}</>}
+      {others.slice(0, matched ? 2 : 3).join(" · ")}
+    </div>
+  );
+}
 function monthYear(iso?: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -167,6 +195,10 @@ function Results() {
   const forcedRef = useRef<Set<string>>(new Set());
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
+  // Last query the user typed into the box on this page. Live search runs as
+  // you type, so we must never auto-open a result mid-keystroke ("fres" → 1 hit
+  // → yanked away). Only queries that arrive by link/history/refresh auto-open.
+  const lastTypedRef = useRef<string | null>(null);
 
   // Merge a param patch into the current URL (null clears a key).
   const setParams = useCallback(
@@ -204,6 +236,7 @@ function Results() {
           !triedRef.current.has(lc) && !forcedRef.current.has(lc)
         ) {
           triedRef.current.add(lc);
+          if (lastTypedRef.current === term) lastTypedRef.current = sug.trim();
           setCorrected({ from: term, to: sug });
           setResults([]); setTotal(0); setFacets(null);
           setParams({ q: sug });
@@ -211,6 +244,18 @@ function Results() {
         }
         // Showing a fresh, unrelated query → drop any stale correction banner.
         if (corrected && lc !== corrected.to.toLowerCase()) setCorrected(null);
+        // Exactly one match for a query that arrived by navigation (sidebar
+        // history, home, chat links) → go straight to it. replace() so Back
+        // returns to where the user came from, not into a redirect loop.
+        // Skipped when the user is narrowing with filters — they're browsing.
+        if (
+          data.total === 1 && data.results.length === 1 &&
+          lastTypedRef.current !== term &&
+          !statusStr && !formStr && !strengthStr
+        ) {
+          router.replace(resultHref(data.results[0]));
+          return;
+        }
         setResults(data.results);
         setTotal(data.total);
         setFacets(data.facets?.status ?? null);
@@ -247,6 +292,7 @@ function Results() {
 
   function onChange(v: string) {
     setQ(v);
+    lastTypedRef.current = v.trim();
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
       setParams({ q: v.trim() || null });
@@ -301,6 +347,12 @@ function Results() {
           autoFocus
           value={q}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Typed query with a single hit: Enter opens it.
+            if (e.key === "Enter" && !loading && results.length === 1 && q.trim() === urlQ.trim()) {
+              router.push(resultHref(results[0]));
+            }
+          }}
           placeholder="Search a drug — e.g. amoxicillin, cisplatin, metformin"
         />
       </div>
@@ -484,7 +536,6 @@ function Results() {
             <tbody>
               {results.map((d) => {
                 const ms = marketStatus(d, market, isGlobalMarket);
-                const bn = cleanBrandNames(d.brand_names, d.generic_name);
                 const eb = monthYear(d.estimated_resolution_date);
                 // Scheme-specific plain-language copy — "Yes" only when the
                 // pathway itself authorises substitute supply.
@@ -498,7 +549,7 @@ function Results() {
                 // catalogue fallback that renders a registration page.
                 const go = () => {
                   addRecentMedicine({ id: String(d.drug_id), name: d.generic_name });
-                  router.push(`/drugs/${d.drug_id}`);
+                  router.push(resultHref(d));
                 };
                 return (
                   <tr
@@ -511,7 +562,7 @@ function Results() {
                   >
                     <td>
                       <div className="t-name">{truncateDrugName(d.generic_name)}</div>
-                      {bn.length > 0 && <div className="t-brands">{bn.slice(0, 3).join(" · ")}</div>}
+                      <BrandLine d={d} className="t-brands" />
                       <div className="t-atc">{d.atc_code ? `ATC ${d.atc_code}` : "—"}</div>
                     </td>
                     <td>
@@ -605,7 +656,7 @@ function Results() {
             <div className="res-card">
               <div className="res-l">
                 <div className="rn">{truncateDrugName(d.generic_name)}</div>
-                {(() => { const bn = cleanBrandNames(d.brand_names, d.generic_name); return bn.length > 0 ? <div className="rg">{bn.slice(0, 3).join(" · ")}</div> : null; })()}
+                <BrandLine d={d} className="rg" />
                 <div className="rmeta">
                   {d.atc_code ? `ATC ${d.atc_code}` : "—"}
                   {d.alternatives_count ? ` · ${d.alternatives_count} same-class drug${d.alternatives_count > 1 ? "s" : ""}` : ""}
@@ -619,7 +670,7 @@ function Results() {
           // "in supply" page when the id resolves to a drug_catalogue row.
           return <Link
                 key={d.drug_id}
-                href={`/drugs/${d.drug_id}`}
+                href={resultHref(d)}
                 style={{ textDecoration: "none", color: "inherit" }}
                 onClick={() => addRecentMedicine({ id: String(d.drug_id), name: d.generic_name })}
               >{inner}</Link>;
@@ -734,6 +785,7 @@ function UnifiedSearch() {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     if (!q) { setIntent("empty"); return; }
     if (looksLikeQuestion(q)) { setIntent("open"); return; }
     // Short, name-like input: optimistically show results (almost always a

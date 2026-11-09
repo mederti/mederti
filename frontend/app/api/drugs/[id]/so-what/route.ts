@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { recordAiUsage } from "@/lib/ai/usage-log";
 import { cleanBrandNames } from "@/lib/brand";
 import { requireAdmin } from "@/lib/admin-auth";
+import { extractEventMarketExit } from "@/lib/event-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -63,12 +64,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const safe = <T,>(p: PromiseLike<{ data: T | null }>, empty: T) =>
     Promise.resolve(p).catch(() => ({ data: empty }));
 
-  const [drugRes, shortagesRes, regEventsRes, trialsRes, facilitiesRes, approvalsRes, alternativesRes] = await Promise.all([
+  const [drugRes, shortagesRes, regEventsRes, trialsRes, approvalsRes, alternativesRes] = await Promise.all([
     sb.from("drugs").select("id, generic_name, brand_names, atc_code_full, drug_class, who_essential_medicine, critical_medicine_eu").eq("id", drugId).maybeSingle(),
-    sb.from("shortage_events").select("country_code, status, severity, reason_category, start_date, end_date").eq("drug_id", drugId),
+    sb.from("shortage_events").select("country_code, status, severity, reason, reason_category, start_date, end_date, notes, data_source_id, raw_data").eq("drug_id", drugId),
     sb.from("regulatory_events").select("event_type, event_date, source_country, sponsor, description, outcome").eq("drug_id", drugId).gte("event_date", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)).limit(10),
     sb.from("clinical_trials").select("phase, overall_status, primary_completion_date, sponsor").eq("drug_id", drugId).in("phase", ["Phase 3", "Phase 4"]).limit(15),
-    sb.from("manufacturing_facilities").select("facility_name, country, last_inspection_classification, oai_count_5y, warning_letter_count_5y").or("last_inspection_classification.eq.OAI,warning_letter_count_5y.gt.0").limit(8),
     sb.from("drug_approvals").select("authority, te_code").eq("drug_id", drugId).limit(20),
     safe(
       sb.from("drug_alternatives").select("alternative_drug_id").eq("drug_id", drugId).eq("is_approved", true).limit(50) as unknown as PromiseLike<{ data: Array<{ alternative_drug_id: string }> | null }>,
@@ -79,7 +79,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const drug = drugRes.data as { generic_name: string; brand_names: string[] | null; atc_code_full: string | null; drug_class: string | null; who_essential_medicine: boolean; critical_medicine_eu: boolean } | null;
   if (!drug) return NextResponse.json({ error: "Drug not found" }, { status: 404 });
 
-  type ShortageRow = { country_code: string; status: string; severity: string; reason_category: string | null; end_date: string | null };
+  type ShortageRow = {
+    country_code: string; status: string; severity: string; reason: string | null; reason_category: string | null;
+    end_date: string | null; notes: string | null; data_source_id: string | null; raw_data: unknown;
+  };
   const shortages = (shortagesRes.data ?? []) as ShortageRow[];
   const active = shortages.filter((s) => s.status === "active");
   const resolved = shortages.filter((s) => s.status === "resolved");
@@ -95,6 +98,20 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (!s.end_date) return false;
     return new Date(s.end_date).getTime() > Date.now() - 90 * 86400000;
   }).length;
+
+  // The regulator's own words for each active notice. Without them the model
+  // only saw "discontinuation" and narrated a withdrawal as a "supply gap".
+  const noticeLines = active.slice(0, 6).map((s) => {
+    const exit = extractEventMarketExit(s.data_source_id, s.raw_data);
+    const facts = [
+      s.reason_category ?? "unknown",
+      exit.withdrawal_date ? `registration cancelled from ${exit.withdrawal_date}` : null,
+      exit.regulator_impact ? `regulator impact rating: ${exit.regulator_impact}` : null,
+      s.reason ? `reason: ${s.reason.slice(0, 160)}` : null,
+      s.notes ? `notice text: ${s.notes.replace(/\s+/g, " ").slice(0, 320)}` : null,
+    ].filter(Boolean);
+    return `- ${s.country_code} (${s.severity}): ${facts.join(" | ")}`;
+  });
 
   const teCodes = ((approvalsRes.data ?? []) as Array<{ te_code: string | null }>).map((a) => a.te_code).filter(Boolean);
 
@@ -116,6 +133,8 @@ Worst severity: ${["", "low", "medium", "high", "critical"][worstSev] || "n/a"}
 Active reason categories: ${reasons.join(", ") || "none"}
 Resolved in last 90 days: ${recentResolved}
 Total shortage events on file: ${shortages.length}
+Active notices (verbatim regulator facts):
+${noticeLines.join("\n") || "(none)"}
 
 REGULATORY (last 30 days + upcoming)
 =====================================
@@ -130,13 +149,9 @@ ACTIVE PHASE III/IV TRIALS
 ${(trialsRes.data ?? []).filter((t) => ["RECRUITING", "ACTIVE_NOT_RECRUITING"].includes((t as { overall_status: string }).overall_status)).length} active
 Sample: ${(trialsRes.data ?? []).slice(0, 3).map((t) => (t as { sponsor: string }).sponsor).join("; ") || "n/a"}
 
-MANUFACTURING SIGNALS (global, OAI/warning letters last 5y)
-============================================================
-${(facilitiesRes.data ?? []).length} facilities flagged
-${(facilitiesRes.data ?? []).slice(0, 4).map((f) => {
-  const r = f as { facility_name: string; country: string; last_inspection_classification: string };
-  return `- ${r.country} ${r.facility_name} (${r.last_inspection_classification})`;
-}).join("\n")}
+MANUFACTURING SIGNALS
+=====================
+None linked to this drug. Mederti's inspection data (FDA OAI / warning letters) is not mapped to the medicines a site makes, so no facility, inspection or manufacturing-country claim can be made about this drug.
 
 APPROVALS / EQUIVALENCE
 ========================
@@ -175,13 +190,15 @@ ${dataContext}
 Output JSON:
 
 {
-  "headline": "4-8 word noun phrase. Examples: 'A worsening cross-border shortage', 'Manufacturing risk in India', 'Stable supply, light pipeline'.",
+  "headline": "4-8 word noun phrase. Examples: 'A worsening cross-border shortage', 'Leaving the market in March', 'Stable supply, light pipeline'.",
   "body": "ONE paragraph, 60-100 words, three sentences. (1) news. (2) telling fact. (3) implication. Active voice. Plain words. No deplorables.",
   "signal": "elevated" | "stable" | "improving" | "worsening",
   "confidence": "high" | "medium" | "low"
 }
 
-If the data is thin (no active shortages, no upcoming events, no manufacturing signals), say so plainly. Don't invent risk that isn't there. The honest reading might be "Supply is stable. There is little forward signal worth flagging." That is fine.
+Only state facts that appear in the data above — never add manufacturers, facilities, countries, inspections or trials that are not listed. A "discontinuation" is a withdrawal from the market, not a temporary gap: say when it takes effect if a date is given, and never imply the product will return.
+
+If the data is thin (no active shortages, no upcoming events), say so plainly. Don't invent risk that isn't there. The honest reading might be "Supply is stable. There is little forward signal worth flagging." That is fine.
 
 NEVER produce text like:
 - "The trajectory of this drug's supply situation paints a concerning picture..."

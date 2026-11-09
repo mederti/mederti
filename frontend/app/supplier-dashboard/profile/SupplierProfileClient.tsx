@@ -182,7 +182,7 @@ export default function SupplierProfileClient() {
             Countries you supply
           </label>
           <div style={{ fontSize: 12, color: "var(--app-text-4)", marginBottom: 10 }}>
-            You'll receive enquiries from buyers in these countries. Leave empty for global.
+            You&apos;ll receive enquiries from buyers in these countries. Leave empty for global.
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 6 }}>
             {COUNTRIES.map(c => {

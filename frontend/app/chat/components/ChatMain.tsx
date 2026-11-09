@@ -445,7 +445,7 @@ export function ChatMain({
                   What Drug Are You Looking For
                 </h1>
                 <p className="text-[14px] text-slate-500 max-w-[480px] mx-auto">
-                  Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what's not covered.
+                  Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what&apos;s not covered.
                 </p>
               </div>
               {/* Search bar lifted directly under the heading + subheading on the

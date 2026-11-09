@@ -65,10 +65,12 @@ export default function PredictiveSignals({ country: countryProp, limit = 8, com
     const m = typeof document !== "undefined"
       ? document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/)
       : null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
     if (m) setCountry(m[1].toUpperCase());
   }, [countryProp]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setLoading(true);
     fetch(`/api/predictive-signals?country=${country}&limit=${limit}`)
       .then(r => r.json())

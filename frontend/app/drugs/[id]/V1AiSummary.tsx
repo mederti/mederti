@@ -28,6 +28,7 @@ export default function V1AiSummary({ id, embedded = false }: { id: string; embe
 
   useEffect(() => {
     let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setLoading(true);
     setUnavailable(false);
     fetch(`/api/drugs/${id}/so-what`)

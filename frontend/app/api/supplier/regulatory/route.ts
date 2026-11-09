@@ -66,7 +66,7 @@ export async function GET() {
     // Get active shortage counts per source country
     const countryCodes: string[] = [...new Set(sources.map((s: { country_code: string | null }) => s.country_code).filter(Boolean) as string[])];
 
-    let countByCountry: Record<string, number> = {};
+    const countByCountry: Record<string, number> = {};
     if (countryCodes.length > 0) {
       const { data: shortages } = await supabase
         .from("shortage_events")

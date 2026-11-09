@@ -90,6 +90,7 @@ function extractAttr(attrs: string, name: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- payload shape varies per `kind`; a discriminated union is a parser refactor, not lint cleanup.
 type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis" | "sources"; index: number; length: number; data: any };
 
 export function parseAgentResponse(raw: string): ParsedPart[] {

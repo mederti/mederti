@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- 165 sites over untyped Supabase rows (getSupabase() has no generated DB types) and dynamic tool-input JSON. Typing them needs a db.ts-backed client; tracked as follow-up, not a lint-cleanup change. */
 import { type ConcentrationTier, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "./supabase";
@@ -2098,8 +2099,8 @@ async function getClassSummary(
     string,
     { drug_id: string; name: string; atc_code: string | null; countries: Set<string>; events: number; who_essential: boolean }
   >();
-  let whoEssentialDrugs = new Set<string>();
-  let euCriticalDrugs = new Set<string>();
+  const whoEssentialDrugs = new Set<string>();
+  const euCriticalDrugs = new Set<string>();
 
   for (const r of rows) {
     const sev = r.severity || "untagged";
@@ -2352,7 +2353,7 @@ async function getSoleSourceEssentials(args: {
     }
   }
 
-  let sponsorNameById = new Map<string, string>();
+  const sponsorNameById = new Map<string, string>();
   if (sponsorIdsToResolve.size > 0) {
     const { data: sps } = await sb
       .from("sponsors")
@@ -2495,7 +2496,7 @@ async function compareShortageBurden(args: { country: string; peer_set?: string[
 
   // Hydrate the top drug names for unique_to_focal + short_in_peers_not_focal (cap 10 each).
   const idsToName = [...unique_to_focal.slice(0, 10), ...short_in_peers_not_focal.slice(0, 10)];
-  let drugNames = new Map<string, string>();
+  const drugNames = new Map<string, string>();
   if (idsToName.length > 0) {
     const { data: drugRows } = await sb.from("drugs").select("id,generic_name").in("id", idsToName);
     for (const r of drugRows ?? []) drugNames.set((r as any).id, (r as any).generic_name);

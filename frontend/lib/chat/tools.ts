@@ -17,6 +17,14 @@ import type {
 import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
 import { ALTERNATIVES_CAVEAT, ALTERNATIVES_SOURCE, atcMatchLabel } from "@/lib/alternatives";
 import { SOURCE_LABELS, fetchSourcedAlternatives } from "@/lib/alternatives-evidence";
+import {
+  DEPENDENCE_CAVEATS,
+  getDependenceIndex,
+  moleculeView,
+  resolveCountry,
+  singleCountryView,
+  whatIfView,
+} from "@/lib/supply/api-country-dependence";
 
 export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
   // Anthropic server-side web search — used freely as a primary research tool
@@ -280,6 +288,23 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
         drug_id: { type: "string", description: "Drug UUID (preferred when known)." },
         name: { type: "string", description: "INN of the medicine (e.g. 'cisplatin') when no drug_id." },
         country: { type: "string", description: "Optional ISO-2 country; adds whether it is short there now." },
+      },
+    },
+  },
+  {
+    name: "get_api_country_dependence",
+    description:
+      "Known FDA Drug Master File (DMF) API holders by country, for any molecule with a US DMF (~3,700). Three modes: 'single_country' — which molecules have every known DMF holder in one country (optionally only those dependent on `country`, or only those short/anticipated now); 'what_if' — if `country` stopped exporting API, which currently short or anticipated molecules lose ALL known DMF holders, and which lose all holders whose country is known; 'molecule' — one molecule's holders by country. Use for 'which drugs depend on India/China for API', 'what if China stopped exporting', 'where is X's API made', 'is X single-country'. Counts DMF filings, NOT market share, volumes or actual supply; holder country is name-matched to FDA DECRS and ~half of holders have none. Always state the result's caveats and coverage, and the counts under each heading (lose all vs. lose all with known country).",
+    input_schema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", enum: ["single_country", "what_if", "molecule"], description: "Which question to answer (default single_country)." },
+        country: { type: "string", description: "Country name or ISO-2 code (e.g. 'China', 'IN'). Required for what_if; optional filter for single_country." },
+        drug_id: { type: "string", description: "Drug UUID for mode=molecule." },
+        name: { type: "string", description: "Molecule name (INN or US name) for mode=molecule when no drug_id." },
+        short_only: { type: "boolean", description: "single_country: only molecules short or anticipated somewhere now." },
+        include_not_short: { type: "boolean", description: "what_if: include molecules not currently short (default false)." },
+        limit: { type: "number", description: "Max molecules per list (default 15, max 50)." },
       },
     },
   },
@@ -2640,6 +2665,72 @@ async function getSupplyProfile(args: { drug_id?: string; name?: string; country
   };
 }
 
+// ── get_api_country_dependence ────────────────────────────────────────────
+// Known FDA DMF API holders by country (lib/supply/api-country-dependence.ts).
+// Lists are trimmed for the model: holder names only, at most 6 per molecule.
+type DependenceRow = ReturnType<typeof singleCountryView>["single_country"]["items"][number];
+
+function compactDependence(items: DependenceRow[]) {
+  return items.map((i) => ({
+    drug_id: i.drug_id,
+    name: i.name,
+    dmf_holders: i.dmf_holders,
+    holders_by_country: i.holders_by_country,
+    holders_without_country: i.holders_without_country,
+    holder_names: i.holders.slice(0, 6).map((h) => (h.country ? `${h.name} (${h.country})` : `${h.name} (country not on file)`)),
+    short_now_in: i.short_now_in,
+    anticipated_in: i.anticipated_in,
+  }));
+}
+
+async function getApiCountryDependence(args: {
+  mode?: "single_country" | "what_if" | "molecule";
+  country?: string;
+  drug_id?: string;
+  name?: string;
+  short_only?: boolean;
+  include_not_short?: boolean;
+  limit?: number;
+}) {
+  const idx = await getDependenceIndex();
+  const limit = Math.min(Math.max(args.limit ?? 15, 1), 50);
+  const mode = args.mode ?? (args.drug_id || args.name ? "molecule" : "single_country");
+  const country = args.country ? resolveCountry(args.country, idx) : null;
+  if (args.country && !country) {
+    return { status: "unanswerable", reason: "unknown_country", hint: `No FDA DMF holder in Mederti's data is matched to '${args.country}'. Use a country name such as China or India.` };
+  }
+
+  if (mode === "molecule") {
+    let v = moleculeView(idx, { drugId: args.drug_id, name: args.name });
+    if (!v && args.drug_id) {
+      const { data } = await getSupabase().from("drugs").select("generic_name,resolved_inn").eq("id", args.drug_id).maybeSingle();
+      if (data) v = moleculeView(idx, { name: data.resolved_inn || data.generic_name });
+    }
+    if (!v) {
+      return { status: "unanswerable", reason: "no_dmf_holder", hint: "No active Type II FDA DMF is on file for this molecule. That means no US DMF was found under this name, not that no API maker exists.", caveats: DEPENDENCE_CAVEATS };
+    }
+    const [c] = compactDependence([v]);
+    return { ...c, classification: v.classification, ...("biologic_note" in v ? { biologic_note: v.biologic_note } : {}), sources: v.sources, coverage: v.coverage, caveats: v.caveats };
+  }
+
+  if (mode === "what_if") {
+    if (!country) return { status: "unanswerable", reason: "missing_country", hint: "Pass the country whose API exports stop (e.g. China)." };
+    const v = whatIfView(idx, country, { includeNotShort: args.include_not_short, limit });
+    return {
+      ...v,
+      lose_all_known_holders: { ...v.lose_all_known_holders, items: compactDependence(v.lose_all_known_holders.items) },
+      lose_all_holders_with_known_country: { ...v.lose_all_holders_with_known_country, items: compactDependence(v.lose_all_holders_with_known_country.items) },
+    };
+  }
+
+  const v = singleCountryView(idx, { country, shortOnly: args.short_only, limit });
+  return {
+    ...v,
+    single_country: { ...v.single_country, items: compactDependence(v.single_country.items) },
+    single_known_country_some_unknown: { ...v.single_known_country_some_unknown, items: compactDependence(v.single_known_country_some_unknown.items) },
+  };
+}
+
 // ── Tool 4: get_resolution_time_stats ─────────────────────────────────────
 async function getResolutionTimeStats(args: { drug_id?: string; atc_prefix?: string; country?: string }) {
   const sb = getSupabase();
@@ -3697,6 +3788,8 @@ export async function executeTool(
       return await getClassConcentrationRisk(input as any);
     case "get_supply_profile":
       return await getSupplyProfile(input as any);
+    case "get_api_country_dependence":
+      return await getApiCountryDependence(input as any);
     case "get_resolution_time_stats":
       return await getResolutionTimeStats(input as any);
     case "get_predictive_signals":

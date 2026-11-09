@@ -101,7 +101,7 @@ export default function SiteNav() {
       router.push(fallbackHref);
     }
   };
-  const ac = useAutocomplete({
+  const { containerRef: acContainerRef, ...ac } = useAutocomplete({
     minChars: 2,
     debounceMs: 200,
     limit: 8,
@@ -132,11 +132,13 @@ export default function SiteNav() {
 
   /* ── Close search when navigating to a page with its own search ── */
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when the dep changes; a key-based remount would also drop other state
     if (hideNavSearch && searchOpen) setSearchOpen(false);
   }, [hideNavSearch]);
 
   /* ── Close mobile menu on route change ── */
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when the dep changes; a key-based remount would also drop other state
     setMobileMenuOpen(false);
   }, [pathname]);
 
@@ -289,7 +291,7 @@ export default function SiteNav() {
               animation: "navSearchFadeIn 0.15s ease-out",
             }}
           >
-            <div ref={ac.containerRef} style={{ position: "relative", flex: 1 }}>
+            <div ref={acContainerRef} style={{ position: "relative", flex: 1 }}>
               <div style={{
                 display: "flex", alignItems: "center", gap: 8,
                 background: "var(--app-bg)", border: "1px solid var(--app-border)",

@@ -95,6 +95,29 @@ export default function AccountPage() {
   const [nameSaving, setNameSaving] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
 
+  async function fetchWatchlist(uid: string) {
+    setWatchlistLoading(true);
+    const { data } = await supabase
+      .from("user_watchlists")
+      .select("id, drug_id, is_active, notification_channels, created_at, drugs(generic_name, brand_names)")
+      .eq("user_id", uid)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+    setWatchlist((data ?? []) as WatchlistRow[]);
+    setWatchlistLoading(false);
+  }
+
+  async function fetchEnquiries(uid: string) {
+    setEnquiriesLoading(true);
+    const { data } = await supabase
+      .from("supplier_enquiries")
+      .select("id, drug_id, drug_name, quantity, urgency, organisation, partner_id, status, country, created_at")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false });
+    setEnquiries((data ?? []) as EnquiryRow[]);
+    setEnquiriesLoading(false);
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -127,29 +150,6 @@ export default function AccountPage() {
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
   }, []);
-
-  async function fetchWatchlist(uid: string) {
-    setWatchlistLoading(true);
-    const { data } = await supabase
-      .from("user_watchlists")
-      .select("id, drug_id, is_active, notification_channels, created_at, drugs(generic_name, brand_names)")
-      .eq("user_id", uid)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-    setWatchlist((data ?? []) as WatchlistRow[]);
-    setWatchlistLoading(false);
-  }
-
-  async function fetchEnquiries(uid: string) {
-    setEnquiriesLoading(true);
-    const { data } = await supabase
-      .from("supplier_enquiries")
-      .select("id, drug_id, drug_name, quantity, urgency, organisation, partner_id, status, country, created_at")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false });
-    setEnquiries((data ?? []) as EnquiryRow[]);
-    setEnquiriesLoading(false);
-  }
 
   async function removeWatch(id: string) {
     setRemovingId(id);

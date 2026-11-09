@@ -133,9 +133,6 @@ def main():
             stripped = strip_salt(gn)
             if stripped != gn:
                 drug_index.setdefault(stripped, d["id"])
-            first = stripped.split()[0]
-            if len(first) > 5:
-                drug_index.setdefault(first, d["id"])
     log.info(f"  Drug index: {len(drug_index)} entries")
 
     # Build catalogue rows
@@ -169,10 +166,6 @@ def main():
             if not drug_id:
                 stripped = strip_salt(gn_lower)
                 drug_id = drug_index.get(stripped)
-            if not drug_id:
-                first = (stripped if 'stripped' in dir() else gn_lower).split()[0]
-                if len(first) > 5:
-                    drug_id = drug_index.get(first)
         if drug_id:
             stats["linked"] += 1
 

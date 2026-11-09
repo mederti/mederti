@@ -31,8 +31,10 @@ from __future__ import annotations
 # (USAN) spellings. Only official, unambiguous INN ↔ USAN pairs for the same
 # substance belong here — one entry per pair, INN on the left.
 INN_TO_USAN: dict[str, str] = {
+    "aciclovir": "acyclovir",
     "beclometasone": "beclomethasone",
     "chlortalidone": "chlorthalidone",
+    "ciclosporin": "cyclosporine",
     "ergometrine": "ergonovine",
     "leuprorelin": "leuprolide",
     "meticillin": "methicillin",

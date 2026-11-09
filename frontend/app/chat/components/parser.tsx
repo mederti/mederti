@@ -72,6 +72,7 @@ function normalisePersona(v?: string): Persona | undefined {
   return undefined;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- payload shape varies per `kind`; a discriminated union is a parser refactor, not lint cleanup.
 type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis" | "sources" | "class"; index: number; length: number; data: any };
 
 function parseSourcesBody(inner: string): SourceChip[] {
@@ -166,7 +167,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
         return { id, name };
       })
       .filter((x): x is { id: string; name: string } => x !== null);
-    hits.push({ kind: "alternates" as any, index: m.index, length: m[0].length, data: { items } });
+    hits.push({ kind: "alternates", index: m.index, length: m[0].length, data: { items } });
     closedAlternatesRanges.push([m.index, m.index + m[0].length]);
   }
   // Tolerant fallback for unclosed <alternates>...
@@ -189,7 +190,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
       })
       .filter((x): x is { id: string; name: string } => x !== null);
     if (items.length === 0) continue;
-    hits.push({ kind: "alternates" as any, index: m.index, length: m[0].length, data: { items } });
+    hits.push({ kind: "alternates", index: m.index, length: m[0].length, data: { items } });
   }
   // KPI grid (closed + unclosed-trailing fallback).
   KPIS_RE.lastIndex = 0;

@@ -30,7 +30,7 @@ function sevLabel(sev: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1) + " shortage";
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 interface MobileDrugPageProps {
   drug: {
     id: string;

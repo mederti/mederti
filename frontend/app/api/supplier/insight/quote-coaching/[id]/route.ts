@@ -49,7 +49,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!enquiry) return NextResponse.json({ error: "Enquiry not found" }, { status: 404 });
 
   // Comparable price benchmarks: what other suppliers list this drug at
-  let priceBenchmarks: Array<{ unit_price: number; currency: string; verified: boolean }> = [];
+  const priceBenchmarks: Array<{ unit_price: number; currency: string; verified: boolean }> = [];
   let competitorVerifiedCount = 0;
   let activeShortageCount = 0;
   let countriesAffected = 0;

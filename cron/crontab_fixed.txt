@@ -104,7 +104,8 @@ SHELL=/bin/bash
 # estonia_ravimiamet     11:30     3 events only — narrow coverage, see follow-up headless-browser task
 # peru_digemid           11:40     2,675 events — high confidence
 # senegal_arp            11:50     Low volume (~2 events) — scanned-image PDFs, title-only parsing
-# taiwan_tfda            12:00     10 events/7 drugs — hand-maintained bulletin ID list, needs periodic upkeep
+# taiwan_tfda            12:00     ~207 drugs active — TFDA open-data feeds 104/105/106 + licence register (v2, 2026-10-26)
+# tfda_alternatives      12:20     ~380 cited substitutes → alternative_evidence (same feeds; expires statements TFDA drops)
 # srilanka_nmra          12:10     1 genuine event — correctly filters 145 unrelated announcements
 0  10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py slovenia_jazmp       >> logs/cron.log 2>&1
 10 10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py iceland_lyfjastofnun >> logs/cron.log 2>&1
@@ -119,6 +120,7 @@ SHELL=/bin/bash
 40 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py peru_digemid        >> logs/cron.log 2>&1
 50 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py senegal_arp         >> logs/cron.log 2>&1
 0  12 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py taiwan_tfda         >> logs/cron.log 2>&1
+20 12 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.tfda_alternatives_importer >> logs/cron.log 2>&1
 10 12 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py srilanka_nmra       >> logs/cron.log 2>&1
 
 # ─── Recall scrapers (daily at 06:00-07:15 UTC) ───

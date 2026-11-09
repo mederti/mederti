@@ -68,6 +68,7 @@ export default function RegulatoryCalendarClient() {
       .finally(() => setLoading(false));
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
   useEffect(() => { load(); }, [country, days]);
 
   return (
@@ -81,10 +82,10 @@ export default function RegulatoryCalendarClient() {
           <CalendarDays size={13} /> Regulatory Calendar
         </div>
         <h1 style={{ fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--app-text)", marginBottom: 12, fontFamily: "var(--font-inter), sans-serif" }}>
-          What's coming next.
+          What&apos;s coming next.
         </h1>
         <p style={{ fontSize: 15, color: "var(--app-text-3)", lineHeight: 1.6, maxWidth: 760 }}>
-          Upcoming FDA Advisory Committee meetings, PDUFA dates, EMA CHMP opinions, MHRA decisions, and TGA registrations — drawn from official regulator calendars and matched to Mederti's catalogue of {`10,721`}+ drugs.
+          Upcoming FDA Advisory Committee meetings, PDUFA dates, EMA CHMP opinions, MHRA decisions, and TGA registrations — drawn from official regulator calendars and matched to Mederti&apos;s catalogue of {`10,721`}+ drugs.
         </p>
       </div>
 

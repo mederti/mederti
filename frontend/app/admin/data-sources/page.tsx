@@ -131,6 +131,7 @@ export default async function DataSourcesPage() {
   // ── 4. Recent raw_scrapes (success / fail / processing buckets) ──
   let recentRuns: { status: string; count: number }[] = [];
   try {
+    // eslint-disable-next-line react-hooks/purity -- async server component: runs once per request, so Date.now() is the request time, not a render-impurity
     const cutoff = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
     const r = await sb
       .from("raw_scrapes")

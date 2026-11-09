@@ -82,12 +82,14 @@ export function EarlyWarningView() {
       typeof document !== "undefined"
         ? document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/)
         : null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
     if (m) setCountry(m[1].toUpperCase());
   }, []);
 
   // Live predictive signals — drugs short in peer markets but not yet here.
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setSignalsLoading(true);
     fetch(`/api/predictive-signals?country=${country}&limit=60`)
       .then((r) => (r.ok ? r.json() : null))
@@ -130,6 +132,7 @@ export function EarlyWarningView() {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("ew-prealerts") || "[]");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
       if (Array.isArray(saved)) setAlerted(new Set(saved as string[]));
     } catch {}
   }, []);

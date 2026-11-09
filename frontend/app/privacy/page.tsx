@@ -132,7 +132,7 @@ export default function PrivacyPage() {
           <ul style={{ paddingLeft: 20, lineHeight: 2, margin: 0 }}>
             <li><b>Access</b> the personal data we hold about you</li>
             <li><b>Correct</b> inaccurate data</li>
-            <li><b>Delete</b> your data ("right to be forgotten")</li>
+            <li><b>Delete</b> your data (&quot;right to be forgotten&quot;)</li>
             <li><b>Object</b> to processing based on legitimate interests</li>
             <li><b>Portability</b> — receive your data in a machine-readable format</li>
           </ul>
@@ -149,7 +149,7 @@ export default function PrivacyPage() {
 
         <Section title="9. Changes to this policy">
           We may update this policy. Material changes will be notified via email to registered users.
-          The "Last updated" date at the top of this page reflects the most recent revision.
+          The &quot;Last updated&quot; date at the top of this page reflects the most recent revision.
         </Section>
 
         <Section title="10. Contact">

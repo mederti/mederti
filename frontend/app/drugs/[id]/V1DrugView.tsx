@@ -19,6 +19,7 @@ import { ParallelTradePanel } from "./parallel-trade-panel";
 import { PriceTrendChart } from "./PriceTrendChart";
 import { ShortageTrendChart } from "@/app/chat/components/views/ShortageTrendChart";
 import { ShortageEpisodeTimeline } from "./ShortageEpisodeTimeline";
+import { DrugTabs } from "./DrugTabs";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { ALTERNATIVES_CAVEAT, affinity, relationshipLabel } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -98,6 +99,12 @@ function timeAgo(iso?: string | null) {
   if (d < 30) return `${d}d ago`;
   return `${Math.floor(d / 30)}mo ago`;
 }
+// Combination names ("Amoxicillin/Clavulanate") have no natural break point
+// and overflow narrow tiles; a zero-width space after each slash lets them wrap.
+function breakAtSlash(name: string): string {
+  return name.replace(/\//g, "/\u200B");
+}
+
 function monthYear(iso?: string | null) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -350,8 +357,17 @@ export default function V1DrugView({
     : null;
 
   // Expected back — sponsor-declared only, else "No estimate provided" (never computed).
-  const expected = monthYear(mine?.estimated_resolution_date);
-  const expSource = abbr(mine?.data_sources?.name, mine?.data_sources?.abbreviation) || "regulator";
+  // Earliest estimate still in the future across this market's notices. A
+  // passed estimate is never shown as "expected back" (Propofol showed
+  // "Apr 2026" in Nov 2026) — it's reported as passed instead.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const futureEst = mineAll
+    .filter((s) => s.estimated_resolution_date && s.estimated_resolution_date.slice(0, 10) >= todayIso)
+    .sort((a, b) => a.estimated_resolution_date!.localeCompare(b.estimated_resolution_date!))[0] ?? null;
+  const estPassed = !futureEst && mineAll.some((s) => !!s.estimated_resolution_date);
+  const expected = monthYear(futureEst?.estimated_resolution_date);
+  const expEvent = futureEst ?? mine;
+  const expSource = abbr(expEvent?.data_sources?.name, expEvent?.data_sources?.abbreviation) || "regulator";
 
   // Substitution pathways — prefer the STRUCTURED regulatory_eligibility feed
   // (real approval references, expiry dates, verifiable source URLs). Filter to
@@ -504,13 +520,7 @@ export default function V1DrugView({
   const marketLabel = `${cName} market`;
 
   // Product-card top-line status pill.
-  const statusPill = localShortage
-    ? anticipated
-      ? { cls: "sp-part", txt: `Anticipated · ${cName}` }
-      : isCrit
-        ? { cls: "sp-crit", txt: `In shortage · ${cName}` }
-        : { cls: "sp-part", txt: `Limited supply · ${cName}` }
-    : { cls: "sp-ok", txt: `In supply · ${cName}` };
+
 
   // Detailed product-attribute table (2-col label/value). Only emits rows with
   // real data; the PIL/SPC document rows are shown muted as "Not on file" so the
@@ -550,6 +560,12 @@ export default function V1DrugView({
       { label: "Summary of product characteristics (SPC)", value: "Not on file", muted: true },
     ] as AttrRow[]
   ).filter((r) => r.value);
+
+  // Tab empty states — each tab says plainly when we hold nothing for it.
+  const hasStatus = !!supplyInMarket || mineAll.length > 0 || regulators.length > 0 || shortages.length > 0 || events.length > 0;
+  const hasAlts = userCountry === "AU" || !!sourcedAlternatives?.available || alts.length > 0;
+  const hasOutlook = shortages.length > 0 || !!history || !!apiConcentration || !!approvalFootprint || recallList.length > 0;
+  const hasInfo = attrRows.length > 0 || regRows.length > 0;
 
   return (
     // Shared 3-column AppShell: V1Sidebar → grounded chat (middle) → the drug
@@ -626,11 +642,32 @@ export default function V1DrugView({
             </div>
           )}
 
-          <div className="product-card">
+          <div className="product-card hero-card">
             <div className="pc-body">
               <div className="pc-head">
                 <div className="pc-titles">
-                  <div className="d-name">{drug.generic_name}</div>
+                  <div className="pc-name-row">
+                    <div className="d-name">{drug.generic_name}</div>
+                      {drug.who_essential_medicine ? (
+                        <a
+                          className="d-eml"
+                          href="https://list.essentialmeds.org/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={
+                            drug.who_eml_section
+                              ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
+                              : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+                          }
+                        >
+                          <span className="d-eml-dot" />
+                          WHO Essential Medicine
+                        </a>
+                      ) : null}
+                      {drug.is_controlled_substance === true ? (
+                        <span className="d-ctrl">Controlled substance</span>
+                      ) : null}
+                  </div>
                   <div className="d-generic">
                     {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
                   </div>
@@ -641,30 +678,12 @@ export default function V1DrugView({
                     </div>
                   )}
                 </div>
-                <span className={`status-pill ${statusPill.cls}`}><span className="d" />{statusPill.txt}</span>
+                <div className="sc-actions pc-actions">
+                  <WatchButton drugId={id} />
+                  <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+                </div>
               </div>
 
-              <div className="pc-badges">
-                {drug.who_essential_medicine ? (
-                  <a
-                    className="d-eml"
-                    href="https://list.essentialmeds.org/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={
-                      drug.who_eml_section
-                        ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
-                        : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
-                    }
-                  >
-                    <span className="d-eml-dot" />
-                    WHO Essential Medicine
-                  </a>
-                ) : null}
-                {drug.is_controlled_substance === true ? (
-                  <span className="d-ctrl">Controlled substance</span>
-                ) : null}
-              </div>
 
               {(() => {
                 const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
@@ -700,6 +719,146 @@ export default function V1DrugView({
                 );
               })()}
             </div>
+          {/* Status — design 3: a one-line status headline, then the three
+              questions a pharmacist asks (when's it back / what instead / what
+              does it cost), then "is it just us?". "Yes" on substitution only
+              when a real pathway is on file; absence is stated as absence. */}
+          <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok"}`}>
+            <div className="hq-head">
+              <span className="hq-ic" aria-hidden>
+                {localShortage ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                )}
+              </span>
+              <div className="hq-head-t">
+                <div className="hq-title">
+                  {localShortage
+                    ? anticipated ? `Anticipated shortage in ${cName}`
+                      : discontinued ? (withdrawalFuture ? `Leaving the market in ${cName}` : `Discontinued in ${cName}`)
+                      : `${isCrit ? "Critical shortage" : "Limited supply"} in ${cName}`
+                    : `In supply in ${cName}`}
+                </div>
+                <div className="hq-sub">
+                  {localShortage && discontinued ? (
+                    <span className="hq-reason">
+                      {withdrawalDate ? `Registration ${withdrawalFuture ? "ends" : "ended"} ${dayMonthYear(withdrawalDate)}` : "Product discontinued"}
+                      {regAvailability ? ` · ${regAvailability}` : ""}
+                      {mine?.regulator_impact ? ` · ${expSource} impact rating: ${mine.regulator_impact}` : ""}
+                    </span>
+                  ) : (
+                    localShortage && mine?.reason && <span className="hq-reason">{String(mine.reason).replace(/^availability:\s*/i, "")}</span>
+                  )}
+                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</span>
+                </div>
+                {localShortage && discontinued && (regGuidance || regStatementUrl) && (
+                  <div className="sc-guid">
+                    {regGuidance && <span>{expSource} advice: &ldquo;{regGuidance}&rdquo;</span>}
+                    {regStatementUrl && (
+                      <a href={regStatementUrl} target="_blank" rel="noopener noreferrer">Read the {expSource} statement →</a>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="hq-qs">
+              <div className="hq-q">
+                {localShortage && discontinued ? (
+                  <>
+                    {/* Discontinuation is a market exit: it is never "back". */}
+                    <div className="hq-q-l">When will it be back?</div>
+                    <div className="hq-q-a">Not expected back</div>
+                    <div className="hq-q-d">
+                      {withdrawalDate ? `Market exit: registration ${withdrawalFuture ? "ends" : "ended"} ${dayMonthYear(withdrawalDate)}, via ${expSource}.` : "Discontinued by the sponsor."}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="hq-q-l">When will it be back?</div>
+                    <div className="hq-q-a">{!localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
+                    <div className="hq-q-d">
+                      {!localShortage ? "No active shortage in this market." : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="hq-q">
+                <div className="hq-q-l">What can I use instead?</div>
+                <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine ? "No pathway on record" : "Not needed"}</div>
+                <div className="hq-q-d">
+                  {s19aTileDetail ?? (mine ? "Substitution is a prescriber decision." : "No shortage substitution needed.")}
+                  {topAlt && (
+                    <>
+                      {" "}Same class:{" "}
+                      {topAlt.id != null ? <Link href={`/drugs/${topAlt.id}`}>{breakAtSlash(topAlt.name)}</Link> : breakAtSlash(topAlt.name)}
+                      , a different medicine.
+                    </>
+                  )}
+                </div>
+                <a href="#alternatives" className="hq-more">See alternatives →</a>
+              </div>
+              <div className="hq-q">
+                <div className="hq-q-l">What does it cost?</div>
+                {concession ? (
+                  <>
+                    <div className="hq-q-a mono">{fmtPrice(concession.price, concession.currency)}</div>
+                    <div className="hq-q-d">Price concession active{concession.pack ? ` · ${concession.pack}` : ""}, above the standard tariff.</div>
+                  </>
+                ) : heroPrice ? (
+                  <>
+                    <div className="hq-q-a mono">{fmtPrice(heroPrice.value, heroPrice.currency)}</div>
+                    <div className="hq-q-d">{heroPrice.label === "AEMP" ? "PBS ex-manufacturer (AEMP)" : heroPrice.label}{heroPrice.extra ? ` · ${heroPrice.extra}` : ""}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="hq-q-a">Not on file</div>
+                    <div className="hq-q-d">We don&apos;t hold an official price for {cName} yet.</div>
+                  </>
+                )}
+                <a href="#trade-price" className="hq-more">Price details →</a>
+              </div>
+            </div>
+
+            {(() => {
+              const marketsShort = [
+                ...(localShortage ? [{ cc: userCountry, sev: isCrit ? 2 : 1, mine: true }] : []),
+                ...footprint.map((f) => ({ cc: f.cc, sev: f.sev, mine: false })),
+              ];
+              const n = marketsShort.length;
+              return (
+                <div className="hq-just">
+                  <div className="hq-just-l">
+                    Is it just us?{" "}
+                    <strong>
+                      {n === 0
+                        ? "Not short in any market we track"
+                        : localShortage
+                          ? n === 1 ? `Only ${cName} so far` : `Short in ${n} countries`
+                          : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
+                    </strong>
+                  </div>
+                  {n > 0 && (
+                    <div className="hq-mkts">
+                      {marketsShort.slice(0, 12).map((m) => (
+                        <span key={m.cc} className={`hq-mk${m.mine ? " mine" : ""}`} title={m.sev >= 2 ? "critical/high severity" : undefined}>
+                          <span className={`hq-dot${m.sev >= 2 ? " crit" : ""}`} />
+                          {COUNTRY[m.cc] ?? m.cc}
+                        </span>
+                      ))}
+                      {n > 12 && <span className="hq-mk">+{n - 12} more</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <details className="hq-ai">
+              <summary>Mederti AI summary</summary>
+              <V1AiSummary id={id} embedded clamp={false} />
+            </details>
+          </div>
           </div>
 
           {brandFocus && (() => {
@@ -781,81 +940,15 @@ export default function V1DrugView({
             );
           })()}
 
-          {/* Status card */}
-          <div className={`status-card ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
-            {/* Status eyebrow: user-market status, then the OTHER markets that
-                are also short, inline as flag chips — "Australia & 🇨🇦 🇩🇪 …".
-                Lets a user tell global-from-local at a glance. Critical/high
-                markets render red; major markets (US/EU/UK) sort first. */}
-            <div className="sc-label">
-              <span className="d" />
-              <span className="sc-label-t">
-                {localShortage
-                  ? anticipated ? "Anticipated · " : discontinued ? (withdrawalFuture ? "Being discontinued · " : "Discontinued · ") : "In declared shortage · "
-                  : "In supply · "}
-                {flag(userCountry)} {cName}
-                {elsewhereCount > 0 ? (localShortage ? " & also short in" : " · short in") : ""}
-              </span>
-              {elsewhereCount > 0 && (
-                <span className="sc-foot-flags">
-                  {footprint.slice(0, 8).map((f) => (
-                    <span
-                      key={f.cc}
-                      className={`scs-c${f.major ? " major" : ""}${f.sev >= 2 ? " crit" : ""}`}
-                      title={`${COUNTRY[f.cc] ?? f.cc}${f.sev >= 2 ? " · critical/high severity" : ""}`}
-                    >
-                      {flag(f.cc)} {f.cc}
-                    </span>
-                  ))}
-                  {footprint.length > 8 && <span className="scs-more">+{footprint.length - 8}</span>}
-                </span>
-              )}
-            </div>
-            <div className="sc-title">
-              {localShortage
-                ? anticipated ? "Anticipated shortage"
-                  : discontinued ? (withdrawalFuture ? `Leaving the market in ${cName}` : `Discontinued in ${cName}`)
-                  : isCrit ? "Critical shortage" : "Limited supply"
-                : `In supply in ${cName}`}
-            </div>
-            {localShortage && discontinued ? (
-              <>
-                <div className="sc-sub">
-                  {withdrawalDate
-                    ? `Registration ${withdrawalFuture ? "ends" : "ended"} ${dayMonthYear(withdrawalDate)}`
-                    : "Product discontinued"}
-                  {regAvailability ? ` · ${regAvailability}` : ""}
-                  {mine?.regulator_impact ? ` · ${expSource} impact rating: ${mine.regulator_impact}` : ""}
-                </div>
-                {(regGuidance || regStatementUrl) && (
-                  <div className="sc-guid">
-                    {regGuidance && <span>{expSource} advice: &ldquo;{regGuidance}&rdquo;</span>}
-                    {regStatementUrl && (
-                      <a href={regStatementUrl} target="_blank" rel="noopener noreferrer">Read the {expSource} statement →</a>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>
-            )}
-            {!localShortage && elsewhereCount === 0 && <div className="sc-sub">No active shortage reported.</div>}
-
-            {/* AI commentary — embedded under the heading, above the as-of line */}
-            <V1AiSummary id={id} embedded />
-
-            {/* Card footer: source line anchored bottom-left, the universal
-                "Find a supplier" CTA anchored bottom-right. */}
-            <div className="sc-footer">
-              <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
-              <div className="sc-actions">
-                <WatchButton drugId={id} />
-                <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
-              </div>
-            </div>
-          </div>
-
-
+          <DrugTabs
+            tabs={[
+              {
+                id: "status",
+                label: "Status",
+                badge: localShortage ? (anticipated ? "Anticipated" : discontinued ? "Market exit" : isCrit ? "Short" : "Limited") : "In supply",
+                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
+                content: (
+            <>
           {/* Price-concession signal — promoted into the hero (Option B). A
               regulator reimbursing above tariff means pharmacies can't source
               at price: an early supply-pressure indicator that typically
@@ -887,57 +980,6 @@ export default function V1DrugView({
             </div>
           )}
 
-          {/* Compact hero price — always-visible market price when no concession
-              banner already carries it. Full multi-market panel stays below. */}
-          {!concession && heroPrice && (
-            <div className="price-strip">
-              <span className="ps-mkt">{flag(userCountry)} {userCountry}</span>
-              <span className="ps-label">{heroPrice.label}</span>
-              <span className="ps-val">{fmtPrice(heroPrice.value, heroPrice.currency)}</span>
-              {heroPrice.extra && <span className="ps-extra">{heroPrice.extra}</span>}
-              <a href="#trade-price" className="ps-more">details →</a>
-            </div>
-          )}
-
-          {/* So-what tiles */}
-          <div className="sw-cards">
-            <div className="sw-card">
-              {/* "Yes" only when a real pathway is on file; absence of data is
-                  stated as absence, never inverted into permission. */}
-              <div className="sw-h"><span className={`sw-ic ${s19aTileDetail || !mine ? "ok" : "neutral"}`}>{s19aTileDetail || !mine ? "✓" : "•"}</span> Can I substitute?</div>
-              <div className="sw-v">{s19aTileDetail ? "Yes — approved substitute available" : mine ? "No pathway on record" : "In supply"}</div>
-              <div className="sw-d">{s19aTileDetail ?? (mine ? "prescriber decision required" : "no shortage substitution needed")}</div>
-            </div>
-            {topAlt?.id != null ? (
-              <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
-                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
-                <div className="sw-v">{topAlt.name}</div>
-                <div className="sw-d">{`${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}`}</div>
-              </Link>
-            ) : (
-              <div className="sw-card">
-                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
-                <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
-                <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
-              </div>
-            )}
-            {discontinued ? (
-              <div className="sw-card">
-                <div className="sw-h"><span className="sw-ic neutral">◷</span> Market exit</div>
-                <div className="sw-v">{withdrawalDate ? dayMonthYear(withdrawalDate) : "Not expected back"}</div>
-                <div className="sw-d">{withdrawalDate ? `Registration cancelled — via ${expSource}` : "Discontinued by sponsor"}</div>
-              </div>
-            ) : (
-              <div className="sw-card">
-                <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
-                <div className="sw-v">{expected ?? "No estimate"}</div>
-                {/* Ingredient-level date — the event may cover a different brand
-                    than the one the user stocks. */}
-                <div className="sw-d">{expected ? `Sponsor est. via ${expSource} — may differ by brand` : "No estimate provided"}</div>
-              </div>
-            )}
-          </div>
-
           {/* Products affected — brand-level rows for the user's market.
               Pharmacists procure by brand: the exact product each notice
               covers, its sponsor, and its OWN return estimate. Events whose
@@ -967,7 +1009,7 @@ export default function V1DrugView({
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
                             </td>
-                            <td><SupplyPill status={p.status} since={p.since} /></td>
+                            <td><SupplyPill status={p.status} since={p.since} history={p.history} /></td>
                             <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} /></td>
                           </tr>
                         ))}
@@ -987,7 +1029,7 @@ export default function V1DrugView({
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
                             </td>
-                            <td><SupplyPill status={p.status} since={p.since} /></td>
+                            <td><SupplyPill status={p.status} since={p.since} history={p.history} /></td>
                             <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} /></td>
                           </tr>
                         ))}
@@ -1100,110 +1142,59 @@ export default function V1DrugView({
             </div>
           )}
 
-          {/* Product attributes — detailed 2-column reference table */}
-          {attrRows.length > 0 && (
+          {/* Regulator status */}
+          {regulators.length > 0 && (
             <div className="sec">
-              <div className="sec-title">Product attributes <span className="help">reference data we hold</span></div>
-              <div className="attr-wrap">
-                <table className="attr-table">
-                  <tbody>
-                    {attrRows.map((r) => (
-                      <tr key={r.label}>
-                        <th scope="row">{r.label}</th>
-                        <td className={r.muted ? "attr-muted" : undefined}>{r.value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Trade price — adaptive panel. AU shows the PBS tiers (AEMP/DPMQ);
-              other markets show their headline official price from
-              drug_pricing_history. Cross-references other markets we hold.
-              Degrades to a visible "awaiting ingest" note. Never fabricates. */}
-          <div className="sec" id="trade-price">
-            <div className="sec-title">Trade price <span className="help">{pricing ? `${flag(userCountry)} ${pricing.source}${pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}` : myMarket && myMarket.value != null ? `${flag(userCountry)} ${myMarket.source ?? cName}${myMarket.effective_date ? ` · ${monthYear(myMarket.effective_date)}` : ""}` : `${flag(userCountry)} ${cName} · awaiting price ingest`}</span></div>
-            <div className="price-panel">
-              <div className="price-top">
-                <div className="market-tabs"><span className="mtab on">{flag(userCountry)} {userCountry}</span></div>
-                {(pricing || (myMarket && myMarket.value != null)) && <span className="reimb">● Official price on file</span>}
-              </div>
-              {pricing ? (
-                <>
-                  <div className="price-tiles">
-                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v">{fmtPrice(pricing.ex_manufacturer, pricing.currency)}</div><div className="ptile-sub">AEMP</div></div>
-                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v">{pricing.dispensed != null ? fmtPrice(pricing.dispensed, pricing.currency) : "—"}</div><div className="ptile-sub">incl. fees</div></div>
-                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v sm">{pricing.pack ?? "—"}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</div>
-                  </div>
-                  <div className="price-foot"><span>Source: {pricing.source}</span><span>{[monthYear(pricing.price_date) ? `Effective ${monthYear(pricing.price_date)}` : null, pricing.currency].filter(Boolean).join(" · ")}</span></div>
-                </>
-              ) : myMarket && myMarket.value != null ? (
-                <>
-                  <div className="price-tiles two">
-                    <div className="ptile"><div className="ptile-l">{myMarket.label}</div><div className="ptile-v">{fmtPrice(myMarket.value, myMarket.currency)}</div><div className="ptile-sub">{myMarket.per}</div></div>
-                    <div className="ptile"><div className="ptile-l">{myMarket.concession != null ? "Concession" : "Pack"}</div>{myMarket.concession != null ? (<><div className="ptile-v" style={{ color: "var(--med)" }}>{fmtPrice(myMarket.concession, myMarket.currency)}</div><div className="ptile-sub">live uplift</div></>) : (<><div className="ptile-v sm">{myMarket.per}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</>)}</div>
-                  </div>
-                  <div className="price-foot"><span>Source: {myMarket.source ?? "official"}</span><span>{[monthYear(myMarket.effective_date) ? `Effective ${monthYear(myMarket.effective_date)}` : null, myMarket.currency].filter(Boolean).join(" · ")}</span></div>
-                </>
-              ) : (
-                <>
-                  <div className="price-tiles">
-                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v empty">—</div></div>
-                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v empty">—</div></div>
-                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v empty">—</div></div>
-                  </div>
-                  <div className="price-empty-note">
-                    <div className="pe-ic" aria-hidden>$</div>
-                    <div>
-                      <div className="pe-t">Not yet captured for {cName}</div>
-                      <div className="pe-d">Official pricing isn’t on file for this market yet. PBS (Australia), NHS Drug Tariff (United Kingdom) and CMS NADAC (United States) feeds are prioritised; this panel populates automatically once the data lands.</div>
+              <div className="sec-title">Shortage status by regulator <span className="help">official notices</span></div>
+              <div className="country-list">
+                {regulators.map((s, i) => {
+                  const cc = (s.country_code || "").toUpperCase();
+                  const r = SEV[(s.severity || "").toLowerCase()] ?? 0;
+                  const cls = (s.status || "").toLowerCase() === "resolved" ? "sp-ok" : r >= 2 ? "sp-crit" : "sp-part";
+                  const lbl = (s.status || "").toLowerCase() === "resolved" ? "Resolved" : `${(s.severity || "shortage")[0].toUpperCase()}${(s.severity || "hortage").slice(1)}`;
+                  return (
+                    <div key={i} className="country-row">
+                      <div className="cl"><span className="flag">{flag(cc)}</span><div><div className="cn">{COUNTRY[cc] ?? cc}</div><div className="alt-f">{abbr(s.data_sources?.name, s.data_sources?.abbreviation)} · {timeAgo(s.last_verified_at ?? s.updated_at)}</div></div></div>
+                      <span className={`status-pill ${cls}`}><span className="d" />{lbl}</span>
                     </div>
-                  </div>
-                </>
-              )}
-              {otherMarkets.length > 0 && (
-                <div className="xmkt-strip">
-                  <div className="xmkt-lbl">Other markets</div>
-                  <div className="xmkt-row">
-                    {otherMarkets.map((m) => (
-                      <div className="xmkt" key={m.country}>
-                        <div className="xmkt-c">{flag(m.country)} {m.country}</div>
-                        <div className="xmkt-v">{m.concession != null ? fmtPrice(m.concession, m.currency) : m.value != null ? fmtPrice(m.value, m.currency) : "—"}</div>
-                        <div className="xmkt-t">{m.concession != null ? "concession" : m.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Price trend + forecast — self-gating: renders nothing when the
-              market has no price history, history-only when the series can't
-              be forecast, and a Holt projection only when it clears a backtest.
-              (concession + drug_tariff history from drug_pricing_history.) */}
-          {(myMarket || otherMarkets.length > 0) && (
-            <div className="sec">
-              <div className="price-panel" style={{ padding: "18px 20px" }}>
-                <PriceTrendChart drugId={id} country={userCountry} />
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Parallel Trade Intelligence — three self-gating surfaces, in
-              value order. Each renders nothing until it has real data
-              (migration 060 + matches), so most drug pages show none.
-              1. Sourcing routes — appears when the drug is short in the user's
-                 market and import lanes can supply it (procurement value).
-              2. Arbitrage map — appears when price spreads are computable
-                 (importer value).
-              3. Raw licence list — reference fallback (all matched licences). */}
-          <ParallelTradeSourcing drugId={id} userCountry={userCountry} />
-          <ParallelTradeArbitrage drugId={id} destination={userCountry} />
-          <ParallelTradePanel drugId={id} />
+          {/* Where & when: one row per market, one bar per notice, by dose form */}
+          {shortages.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Where and when <span className="help">each regulator notice, by market and dose form</span></div>
+              <ShortageEpisodeTimeline drugId={id} />
+            </div>
+          )}
 
+          {/* Timeline */}
+          {events.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Verified timeline <span className="help">regulator events</span></div>
+              <div className="timeline">
+                {events.map((e, i) => (
+                  <div key={i} className="tl-row">
+                    <span className={`tl-d ${e.resolved ? "filled" : ""}`} />
+                    <div><div className="tl-dt">{flag(e.cc)} {new Date(e.date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</div><div className="tl-ev">{e.txt}</div></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!hasStatus && <div className="sec"><div className="alt-note">No regulator shortage notices on file for {drug.generic_name} in any market we track.</div></div>}
+            </>
+                ),
+              },
+              {
+                id: "alternatives",
+                label: "Alternatives",
+                badge: sourcedAlternatives?.available && sourcedAlternatives.alternatives.length > 0 ? String(sourcedAlternatives.alternatives.length) : undefined,
+                content: (
+            <>
           {/* Substitution pathways (AU only) */}
           {userCountry === "AU" && (
             <div className="sec">
@@ -1250,109 +1241,6 @@ export default function V1DrugView({
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Shortage trend for this molecule, every market (range-selectable) */}
-          {shortages.length > 0 && (
-            <div className="sec">
-              <div className="sec-title">Shortage history <span className="help">new &amp; open notices across all markets we track</span></div>
-              <ShortageTrendChart drugId={id} defaultRange="MAX" />
-            </div>
-          )}
-
-          {/* Where & when: one row per market, one bar per notice, by dose form */}
-          {shortages.length > 0 && (
-            <div className="sec">
-              <div className="sec-title">Where and when <span className="help">each regulator notice, by market and dose form</span></div>
-              <ShortageEpisodeTimeline drugId={id} />
-            </div>
-          )}
-
-          {/* History */}
-          {history && (
-            <div className="sec">
-              <div className="sec-title">How long have past shortages lasted? <span className="help">from {history.n} resolved event{history.n > 1 ? "s" : ""}</span></div>
-              <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
-                <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
-                <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
-              </div></div></div></div>
-            </div>
-          )}
-
-          {/* API supply-base concentration (FDA Drug Master Files) */}
-          {apiConcentration && !supplyInMarket && (
-            <div className="sec">
-              <div className="sec-title">Global API supply base <span className="help">🇺🇸 FDA Drug Master Files · active Type II</span></div>
-              <div className="conc">
-                <div className="conc-head">
-                  <div>
-                    <div className="conc-n">{apiConcentration.count} API manufacturer{apiConcentration.count !== 1 ? "s" : ""}</div>
-                    <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                    <span className={`status-pill ${TIER_CLS[supplyTier]}`}><span className="d" />{TIER_LABEL[supplyTier]} supply</span>
-                    {(apiConcentration.whoPqCount ?? 0) > 0 && (
-                      <span className="who-pq-badge">✓ {apiConcentration.whoPqCount} WHO-prequalified</span>
-                    )}
-                  </div>
-                </div>
-                {apiConcentration.makers.length > 0 && (
-                  <div className="conc-makers">
-                    {apiConcentration.makers.map((m) => <span key={m} className="d-tag">{m}</span>)}
-                    {apiConcentration.count > apiConcentration.makers.length && (
-                      <span className="d-tag">+{apiConcentration.count - apiConcentration.makers.length} more</span>
-                    )}
-                  </div>
-                )}
-                {supplyProfile && (
-                  <div className="conc-d" style={{ marginTop: 10 }}>
-                    {[
-                      supplyProfile.whoList ? `WHO Model List (${supplyProfile.whoList})` : null,
-                      supplyProfile.euCritical ? "EU Union list of critical medicines" : null,
-                      supplyProfile.nFinishedFirms != null ? `${supplyProfile.nFinishedFirms} US finished-dose firm${supplyProfile.nFinishedFirms !== 1 ? "s" : ""}` : null,
-                      supplyProfile.topApiCountry && supplyProfile.topApiShare != null
-                        ? `${Math.round(supplyProfile.topApiShare * 100)}% of API makers in ${supplyProfile.topApiCountry}`
-                        : null,
-                      `all ${supplyProfile.molecule.toLowerCase()} products short in ${supplyProfile.shortCountries.length} countr${supplyProfile.shortCountries.length === 1 ? "y" : "ies"} now`,
-                    ].filter(Boolean).join(" · ")}
-                  </div>
-                )}
-                <div className="conc-foot">
-                  {apiConcentration.countries.length > 0
-                    ? `Manufacturing countries: ${apiConcentration.countries.join(", ")} · `
-                    : "Country of manufacture not yet mapped · "}
-                  Source: FDA List of Drug Master Files
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* FDA approval footprint — market depth (generic competition) */}
-          {approvalFootprint && (
-            <div className="sec">
-              <div className="sec-title">FDA-approved products <span className="help">🇺🇸 Drugs@FDA</span></div>
-              <div className="stat-row">
-                <div className="stat-cell">
-                  <div className="stat-v">{approvalFootprint.total}</div>
-                  <div className="stat-l">Approved applications</div>
-                </div>
-                <div className="stat-cell">
-                  <div className="stat-v">{approvalFootprint.generics}</div>
-                  <div className="stat-l">Generic (ANDA)</div>
-                </div>
-                <div className="stat-cell">
-                  <div className="stat-v">{approvalFootprint.brands}</div>
-                  <div className="stat-l">Brand (NDA/BLA)</div>
-                </div>
-                <div className="stat-cell">
-                  <div className="stat-v">{monthYear(approvalFootprint.latest) ?? "—"}</div>
-                  <div className="stat-l">Latest approval</div>
-                </div>
-              </div>
-              {approvalFootprint.generics > 0 && (
-                <div className="stat-foot">{approvalFootprint.generics} approved generic{approvalFootprint.generics !== 1 ? "s" : ""} — more competitors generally means a more resilient supply.</div>
-              )}
             </div>
           )}
 
@@ -1453,24 +1341,196 @@ export default function V1DrugView({
             );
           })()}
 
-          {/* Regulator status */}
-          {regulators.length > 0 && (
-            <div className="sec">
-              <div className="sec-title">Shortage status by regulator <span className="help">official notices</span></div>
-              <div className="country-list">
-                {regulators.map((s, i) => {
-                  const cc = (s.country_code || "").toUpperCase();
-                  const r = SEV[(s.severity || "").toLowerCase()] ?? 0;
-                  const cls = (s.status || "").toLowerCase() === "resolved" ? "sp-ok" : r >= 2 ? "sp-crit" : "sp-part";
-                  const lbl = (s.status || "").toLowerCase() === "resolved" ? "Resolved" : `${(s.severity || "shortage")[0].toUpperCase()}${(s.severity || "hortage").slice(1)}`;
-                  return (
-                    <div key={i} className="country-row">
-                      <div className="cl"><span className="flag">{flag(cc)}</span><div><div className="cn">{COUNTRY[cc] ?? cc}</div><div className="alt-f">{abbr(s.data_sources?.name, s.data_sources?.abbreviation)} · {timeAgo(s.last_verified_at ?? s.updated_at)}</div></div></div>
-                      <span className={`status-pill ${cls}`}><span className="d" />{lbl}</span>
-                    </div>
-                  );
-                })}
+          <ParallelTradeSourcing drugId={id} userCountry={userCountry} />
+          {!hasAlts && <div className="sec"><div className="alt-note">No substitution instruments, source-backed alternatives or same-class drugs on file for this medicine. Refer to the prescriber.</div></div>}
+            </>
+                ),
+              },
+              {
+                id: "prices",
+                label: "Prices",
+                content: (
+            <>
+          {/* Trade price — adaptive panel. AU shows the PBS tiers (AEMP/DPMQ);
+              other markets show their headline official price from
+              drug_pricing_history. Cross-references other markets we hold.
+              Degrades to a visible "awaiting ingest" note. Never fabricates. */}
+          <div className="sec" id="trade-price">
+            <div className="sec-title">Trade price <span className="help">{pricing ? `${flag(userCountry)} ${pricing.source}${pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}` : myMarket && myMarket.value != null ? `${flag(userCountry)} ${myMarket.source ?? cName}${myMarket.effective_date ? ` · ${monthYear(myMarket.effective_date)}` : ""}` : `${flag(userCountry)} ${cName} · awaiting price ingest`}</span></div>
+            <div className="price-panel">
+              <div className="price-top">
+                <div className="market-tabs"><span className="mtab on">{flag(userCountry)} {userCountry}</span></div>
+                {(pricing || (myMarket && myMarket.value != null)) && <span className="reimb">● Official price on file</span>}
               </div>
+              {pricing ? (
+                <>
+                  <div className="price-tiles">
+                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v">{fmtPrice(pricing.ex_manufacturer, pricing.currency)}</div><div className="ptile-sub">AEMP</div></div>
+                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v">{pricing.dispensed != null ? fmtPrice(pricing.dispensed, pricing.currency) : "—"}</div><div className="ptile-sub">incl. fees</div></div>
+                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v sm">{pricing.pack ?? "—"}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</div>
+                  </div>
+                  <div className="price-foot"><span>Source: {pricing.source}</span><span>{[monthYear(pricing.price_date) ? `Effective ${monthYear(pricing.price_date)}` : null, pricing.currency].filter(Boolean).join(" · ")}</span></div>
+                </>
+              ) : myMarket && myMarket.value != null ? (
+                <>
+                  <div className="price-tiles two">
+                    <div className="ptile"><div className="ptile-l">{myMarket.label}</div><div className="ptile-v">{fmtPrice(myMarket.value, myMarket.currency)}</div><div className="ptile-sub">{myMarket.per}</div></div>
+                    <div className="ptile"><div className="ptile-l">{myMarket.concession != null ? "Concession" : "Pack"}</div>{myMarket.concession != null ? (<><div className="ptile-v" style={{ color: "var(--med)" }}>{fmtPrice(myMarket.concession, myMarket.currency)}</div><div className="ptile-sub">live uplift</div></>) : (<><div className="ptile-v sm">{myMarket.per}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</>)}</div>
+                  </div>
+                  <div className="price-foot"><span>Source: {myMarket.source ?? "official"}</span><span>{[monthYear(myMarket.effective_date) ? `Effective ${monthYear(myMarket.effective_date)}` : null, myMarket.currency].filter(Boolean).join(" · ")}</span></div>
+                </>
+              ) : (
+                <>
+                  <div className="price-tiles">
+                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v empty">—</div></div>
+                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v empty">—</div></div>
+                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v empty">—</div></div>
+                  </div>
+                  <div className="price-empty-note">
+                    <div className="pe-ic" aria-hidden>$</div>
+                    <div>
+                      <div className="pe-t">Not yet captured for {cName}</div>
+                      <div className="pe-d">Official pricing isn’t on file for this market yet. PBS (Australia), NHS Drug Tariff (United Kingdom) and CMS NADAC (United States) feeds are prioritised; this panel populates automatically once the data lands.</div>
+                    </div>
+                  </div>
+                </>
+              )}
+              {otherMarkets.length > 0 && (
+                <div className="xmkt-strip">
+                  <div className="xmkt-lbl">Other markets</div>
+                  <div className="xmkt-row">
+                    {otherMarkets.map((m) => (
+                      <div className="xmkt" key={m.country}>
+                        <div className="xmkt-c">{flag(m.country)} {m.country}</div>
+                        <div className="xmkt-v">{m.concession != null ? fmtPrice(m.concession, m.currency) : m.value != null ? fmtPrice(m.value, m.currency) : "—"}</div>
+                        <div className="xmkt-t">{m.concession != null ? "concession" : m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Price trend + forecast — self-gating: renders nothing when the
+              market has no price history, history-only when the series can't
+              be forecast, and a Holt projection only when it clears a backtest.
+              (concession + drug_tariff history from drug_pricing_history.) */}
+          {(myMarket || otherMarkets.length > 0) && (
+            <div className="sec">
+              <div className="price-panel" style={{ padding: "18px 20px" }}>
+                <PriceTrendChart drugId={id} country={userCountry} />
+              </div>
+            </div>
+          )}
+
+          <ParallelTradeArbitrage drugId={id} destination={userCountry} />
+            </>
+                ),
+              },
+              {
+                id: "outlook",
+                label: "Supply outlook",
+                content: (
+            <>
+          <div className="sec tab-intro">
+            <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">i</span><div>
+              <div className="subpath-n">Evidence, not a forecast</div>
+              <div className="subpath-d">How past shortages of {drug.generic_name} played out, how concentrated its manufacturing base is, and recent recalls. Mederti doesn&apos;t publish a shortage probability: when we backtested one, it didn&apos;t beat a simple baseline.</div>
+            </div></div></div></div>
+          </div>
+          {/* Shortage trend for this molecule, every market (range-selectable) */}
+          {shortages.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Shortage history <span className="help">new &amp; open notices across all markets we track</span></div>
+              <ShortageTrendChart drugId={id} defaultRange="MAX" />
+            </div>
+          )}
+
+          {/* History */}
+          {history && (
+            <div className="sec">
+              <div className="sec-title">How long have past shortages lasted? <span className="help">from {history.n} resolved event{history.n > 1 ? "s" : ""}</span></div>
+              <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
+                <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
+                <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
+              </div></div></div></div>
+            </div>
+          )}
+
+          {/* API supply-base concentration (FDA Drug Master Files) */}
+          {apiConcentration && (
+            <div className="sec">
+              <div className="sec-title">Global API supply base <span className="help">🇺🇸 FDA Drug Master Files · active Type II</span></div>
+              <div className="conc">
+                <div className="conc-head">
+                  <div>
+                    <div className="conc-n">{apiConcentration.count} API manufacturer{apiConcentration.count !== 1 ? "s" : ""}</div>
+                    <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                    <span className={`status-pill ${TIER_CLS[supplyTier]}`}><span className="d" />{TIER_LABEL[supplyTier]} supply</span>
+                    {(apiConcentration.whoPqCount ?? 0) > 0 && (
+                      <span className="who-pq-badge">✓ {apiConcentration.whoPqCount} WHO-prequalified</span>
+                    )}
+                  </div>
+                </div>
+                {apiConcentration.makers.length > 0 && (
+                  <div className="conc-makers">
+                    {apiConcentration.makers.map((m) => <span key={m} className="d-tag">{m}</span>)}
+                    {apiConcentration.count > apiConcentration.makers.length && (
+                      <span className="d-tag">+{apiConcentration.count - apiConcentration.makers.length} more</span>
+                    )}
+                  </div>
+                )}
+                {supplyProfile && (
+                  <div className="conc-d" style={{ marginTop: 10 }}>
+                    {[
+                      supplyProfile.whoList ? `WHO Model List (${supplyProfile.whoList})` : null,
+                      supplyProfile.euCritical ? "EU Union list of critical medicines" : null,
+                      supplyProfile.nFinishedFirms != null ? `${supplyProfile.nFinishedFirms} US finished-dose firm${supplyProfile.nFinishedFirms !== 1 ? "s" : ""}` : null,
+                      supplyProfile.topApiCountry && supplyProfile.topApiShare != null
+                        ? `${Math.round(supplyProfile.topApiShare * 100)}% of API makers in ${supplyProfile.topApiCountry}`
+                        : null,
+                      `all ${supplyProfile.molecule.toLowerCase()} products short in ${supplyProfile.shortCountries.length} countr${supplyProfile.shortCountries.length === 1 ? "y" : "ies"} now`,
+                    ].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+                <div className="conc-foot">
+                  {apiConcentration.countries.length > 0
+                    ? `Manufacturing countries: ${apiConcentration.countries.join(", ")} · `
+                    : "Country of manufacture not yet mapped · "}
+                  Source: FDA List of Drug Master Files
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* FDA approval footprint — market depth (generic competition) */}
+          {approvalFootprint && (
+            <div className="sec">
+              <div className="sec-title">FDA-approved products <span className="help">🇺🇸 Drugs@FDA</span></div>
+              <div className="stat-row">
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.total}</div>
+                  <div className="stat-l">Approved applications</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.generics}</div>
+                  <div className="stat-l">Generic (ANDA)</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.brands}</div>
+                  <div className="stat-l">Brand (NDA/BLA)</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{monthYear(approvalFootprint.latest) ?? "—"}</div>
+                  <div className="stat-l">Latest approval</div>
+                </div>
+              </div>
+              {approvalFootprint.generics > 0 && (
+                <div className="stat-foot">{approvalFootprint.generics} approved generic{approvalFootprint.generics !== 1 ? "s" : ""} — more competitors generally means a more resilient supply.</div>
+              )}
             </div>
           )}
 
@@ -1503,33 +1563,30 @@ export default function V1DrugView({
               </div>
             </div>
           )}
-
-          {/* Timeline */}
-          {events.length > 0 && (
+          {!hasOutlook && <div className="sec"><div className="alt-note">No shortage history, supply-base or recall records on file for this medicine yet.</div></div>}
+            </>
+                ),
+              },
+              {
+                id: "info",
+                label: "Product info",
+                content: (
+            <>
+          {/* Product attributes — detailed 2-column reference table */}
+          {attrRows.length > 0 && (
             <div className="sec">
-              <div className="sec-title">Verified timeline <span className="help">regulator events</span></div>
-              <div className="timeline">
-                {events.map((e, i) => (
-                  <div key={i} className="tl-row">
-                    <span className={`tl-d ${e.resolved ? "filled" : ""}`} />
-                    <div><div className="tl-dt">{flag(e.cc)} {new Date(e.date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</div><div className="tl-ev">{e.txt}</div></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Sources */}
-          {sources.length > 0 && (
-            <div className="sec">
-              <div className="sec-title">Sources <span className="help">official regulators</span></div>
-              <div className="src-list">
-                {sources.map((s, i) => (
-                  <div key={i} className="src-item">
-                    <div className="src-l"><span className="flag">{flag(s.cc)}</span><div><div className="src-n">{s.a}</div><div className="alt-f">verified {timeAgo(s.ver) || "recently"}</div></div></div>
-                    {s.url && <a className="src-link" href={s.url} target="_blank" rel="noopener noreferrer">verify ↗</a>}
-                  </div>
-                ))}
+              <div className="sec-title">Product attributes <span className="help">reference data we hold</span></div>
+              <div className="attr-wrap">
+                <table className="attr-table">
+                  <tbody>
+                    {attrRows.map((r) => (
+                      <tr key={r.label}>
+                        <th scope="row">{r.label}</th>
+                        <td className={r.muted ? "attr-muted" : undefined}>{r.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -1583,6 +1640,44 @@ export default function V1DrugView({
               )}
             </details>
           )}
+
+          <ParallelTradePanel drugId={id} />
+          {!hasInfo && <div className="sec"><div className="alt-note">No product attributes or registrations on file for this medicine yet.</div></div>}
+            </>
+                ),
+              },
+              {
+                id: "community",
+                label: "Community",
+                badge: "Soon",
+                content: (
+            <div className="sec">
+              <div className="sec-title">Community <span className="help">field reports from pharmacists</span></div>
+              <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
+                <div className="subpath-n">Coming soon: is it just you?</div>
+                <div className="subpath-d">Verified pharmacists will be able to report what they&apos;re seeing at the counter and with wholesalers, kept separate from official regulator data. Until then, official notices are on the Status tab. Seeing a shortage we haven&apos;t listed? <a href="/contact">Tell us</a>.</div>
+              </div></div></div></div>
+            </div>
+                ),
+              },
+            ]}
+          />
+
+          {/* Sources */}
+          {sources.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Sources <span className="help">official regulators</span></div>
+              <div className="src-list">
+                {sources.map((s, i) => (
+                  <div key={i} className="src-item">
+                    <div className="src-l"><span className="flag">{flag(s.cc)}</span><div><div className="src-n">{s.a}</div><div className="alt-f">verified {timeAgo(s.ver) || "recently"}</div></div></div>
+                    {s.url && <a className="src-link" href={s.url} target="_blank" rel="noopener noreferrer">verify ↗</a>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
 
           <V1ReportActions generatedLabel={generatedLabel} marketLabel={marketLabel} sourceCount={sources.length} />
 
@@ -1828,6 +1923,90 @@ const CSS = `
 .find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
 .find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
 .find-supplier-hint{font-size:12px;color:var(--text-4)}
+.hero-card{flex-direction:column;align-items:stretch;gap:0;padding:0;overflow:hidden;container-type:inline-size;container-name:hero}
+.hero-card .pc-body{padding:20px 22px}
+.hero-card .pc-head{align-items:flex-start}
+.pc-name-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pc-name-row .status-pill{margin-top:0}
+.pc-actions{flex-shrink:0}
+.hero-band{border-top:1px solid var(--border)}
+.hero-band.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border-top-color:var(--crit-b)}
+.hero-band.med{background:linear-gradient(135deg,#fffdf5,#fffbeb);border-top-color:var(--med-b)}
+.hero-band.ok{background:linear-gradient(135deg,#f0fdf8,#ecfdf5);border-top-color:var(--ok-b)}
+.hb-cols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:22px;padding:20px 22px 6px}
+.hb-left{display:flex;flex-direction:column;gap:12px;min-width:0}
+.hb-answer{font-size:18px;font-weight:600;letter-spacing:-.02em;line-height:1.35;color:var(--ink)}
+.hb-markets{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.hb-markets-l{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-right:3px}
+.hero-band.crit .hb-markets-l{color:var(--crit)}.hero-band.med .hb-markets-l{color:var(--med)}
+.hb-left .ai-sum.embedded{margin-top:0;padding-top:12px;border-top:1px solid rgba(12,17,24,.07)}
+.sc-facts.hb-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:0;border-top:0;align-content:start}
+.hb-tiles .sc-fact,.hb-tiles .sc-fact + .sc-fact{background:var(--bg);border:1px solid rgba(12,17,24,.07);border-radius:12px;padding:12px 14px}
+.hb-tiles .sc-fact-link:hover{border-color:var(--green)}
+.hb-asof{padding:8px 22px 14px;margin-top:0}
+.hero-card .pc-head{flex-wrap:wrap}
+.hero-card .pc-titles{flex:1 1 auto;min-width:min(100%,280px)}
+.pc-actions .find-supplier-hint{display:none}
+@container hero (max-width:820px){.hb-cols{grid-template-columns:1fr}.sc-facts.hb-tiles{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
+@container hero (max-width:560px){.pc-actions{justify-content:flex-start;width:100%}}
+.hq{border-top:1px solid var(--border)}
+.hq-head{display:flex;align-items:flex-start;gap:14px;padding:18px 22px}
+.hq-ic{width:44px;height:44px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid}
+.hq.crit .hq-ic{background:var(--crit-bg);border-color:var(--crit-b);color:var(--crit)}
+.hq.med .hq-ic{background:var(--med-bg);border-color:var(--med-b);color:var(--med)}
+.hq.ok .hq-ic{background:var(--ok-bg);border-color:var(--ok-b);color:var(--green-d)}
+.hq-head-t{min-width:0}
+.hq-title{font-size:22px;font-weight:700;letter-spacing:-.028em;color:var(--ink);line-height:1.2}
+.hq-reason{font-size:13px;color:var(--text-2);margin-top:3px}
+.hq-src{font-size:11.5px;color:var(--text-3);margin-top:3px;font-family:var(--font-geist-mono),ui-monospace,monospace}
+.hq-qs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--border)}
+.hq-q{padding:16px 22px;min-width:0;display:flex;flex-direction:column}
+.hq-q + .hq-q{border-left:1px solid var(--border)}
+.hq-q-l{font-size:13px;font-weight:600;color:var(--text-3)}
+.hq-q-a{font-size:19px;font-weight:700;letter-spacing:-.025em;color:var(--ink);margin-top:6px;line-height:1.2;overflow-wrap:anywhere}
+.hq-q-a.mono{font-family:var(--font-geist-mono),ui-monospace,monospace;font-weight:600}
+.hq-q-d{font-size:12.5px;color:var(--text-3);margin-top:5px;line-height:1.45;overflow-wrap:anywhere}
+.hq-q-d a{color:var(--green-d);font-weight:600;text-decoration:none}
+.hq-more{margin-top:auto;padding-top:10px;font-size:12.5px;font-weight:600;color:var(--green-d);text-decoration:none;align-self:flex-start;min-height:24px}
+.hq-more:hover,.hq-q-d a:hover{text-decoration:underline}
+.hq-just{padding:14px 22px;border-top:1px solid var(--border);background:var(--bg-2)}
+.hq-just-l{font-size:13px;color:var(--text-3);margin-bottom:8px}
+.hq-just-l strong{color:var(--ink);font-weight:600}
+.hq-mkts{display:flex;flex-wrap:wrap;gap:6px}
+.hq-mk{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)}
+.hq-mk.mine{border-color:var(--border-2);color:var(--ink)}
+.hq-dot{width:7px;height:7px;border-radius:50%;background:var(--med)}
+.hq-dot.crit{background:var(--crit)}
+.hq-ai{border-top:1px solid var(--border);padding:10px 22px 14px}
+.hq-ai summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--green-d);min-height:32px;display:flex;align-items:center}
+.hq-ai .ai-sum.embedded{border-top:0;padding-top:4px;margin-top:0}
+@container hero (max-width:700px){.hq-qs{grid-template-columns:1fr}.hq-q + .hq-q{border-left:0;border-top:1px solid var(--border)}}
+.hero-card .pc-body{padding:18px 22px 16px}
+.pc-name-row .d-eml,.pc-name-row .d-ctrl{margin-top:0}
+.hero-card .d-generic,.hero-card .d-localcode{display:inline}
+.hero-card .d-localcode::before{content:" · "}
+.hero-card .d-tags{margin-top:10px}
+.hq-head{padding:14px 22px;gap:12px;align-items:center}
+.hq-ic{width:36px;height:36px;border-radius:10px}
+.hq-ic svg{width:18px;height:18px}
+.hq-title{font-size:19px}
+.hq-reason,.hq-src{display:inline;margin-top:0}
+.hq-sub{margin-top:3px;font-size:13px;color:var(--text-2);line-height:1.4}
+.hq-reason + .hq-src::before{content:" · "}
+.sc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:14px;border-top:1px solid rgba(12,17,24,.07)}
+.sc-fact{padding:12px 14px 2px 0;min-width:0;text-decoration:none;color:inherit;display:block}
+.sc-fact + .sc-fact{padding-left:14px;border-left:1px solid rgba(12,17,24,.07)}
+.sc-fact-l{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
+.sc-fact-v{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:4px;line-height:1.25}
+.sc-fact-v.mono{font-family:var(--font-geist-mono),ui-monospace,monospace}
+.sc-fact-d{font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.35}
+.sc-fact-link:hover .sc-fact-v{color:var(--green-d)}
+.sc-fact{min-width:0}
+.sc-fact-v,.sc-fact-d{overflow-wrap:anywhere}
+@media(max-width:680px){.sc-fact + .sc-fact{padding-left:0;border-left:0;border-top:1px solid rgba(12,17,24,.07)}}
+.ai-sum-body.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ai-sum-more{font:inherit;font-size:12px;font-weight:600;color:var(--green-d);background:none;border:0;padding:4px 0;margin-top:2px;cursor:pointer;min-height:32px}
+.ai-sum-more:hover{text-decoration:underline}
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block;box-shadow:var(--sh-card),var(--hi-inset);}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}
@@ -1841,6 +2020,25 @@ const CSS = `
 .sw-v{font-size:17px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:9px;line-height:1.2}
 .sw-d{font-size:11.5px;color:var(--text-3);margin-top:5px}
 .sec{margin-top:30px}
+.dtabs{margin-top:26px}
+.dtabs-bar{position:sticky;top:0;z-index:5;background:var(--bg-2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;padding:8px 12px 0}
+.dtabs-bar::-webkit-scrollbar{display:none}
+.dtabs-list{display:flex;gap:2px;min-width:max-content}
+.dtab{font:inherit;font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--text-3);background:none;border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;margin-bottom:-1px;padding:10px 16px 11px;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:background .12s,color .12s}
+.dtab:hover{color:var(--ink);background:rgba(12,17,24,.04)}
+.dtab.on{background:var(--bg);color:var(--ink);border-color:var(--border);box-shadow:inset 0 2px 0 var(--green)}
+.dtab:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
+.dtab-badge{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--border);color:var(--text-3);background:var(--bg)}
+.dtab-badge.crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-b)}
+.dtab-badge.med{color:var(--med);background:var(--med-bg);border-color:var(--med-b)}
+.dtab-badge.ok{color:var(--green-d);background:var(--ok-bg);border-color:var(--ok-b)}
+.dtabs-panel > .sec:first-of-type{margin-top:20px}
+.dtabs-panel > .status-card:first-of-type{margin-top:20px}
+.dtabs{margin-top:18px;background:var(--bg);border:1px solid var(--border);border-radius:18px;overflow:clip;box-shadow:var(--sh-card),var(--hi-inset)}
+.dtabs-panel{padding:2px 22px 24px}
+@media(max-width:620px){.dtabs-panel{padding:2px 14px 18px}}
+.dtabs-print-h{display:none}
+.dtabs-panel [id]{scroll-margin-top:64px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
 .ai-sum.embedded{margin:14px 0 0;border:0;border-top:1px solid var(--border);border-radius:0;background:none;padding:14px 0 0}
 .ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -2059,6 +2257,9 @@ const CSS = `
   .report-bar{box-shadow:none;border-color:#ccc}
   .sec,.status-card,.price-panel,.subpath,.conc,.record,.record-block,.country-row,.alt-card,.stat-row,.reg-wrap,.attr-wrap{break-inside:avoid;page-break-inside:avoid}
   .sec{margin-top:18px}
+  .dtabs-bar{display:none}
+  .dtabs-panel[hidden]{display:block !important}
+  .dtabs-print-h{display:block;font-size:14px;font-weight:700;margin:22px 0 0}
   .record[open] .record-chev,.record-chev{display:none}
   .record .record-block{display:block !important}
   .status-card,.sw-card,.price-panel,.conc,.subpath,.alt-card,.country-row,.src-item,.record{box-shadow:none !important}
@@ -2070,8 +2271,27 @@ const CSS = `
 // register ~100 presentations of a common molecule (GB amoxicillin).
 const SIM_CLEAR_SHOWN = 4;
 
-function SupplyPill({ status, since }: { status: SupplyStatus; since: string | null }) {
-  if (status === "none") return <span className="status-pill sp-ok"><span className="d" />No shortage reported</span>;
+function SupplyPill({ status, since, history }: {
+  status: SupplyStatus; since: string | null;
+  history?: { count: number; last: string | null } | null;
+}) {
+  if (status === "none") {
+    // A clean pill alone hid a product that had been short on and off — say
+    // when the regulator last listed it (past notices, last 2 years).
+    const last = history?.last
+      ? new Date(history.last + "T00:00:00Z").toLocaleDateString("en-AU", { month: "short", year: "numeric", timeZone: "UTC" })
+      : null;
+    return (
+      <>
+        <span className="status-pill sp-ok"><span className="d" />No current shortage</span>
+        {history && last && (
+          <div style={{ fontSize: 10.5, marginTop: 4, color: "var(--med)" }}>
+            Short {history.count === 1 ? "once" : `${history.count}×`} in past 2 yrs · last {last}
+          </div>
+        )}
+      </>
+    );
+  }
   // Year shown unless it's the current one: "since 15 Dec" alone could be either.
   const d = since ? new Date(since + "T00:00:00Z") : null;
   const when = d

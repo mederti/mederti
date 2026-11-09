@@ -333,7 +333,12 @@ export async function GET(req: NextRequest) {
               a.active++;
               if (row.estimated_resolution_date) {
                 const t = Date.parse(row.estimated_resolution_date);
-                if (!Number.isNaN(t) && (a.minRes === null || t < a.minRes)) a.minRes = t;
+                // A sponsor estimate already in the past is not an "expected
+                // back" date — the drug page labels it "Estimate passed, not
+                // updated"; showing it here as the ETA misled (Propofol showed
+                // "Apr 2026" in Nov 2026). Only future estimates qualify.
+                const startOfToday = new Date().setUTCHours(0, 0, 0, 0);
+                if (!Number.isNaN(t) && t >= startOfToday && (a.minRes === null || t < a.minRes)) a.minRes = t;
               }
               const sev = SEV[(row.severity ?? "").toLowerCase()] ?? 0;
               if (sev > a.maxSev) a.maxSev = sev;

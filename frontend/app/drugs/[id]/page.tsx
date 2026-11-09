@@ -731,7 +731,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // molecule (drug_ids from the nightly profile), not just this one, because
   // a market's notices often sit on a salt- or form-specific row.
   const moleculeIds: string[] = [...new Set([id, ...((profileRes.data?.[0] as { drug_ids?: string[] } | undefined)?.drug_ids ?? [])])];
-  const [catRes, noticeRes] = await Promise.all([
+  // Past notices (2 years) ride in a separate, light query so they can never
+  // crowd open notices out of the 200-row cap. Only used for per-product
+  // "short N× before" history, matched by registration number.
+  const histSince = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10);
+  const [catRes, noticeRes, pastRes] = await Promise.all([
     supabase
       .from("drug_catalogue")
       .select("brand_name, strength, dosage_form, sponsor, registration_number, active_ingredients")
@@ -747,6 +751,15 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .in("status", ["active", "anticipated"])
       .or("synthetic.is.null,synthetic.eq.false")
       .limit(200),
+    supabase
+      .from("shortage_events")
+      .select("start_date, artg:raw_data->>artg_numb, din:raw_data->>din")
+      .in("drug_id", moleculeIds.slice(0, 150))
+      .eq("country_code", userCountry)
+      .eq("status", "resolved")
+      .gte("start_date", histSince)
+      .or("synthetic.is.null,synthetic.eq.false")
+      .limit(500),
   ]);
   const supplyInMarket = buildSupplyInMarket(
     userCountry,
@@ -762,7 +775,20 @@ export default async function DrugPage({ params, searchParams }: Props) {
       productName: extractEventBrand(n.data_source_id ?? null, n.raw_data).brand_name,
       doseForm: n.dose_form ?? n.ca_form ?? null,
       ingredients: typeof n.ingredients === "string" ? n.ingredients.split(";").map((x: string) => x.trim()).filter(Boolean) : undefined,
-    })),
+    })).concat(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((pastRes.data ?? []) as any[]).map((n) => ({
+        status: "resolved",
+        start_date: n.start_date,
+        anticipated_start_date: null,
+        estimated_resolution_date: null,
+        source_url: null,
+        regNo: n.artg ?? n.din ?? null,
+        productName: null,
+        doseForm: null,
+        ingredients: undefined,
+      })),
+    ),
   );
 
   const apiConcentration =

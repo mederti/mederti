@@ -30,6 +30,11 @@ export interface SupplyProduct {
   back: string | null;         // ISO estimated return, only when still in the future
   backPassed: boolean;         // the regulator's estimate has passed without an update
   sourceUrl: string | null;
+  // Past (resolved) regulator notices for this exact product, matched by
+  // registration number only. "No shortage reported" today can hide a product
+  // that has been short on and off for years (Barwon Health, Fresofol: 3 TGA
+  // notices in 2026). Counted per distinct start date.
+  history: { count: number; last: string | null } | null;
 }
 
 export interface SupplyNotice {
@@ -188,6 +193,23 @@ export function buildSupplyInMarket(
     byKey.set(key, p);
   }
 
+  // Resolved notices → per-product history, exact registration match only.
+  const pastByReg = new Map<string, Set<string>>(); // reg digits → start dates
+  for (const n of notices) {
+    const reg = regDigits(n.regNo);
+    if (n.status !== "resolved" || !reg || !n.start_date) continue;
+    pastByReg.set(reg, (pastByReg.get(reg) ?? new Set()).add(n.start_date));
+  }
+  const historyOf = (regNos: Set<string>) => {
+    const starts = new Set<string>();
+    for (const r of regNos) {
+      const d = regDigits(r);
+      for (const s of (d && pastByReg.get(d)) || []) starts.add(s);
+    }
+    if (starts.size === 0) return null;
+    return { count: starts.size, last: [...starts].sort().pop() ?? null };
+  };
+
   const openAll = notices.filter((n) => n.status === "active" || n.status === "anticipated");
   const open = openAll.filter((n) => !isCombo(n.productName, n.ingredients));
   combosExcluded += openAll.length - open.length;
@@ -229,6 +251,7 @@ export function buildSupplyInMarket(
         : status === "anticipated" ? minDate(use.map((n) => n.anticipated_start_date ?? n.start_date)) : null,
       ...backFields(status === "none" ? null : minDate(use.map((n) => n.estimated_resolution_date))),
       sourceUrl: use.find((n) => n.source_url)?.source_url ?? null,
+      history: historyOf(p.regNos),
     });
   }
   for (const n of unmatched) {

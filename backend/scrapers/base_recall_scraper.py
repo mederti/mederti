@@ -29,7 +29,12 @@ from typing import Any
 # pipelines tag raw_scrapes rows with the same identifier. Closes audit
 # FINDING-D1-09 on the recall side. Single import means no duplicated
 # git-resolution logic; the helper runs once per process.
-from backend.scrapers.base_scraper import _DEFAULT_SCRAPER_VERSION, grade_write_outcome
+from backend.scrapers.base_scraper import (
+    _DEFAULT_SCRAPER_VERSION,
+    grade_write_outcome,
+    newest_source_date,
+    record_source_freshness,
+)
 
 # ── Drug-name plausibility guard ────────────────────────────────────────────
 # Recall feed titles often look like sentences ("Updated labelling for X",
@@ -532,11 +537,13 @@ class BaseRecallScraper(ABC):
             "auto_shortages":    0,
             "error":             None,
         }
+        observed_source_date: date | None = None
 
         try:
             raw = self.fetch()
             recalls = self.normalize(raw)
             summary["records_found"] = len(recalls)
+            observed_source_date = newest_source_date(recalls, ("announced_date",))
             self.log.info("Normalisation complete", extra={"source": self.SOURCE_NAME, "records": len(recalls)})
 
             counts = self.upsert(recalls)
@@ -582,5 +589,12 @@ class BaseRecallScraper(ABC):
                         "Could not update last_scraped_at",
                         extra={"error": str(ts_exc), "source": self.SOURCE_NAME},
                     )
+            record_source_freshness(
+                self.db, self.SOURCE_ID,
+                finished_at=finished_at,
+                status=summary["status"],
+                observed=observed_source_date,
+                log=self.log,
+            )
 
         return summary

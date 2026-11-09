@@ -377,6 +377,16 @@ class SloveniaJAZMPScraper(BaseScraper):
 
         status = self._determine_status(notice_class, event_start, today)
 
+        # A re-arrival dated in the future hasn't happened: the medicine is
+        # still short, and the preceding disruption notice carries that. Writing
+        # it as "resolved" would need an end_date before its own start_date.
+        if notice_class == "ARRIVAL" and status == "resolved" and event_start:
+            try:
+                if datetime.fromisoformat(event_start).date() > today:
+                    return None
+            except ValueError:
+                pass
+
         # Filter out ancient, already-closed events -- see module docstring.
         # Keep everything currently active/anticipated regardless of age
         # (JAZMP's own "latest notice" record says it's still open).
@@ -505,6 +515,12 @@ class SloveniaJAZMPScraper(BaseScraper):
 
         if notice_class in ("DISRUPTION", "TEMPORARY_STOP"):
             return "anticipated" if is_future else "active"
+        # A permanent stop announced for a future date is a known, upcoming
+        # loss of supply -- not a closed chapter yet. Marking it resolved
+        # stamped end_date=today < start_date and Postgres rejected the row
+        # (chk_dates), silently dropping ~28 pre-announced withdrawals a run.
+        if notice_class == "PERMANENT_STOP" and is_future:
+            return "anticipated"
         # PERMANENT_STOP and ARRIVAL/RETURN both represent a closed chapter
         # from JAZMP's perspective -- the medicine either left the market
         # for good, or came back. Either way there's nothing "ongoing".

@@ -54,6 +54,16 @@ function BrandLine({ d, className }: { d: DrugHit; className: string }) {
     </div>
   );
 }
+/** The typed brand's own status line (AU/CA, matched by registration number). */
+function brandStatusLine(d: DrugHit): string | null {
+  const b = d.brand_status;
+  if (!b) return null;
+  const now = b.short > 0
+    ? `${b.short} product${b.short === 1 ? "" : "s"} short now`
+    : b.anticipated > 0 ? "shortage anticipated" : `not on ${b.regulator}'s shortage list`;
+  const past = b.past > 0 ? ` · short ${b.past === 1 ? "once" : `${b.past}×`} in past 2 yrs` : "";
+  return `${b.brand}: ${now}${past}`;
+}
 function monthYear(iso?: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -568,6 +578,7 @@ function Results() {
                     <td>
                       <span className={`status-pill ${ms.cls}`}><span className="d" />{ms.label}</span>
                       {ms.sub && <div className={`t-mktsub ${ms.warn ? "warn" : ""}`}>{ms.sub}</div>}
+                      {brandStatusLine(d) && <div className={`t-mktsub ${d.brand_status!.short > 0 ? "warn" : ""}`}>{brandStatusLine(d)}</div>}
                     </td>
                     <td>
                       {sub ? (
@@ -629,7 +640,18 @@ function Results() {
                         (brand) of this ingredient in the market — a specific
                         contracted brand may return later, so say so. */}
                     <td title={eb ? `Earliest sponsor-declared return date across all products containing this ingredient${isGlobalMarket ? "" : ` in ${mk.name}`}. A specific brand may return later.` : undefined}>
-                      {eb ? (
+                      {d.brand_status ? (
+                        // A brand search answers for that brand: the molecule's
+                        // earliest date belonged to another brand (Fresofol showed
+                        // B Braun's Propofol-Lipuro date).
+                        d.brand_status.short > 0 ? (
+                          d.brand_status.back
+                            ? <><div className="t-eb">{monthYear(d.brand_status.back)}</div><div className="t-sub2">{d.brand_status.brand} · sponsor est.</div></>
+                            : <><div className="t-eb none">No estimate</div><div className="t-sub2">{d.brand_status.brand}</div></>
+                        ) : (
+                          <><div className="t-eb none">{d.brand_status.brand} not short</div>{eb && <div className="t-sub2">other brands ~{eb}</div>}</>
+                        )
+                      ) : eb ? (
                         <><div className="t-eb">{eb}</div><div className="t-sub2">earliest sponsor est. — brands may differ</div></>
                       ) : inShortage ? (
                         <div className="t-eb none">No estimate</div>
@@ -661,6 +683,7 @@ function Results() {
                   {d.atc_code ? `ATC ${d.atc_code}` : "—"}
                   {d.alternatives_count ? ` · ${d.alternatives_count} same-class drug${d.alternatives_count > 1 ? "s" : ""}` : ""}
                 </div>
+                {brandStatusLine(d) && <div className="rmeta">{brandStatusLine(d)}</div>}
               </div>
               <span className={`status-pill ${st.cls}`}><span className="d" />{st.label}</span>
             </div>

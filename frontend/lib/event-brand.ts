@@ -89,6 +89,11 @@ export function extractEventMarketExit(
   rawData: unknown,
 ): EventMarketExit {
   const raw = (rawData && typeof rawData === "object" ? rawData : {}) as Record<string, unknown>;
-  if (dataSourceId !== SRC_TGA || raw.status !== "D") return { withdrawal_date: null, regulator_impact: null };
-  return { withdrawal_date: tgaDate(raw.deleted_date), regulator_impact: clean(raw.shortage_impact) };
+  if (dataSourceId !== SRC_TGA) return { withdrawal_date: null, regulator_impact: null };
+  // The impact rating is on every TGA record; the cancellation date only
+  // means a market exit on a 'D' (discontinuation) record.
+  return {
+    withdrawal_date: raw.status === "D" ? tgaDate(raw.deleted_date) : null,
+    regulator_impact: clean(raw.shortage_impact),
+  };
 }

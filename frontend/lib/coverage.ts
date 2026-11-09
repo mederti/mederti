@@ -13,10 +13,14 @@ export interface LiveCoverage {
 
 const OPEN = ["active", "anticipated"];
 
-async function computeLiveCoverage(): Promise<LiveCoverage | null> {
+// Throws instead of returning null/partial: unstable_cache stores whatever we
+// return for 6h, so a transient Supabase blip used to bake "—" (or an
+// undercount, when a single probe failed) into the homepage for hours.
+// Throwing leaves the cache empty and the next request retries.
+async function computeLiveCoverage(): Promise<LiveCoverage> {
   const admin = getSupabaseAdmin();
   const { data: sources, error } = await admin.from("data_sources").select("id, country_code");
-  if (error || !sources) return null;
+  if (error || !sources) throw new Error(`data_sources lookup failed: ${error?.message ?? "no data"}`);
 
   // One cheap LIMIT 1 probe per source — PostgREST aggregates are disabled
   // and head counts on the big sources are slow. Batched to stay polite.
@@ -35,6 +39,7 @@ async function computeLiveCoverage(): Promise<LiveCoverage | null> {
       ),
     );
     probes.forEach((p, j) => {
+      if (p.error) throw new Error(`coverage probe failed for ${batch[j].id}: ${p.error.message}`);
       if (p.data && p.data.length > 0) live.push(batch[j]);
     });
   }
@@ -48,6 +53,16 @@ async function computeLiveCoverage(): Promise<LiveCoverage | null> {
 }
 
 /** Live coverage, cached 6h (it moves when a scraper starts/stops producing). */
-export const liveCoverage = unstable_cache(computeLiveCoverage, ["mederti-live-coverage"], {
+const cachedLiveCoverage = unstable_cache(computeLiveCoverage, ["mederti-live-coverage"], {
   revalidate: 21600,
 });
+
+/** Null on failure (callers show "—"); failures are never cached. */
+export async function liveCoverage(): Promise<LiveCoverage | null> {
+  try {
+    return await cachedLiveCoverage();
+  } catch (err) {
+    console.error("[coverage] live coverage failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}

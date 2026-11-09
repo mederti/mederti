@@ -99,6 +99,12 @@ function timeAgo(iso?: string | null) {
   if (d < 30) return `${d}d ago`;
   return `${Math.floor(d / 30)}mo ago`;
 }
+// Combination names ("Amoxicillin/Clavulanate") have no natural break point
+// and overflow narrow tiles; a zero-width space after each slash lets them wrap.
+function breakAtSlash(name: string): string {
+  return name.replace(/\//g, "/\u200B");
+}
+
 function monthYear(iso?: string | null) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -707,7 +713,7 @@ export default function V1DrugView({
           {/* Status band — design 4: the answer in one sentence + other markets
               + AI summary on the left; the four key facts as tiles on the
               right. "Yes" only when a real pathway is on file. */}
-          <div className={`hero-band ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
+          <div className={`hero-band ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok"}`}>
             <div className="hb-cols">
               <div className="hb-left">
                 <div className="hb-answer">{heroAnswer}</div>
@@ -744,13 +750,13 @@ export default function V1DrugView({
                   {topAlt?.id != null ? (
                     <Link href={`/drugs/${topAlt.id}`} className="sc-fact sc-fact-link">
                       <div className="sc-fact-l">Same-class drug</div>
-                      <div className="sc-fact-v">{topAlt.name}</div>
+                      <div className="sc-fact-v">{breakAtSlash(topAlt.name)}</div>
                       <div className="sc-fact-d">different medicine · prescriber must approve</div>
                     </Link>
                   ) : (
                     <div className="sc-fact">
                       <div className="sc-fact-l">Same-class drug</div>
-                      <div className="sc-fact-v">{topAlt ? topAlt.name : "None listed"}</div>
+                      <div className="sc-fact-v">{topAlt ? breakAtSlash(topAlt.name) : "None listed"}</div>
                       <div className="sc-fact-d">{topAlt ? "different medicine · prescriber must approve" : "refer to prescriber"}</div>
                     </div>
                   )}
@@ -1860,6 +1866,8 @@ const CSS = `
 .sc-fact-v.mono{font-family:var(--font-geist-mono),ui-monospace,monospace}
 .sc-fact-d{font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.35}
 .sc-fact-link:hover .sc-fact-v{color:var(--green-d)}
+.sc-fact{min-width:0}
+.sc-fact-v,.sc-fact-d{overflow-wrap:anywhere}
 @media(max-width:680px){.sc-fact + .sc-fact{padding-left:0;border-left:0;border-top:1px solid rgba(12,17,24,.07)}}
 .ai-sum-body.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ai-sum-more{font:inherit;font-size:12px;font-weight:600;color:var(--green-d);background:none;border:0;padding:4px 0;margin-top:2px;cursor:pointer;min-height:32px}
@@ -1878,13 +1886,14 @@ const CSS = `
 .sw-d{font-size:11.5px;color:var(--text-3);margin-top:5px}
 .sec{margin-top:30px}
 .dtabs{margin-top:26px}
-.dtabs-bar{position:sticky;top:0;z-index:5;background:var(--bg-2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.dtabs-bar{position:sticky;top:8px;z-index:5;overflow-x:auto;scrollbar-width:none;padding:2px;margin:-2px}
 .dtabs-bar::-webkit-scrollbar{display:none}
-.dtabs-list{display:flex;gap:22px;min-width:max-content}
-.dtab{font:inherit;font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--text-3);background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:12px 2px 11px;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
-.dtab:hover{color:var(--text)}
-.dtab.on{color:var(--ink);border-bottom-color:var(--green)}
-.dtab:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:4px}
+.dtabs-list{display:inline-flex;gap:4px;min-width:max-content;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:14px;box-shadow:var(--sh-card),var(--hi-inset)}
+.dtab{font:inherit;font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--text-2);background:none;border:0;border-radius:10px;padding:8px 14px;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:background .12s,color .12s}
+.dtab:hover{background:var(--bg-3);color:var(--ink)}
+.dtab.on{background:var(--ink);color:#fff;box-shadow:0 1px 2px rgba(12,17,24,.18)}
+.dtab.on .dtab-badge.muted{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.22);color:#fff}
+.dtab:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 .dtab-badge{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--border);color:var(--text-3);background:var(--bg)}
 .dtab-badge.crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-b)}
 .dtab-badge.med{color:var(--med);background:var(--med-bg);border-color:var(--med-b)}
@@ -1893,7 +1902,7 @@ const CSS = `
 .dtabs-panel > .status-card:first-of-type{margin-top:20px}
 .dtabs{margin-top:18px}
 .dtabs-print-h{display:none}
-.dtabs-panel [id]{scroll-margin-top:60px}
+.dtabs-panel [id]{scroll-margin-top:76px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
 .ai-sum.embedded{margin:14px 0 0;border:0;border-top:1px solid var(--border);border-radius:0;background:none;padding:14px 0 0}
 .ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}

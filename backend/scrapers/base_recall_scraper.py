@@ -405,6 +405,9 @@ class BaseRecallScraper(ABC):
                     "start_date":       announced_date,
                     "source_url":       recall.get("press_release_url", self.BASE_URL),
                     "notes":            f"Auto-generated from Class I recall {recall_uuid}",
+                    # Inferred from a recall, not published as a shortage:
+                    # synthetic, like recall_linker's copies (migration 046).
+                    "synthetic":        True,
                     "last_verified_at": datetime.now(timezone.utc).isoformat(),
                 },
                 on_conflict="shortage_id",

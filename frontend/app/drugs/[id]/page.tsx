@@ -424,7 +424,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .eq("id", id).single(),
       supabase.from("shortage_events")
         .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, raw_data, data_source_id, data_sources(name, abbreviation, country_code)")
-        .eq("drug_id", id).order("updated_at", { ascending: false }),
+        // Synthetic rows (recalls the MedWatch/enforcement scrapers wrote
+        // into shortage_events) are not shortages: every other surface drops
+        // them, and here a 2014 FDA recall headlined propofol in the US as an
+        // "Anticipated shortage".
+        .eq("drug_id", id).or("synthetic.is.null,synthetic.eq.false").order("updated_at", { ascending: false }),
       supabase.from("shortage_status_log")
         .select("id, shortage_event_id, drug_id, old_status, new_status, old_severity, new_severity, changed_at")
         .eq("drug_id", id).order("changed_at", { ascending: false }),
@@ -447,6 +451,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const shortages = shortagesRaw.map(({ raw_data, ...ev }: any) => ({
     ...ev,
+    // registration the regulator names (TGA ARTG / Health Canada DIN), so a
+    // brand view can tie notices to its own registrations exactly
+    reg_no: raw_data?.artg_numb ?? raw_data?.din ?? null,
     ...extractEventBrand(ev.data_source_id ?? null, raw_data),
     ...extractEventMarketExit(ev.data_source_id ?? null, raw_data),
   }));
@@ -835,7 +842,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       const reg = (n.artg ?? n.din ?? "").replace(/\D/g, "");
       const onPage = !!reg && pageRegs.some((r) => r.replace(/^0+/, "") === reg.replace(/^0+/, ""));
       if (!onPage && isCombo(brand.brand_name, ings)) continue;
-      shortages.push({ ...ev, ...brand });
+      shortages.push({ ...ev, reg_no: n.artg ?? n.din ?? null, ...brand, ...extractEventMarketExit(ev.data_source_id ?? null, raw_data) });
       seen.add(n.id);
     }
   }
@@ -998,12 +1005,28 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // each event's regulator-published brand_name (never drugs.brand_names).
     const focusId = sp.brand_focus;
     if (focusId) {
+      // A brand is its brand word, not the full register string: "FRESOFOL 1%"
+      // and "FRESOFOL 1% MCT/LCT" are one brand (the page listed 3 of its 8 AU
+      // registrations). Falls back to the full cleaned name when the first
+      // word is the molecule itself or too short to be a brand
+      // ("Propofol-Lipuro" stays whole; "Propofol Sandoz" stays whole).
+      const molWords = new Set((drug.generic_name ?? "").toLowerCase().split(/[^a-z]+/).filter(Boolean));
+      const brandKey = (clean: string) => {
+        const first = clean.toLowerCase().split(/\s+/)[0]?.replace(/[^a-z\-]/g, "") ?? "";
+        return first.length >= 4 && !molWords.has(first) ? first : clean.toLowerCase();
+      };
       const focusRow = catRows.find((r) => r.id === focusId);
-      const focusBrand = focusRow ? cleanBrandNames([focusRow.brand_name ?? ""], drug.generic_name)[0] : null;
-      if (focusRow && focusBrand) {
-        const key = focusBrand.toLowerCase();
+      const focusClean = focusRow ? cleanBrandNames([focusRow.brand_name ?? ""], drug.generic_name)[0] : null;
+      const key = focusClean ? brandKey(focusClean) : null;
+      const focusBrand = focusClean && key
+        ? (key === focusClean.toLowerCase() ? focusClean : key.charAt(0).toUpperCase() + key.slice(1))
+        : null;
+      if (focusRow && focusBrand && key) {
         const regs = catRows
-          .filter((r) => (cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0] ?? "").toLowerCase() === key)
+          .filter((r) => {
+            const c = cleanBrandNames([r.brand_name ?? ""], drug.generic_name)[0];
+            return !!c && brandKey(c) === key;
+          })
           .map((r) => ({
             product: r.brand_name ?? focusBrand,
             country: (r.source_country ?? "").toUpperCase(),

@@ -854,10 +854,11 @@ export default function V1DrugView({
               );
             })()}
 
-            <details className="hq-ai">
-              <summary>Mederti AI summary</summary>
-              <V1AiSummary id={id} embedded clamp={false} />
-            </details>
+            {/* AI summary teaser: headline + first two lines, expandable in place */}
+            <div className="hq-ai">
+              <div className="hq-ai-l"><span className="hq-ai-badge" aria-hidden>AI</span>Mederti AI summary</div>
+              <V1AiSummary id={id} embedded />
+            </div>
           </div>
           </div>
 
@@ -1956,6 +1957,13 @@ const CSS = `
 .hq.med .hq-ic{background:var(--med-bg);border-color:var(--med-b);color:var(--med)}
 .hq.ok .hq-ic{background:var(--ok-bg);border-color:var(--ok-b);color:var(--green-d)}
 .hq-head-t{min-width:0}
+.hq.crit .hq-head{background:linear-gradient(135deg,#fff5f6,#fff1f3)}
+.hq.med .hq-head{background:linear-gradient(135deg,#fffdf5,#fffbeb)}
+.hq.ok .hq-head{background:linear-gradient(135deg,#f0fdf8,#ecfdf5)}
+.hq.crit{border-top-color:var(--crit-b)}.hq.med{border-top-color:var(--med-b)}.hq.ok{border-top-color:var(--ok-b)}
+.hq.crit .hq-qs{border-top-color:var(--crit-b)}.hq.med .hq-qs{border-top-color:var(--med-b)}.hq.ok .hq-qs{border-top-color:var(--ok-b)}
+.hq .hq-ic{background:var(--bg) !important}
+.hq.crit .hq-title{color:#a8102e}.hq.med .hq-title{color:#8a4e05}
 .hq-title{font-size:22px;font-weight:700;letter-spacing:-.028em;color:var(--ink);line-height:1.2}
 .hq-reason{font-size:13px;color:var(--text-2);margin-top:3px}
 .hq-src{font-size:11.5px;color:var(--text-3);margin-top:3px;font-family:var(--font-geist-mono),ui-monospace,monospace}
@@ -1977,9 +1985,11 @@ const CSS = `
 .hq-mk.mine{border-color:var(--border-2);color:var(--ink)}
 .hq-dot{width:7px;height:7px;border-radius:50%;background:var(--med)}
 .hq-dot.crit{background:var(--crit)}
-.hq-ai{border-top:1px solid var(--border);padding:10px 22px 14px}
-.hq-ai summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--green-d);min-height:32px;display:flex;align-items:center}
-.hq-ai .ai-sum.embedded{border-top:0;padding-top:4px;margin-top:0}
+.hq-ai{border-top:1px solid var(--border);padding:14px 22px 12px}
+.hq-ai-l{display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3)}
+.hq-ai-badge{font-size:9.5px;font-weight:700;letter-spacing:.02em;color:#fff;background:var(--grad-brand);border-radius:5px;padding:2px 5px}
+.hq-ai .ai-sum.embedded{border-top:0;padding-top:8px;margin-top:0}
+.hq-ai .ai-sum-hl{font-size:14.5px;margin-bottom:3px}
 @container hero (max-width:700px){.hq-qs{grid-template-columns:1fr}.hq-q + .hq-q{border-left:0;border-top:1px solid var(--border)}}
 .hero-card .pc-body{padding:18px 22px 16px}
 .pc-name-row .d-eml,.pc-name-row .d-ctrl{margin-top:0}

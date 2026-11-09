@@ -84,7 +84,7 @@ export default function V1AiSummary({ id, embedded = false, clamp = true }: { id
       <div className={`ai-sum-body${embedded && clamp && !expanded ? " clamp" : ""}`}>{data.body}</div>
       {embedded && clamp && (
         <button type="button" className="ai-sum-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-          {expanded ? "Show less" : "Read more"}
+          {expanded ? "Show less" : "Read full summary →"}
         </button>
       )}
     </div>

@@ -820,9 +820,9 @@ const CSS = `
 /* Tuned design system: scoped token block mirrors the global tuned palette
    (globals.css :root) and uses Geist. */
 .v1home .res-l .rn{font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;font-weight:600;letter-spacing:-.02em}
-.v1home{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;
+.v1home{--ink:var(--navy);--green:var(--teal);--green-d:var(--teal-l);--green-bg:var(--acc-soft);--green-b:#C6F3E6;
   --bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
-  --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;
+  --text:var(--navy);--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;
   --crit:#dc2647;--crit-bg:#fdeef1;--crit-b:#f8cdd6;--med:#b46708;--med-bg:#fdf6e9;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;
   --violet:#6366f1;--violet-b:#c7d2fe;--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
   --hi-inset:inset 0 1px 0 rgba(255,255,255,.7);--sh-card:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06);
@@ -833,21 +833,6 @@ const CSS = `
 
 /* ── App shell (mirrors V1DrugView) ── */
 .shell{display:flex;align-items:flex-start;min-height:100vh}
-.sb{width:262px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.sb-top{height:64px;padding:0 28px;display:flex;align-items:center}
-.sb-scroll{flex:1;overflow-y:auto;padding:8px 14px 8px 19px}
-.sb-group{margin-top:14px}
-.sb-glabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-4);padding:6px 9px}
-.sb-item{display:flex;align-items:center;gap:10px;padding:9px;border-radius:10px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none}
-.sb-item:hover{background:var(--bg-2)}
-.sb-item.sb-active{background:var(--green-bg);color:var(--green-d)}
-.sb-empty{color:var(--text-4);font-style:italic}
-.sb-sub{padding-left:18px;color:var(--text-3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-.sb-sub:hover{color:var(--text);background:var(--bg-2)}
-.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.sb-dot.green{background:var(--ok)}
-.sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
-.sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
 .v1app.v1search .dg-main{flex:1;min-width:0;max-width:none;padding:32px 40px 80px;width:100%;background:#eef1f5}
 

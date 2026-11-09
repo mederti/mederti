@@ -310,7 +310,7 @@ export function EarlyWarningView() {
           font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;color:#0c1118;
           --bg:#fafafa; --bg-2:#f4f4f5; --bg-3:#e4e4e7; --card:#fff; --border:#e4e4e7; --border-2:#d4d4d8;
           --text:#0c1118; --text-2:#3f3f46; --text-3:#71717a; --text-4:#a1a1aa;
-          --teal:#0fa676; --teal-l:#0c8a62; --teal-bg:#e8f6f0; --teal-b:#bce4d4;
+          --teal:var(--brand-teal); --teal-l:var(--brand-teal-d); --teal-bg:var(--brand-tint); --teal-b:#C6F3E6;
           --crit:#dc2626; --crit-bg:#fef2f2; --crit-b:#fecaca;
           --med:#ca8a04; --med-bg:#fefce8; --med-b:#f3dcae;
           --ok:#0fa676; --ok-bg:#e8f6f0; --ok-b:#bce4d4;

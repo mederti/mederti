@@ -19,6 +19,7 @@ import { ParallelTradePanel } from "./parallel-trade-panel";
 import { PriceTrendChart } from "./PriceTrendChart";
 import { ShortageTrendChart } from "@/app/chat/components/views/ShortageTrendChart";
 import { ShortageEpisodeTimeline } from "./ShortageEpisodeTimeline";
+import { DrugTabs } from "./DrugTabs";
 import { detectS19A, getS19AText } from "@/lib/shortage-utils";
 import { ALTERNATIVES_CAVEAT, affinity, relationshipLabel } from "@/lib/alternatives";
 import { cleanBrandNames } from "@/lib/brand";
@@ -494,6 +495,7 @@ export default function V1DrugView({
         : { cls: "sp-part", txt: `Limited supply · ${cName}` }
     : { cls: "sp-ok", txt: `In supply · ${cName}` };
 
+
   // Detailed product-attribute table (2-col label/value). Only emits rows with
   // real data; the PIL/SPC document rows are shown muted as "Not on file" so the
   // field is visible without fabricating a value.
@@ -532,6 +534,12 @@ export default function V1DrugView({
       { label: "Summary of product characteristics (SPC)", value: "Not on file", muted: true },
     ] as AttrRow[]
   ).filter((r) => r.value);
+
+  // Tab empty states — each tab says plainly when we hold nothing for it.
+  const hasStatus = !!supplyInMarket || mineAll.length > 0 || regulators.length > 0 || shortages.length > 0 || events.length > 0;
+  const hasAlts = userCountry === "AU" || !!sourcedAlternatives?.available || alts.length > 0;
+  const hasOutlook = shortages.length > 0 || !!history || !!apiConcentration || !!approvalFootprint || recallList.length > 0;
+  const hasInfo = attrRows.length > 0 || regRows.length > 0;
 
   return (
     // Shared 3-column AppShell: V1Sidebar → grounded chat (middle) → the drug
@@ -884,6 +892,15 @@ export default function V1DrugView({
             </div>
           </div>
 
+          <DrugTabs
+            tabs={[
+              {
+                id: "status",
+                label: "Status",
+                badge: localShortage ? (anticipated ? "Anticipated" : isCrit ? "Short" : "Limited") : "In supply",
+                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
+                content: (
+            <>
           {/* Products affected — brand-level rows for the user's market.
               Pharmacists procure by brand: the exact product each notice
               covers, its sponsor, and its OWN return estimate. Events whose
@@ -1046,110 +1063,59 @@ export default function V1DrugView({
             </div>
           )}
 
-          {/* Product attributes — detailed 2-column reference table */}
-          {attrRows.length > 0 && (
+          {/* Regulator status */}
+          {regulators.length > 0 && (
             <div className="sec">
-              <div className="sec-title">Product attributes <span className="help">reference data we hold</span></div>
-              <div className="attr-wrap">
-                <table className="attr-table">
-                  <tbody>
-                    {attrRows.map((r) => (
-                      <tr key={r.label}>
-                        <th scope="row">{r.label}</th>
-                        <td className={r.muted ? "attr-muted" : undefined}>{r.value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Trade price — adaptive panel. AU shows the PBS tiers (AEMP/DPMQ);
-              other markets show their headline official price from
-              drug_pricing_history. Cross-references other markets we hold.
-              Degrades to a visible "awaiting ingest" note. Never fabricates. */}
-          <div className="sec" id="trade-price">
-            <div className="sec-title">Trade price <span className="help">{pricing ? `${flag(userCountry)} ${pricing.source}${pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}` : myMarket && myMarket.value != null ? `${flag(userCountry)} ${myMarket.source ?? cName}${myMarket.effective_date ? ` · ${monthYear(myMarket.effective_date)}` : ""}` : `${flag(userCountry)} ${cName} · awaiting price ingest`}</span></div>
-            <div className="price-panel">
-              <div className="price-top">
-                <div className="market-tabs"><span className="mtab on">{flag(userCountry)} {userCountry}</span></div>
-                {(pricing || (myMarket && myMarket.value != null)) && <span className="reimb">● Official price on file</span>}
-              </div>
-              {pricing ? (
-                <>
-                  <div className="price-tiles">
-                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v">{fmtPrice(pricing.ex_manufacturer, pricing.currency)}</div><div className="ptile-sub">AEMP</div></div>
-                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v">{pricing.dispensed != null ? fmtPrice(pricing.dispensed, pricing.currency) : "—"}</div><div className="ptile-sub">incl. fees</div></div>
-                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v sm">{pricing.pack ?? "—"}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</div>
-                  </div>
-                  <div className="price-foot"><span>Source: {pricing.source}</span><span>{[monthYear(pricing.price_date) ? `Effective ${monthYear(pricing.price_date)}` : null, pricing.currency].filter(Boolean).join(" · ")}</span></div>
-                </>
-              ) : myMarket && myMarket.value != null ? (
-                <>
-                  <div className="price-tiles two">
-                    <div className="ptile"><div className="ptile-l">{myMarket.label}</div><div className="ptile-v">{fmtPrice(myMarket.value, myMarket.currency)}</div><div className="ptile-sub">{myMarket.per}</div></div>
-                    <div className="ptile"><div className="ptile-l">{myMarket.concession != null ? "Concession" : "Pack"}</div>{myMarket.concession != null ? (<><div className="ptile-v" style={{ color: "var(--med)" }}>{fmtPrice(myMarket.concession, myMarket.currency)}</div><div className="ptile-sub">live uplift</div></>) : (<><div className="ptile-v sm">{myMarket.per}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</>)}</div>
-                  </div>
-                  <div className="price-foot"><span>Source: {myMarket.source ?? "official"}</span><span>{[monthYear(myMarket.effective_date) ? `Effective ${monthYear(myMarket.effective_date)}` : null, myMarket.currency].filter(Boolean).join(" · ")}</span></div>
-                </>
-              ) : (
-                <>
-                  <div className="price-tiles">
-                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v empty">—</div></div>
-                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v empty">—</div></div>
-                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v empty">—</div></div>
-                  </div>
-                  <div className="price-empty-note">
-                    <div className="pe-ic" aria-hidden>$</div>
-                    <div>
-                      <div className="pe-t">Not yet captured for {cName}</div>
-                      <div className="pe-d">Official pricing isn’t on file for this market yet. PBS (Australia), NHS Drug Tariff (United Kingdom) and CMS NADAC (United States) feeds are prioritised; this panel populates automatically once the data lands.</div>
+              <div className="sec-title">Shortage status by regulator <span className="help">official notices</span></div>
+              <div className="country-list">
+                {regulators.map((s, i) => {
+                  const cc = (s.country_code || "").toUpperCase();
+                  const r = SEV[(s.severity || "").toLowerCase()] ?? 0;
+                  const cls = (s.status || "").toLowerCase() === "resolved" ? "sp-ok" : r >= 2 ? "sp-crit" : "sp-part";
+                  const lbl = (s.status || "").toLowerCase() === "resolved" ? "Resolved" : `${(s.severity || "shortage")[0].toUpperCase()}${(s.severity || "hortage").slice(1)}`;
+                  return (
+                    <div key={i} className="country-row">
+                      <div className="cl"><span className="flag">{flag(cc)}</span><div><div className="cn">{COUNTRY[cc] ?? cc}</div><div className="alt-f">{abbr(s.data_sources?.name, s.data_sources?.abbreviation)} · {timeAgo(s.last_verified_at ?? s.updated_at)}</div></div></div>
+                      <span className={`status-pill ${cls}`}><span className="d" />{lbl}</span>
                     </div>
-                  </div>
-                </>
-              )}
-              {otherMarkets.length > 0 && (
-                <div className="xmkt-strip">
-                  <div className="xmkt-lbl">Other markets</div>
-                  <div className="xmkt-row">
-                    {otherMarkets.map((m) => (
-                      <div className="xmkt" key={m.country}>
-                        <div className="xmkt-c">{flag(m.country)} {m.country}</div>
-                        <div className="xmkt-v">{m.concession != null ? fmtPrice(m.concession, m.currency) : m.value != null ? fmtPrice(m.value, m.currency) : "—"}</div>
-                        <div className="xmkt-t">{m.concession != null ? "concession" : m.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Price trend + forecast — self-gating: renders nothing when the
-              market has no price history, history-only when the series can't
-              be forecast, and a Holt projection only when it clears a backtest.
-              (concession + drug_tariff history from drug_pricing_history.) */}
-          {(myMarket || otherMarkets.length > 0) && (
-            <div className="sec">
-              <div className="price-panel" style={{ padding: "18px 20px" }}>
-                <PriceTrendChart drugId={id} country={userCountry} />
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Parallel Trade Intelligence — three self-gating surfaces, in
-              value order. Each renders nothing until it has real data
-              (migration 060 + matches), so most drug pages show none.
-              1. Sourcing routes — appears when the drug is short in the user's
-                 market and import lanes can supply it (procurement value).
-              2. Arbitrage map — appears when price spreads are computable
-                 (importer value).
-              3. Raw licence list — reference fallback (all matched licences). */}
-          <ParallelTradeSourcing drugId={id} userCountry={userCountry} />
-          <ParallelTradeArbitrage drugId={id} destination={userCountry} />
-          <ParallelTradePanel drugId={id} />
+          {/* Where & when: one row per market, one bar per notice, by dose form */}
+          {shortages.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Where and when <span className="help">each regulator notice, by market and dose form</span></div>
+              <ShortageEpisodeTimeline drugId={id} />
+            </div>
+          )}
 
+          {/* Timeline */}
+          {events.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Verified timeline <span className="help">regulator events</span></div>
+              <div className="timeline">
+                {events.map((e, i) => (
+                  <div key={i} className="tl-row">
+                    <span className={`tl-d ${e.resolved ? "filled" : ""}`} />
+                    <div><div className="tl-dt">{flag(e.cc)} {new Date(e.date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</div><div className="tl-ev">{e.txt}</div></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!hasStatus && <div className="sec"><div className="alt-note">No regulator shortage notices on file for {drug.generic_name} in any market we track.</div></div>}
+            </>
+                ),
+              },
+              {
+                id: "alternatives",
+                label: "Alternatives",
+                badge: sourcedAlternatives?.available && sourcedAlternatives.alternatives.length > 0 ? String(sourcedAlternatives.alternatives.length) : undefined,
+                content: (
+            <>
           {/* Substitution pathways (AU only) */}
           {userCountry === "AU" && (
             <div className="sec">
@@ -1196,109 +1162,6 @@ export default function V1DrugView({
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Shortage trend for this molecule, every market (range-selectable) */}
-          {shortages.length > 0 && (
-            <div className="sec">
-              <div className="sec-title">Shortage history <span className="help">new &amp; open notices across all markets we track</span></div>
-              <ShortageTrendChart drugId={id} defaultRange="MAX" />
-            </div>
-          )}
-
-          {/* Where & when: one row per market, one bar per notice, by dose form */}
-          {shortages.length > 0 && (
-            <div className="sec">
-              <div className="sec-title">Where and when <span className="help">each regulator notice, by market and dose form</span></div>
-              <ShortageEpisodeTimeline drugId={id} />
-            </div>
-          )}
-
-          {/* History */}
-          {history && (
-            <div className="sec">
-              <div className="sec-title">How long have past shortages lasted? <span className="help">from {history.n} resolved event{history.n > 1 ? "s" : ""}</span></div>
-              <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
-                <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
-                <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
-              </div></div></div></div>
-            </div>
-          )}
-
-          {/* API supply-base concentration (FDA Drug Master Files) */}
-          {apiConcentration && !supplyInMarket && (
-            <div className="sec">
-              <div className="sec-title">Global API supply base <span className="help">🇺🇸 FDA Drug Master Files · active Type II</span></div>
-              <div className="conc">
-                <div className="conc-head">
-                  <div>
-                    <div className="conc-n">{apiConcentration.count} API manufacturer{apiConcentration.count !== 1 ? "s" : ""}</div>
-                    <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                    <span className={`status-pill ${TIER_CLS[supplyTier]}`}><span className="d" />{TIER_LABEL[supplyTier]} supply</span>
-                    {(apiConcentration.whoPqCount ?? 0) > 0 && (
-                      <span className="who-pq-badge">✓ {apiConcentration.whoPqCount} WHO-prequalified</span>
-                    )}
-                  </div>
-                </div>
-                {apiConcentration.makers.length > 0 && (
-                  <div className="conc-makers">
-                    {apiConcentration.makers.map((m) => <span key={m} className="d-tag">{m}</span>)}
-                    {apiConcentration.count > apiConcentration.makers.length && (
-                      <span className="d-tag">+{apiConcentration.count - apiConcentration.makers.length} more</span>
-                    )}
-                  </div>
-                )}
-                {supplyProfile && (
-                  <div className="conc-d" style={{ marginTop: 10 }}>
-                    {[
-                      supplyProfile.whoList ? `WHO Model List (${supplyProfile.whoList})` : null,
-                      supplyProfile.euCritical ? "EU Union list of critical medicines" : null,
-                      supplyProfile.nFinishedFirms != null ? `${supplyProfile.nFinishedFirms} US finished-dose firm${supplyProfile.nFinishedFirms !== 1 ? "s" : ""}` : null,
-                      supplyProfile.topApiCountry && supplyProfile.topApiShare != null
-                        ? `${Math.round(supplyProfile.topApiShare * 100)}% of API makers in ${supplyProfile.topApiCountry}`
-                        : null,
-                      `all ${supplyProfile.molecule.toLowerCase()} products short in ${supplyProfile.shortCountries.length} countr${supplyProfile.shortCountries.length === 1 ? "y" : "ies"} now`,
-                    ].filter(Boolean).join(" · ")}
-                  </div>
-                )}
-                <div className="conc-foot">
-                  {apiConcentration.countries.length > 0
-                    ? `Manufacturing countries: ${apiConcentration.countries.join(", ")} · `
-                    : "Country of manufacture not yet mapped · "}
-                  Source: FDA List of Drug Master Files
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* FDA approval footprint — market depth (generic competition) */}
-          {approvalFootprint && (
-            <div className="sec">
-              <div className="sec-title">FDA-approved products <span className="help">🇺🇸 Drugs@FDA</span></div>
-              <div className="stat-row">
-                <div className="stat-cell">
-                  <div className="stat-v">{approvalFootprint.total}</div>
-                  <div className="stat-l">Approved applications</div>
-                </div>
-                <div className="stat-cell">
-                  <div className="stat-v">{approvalFootprint.generics}</div>
-                  <div className="stat-l">Generic (ANDA)</div>
-                </div>
-                <div className="stat-cell">
-                  <div className="stat-v">{approvalFootprint.brands}</div>
-                  <div className="stat-l">Brand (NDA/BLA)</div>
-                </div>
-                <div className="stat-cell">
-                  <div className="stat-v">{monthYear(approvalFootprint.latest) ?? "—"}</div>
-                  <div className="stat-l">Latest approval</div>
-                </div>
-              </div>
-              {approvalFootprint.generics > 0 && (
-                <div className="stat-foot">{approvalFootprint.generics} approved generic{approvalFootprint.generics !== 1 ? "s" : ""} — more competitors generally means a more resilient supply.</div>
-              )}
             </div>
           )}
 
@@ -1399,24 +1262,196 @@ export default function V1DrugView({
             );
           })()}
 
-          {/* Regulator status */}
-          {regulators.length > 0 && (
-            <div className="sec">
-              <div className="sec-title">Shortage status by regulator <span className="help">official notices</span></div>
-              <div className="country-list">
-                {regulators.map((s, i) => {
-                  const cc = (s.country_code || "").toUpperCase();
-                  const r = SEV[(s.severity || "").toLowerCase()] ?? 0;
-                  const cls = (s.status || "").toLowerCase() === "resolved" ? "sp-ok" : r >= 2 ? "sp-crit" : "sp-part";
-                  const lbl = (s.status || "").toLowerCase() === "resolved" ? "Resolved" : `${(s.severity || "shortage")[0].toUpperCase()}${(s.severity || "hortage").slice(1)}`;
-                  return (
-                    <div key={i} className="country-row">
-                      <div className="cl"><span className="flag">{flag(cc)}</span><div><div className="cn">{COUNTRY[cc] ?? cc}</div><div className="alt-f">{abbr(s.data_sources?.name, s.data_sources?.abbreviation)} · {timeAgo(s.last_verified_at ?? s.updated_at)}</div></div></div>
-                      <span className={`status-pill ${cls}`}><span className="d" />{lbl}</span>
-                    </div>
-                  );
-                })}
+          <ParallelTradeSourcing drugId={id} userCountry={userCountry} />
+          {!hasAlts && <div className="sec"><div className="alt-note">No substitution instruments, source-backed alternatives or same-class drugs on file for this medicine. Refer to the prescriber.</div></div>}
+            </>
+                ),
+              },
+              {
+                id: "prices",
+                label: "Prices",
+                content: (
+            <>
+          {/* Trade price — adaptive panel. AU shows the PBS tiers (AEMP/DPMQ);
+              other markets show their headline official price from
+              drug_pricing_history. Cross-references other markets we hold.
+              Degrades to a visible "awaiting ingest" note. Never fabricates. */}
+          <div className="sec" id="trade-price">
+            <div className="sec-title">Trade price <span className="help">{pricing ? `${flag(userCountry)} ${pricing.source}${pricing.price_date ? ` · ${monthYear(pricing.price_date)}` : ""}` : myMarket && myMarket.value != null ? `${flag(userCountry)} ${myMarket.source ?? cName}${myMarket.effective_date ? ` · ${monthYear(myMarket.effective_date)}` : ""}` : `${flag(userCountry)} ${cName} · awaiting price ingest`}</span></div>
+            <div className="price-panel">
+              <div className="price-top">
+                <div className="market-tabs"><span className="mtab on">{flag(userCountry)} {userCountry}</span></div>
+                {(pricing || (myMarket && myMarket.value != null)) && <span className="reimb">● Official price on file</span>}
               </div>
+              {pricing ? (
+                <>
+                  <div className="price-tiles">
+                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v">{fmtPrice(pricing.ex_manufacturer, pricing.currency)}</div><div className="ptile-sub">AEMP</div></div>
+                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v">{pricing.dispensed != null ? fmtPrice(pricing.dispensed, pricing.currency) : "—"}</div><div className="ptile-sub">incl. fees</div></div>
+                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v sm">{pricing.pack ?? "—"}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</div>
+                  </div>
+                  <div className="price-foot"><span>Source: {pricing.source}</span><span>{[monthYear(pricing.price_date) ? `Effective ${monthYear(pricing.price_date)}` : null, pricing.currency].filter(Boolean).join(" · ")}</span></div>
+                </>
+              ) : myMarket && myMarket.value != null ? (
+                <>
+                  <div className="price-tiles two">
+                    <div className="ptile"><div className="ptile-l">{myMarket.label}</div><div className="ptile-v">{fmtPrice(myMarket.value, myMarket.currency)}</div><div className="ptile-sub">{myMarket.per}</div></div>
+                    <div className="ptile"><div className="ptile-l">{myMarket.concession != null ? "Concession" : "Pack"}</div>{myMarket.concession != null ? (<><div className="ptile-v" style={{ color: "var(--med)" }}>{fmtPrice(myMarket.concession, myMarket.currency)}</div><div className="ptile-sub">live uplift</div></>) : (<><div className="ptile-v sm">{myMarket.per}</div>{drugForm ? <div className="ptile-sub">{drugForm}</div> : null}</>)}</div>
+                  </div>
+                  <div className="price-foot"><span>Source: {myMarket.source ?? "official"}</span><span>{[monthYear(myMarket.effective_date) ? `Effective ${monthYear(myMarket.effective_date)}` : null, myMarket.currency].filter(Boolean).join(" · ")}</span></div>
+                </>
+              ) : (
+                <>
+                  <div className="price-tiles">
+                    <div className="ptile"><div className="ptile-l">Ex-manufacturer</div><div className="ptile-v empty">—</div></div>
+                    <div className="ptile"><div className="ptile-l">Dispensed (DPMQ)</div><div className="ptile-v empty">—</div></div>
+                    <div className="ptile"><div className="ptile-l">Pack</div><div className="ptile-v empty">—</div></div>
+                  </div>
+                  <div className="price-empty-note">
+                    <div className="pe-ic" aria-hidden>$</div>
+                    <div>
+                      <div className="pe-t">Not yet captured for {cName}</div>
+                      <div className="pe-d">Official pricing isn’t on file for this market yet. PBS (Australia), NHS Drug Tariff (United Kingdom) and CMS NADAC (United States) feeds are prioritised; this panel populates automatically once the data lands.</div>
+                    </div>
+                  </div>
+                </>
+              )}
+              {otherMarkets.length > 0 && (
+                <div className="xmkt-strip">
+                  <div className="xmkt-lbl">Other markets</div>
+                  <div className="xmkt-row">
+                    {otherMarkets.map((m) => (
+                      <div className="xmkt" key={m.country}>
+                        <div className="xmkt-c">{flag(m.country)} {m.country}</div>
+                        <div className="xmkt-v">{m.concession != null ? fmtPrice(m.concession, m.currency) : m.value != null ? fmtPrice(m.value, m.currency) : "—"}</div>
+                        <div className="xmkt-t">{m.concession != null ? "concession" : m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Price trend + forecast — self-gating: renders nothing when the
+              market has no price history, history-only when the series can't
+              be forecast, and a Holt projection only when it clears a backtest.
+              (concession + drug_tariff history from drug_pricing_history.) */}
+          {(myMarket || otherMarkets.length > 0) && (
+            <div className="sec">
+              <div className="price-panel" style={{ padding: "18px 20px" }}>
+                <PriceTrendChart drugId={id} country={userCountry} />
+              </div>
+            </div>
+          )}
+
+          <ParallelTradeArbitrage drugId={id} destination={userCountry} />
+            </>
+                ),
+              },
+              {
+                id: "outlook",
+                label: "Supply outlook",
+                content: (
+            <>
+          <div className="sec tab-intro">
+            <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">i</span><div>
+              <div className="subpath-n">Evidence, not a forecast</div>
+              <div className="subpath-d">How past shortages of {drug.generic_name} played out, how concentrated its manufacturing base is, and recent recalls. Mederti doesn&apos;t publish a shortage probability: when we backtested one, it didn&apos;t beat a simple baseline.</div>
+            </div></div></div></div>
+          </div>
+          {/* Shortage trend for this molecule, every market (range-selectable) */}
+          {shortages.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Shortage history <span className="help">new &amp; open notices across all markets we track</span></div>
+              <ShortageTrendChart drugId={id} defaultRange="MAX" />
+            </div>
+          )}
+
+          {/* History */}
+          {history && (
+            <div className="sec">
+              <div className="sec-title">How long have past shortages lasted? <span className="help">from {history.n} resolved event{history.n > 1 ? "s" : ""}</span></div>
+              <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
+                <div className="subpath-n">{history.lo === history.hi ? `~${history.lo} month${history.lo > 1 ? "s" : ""}` : `${history.lo}–${history.hi} months`}</div>
+                <div className="subpath-d">Historical pattern from resolved shortage records — not a prediction of this event.</div>
+              </div></div></div></div>
+            </div>
+          )}
+
+          {/* API supply-base concentration (FDA Drug Master Files) */}
+          {apiConcentration && (
+            <div className="sec">
+              <div className="sec-title">Global API supply base <span className="help">🇺🇸 FDA Drug Master Files · active Type II</span></div>
+              <div className="conc">
+                <div className="conc-head">
+                  <div>
+                    <div className="conc-n">{apiConcentration.count} API manufacturer{apiConcentration.count !== 1 ? "s" : ""}</div>
+                    <div className="conc-d">Manufacturers with an active Type II Drug Master File — i.e. cleared to supply this active ingredient into the US market. A proxy for how concentrated the global manufacturing base is.</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                    <span className={`status-pill ${TIER_CLS[supplyTier]}`}><span className="d" />{TIER_LABEL[supplyTier]} supply</span>
+                    {(apiConcentration.whoPqCount ?? 0) > 0 && (
+                      <span className="who-pq-badge">✓ {apiConcentration.whoPqCount} WHO-prequalified</span>
+                    )}
+                  </div>
+                </div>
+                {apiConcentration.makers.length > 0 && (
+                  <div className="conc-makers">
+                    {apiConcentration.makers.map((m) => <span key={m} className="d-tag">{m}</span>)}
+                    {apiConcentration.count > apiConcentration.makers.length && (
+                      <span className="d-tag">+{apiConcentration.count - apiConcentration.makers.length} more</span>
+                    )}
+                  </div>
+                )}
+                {supplyProfile && (
+                  <div className="conc-d" style={{ marginTop: 10 }}>
+                    {[
+                      supplyProfile.whoList ? `WHO Model List (${supplyProfile.whoList})` : null,
+                      supplyProfile.euCritical ? "EU Union list of critical medicines" : null,
+                      supplyProfile.nFinishedFirms != null ? `${supplyProfile.nFinishedFirms} US finished-dose firm${supplyProfile.nFinishedFirms !== 1 ? "s" : ""}` : null,
+                      supplyProfile.topApiCountry && supplyProfile.topApiShare != null
+                        ? `${Math.round(supplyProfile.topApiShare * 100)}% of API makers in ${supplyProfile.topApiCountry}`
+                        : null,
+                      `all ${supplyProfile.molecule.toLowerCase()} products short in ${supplyProfile.shortCountries.length} countr${supplyProfile.shortCountries.length === 1 ? "y" : "ies"} now`,
+                    ].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+                <div className="conc-foot">
+                  {apiConcentration.countries.length > 0
+                    ? `Manufacturing countries: ${apiConcentration.countries.join(", ")} · `
+                    : "Country of manufacture not yet mapped · "}
+                  Source: FDA List of Drug Master Files
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* FDA approval footprint — market depth (generic competition) */}
+          {approvalFootprint && (
+            <div className="sec">
+              <div className="sec-title">FDA-approved products <span className="help">🇺🇸 Drugs@FDA</span></div>
+              <div className="stat-row">
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.total}</div>
+                  <div className="stat-l">Approved applications</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.generics}</div>
+                  <div className="stat-l">Generic (ANDA)</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{approvalFootprint.brands}</div>
+                  <div className="stat-l">Brand (NDA/BLA)</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-v">{monthYear(approvalFootprint.latest) ?? "—"}</div>
+                  <div className="stat-l">Latest approval</div>
+                </div>
+              </div>
+              {approvalFootprint.generics > 0 && (
+                <div className="stat-foot">{approvalFootprint.generics} approved generic{approvalFootprint.generics !== 1 ? "s" : ""} — more competitors generally means a more resilient supply.</div>
+              )}
             </div>
           )}
 
@@ -1449,33 +1484,30 @@ export default function V1DrugView({
               </div>
             </div>
           )}
-
-          {/* Timeline */}
-          {events.length > 0 && (
+          {!hasOutlook && <div className="sec"><div className="alt-note">No shortage history, supply-base or recall records on file for this medicine yet.</div></div>}
+            </>
+                ),
+              },
+              {
+                id: "info",
+                label: "Product info",
+                content: (
+            <>
+          {/* Product attributes — detailed 2-column reference table */}
+          {attrRows.length > 0 && (
             <div className="sec">
-              <div className="sec-title">Verified timeline <span className="help">regulator events</span></div>
-              <div className="timeline">
-                {events.map((e, i) => (
-                  <div key={i} className="tl-row">
-                    <span className={`tl-d ${e.resolved ? "filled" : ""}`} />
-                    <div><div className="tl-dt">{flag(e.cc)} {new Date(e.date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</div><div className="tl-ev">{e.txt}</div></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Sources */}
-          {sources.length > 0 && (
-            <div className="sec">
-              <div className="sec-title">Sources <span className="help">official regulators</span></div>
-              <div className="src-list">
-                {sources.map((s, i) => (
-                  <div key={i} className="src-item">
-                    <div className="src-l"><span className="flag">{flag(s.cc)}</span><div><div className="src-n">{s.a}</div><div className="alt-f">verified {timeAgo(s.ver) || "recently"}</div></div></div>
-                    {s.url && <a className="src-link" href={s.url} target="_blank" rel="noopener noreferrer">verify ↗</a>}
-                  </div>
-                ))}
+              <div className="sec-title">Product attributes <span className="help">reference data we hold</span></div>
+              <div className="attr-wrap">
+                <table className="attr-table">
+                  <tbody>
+                    {attrRows.map((r) => (
+                      <tr key={r.label}>
+                        <th scope="row">{r.label}</th>
+                        <td className={r.muted ? "attr-muted" : undefined}>{r.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -1529,6 +1561,44 @@ export default function V1DrugView({
               )}
             </details>
           )}
+
+          <ParallelTradePanel drugId={id} />
+          {!hasInfo && <div className="sec"><div className="alt-note">No product attributes or registrations on file for this medicine yet.</div></div>}
+            </>
+                ),
+              },
+              {
+                id: "community",
+                label: "Community",
+                badge: "Soon",
+                content: (
+            <div className="sec">
+              <div className="sec-title">Community <span className="help">field reports from pharmacists</span></div>
+              <div className="subpath"><div className="subpath-row"><div className="subpath-l"><span className="subpath-ic neutral">◷</span><div>
+                <div className="subpath-n">Coming soon: is it just you?</div>
+                <div className="subpath-d">Verified pharmacists will be able to report what they&apos;re seeing at the counter and with wholesalers, kept separate from official regulator data. Until then, official notices are on the Status tab. Seeing a shortage we haven&apos;t listed? <a href="/contact">Tell us</a>.</div>
+              </div></div></div></div>
+            </div>
+                ),
+              },
+            ]}
+          />
+
+          {/* Sources */}
+          {sources.length > 0 && (
+            <div className="sec">
+              <div className="sec-title">Sources <span className="help">official regulators</span></div>
+              <div className="src-list">
+                {sources.map((s, i) => (
+                  <div key={i} className="src-item">
+                    <div className="src-l"><span className="flag">{flag(s.cc)}</span><div><div className="src-n">{s.a}</div><div className="alt-f">verified {timeAgo(s.ver) || "recently"}</div></div></div>
+                    {s.url && <a className="src-link" href={s.url} target="_blank" rel="noopener noreferrer">verify ↗</a>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
 
           <V1ReportActions generatedLabel={generatedLabel} marketLabel={marketLabel} sourceCount={sources.length} />
 
@@ -1784,6 +1854,21 @@ const CSS = `
 .sw-v{font-size:17px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:9px;line-height:1.2}
 .sw-d{font-size:11.5px;color:var(--text-3);margin-top:5px}
 .sec{margin-top:30px}
+.dtabs{margin-top:26px}
+.dtabs-bar{position:sticky;top:0;z-index:5;background:var(--bg-2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.dtabs-bar::-webkit-scrollbar{display:none}
+.dtabs-list{display:flex;gap:22px;min-width:max-content}
+.dtab{font:inherit;font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--text-3);background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:12px 2px 11px;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.dtab:hover{color:var(--text)}
+.dtab.on{color:var(--ink);border-bottom-color:var(--green)}
+.dtab:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:4px}
+.dtab-badge{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--border);color:var(--text-3);background:var(--bg)}
+.dtab-badge.crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-b)}
+.dtab-badge.med{color:var(--med);background:var(--med-bg);border-color:var(--med-b)}
+.dtab-badge.ok{color:var(--green-d);background:var(--ok-bg);border-color:var(--ok-b)}
+.dtabs-panel > .sec:first-of-type{margin-top:20px}
+.dtabs-print-h{display:none}
+.dtabs-panel [id]{scroll-margin-top:60px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
 .ai-sum.embedded{margin:14px 0 0;border:0;border-top:1px solid var(--border);border-radius:0;background:none;padding:14px 0 0}
 .ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -2002,6 +2087,9 @@ const CSS = `
   .report-bar{box-shadow:none;border-color:#ccc}
   .sec,.status-card,.price-panel,.subpath,.conc,.record,.record-block,.country-row,.alt-card,.stat-row,.reg-wrap,.attr-wrap{break-inside:avoid;page-break-inside:avoid}
   .sec{margin-top:18px}
+  .dtabs-bar{display:none}
+  .dtabs-panel[hidden]{display:block !important}
+  .dtabs-print-h{display:block;font-size:14px;font-weight:700;margin:22px 0 0}
   .record[open] .record-chev,.record-chev{display:none}
   .record .record-block{display:block !important}
   .status-card,.sw-card,.price-panel,.conc,.subpath,.alt-card,.country-row,.src-item,.record{box-shadow:none !important}

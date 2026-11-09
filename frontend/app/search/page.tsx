@@ -14,6 +14,7 @@ import { SCHEME_COPY, FALLBACK_SCHEME_COPY } from "@/lib/substitution";
 import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
 import Chat2Client from "@/app/chat/Chat2Client";
 import { classifyQuery, looksLikeQuestion, type QueryIntent } from "@/lib/search/classify";
+import { countryLandingPath } from "@/lib/search/country-intent";
 import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
 import { useFreeTier } from "@/app/components/free-tier/useFreeTier";
 
@@ -749,6 +750,13 @@ function ResultsShell() {
 function UnifiedSearch() {
   const params = useSearchParams();
   const q = (params.get("q") ?? "").trim();
+  // Country-level queries ("drugs in short supply in india") land on that
+  // country's page, which hosts its own grounded chat.
+  const countryPath = q ? countryLandingPath(q) : null;
+  const router = useRouter();
+  useEffect(() => {
+    if (countryPath) router.replace(countryPath);
+  }, [countryPath, router]);
   // Note: the selected market is deliberately NOT read here — intent
   // classification (drug vs open question) is market-independent. See the
   // classify effect below for why market must not influence routing.
@@ -778,6 +786,7 @@ function UnifiedSearch() {
     return () => { cancelled = true; };
   }, [q]);
 
+  if (countryPath) return null;
   if (intent === "drug") return <ResultsShell />;
   // Empty home and open-question answer are both the chat experience. A drug
   // typed into its composer routes back here as /search?q=… (see Chat2Client).

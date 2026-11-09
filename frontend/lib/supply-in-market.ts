@@ -140,7 +140,7 @@ function regDigits(s: string | null): string | null {
 // unit before the slash, so it doesn't match).
 const COMBO_NAME = /\s(and|&|\+)\s|&|\bcomposite\b|\d\s*\/\s*\d/i;
 
-function isCombo(name: string | null, ingredients?: unknown): boolean {
+export function isCombo(name: string | null, ingredients?: unknown): boolean {
   if (Array.isArray(ingredients) && ingredients.filter(Boolean).length > 1) return true;
   return !!name && COMBO_NAME.test(name);
 }
@@ -211,16 +211,19 @@ export function buildSupplyInMarket(
   };
 
   const openAll = notices.filter((n) => n.status === "active" || n.status === "anticipated");
-  const open = openAll.filter((n) => !isCombo(n.productName, n.ingredients));
-  combosExcluded += openAll.length - open.length;
   const matched = new Map<string, MarketNotice[]>(); // product key → notices
   const unmatched: MarketNotice[] = [];
-  for (const n of open) {
+  for (const n of openAll) {
     const reg = regDigits(n.regNo);
     let hit: string | null = null;
+    // A registration-number match wins over the combination rule: the notice
+    // is about a product we already show (e.g. "TEVA-TELMISARTAN HCTZ", whose
+    // register name doesn't look like a combination but whose notice lists
+    // two ingredients), so it must not leave that row reading "no shortage".
     if (reg) {
       for (const [k, p] of byKey) if ([...p.regNos].some((x) => regDigits(x) === reg)) { hit = k; break; }
     }
+    if (!hit && isCombo(n.productName, n.ingredients)) { combosExcluded++; continue; }
     if (!hit && n.productName) {
       const nk = productKey(n.productName);
       const same = [...byKey.keys()].filter((k) => k.split("|")[0] === nk);

@@ -15,6 +15,10 @@ import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
 import Chat2Client from "@/app/chat/Chat2Client";
 import { classifyQuery, looksLikeQuestion, type QueryIntent } from "@/lib/search/classify";
 import { countryLandingPath } from "@/lib/search/country-intent";
+import { countryCodeFromSlug, countryName } from "@/lib/geo/country-names";
+
+const countryNameFromPath = (path: string) =>
+  countryName(countryCodeFromSlug(path.split("/")[2] ?? "") ?? "");
 import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
 import { useFreeTier } from "@/app/components/free-tier/useFreeTier";
 
@@ -786,7 +790,14 @@ function UnifiedSearch() {
     return () => { cancelled = true; };
   }, [q]);
 
-  if (countryPath) return null;
+  if (countryPath) {
+    // Shown only while router.replace swaps in the country page.
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "var(--font-geist-sans), system-ui, sans-serif", fontSize: 14, color: "#6a7280" }}>
+        Opening the {countryNameFromPath(countryPath)} shortage register…
+      </div>
+    );
+  }
   if (intent === "drug") return <ResultsShell />;
   // Empty home and open-question answer are both the chat experience. A drug
   // typed into its composer routes back here as /search?q=… (see Chat2Client).

@@ -257,6 +257,8 @@ export interface CountrySummary {
    * a Mederti forecast. Soonest first.
    */
   upcoming: PseoShortageEventWithDrug[];
+  /** Total behind `upcoming` (uncapped): anticipated + active notices with start_date > today. */
+  upcomingTotal: number | null;
   /** Active notices with a regulator-estimated resolution date, soonest first. */
   resolving: PseoShortageEventWithDrug[];
 }
@@ -376,6 +378,29 @@ export async function countrySummary(code: string): Promise<CountrySummary> {
       .limit(50),
   ]);
 
+  const countFuture = async (status: string): Promise<number | null> => {
+    try {
+      const { count, error } = await realEventsFilter(
+        admin
+          .from("shortage_events")
+          .select("id", { count: "exact", head: true })
+          .eq("country_code", code)
+          .eq("status", status)
+          .not("drug_id", "is", null)
+          .gt("start_date", today),
+      );
+      return error ? null : count;
+    } catch {
+      return null;
+    }
+  };
+  const [futureAnticipated, futureActive] = await Promise.all([
+    countFuture("anticipated"),
+    countFuture("active"),
+  ]);
+  const upcomingTotal =
+    futureAnticipated === null || futureActive === null ? null : futureAnticipated + futureActive;
+
   const rows = (r: unknown) =>
     ((r as { data: unknown[] | null }).data ?? []) as unknown as PseoShortageEventWithDrug[];
 
@@ -388,6 +413,7 @@ export async function countrySummary(code: string): Promise<CountrySummary> {
     upcoming: [...rows(anticipatedRes), ...rows(futureActiveRes)]
       .sort((a, b) => (a.start_date ?? "9999").localeCompare(b.start_date ?? "9999"))
       .slice(0, 50),
+    upcomingTotal,
     resolving: rows(resolvingRes),
   };
 }

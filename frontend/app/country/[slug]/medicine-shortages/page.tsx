@@ -61,9 +61,9 @@ function groundingText(
     } | ${dateLabel} ${date ?? "unknown"} | ${e.data_sources?.abbreviation ?? e.data_sources?.name ?? "source"}`;
   const parts = [
     `Country: ${name} (${code}). Official sources: ${regs.map((r) => `${r.name}${r.abbreviation ? ` (${r.abbreviation})` : ""}`).join(", ") || "unknown"}.`,
-    `Counts (notices, not medicines — regulators list each strength/pack separately): active ${s.active ?? "unknown"}, distinct medicines affected ${s.activeMedicines ?? "unknown"}, anticipated ${s.anticipated ?? "unknown"}, critical ${s.critical ?? "unknown"}.`,
+    `Counts (notices, not medicines — regulators list each strength/pack separately): active ${s.active ?? "unknown"}, distinct medicines affected ${s.activeMedicines ?? "unknown"}, anticipated (any start date) ${s.anticipated ?? "unknown"}, announced upcoming (start date still ahead) ${s.upcomingTotal ?? "unknown"}, critical ${s.critical ?? "unknown"}.`,
     `HOW TO ANSWER FORWARD-LOOKING QUESTIONS ("what will be short in 6 months", "what should I buy now"): Mederti has no validated shortage forecast — its backtests did not hold up — so never present a prediction or risk score as fact. Answer from regulator facts: (1) the announced-upcoming notices below (anticipated or future start date), (2) active notices with estimated resolution dates, (3) critical active notices, and you may use tools to check whether the same medicines are short in other markets, labelled as context not prediction. For purchasing questions, frame as "what the published notices suggest preparing for", cite the notices and dates, and say it is not procurement advice. If the lists are empty, say so plainly.`,
-    `ANNOUNCED UPCOMING (${s.upcoming.length}):`,
+    `ANNOUNCED UPCOMING (soonest ${s.upcoming.length} of ${s.upcomingTotal ?? "unknown"}):`,
     ...s.upcoming.map((e) => line(e, "starts", e.start_date)),
     `ACTIVE WITH ESTIMATED RESOLUTION (${s.resolving.length}):`,
     ...s.resolving.map((e) => line(e, "est. resolution", e.estimated_resolution_date)),
@@ -208,7 +208,7 @@ export default async function CountryShortagesPage(
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {stat("Active notices", summary.active, "#b42318")}
           {stat("Medicines affected", summary.activeMedicines)}
-          {stat("Anticipated", summary.anticipated, "#b54708", "announced by the regulator")}
+          {stat("Announced upcoming", summary.upcomingTotal, "#b54708", "start date still ahead")}
           {stat("Critical severity", summary.critical)}
         </div>
         <p style={{ fontSize: 13, color: "var(--app-text-3, #6a7280)", lineHeight: 1.6, margin: "10px 0 0", maxWidth: 680 }}>
@@ -221,6 +221,7 @@ export default async function CountryShortagesPage(
           name={name}
           latest={summary.recent.map(toRow)}
           upcoming={summary.upcoming.map(toRow)}
+          upcomingTotal={summary.upcomingTotal}
           resolving={summary.resolving.map(toRow)}
           activeTotal={summary.active}
         />

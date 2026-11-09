@@ -22,6 +22,8 @@ interface Props {
   upcoming: NoticeRow[];
   resolving: NoticeRow[];
   activeTotal: number | null;
+  /** Uncapped count behind `upcoming` — matches the stat card. */
+  upcomingTotal: number | null;
 }
 
 const sevColor: Record<string, string> = {
@@ -47,7 +49,7 @@ type Tab = "latest" | "upcoming" | "resolving";
  * (latest / announced upcoming / estimated to resolve), severity chips and a
  * medicine filter. Rows are server-fetched; filtering is client-side.
  */
-export default function CountryNotices({ name, latest, upcoming, resolving, activeTotal }: Props) {
+export default function CountryNotices({ name, latest, upcoming, resolving, activeTotal, upcomingTotal }: Props) {
   const [tab, setTab] = useState<Tab>(latest.length ? "latest" : upcoming.length ? "upcoming" : "resolving");
   const [sev, setSev] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -73,8 +75,10 @@ export default function CountryNotices({ name, latest, upcoming, resolving, acti
     {
       key: "upcoming",
       label: "Announced upcoming",
-      n: upcoming.length,
-      hint: `Shortages the regulator has announced ahead of time (anticipated, or with a future start date). These are published notices — not a Mederti prediction.`,
+      n: upcomingTotal ?? upcoming.length,
+      hint: `Shortages the regulator has announced ahead of time (start date still in the future). These are published notices — not a Mederti prediction.${
+        upcomingTotal !== null && upcomingTotal > upcoming.length ? ` Showing the soonest ${upcoming.length} of ${upcomingTotal.toLocaleString()}.` : ""
+      }`,
     },
     {
       key: "resolving",

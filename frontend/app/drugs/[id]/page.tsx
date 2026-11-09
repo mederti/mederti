@@ -13,7 +13,7 @@ import SiteNav from "@/app/components/landing-nav";
 import AppShell from "@/app/components/v1/AppShell";
 import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand } from "@/lib/event-brand";
-import { buildSupplyInMarket, type CatalogueRow } from "@/lib/supply-in-market";
+import { buildSupplyInMarket, isCombo, type CatalogueRow } from "@/lib/supply-in-market";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
 
@@ -735,6 +735,10 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // crowd open notices out of the 200-row cap. Only used for per-product
   // "short N× before" history, matched by registration number.
   const histSince = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10);
+  // Open notices carry the hero's fields too, so the status card and the
+  // supply table are built from the same notices (they disagreed: hero "In
+  // supply" over a table row "Short since 2 Oct").
+  const NOTICE_SELECT = "shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, anticipated_start_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, data_source_id, data_sources(name, abbreviation, country_code), artg:raw_data->>artg_numb, din:raw_data->>din, dose_form:raw_data->>dose_form, ca_form:raw_data->>dosage_form, ingredients:raw_data->>ingredients, raw_data";
   const [catRes, noticeRes, pastRes] = await Promise.all([
     supabase
       .from("drug_catalogue")
@@ -745,7 +749,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .limit(1000),
     supabase
       .from("shortage_events")
-      .select("status, start_date, anticipated_start_date, estimated_resolution_date, source_url, data_source_id, artg:raw_data->>artg_numb, din:raw_data->>din, dose_form:raw_data->>dose_form, ca_form:raw_data->>dosage_form, ingredients:raw_data->>ingredients, raw_data")
+      .select(NOTICE_SELECT)
       .in("drug_id", moleculeIds.slice(0, 150))
       .eq("country_code", userCountry)
       .in("status", ["active", "anticipated"])
@@ -753,7 +757,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .limit(200),
     supabase
       .from("shortage_events")
-      .select("start_date, artg:raw_data->>artg_numb, din:raw_data->>din")
+      .select("id, start_date, artg:raw_data->>artg_numb, din:raw_data->>din")
       .in("drug_id", moleculeIds.slice(0, 150))
       .eq("country_code", userCountry)
       .eq("status", "resolved")
@@ -761,11 +765,78 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .or("synthetic.is.null,synthetic.eq.false")
       .limit(500),
   ]);
+  // Notices for this page's registered products that were filed under a
+  // different drugs row (salt/spelling variant, brand-named row, wrong
+  // molecule). Without this, a product the regulator lists as short reads
+  // "No shortage reported" (2026-11-06 audit: 730 AU/CA products, e.g.
+  // Sitaglo 25 mg AUST R 373753). Exact registration number only: TGA
+  // artg_numb is bare digits ("AUST R 373753" → "373753"); Health Canada din
+  // is the 8-digit padded DIN, as in the register.
+  const regField = userCountry === "AU" ? "artg_numb" : userCountry === "CA" ? "din" : null;
+  const pageRegs = regField
+    ? [...new Set(((catRes.data ?? []) as CatalogueRow[])
+        // combination products are left out of the table, so their notices
+        // must not ride in as unmatched rows
+        .filter((r) => r.brand_name && !isCombo(r.brand_name, r.active_ingredients))
+        .map((r) => (r.registration_number ?? "").trim())
+        .map((r) => (userCountry === "AU" ? r.replace(/\D/g, "").replace(/^0+/, "") : r.replace(/\D/g, "")))
+        .filter(Boolean))].slice(0, 300)
+    : [];
+  const [regOpenRes, regPastRes] = pageRegs.length
+    ? await Promise.all([
+        supabase
+          .from("shortage_events")
+          .select(NOTICE_SELECT)
+          .eq("country_code", userCountry)
+          .in("status", ["active", "anticipated"])
+          .in(`raw_data->>${regField}`, pageRegs)
+          .or("synthetic.is.null,synthetic.eq.false")
+          .limit(200),
+        supabase
+          .from("shortage_events")
+          .select("id, start_date, artg:raw_data->>artg_numb, din:raw_data->>din")
+          .eq("country_code", userCountry)
+          .eq("status", "resolved")
+          .gte("start_date", histSince)
+          .in(`raw_data->>${regField}`, pageRegs)
+          .or("synthetic.is.null,synthetic.eq.false")
+          .limit(500),
+      ])
+    : [{ data: [] }, { data: [] }];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const byId = (a: any[] | null | undefined, b: any[] | null | undefined) => {
+    const m = new Map<string, unknown>();
+    for (const r of [...(a ?? []), ...(b ?? [])]) m.set(r.id, r);
+    return [...m.values()];
+  };
+  const openNotices = byId(noticeRes.data, regOpenRes.data);
+  const pastNotices = byId(pastRes.data, regPastRes.data);
+  // Hero/status card: add the market's open notices that the supply table
+  // counts but that sit on another drugs row (same molecule, or matched by
+  // registration number). Combination products stay out, as in the table.
+  {
+    const seen = new Set(shortages.map((s: { id: string }) => s.id));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const n of openNotices as any[]) {
+      if (seen.has(n.id)) continue;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { raw_data, artg: _a, din: _d, dose_form: _f, ca_form: _c, ingredients, ...ev } = n;
+      const brand = extractEventBrand(ev.data_source_id ?? null, raw_data);
+      const ings = typeof ingredients === "string" ? ingredients.split(";").map((x: string) => x.trim()).filter(Boolean) : undefined;
+      // A notice tied by registration number to a product in the table is
+      // that product's notice, whatever its ingredient list says.
+      const reg = (n.artg ?? n.din ?? "").replace(/\D/g, "");
+      const onPage = !!reg && pageRegs.some((r) => r.replace(/^0+/, "") === reg.replace(/^0+/, ""));
+      if (!onPage && isCombo(brand.brand_name, ings)) continue;
+      shortages.push({ ...ev, ...brand });
+      seen.add(n.id);
+    }
+  }
   const supplyInMarket = buildSupplyInMarket(
     userCountry,
     (catRes.data ?? []) as CatalogueRow[],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((noticeRes.data ?? []) as any[]).map((n) => ({
+    (openNotices as any[]).map((n) => ({
       status: n.status,
       start_date: n.start_date,
       anticipated_start_date: n.anticipated_start_date,
@@ -777,7 +848,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       ingredients: typeof n.ingredients === "string" ? n.ingredients.split(";").map((x: string) => x.trim()).filter(Boolean) : undefined,
     })).concat(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((pastRes.data ?? []) as any[]).map((n) => ({
+      (pastNotices as any[]).map((n) => ({
         status: "resolved",
         start_date: n.start_date,
         anticipated_start_date: null,

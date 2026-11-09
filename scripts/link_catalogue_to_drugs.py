@@ -116,6 +116,8 @@ def normalise_name(name: str, source: str) -> list[str]:
     candidates = []
     clean = name.lower().strip()
 
+    # No first-word fallback anywhere: it linked every product starting with
+    # "sandoz", "insulin", "penicillin"… to one drug (2026-11-06 audit).
     if "HC DPD" in source:
         extracted = extract_hc_ingredient(clean)
         candidates.append(extracted)
@@ -123,20 +125,12 @@ def normalise_name(name: str, source: str) -> list[str]:
         stripped = strip_salt(extracted)
         if stripped != extracted:
             candidates.append(stripped)
-        # First word as fallback
-        first = extracted.split()[0] if extracted else ""
-        if first:
-            candidates.append(first)
     else:
         # FDA NDC and others
         candidates.append(clean)
         stripped = strip_salt(clean)
         if stripped != clean:
             candidates.append(stripped)
-        # First word as fallback
-        first = stripped.split()[0] if stripped else clean.split()[0]
-        if first:
-            candidates.append(first)
 
     # Deduplicate while preserving order, skip short names
     seen: set[str] = set()
@@ -192,10 +186,6 @@ def main():
         if stripped != gn:
             drug_index.setdefault(stripped, did)
 
-        # First word (only if > 5 chars to avoid false positives like "iron")
-        first = stripped.split()[0] if stripped else gn.split()[0]
-        if len(first) > 5:
-            drug_index.setdefault(first, did)
 
         # Brand names
         for b in (d.get("brand_names") or []):

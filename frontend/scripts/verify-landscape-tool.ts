@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- one-off dev script reading untyped REST / tool-result JSON; not shipped. */
 // Standalone verification of the summarize_shortage_landscape tool.
 // Bypasses the LLM and chat route — just confirms the tool returns useful
 // aggregates against live Supabase data.

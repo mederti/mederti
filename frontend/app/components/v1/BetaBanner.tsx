@@ -15,6 +15,7 @@ export default function BetaBanner() {
 
   useEffect(() => {
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
       if (localStorage.getItem(STORAGE_KEY) !== "1") setShow(true);
     } catch {
       setShow(true);

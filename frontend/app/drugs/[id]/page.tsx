@@ -94,7 +94,13 @@ async function buildMarketPricing(
   // nothing, best-effort the name fallback (unlinked-variant case), tolerating
   // a timeout as empty. Migration 067 (trigram idx) makes the fallback fast.
   const PRICE_COLS = "country, price_type, category, pack_price, unit_price, currency, pack_description, product_name, effective_date, source";
-  let rows: any[] = [];
+  type PriceRow = {
+    country: string | null; price_type: string | null; category: string | null;
+    pack_price: number | string | null; unit_price: number | string | null;
+    currency: string | null; pack_description: string | null; product_name: string | null;
+    effective_date: string | null; source: string | null;
+  };
+  let rows: PriceRow[] = [];
   {
     const { data, error } = await supabase
       .from("drug_pricing_history")
@@ -103,7 +109,7 @@ async function buildMarketPricing(
       .order("effective_date", { ascending: false, nullsFirst: false })
       .limit(400);
     if (error) return { concession: null, priceMarkets: [] };
-    rows = data ?? [];
+    rows = (data ?? []) as PriceRow[];
   }
   if (rows.length === 0 && innSafe) {
     const { data } = await supabase
@@ -112,21 +118,21 @@ async function buildMarketPricing(
       .ilike("generic_name", innSafe)
       .order("effective_date", { ascending: false, nullsFirst: false })
       .limit(400);
-    rows = data ?? []; // timeout here → just no fallback rows
+    rows = (data ?? []) as PriceRow[]; // timeout here → just no fallback rows
   }
   if (rows.length === 0) return { concession: null, priceMarkets: [] };
 
   // Latest row per (country, price_type) — rows are already date-desc.
-  const latest = new Map<string, any>();
+  const latest = new Map<string, PriceRow>();
   for (const r of rows) {
     if (!r.country || !r.price_type) continue;
     const k = `${r.country}|${r.price_type}`;
     if (!latest.has(k)) latest.set(k, r);
   }
-  const val = (r: any): number | null =>
+  const val = (r: PriceRow | null | undefined): number | null =>
     r?.pack_price != null ? Number(r.pack_price) : r?.unit_price != null ? Number(r.unit_price) : null;
 
-  const countries = Array.from(new Set(rows.map((r) => r.country).filter(Boolean)));
+  const countries = Array.from(new Set(rows.map((r) => r.country).filter((c): c is string => Boolean(c))));
   const priceMarkets: MarketPrice[] = [];
   for (const country of countries) {
     const headline = HEADLINE_PRIORITY.map((t) => latest.get(`${country}|${t}`)).find(Boolean);
@@ -135,7 +141,7 @@ async function buildMarketPricing(
     if (!base) continue;
     priceMarkets.push({
       country,
-      label: PRICE_TYPE_LABEL[base.price_type] ?? base.price_type,
+      label: PRICE_TYPE_LABEL[base.price_type ?? ""] ?? base.price_type,
       value: val(base),
       per: base.pack_price != null ? (base.pack_description ?? "pack") : "unit",
       currency: base.currency ?? "",
@@ -449,7 +455,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   const alternativesRaw = alternativesRes.status === "fulfilled" ? ((alternativesRes.value as any).data ?? []) : [];
   // Live shortage status for each same-class drug (any market). "No shortage
   // listed" is all we can truthfully say — it is not proof of stock.
-  const altIds = alternativesRaw.map((a: any) => a.alternative_drug_id).filter(Boolean);
+  const altIds = alternativesRaw.map((a: { alternative_drug_id?: string | null }) => a.alternative_drug_id).filter(Boolean);
   const altShortageCounts = new Map<string, number>();
   if (altIds.length > 0) {
     const { data: altSh } = await supabase.from("shortage_events").select("drug_id").in("drug_id", altIds).eq("status", "active");

@@ -761,6 +761,7 @@ function UnifiedSearch() {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     if (!q) { setIntent("empty"); return; }
     if (looksLikeQuestion(q)) { setIntent("open"); return; }
     // Short, name-like input: optimistically show results (almost always a

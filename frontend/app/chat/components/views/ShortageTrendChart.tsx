@@ -97,6 +97,7 @@ export function ShortageTrendChart({
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setState("loading");
     setHover(null);
     const qs = new URLSearchParams({ range });

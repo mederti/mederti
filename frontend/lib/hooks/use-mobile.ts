@@ -12,6 +12,7 @@ export function useMobile(): boolean {
       ?.split("=")?.[1];
 
     if (cookie) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
       setIsMobile(cookie === "mobile");
       return;
     }

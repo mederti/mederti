@@ -803,7 +803,43 @@ export default function V1DrugView({
             {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
             {!localShortage && elsewhereCount === 0 && <div className="sc-sub">No active shortage reported.</div>}
 
-            {/* AI commentary — embedded under the heading, above the as-of line */}
+            {/* Key facts — the old so-what tiles and price strip, folded into
+                the status card as one compact row. "Yes" only when a real
+                pathway is on file; absence of data is stated as absence. */}
+            <div className="sc-facts">
+              <div className="sc-fact">
+                <div className="sc-fact-l">Expected back</div>
+                <div className="sc-fact-v">{expected ?? "No estimate"}</div>
+                <div className="sc-fact-d">{expected ? `Sponsor est. via ${expSource} · may differ by brand` : "none provided"}</div>
+              </div>
+              <a href="#alternatives" className="sc-fact sc-fact-link">
+                <div className="sc-fact-l">Can I substitute?</div>
+                <div className="sc-fact-v">{s19aTileDetail ? "Yes, approved substitute" : mine ? "No pathway on record" : "Not needed"}</div>
+                <div className="sc-fact-d">{s19aTileDetail ?? (mine ? "prescriber decision required" : "no shortage here")}</div>
+              </a>
+              {topAlt?.id != null ? (
+                <Link href={`/drugs/${topAlt.id}`} className="sc-fact sc-fact-link">
+                  <div className="sc-fact-l">Same-class drug</div>
+                  <div className="sc-fact-v">{topAlt.name}</div>
+                  <div className="sc-fact-d">different medicine · prescriber must approve</div>
+                </Link>
+              ) : (
+                <div className="sc-fact">
+                  <div className="sc-fact-l">Same-class drug</div>
+                  <div className="sc-fact-v">{topAlt ? topAlt.name : "None listed"}</div>
+                  <div className="sc-fact-d">{topAlt ? "different medicine · prescriber must approve" : "refer to prescriber"}</div>
+                </div>
+              )}
+              {!concession && heroPrice && (
+                <a href="#trade-price" className="sc-fact sc-fact-link">
+                  <div className="sc-fact-l">{flag(userCountry)} {heroPrice.label}</div>
+                  <div className="sc-fact-v mono">{fmtPrice(heroPrice.value, heroPrice.currency)}</div>
+                  <div className="sc-fact-d">{heroPrice.extra ?? "official price"} · details →</div>
+                </a>
+              )}
+            </div>
+
+            {/* AI commentary — collapsed to two lines, expandable */}
             <V1AiSummary id={id} embedded />
 
             {/* Card footer: source line anchored bottom-left, the universal
@@ -849,48 +885,6 @@ export default function V1DrugView({
             </div>
           )}
 
-          {/* Compact hero price — always-visible market price when no concession
-              banner already carries it. Full multi-market panel stays below. */}
-          {!concession && heroPrice && (
-            <div className="price-strip">
-              <span className="ps-mkt">{flag(userCountry)} {userCountry}</span>
-              <span className="ps-label">{heroPrice.label}</span>
-              <span className="ps-val">{fmtPrice(heroPrice.value, heroPrice.currency)}</span>
-              {heroPrice.extra && <span className="ps-extra">{heroPrice.extra}</span>}
-              <a href="#trade-price" className="ps-more">details →</a>
-            </div>
-          )}
-
-          {/* So-what tiles */}
-          <div className="sw-cards">
-            <div className="sw-card">
-              {/* "Yes" only when a real pathway is on file; absence of data is
-                  stated as absence, never inverted into permission. */}
-              <div className="sw-h"><span className={`sw-ic ${s19aTileDetail || !mine ? "ok" : "neutral"}`}>{s19aTileDetail || !mine ? "✓" : "•"}</span> Can I substitute?</div>
-              <div className="sw-v">{s19aTileDetail ? "Yes — approved substitute available" : mine ? "No pathway on record" : "In supply"}</div>
-              <div className="sw-d">{s19aTileDetail ?? (mine ? "prescriber decision required" : "no shortage substitution needed")}</div>
-            </div>
-            {topAlt?.id != null ? (
-              <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
-                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
-                <div className="sw-v">{topAlt.name}</div>
-                <div className="sw-d">{`${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}`}</div>
-              </Link>
-            ) : (
-              <div className="sw-card">
-                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
-                <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
-                <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
-              </div>
-            )}
-            <div className="sw-card">
-              <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
-              <div className="sw-v">{expected ?? "No estimate"}</div>
-              {/* Ingredient-level date — the event may cover a different brand
-                  than the one the user stocks. */}
-              <div className="sw-d">{expected ? `Sponsor est. via ${expSource} — may differ by brand` : "No estimate provided"}</div>
-            </div>
-          </div>
           {/* Products affected — brand-level rows for the user's market.
               Pharmacists procure by brand: the exact product each notice
               covers, its sponsor, and its OWN return estimate. Events whose
@@ -1831,6 +1825,18 @@ const CSS = `
 .find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
 .find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
 .find-supplier-hint{font-size:12px;color:var(--text-4)}
+.sc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:14px;border-top:1px solid rgba(12,17,24,.07)}
+.sc-fact{padding:12px 14px 2px 0;min-width:0;text-decoration:none;color:inherit;display:block}
+.sc-fact + .sc-fact{padding-left:14px;border-left:1px solid rgba(12,17,24,.07)}
+.sc-fact-l{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
+.sc-fact-v{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:4px;line-height:1.25}
+.sc-fact-v.mono{font-family:var(--font-geist-mono),ui-monospace,monospace}
+.sc-fact-d{font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.35}
+.sc-fact-link:hover .sc-fact-v{color:var(--green-d)}
+@media(max-width:680px){.sc-fact + .sc-fact{padding-left:0;border-left:0;border-top:1px solid rgba(12,17,24,.07)}}
+.ai-sum-body.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ai-sum-more{font:inherit;font-size:12px;font-weight:600;color:var(--green-d);background:none;border:0;padding:4px 0;margin-top:2px;cursor:pointer;min-height:32px}
+.ai-sum-more:hover{text-decoration:underline}
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block;box-shadow:var(--sh-card),var(--hi-inset);}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}

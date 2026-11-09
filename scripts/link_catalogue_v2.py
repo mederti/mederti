@@ -332,7 +332,7 @@ def build_drug_index(supabase) -> tuple[dict[str, str], dict[str, str]]:
     """
     Returns (name_index, name_normalised_index) where:
       - name_index: lower-trimmed name -> drug_id
-      - the index includes generic_name, salt-stripped, first word, brand_names,
+      - the index includes generic_name, salt-stripped, brand_names,
         and any drug_synonyms entries.
     """
     drugs = fetch_all(supabase, "drugs", "id, generic_name, brand_names")
@@ -355,10 +355,10 @@ def build_drug_index(supabase) -> tuple[dict[str, str], dict[str, str]]:
         if stripped != gn:
             idx.setdefault(stripped, did)
 
-        # First word (only if long enough — avoids "iron", "zinc" false positives)
-        first = stripped.split()[0] if stripped else ""
-        if len(first) > 5:
-            idx.setdefault(first, did)
+        # No first-word key. It made the first drug starting with "sandoz",
+        # "insulin", "penicillin"… the link target for EVERY product starting
+        # with that word (2026-11-06 audit: 2,175 register rows on the wrong
+        # molecule — Humalog on Insulin glargine, 209 rows on one Sandoz drug).
 
         # Brand names
         for b in (d.get("brand_names") or []):
@@ -442,10 +442,8 @@ def candidate_names(name: str, source: str) -> list[str]:
             cands.append(no_prefix)
             cands.append(strip_salts(no_prefix))
 
-    # First long word as last-ditch
-    first = stripped.split()[0] if stripped else ""
-    if len(first) > 5:
-        cands.append(first)
+    # No first-word fallback: see build_drug_index. An unlinked row is honest;
+    # a row on the wrong molecule shows the wrong shortage status.
 
     # Dedupe preserving order
     seen: set[str] = set()

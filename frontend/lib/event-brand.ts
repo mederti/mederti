@@ -64,3 +64,31 @@ export function extractEventBrand(
       return { brand_name: null, sponsor: null };
   }
 }
+
+// Market-exit facts a regulator states on a discontinuation notice. Only
+// TGA exposes these today: `deleted_date` on a 'D' record is the ARTG
+// cancellation date (the product's legal last day on the market) and
+// `shortage_impact` is TGA's own impact rating, which our availability-led
+// severity can disagree with — so it is surfaced verbatim, never re-derived.
+export type EventMarketExit = { withdrawal_date: string | null; regulator_impact: string | null };
+
+const MONTHS: Record<string, string> = {
+  jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+  jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+};
+
+/** TGA "31 Mar 2027" → "2027-03-31"; anything else → null (never guessed). */
+function tgaDate(v: unknown): string | null {
+  const m = /^(\d{1,2}) ([A-Za-z]{3}) (\d{4})$/.exec(String(v ?? "").trim());
+  const mm = m && MONTHS[m[2].toLowerCase()];
+  return m && mm ? `${m[3]}-${mm}-${m[1].padStart(2, "0")}` : null;
+}
+
+export function extractEventMarketExit(
+  dataSourceId: string | null | undefined,
+  rawData: unknown,
+): EventMarketExit {
+  const raw = (rawData && typeof rawData === "object" ? rawData : {}) as Record<string, unknown>;
+  if (dataSourceId !== SRC_TGA || raw.status !== "D") return { withdrawal_date: null, regulator_impact: null };
+  return { withdrawal_date: tgaDate(raw.deleted_date), regulator_impact: clean(raw.shortage_impact) };
+}

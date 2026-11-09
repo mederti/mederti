@@ -24,6 +24,7 @@ export default function V1AiSummary({ id, embedded = false }: { id: string; embe
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const wrapCls = embedded ? "ai-sum embedded" : "ai-sum";
 
   useEffect(() => {
@@ -80,7 +81,12 @@ export default function V1AiSummary({ id, embedded = false }: { id: string; embe
   return (
     <div className={wrapCls}>
       {data.headline && <div className="ai-sum-hl">{data.headline}</div>}
-      <div className="ai-sum-body">{data.body}</div>
+      <div className={`ai-sum-body${embedded && !expanded ? " clamp" : ""}`}>{data.body}</div>
+      {embedded && (
+        <button type="button" className="ai-sum-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      )}
     </div>
   );
 }

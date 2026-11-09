@@ -535,6 +535,14 @@ export default function V1DrugView({
     ] as AttrRow[]
   ).filter((r) => r.value);
 
+  // Design-4 hero: the status in one plain sentence. Expected date is the
+  // sponsor's estimate; absence of a pathway is stated, never inverted.
+  const heroAnswer = localShortage
+    ? `${anticipated ? "Shortage anticipated" : isCrit ? "Critically short" : "Short"} in ${cName}${expected ? `, expected back around ${expected}` : estPassed ? ", and the sponsor's return date has passed without an update" : ", no return date published"}. ${s19aTileDetail ? "An approved substitute is available." : "No substitution pathway on record."}`
+    : elsewhereCount > 0
+      ? `In supply in ${cName}. Short in ${elsewhereCount} other market${elsewhereCount === 1 ? "" : "s"}.`
+      : `In supply in ${cName}. No active shortage reported.`;
+
   // Tab empty states — each tab says plainly when we hold nothing for it.
   const hasStatus = !!supplyInMarket || mineAll.length > 0 || regulators.length > 0 || shortages.length > 0 || events.length > 0;
   const hasAlts = userCountry === "AU" || !!sourcedAlternatives?.available || alts.length > 0;
@@ -616,11 +624,14 @@ export default function V1DrugView({
             </div>
           )}
 
-          <div className="product-card">
+          <div className="product-card hero-card">
             <div className="pc-body">
               <div className="pc-head">
                 <div className="pc-titles">
-                  <div className="d-name">{drug.generic_name}</div>
+                  <div className="pc-name-row">
+                    <div className="d-name">{drug.generic_name}</div>
+                    <span className={`status-pill ${statusPill.cls}`}><span className="d" />{statusPill.txt}</span>
+                  </div>
                   <div className="d-generic">
                     {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
                   </div>
@@ -631,7 +642,10 @@ export default function V1DrugView({
                     </div>
                   )}
                 </div>
-                <span className={`status-pill ${statusPill.cls}`}><span className="d" />{statusPill.txt}</span>
+                <div className="sc-actions pc-actions">
+                  <WatchButton drugId={id} />
+                  <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+                </div>
               </div>
 
               <div className="pc-badges">
@@ -690,6 +704,67 @@ export default function V1DrugView({
                 );
               })()}
             </div>
+          {/* Status band — design 4: the answer in one sentence + other markets
+              + AI summary on the left; the four key facts as tiles on the
+              right. "Yes" only when a real pathway is on file. */}
+          <div className={`hero-band ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
+            <div className="hb-cols">
+              <div className="hb-left">
+                <div className="hb-answer">{heroAnswer}</div>
+                {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
+                {elsewhereCount > 0 && (
+                  <div className="hb-markets">
+                    <span className="hb-markets-l">{localShortage ? "Also short in" : "Short in"}</span>
+                    {footprint.slice(0, 8).map((f) => (
+                      <span
+                        key={f.cc}
+                        className={`scs-c${f.major ? " major" : ""}${f.sev >= 2 ? " crit" : ""}`}
+                        title={`${COUNTRY[f.cc] ?? f.cc}${f.sev >= 2 ? " · critical/high severity" : ""}`}
+                      >
+                        {flag(f.cc)} {f.cc}
+                      </span>
+                    ))}
+                    {footprint.length > 8 && <span className="scs-more">+{footprint.length - 8}</span>}
+                  </div>
+                )}
+                <V1AiSummary id={id} embedded />
+              </div>
+
+                <div className="sc-facts hb-tiles">
+                  <div className="sc-fact">
+                    <div className="sc-fact-l">Expected back</div>
+                    <div className="sc-fact-v">{expected ?? (estPassed ? "Estimate passed" : "No estimate")}</div>
+                    <div className="sc-fact-d">{expected ? `Earliest sponsor est. via ${expSource} · may differ by brand` : estPassed ? "sponsor's date passed, not updated" : "none provided"}</div>
+                  </div>
+                  <a href="#alternatives" className="sc-fact sc-fact-link">
+                    <div className="sc-fact-l">Can I substitute?</div>
+                    <div className="sc-fact-v">{s19aTileDetail ? "Yes, approved substitute" : mine ? "No pathway on record" : "Not needed"}</div>
+                    <div className="sc-fact-d">{s19aTileDetail ?? (mine ? "prescriber decision required" : "no shortage here")}</div>
+                  </a>
+                  {topAlt?.id != null ? (
+                    <Link href={`/drugs/${topAlt.id}`} className="sc-fact sc-fact-link">
+                      <div className="sc-fact-l">Same-class drug</div>
+                      <div className="sc-fact-v">{topAlt.name}</div>
+                      <div className="sc-fact-d">different medicine · prescriber must approve</div>
+                    </Link>
+                  ) : (
+                    <div className="sc-fact">
+                      <div className="sc-fact-l">Same-class drug</div>
+                      <div className="sc-fact-v">{topAlt ? topAlt.name : "None listed"}</div>
+                      <div className="sc-fact-d">{topAlt ? "different medicine · prescriber must approve" : "refer to prescriber"}</div>
+                    </div>
+                  )}
+                  {!concession && heroPrice && (
+                    <a href="#trade-price" className="sc-fact sc-fact-link">
+                      <div className="sc-fact-l">{flag(userCountry)} {heroPrice.label}</div>
+                      <div className="sc-fact-v mono">{fmtPrice(heroPrice.value, heroPrice.currency)}</div>
+                      <div className="sc-fact-d">{heroPrice.extra ?? "official price"} · details →</div>
+                    </a>
+                  )}
+                </div>
+            </div>
+            <div className="sc-asof hb-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
+          </div>
           </div>
 
           {brandFocus && (() => {
@@ -771,53 +846,15 @@ export default function V1DrugView({
             );
           })()}
 
-          {/* Status card */}
-          <div className={`status-card ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
-            {/* Status eyebrow: user-market status, then the OTHER markets that
-                are also short, inline as flag chips — "Australia & 🇨🇦 🇩🇪 …".
-                Lets a user tell global-from-local at a glance. Critical/high
-                markets render red; major markets (US/EU/UK) sort first. */}
-            <div className="sc-label">
-              <span className="d" />
-              <span className="sc-label-t">
-                {localShortage ? (anticipated ? "Anticipated · " : "In declared shortage · ") : "In supply · "}
-                {flag(userCountry)} {cName}
-                {elsewhereCount > 0 ? (localShortage ? " & also short in" : " · short in") : ""}
-              </span>
-              {elsewhereCount > 0 && (
-                <span className="sc-foot-flags">
-                  {footprint.slice(0, 8).map((f) => (
-                    <span
-                      key={f.cc}
-                      className={`scs-c${f.major ? " major" : ""}${f.sev >= 2 ? " crit" : ""}`}
-                      title={`${COUNTRY[f.cc] ?? f.cc}${f.sev >= 2 ? " · critical/high severity" : ""}`}
-                    >
-                      {flag(f.cc)} {f.cc}
-                    </span>
-                  ))}
-                  {footprint.length > 8 && <span className="scs-more">+{footprint.length - 8}</span>}
-                </span>
-              )}
-            </div>
-            <div className="sc-title">{localShortage ? (anticipated ? "Anticipated shortage" : isCrit ? "Critical shortage" : "Limited supply") : `In supply in ${cName}`}</div>
-            {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
-            {!localShortage && elsewhereCount === 0 && <div className="sc-sub">No active shortage reported.</div>}
-
-            {/* AI commentary — embedded under the heading, above the as-of line */}
-            <V1AiSummary id={id} embedded />
-
-            {/* Card footer: source line anchored bottom-left, the universal
-                "Find a supplier" CTA anchored bottom-right. */}
-            <div className="sc-footer">
-              <div className="sc-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
-              <div className="sc-actions">
-                <WatchButton drugId={id} />
-                <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
-              </div>
-            </div>
-          </div>
-
-
+          <DrugTabs
+            tabs={[
+              {
+                id: "status",
+                label: "Status",
+                badge: localShortage ? (anticipated ? "Anticipated" : isCrit ? "Short" : "Limited") : "In supply",
+                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
+                content: (
+            <>
           {/* Price-concession signal — promoted into the hero (Option B). A
               regulator reimbursing above tariff means pharmacies can't source
               at price: an early supply-pressure indicator that typically
@@ -849,58 +886,6 @@ export default function V1DrugView({
             </div>
           )}
 
-          {/* Compact hero price — always-visible market price when no concession
-              banner already carries it. Full multi-market panel stays below. */}
-          {!concession && heroPrice && (
-            <div className="price-strip">
-              <span className="ps-mkt">{flag(userCountry)} {userCountry}</span>
-              <span className="ps-label">{heroPrice.label}</span>
-              <span className="ps-val">{fmtPrice(heroPrice.value, heroPrice.currency)}</span>
-              {heroPrice.extra && <span className="ps-extra">{heroPrice.extra}</span>}
-              <a href="#trade-price" className="ps-more">details →</a>
-            </div>
-          )}
-
-          {/* So-what tiles */}
-          <div className="sw-cards">
-            <div className="sw-card">
-              {/* "Yes" only when a real pathway is on file; absence of data is
-                  stated as absence, never inverted into permission. */}
-              <div className="sw-h"><span className={`sw-ic ${s19aTileDetail || !mine ? "ok" : "neutral"}`}>{s19aTileDetail || !mine ? "✓" : "•"}</span> Can I substitute?</div>
-              <div className="sw-v">{s19aTileDetail ? "Yes — approved substitute available" : mine ? "No pathway on record" : "In supply"}</div>
-              <div className="sw-d">{s19aTileDetail ?? (mine ? "prescriber decision required" : "no shortage substitution needed")}</div>
-            </div>
-            {topAlt?.id != null ? (
-              <Link href={`/drugs/${topAlt.id}`} className="sw-card sw-card-link">
-                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
-                <div className="sw-v">{topAlt.name}</div>
-                <div className="sw-d">{`${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}`}</div>
-              </Link>
-            ) : (
-              <div className="sw-card">
-                <div className="sw-h"><span className="sw-ic neutral">⇄</span> Same-class drug</div>
-                <div className="sw-v">{topAlt ? topAlt.name : "None listed"}</div>
-                <div className="sw-d">{topAlt ? `${affinity(topAlt.pct) ? `${affinity(topAlt.pct)} · ` : ""}${topAlt.rel}` : "refer to prescriber"}</div>
-              </div>
-            )}
-            <div className="sw-card">
-              <div className="sw-h"><span className="sw-ic neutral">◷</span> Expected back</div>
-              <div className="sw-v">{expected ?? (estPassed ? "Estimate passed" : "No estimate")}</div>
-              {/* Ingredient-level date — the event may cover a different brand
-                  than the one the user stocks. */}
-              <div className="sw-d">{expected ? `Earliest sponsor est. via ${expSource} — may differ by brand` : estPassed ? "Sponsor's date passed, not updated" : "No estimate provided"}</div>
-            </div>
-          </div>
-
-          <DrugTabs
-            tabs={[
-              {
-                id: "status",
-                label: "Status",
-                badge: localShortage ? (anticipated ? "Anticipated" : isCrit ? "Short" : "Limited") : "In supply",
-                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
-                content: (
-            <>
           {/* Products affected — brand-level rows for the user's market.
               Pharmacists procure by brand: the exact product each notice
               covers, its sponsor, and its OWN return estimate. Events whose
@@ -1841,6 +1826,44 @@ const CSS = `
 .find-supplier-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;font-family:inherit;transition:filter .15s,transform .15s;box-shadow:var(--sh-card)}
 .find-supplier-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
 .find-supplier-hint{font-size:12px;color:var(--text-4)}
+.hero-card{flex-direction:column;align-items:stretch;gap:0;padding:0;overflow:hidden;container-type:inline-size;container-name:hero}
+.hero-card .pc-body{padding:20px 22px}
+.hero-card .pc-head{align-items:flex-start}
+.pc-name-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pc-name-row .status-pill{margin-top:0}
+.pc-actions{flex-shrink:0}
+.hero-band{border-top:1px solid var(--border)}
+.hero-band.crit{background:linear-gradient(135deg,#fff5f6,#fff1f3);border-top-color:var(--crit-b)}
+.hero-band.med{background:linear-gradient(135deg,#fffdf5,#fffbeb);border-top-color:var(--med-b)}
+.hero-band.ok{background:linear-gradient(135deg,#f0fdf8,#ecfdf5);border-top-color:var(--ok-b)}
+.hb-cols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:22px;padding:20px 22px 6px}
+.hb-left{display:flex;flex-direction:column;gap:12px;min-width:0}
+.hb-answer{font-size:18px;font-weight:600;letter-spacing:-.02em;line-height:1.35;color:var(--ink)}
+.hb-markets{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.hb-markets-l{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-right:3px}
+.hero-band.crit .hb-markets-l{color:var(--crit)}.hero-band.med .hb-markets-l{color:var(--med)}
+.hb-left .ai-sum.embedded{margin-top:0;padding-top:12px;border-top:1px solid rgba(12,17,24,.07)}
+.sc-facts.hb-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:0;border-top:0;align-content:start}
+.hb-tiles .sc-fact,.hb-tiles .sc-fact + .sc-fact{background:var(--bg);border:1px solid rgba(12,17,24,.07);border-radius:12px;padding:12px 14px}
+.hb-tiles .sc-fact-link:hover{border-color:var(--green)}
+.hb-asof{padding:8px 22px 14px;margin-top:0}
+.hero-card .pc-head{flex-wrap:wrap}
+.hero-card .pc-titles{flex:1 1 auto;min-width:min(100%,280px)}
+.pc-actions .find-supplier-hint{display:none}
+@container hero (max-width:820px){.hb-cols{grid-template-columns:1fr}.sc-facts.hb-tiles{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
+@container hero (max-width:560px){.pc-actions{justify-content:flex-start;width:100%}}
+.sc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:14px;border-top:1px solid rgba(12,17,24,.07)}
+.sc-fact{padding:12px 14px 2px 0;min-width:0;text-decoration:none;color:inherit;display:block}
+.sc-fact + .sc-fact{padding-left:14px;border-left:1px solid rgba(12,17,24,.07)}
+.sc-fact-l{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
+.sc-fact-v{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-top:4px;line-height:1.25}
+.sc-fact-v.mono{font-family:var(--font-geist-mono),ui-monospace,monospace}
+.sc-fact-d{font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.35}
+.sc-fact-link:hover .sc-fact-v{color:var(--green-d)}
+@media(max-width:680px){.sc-fact + .sc-fact{padding-left:0;border-left:0;border-top:1px solid rgba(12,17,24,.07)}}
+.ai-sum-body.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ai-sum-more{font:inherit;font-size:12px;font-weight:600;color:var(--green-d);background:none;border:0;padding:4px 0;margin-top:2px;cursor:pointer;min-height:32px}
+.ai-sum-more:hover{text-decoration:underline}
 .sw-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .sw-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px 16px;text-decoration:none;color:inherit;display:block;box-shadow:var(--sh-card),var(--hi-inset);}
 .sw-card.emph{background:linear-gradient(150deg,var(--green-bg),var(--bg) 80%);border-color:var(--green-b)}
@@ -1867,6 +1890,8 @@ const CSS = `
 .dtab-badge.med{color:var(--med);background:var(--med-bg);border-color:var(--med-b)}
 .dtab-badge.ok{color:var(--green-d);background:var(--ok-bg);border-color:var(--ok-b)}
 .dtabs-panel > .sec:first-of-type{margin-top:20px}
+.dtabs-panel > .status-card:first-of-type{margin-top:20px}
+.dtabs{margin-top:18px}
 .dtabs-print-h{display:none}
 .dtabs-panel [id]{scroll-margin-top:60px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}

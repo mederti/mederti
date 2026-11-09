@@ -771,6 +771,15 @@ export default function V1DrugView({
             );
           })()}
 
+          <DrugTabs
+            tabs={[
+              {
+                id: "status",
+                label: "Status",
+                badge: localShortage ? (anticipated ? "Anticipated" : isCrit ? "Short" : "Limited") : "In supply",
+                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
+                content: (
+            <>
           {/* Status card */}
           <div className={`status-card ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
             {/* Status eyebrow: user-market status, then the OTHER markets that
@@ -891,16 +900,6 @@ export default function V1DrugView({
               <div className="sw-d">{expected ? `Earliest sponsor est. via ${expSource} — may differ by brand` : estPassed ? "Sponsor's date passed, not updated" : "No estimate provided"}</div>
             </div>
           </div>
-
-          <DrugTabs
-            tabs={[
-              {
-                id: "status",
-                label: "Status",
-                badge: localShortage ? (anticipated ? "Anticipated" : isCrit ? "Short" : "Limited") : "In supply",
-                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
-                content: (
-            <>
           {/* Products affected — brand-level rows for the user's market.
               Pharmacists procure by brand: the exact product each notice
               covers, its sponsor, and its OWN return estimate. Events whose
@@ -1867,6 +1866,8 @@ const CSS = `
 .dtab-badge.med{color:var(--med);background:var(--med-bg);border-color:var(--med-b)}
 .dtab-badge.ok{color:var(--green-d);background:var(--ok-bg);border-color:var(--ok-b)}
 .dtabs-panel > .sec:first-of-type{margin-top:20px}
+.dtabs-panel > .status-card:first-of-type{margin-top:20px}
+.dtabs{margin-top:18px}
 .dtabs-print-h{display:none}
 .dtabs-panel [id]{scroll-margin-top:60px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}

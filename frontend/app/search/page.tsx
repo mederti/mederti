@@ -195,6 +195,10 @@ function Results() {
   const forcedRef = useRef<Set<string>>(new Set());
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
+  // Last query the user typed into the box on this page. Live search runs as
+  // you type, so we must never auto-open a result mid-keystroke ("fres" → 1 hit
+  // → yanked away). Only queries that arrive by link/history/refresh auto-open.
+  const lastTypedRef = useRef<string | null>(null);
 
   // Merge a param patch into the current URL (null clears a key).
   const setParams = useCallback(
@@ -232,6 +236,7 @@ function Results() {
           !triedRef.current.has(lc) && !forcedRef.current.has(lc)
         ) {
           triedRef.current.add(lc);
+          if (lastTypedRef.current === term) lastTypedRef.current = sug.trim();
           setCorrected({ from: term, to: sug });
           setResults([]); setTotal(0); setFacets(null);
           setParams({ q: sug });
@@ -239,6 +244,18 @@ function Results() {
         }
         // Showing a fresh, unrelated query → drop any stale correction banner.
         if (corrected && lc !== corrected.to.toLowerCase()) setCorrected(null);
+        // Exactly one match for a query that arrived by navigation (sidebar
+        // history, home, chat links) → go straight to it. replace() so Back
+        // returns to where the user came from, not into a redirect loop.
+        // Skipped when the user is narrowing with filters — they're browsing.
+        if (
+          data.total === 1 && data.results.length === 1 &&
+          lastTypedRef.current !== term &&
+          !statusStr && !formStr && !strengthStr
+        ) {
+          router.replace(resultHref(data.results[0]));
+          return;
+        }
         setResults(data.results);
         setTotal(data.total);
         setFacets(data.facets?.status ?? null);
@@ -275,6 +292,7 @@ function Results() {
 
   function onChange(v: string) {
     setQ(v);
+    lastTypedRef.current = v.trim();
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
       setParams({ q: v.trim() || null });
@@ -329,6 +347,12 @@ function Results() {
           autoFocus
           value={q}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Typed query with a single hit: Enter opens it.
+            if (e.key === "Enter" && !loading && results.length === 1 && q.trim() === urlQ.trim()) {
+              router.push(resultHref(results[0]));
+            }
+          }}
           placeholder="Search a drug — e.g. amoxicillin, cisplatin, metformin"
         />
       </div>

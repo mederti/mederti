@@ -20,7 +20,7 @@ interface Payload {
   error?: string;
 }
 
-export default function V1AiSummary({ id, embedded = false }: { id: string; embedded?: boolean }) {
+export default function V1AiSummary({ id, embedded = false, clamp = true }: { id: string; embedded?: boolean; clamp?: boolean }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
@@ -81,8 +81,8 @@ export default function V1AiSummary({ id, embedded = false }: { id: string; embe
   return (
     <div className={wrapCls}>
       {data.headline && <div className="ai-sum-hl">{data.headline}</div>}
-      <div className={`ai-sum-body${embedded && !expanded ? " clamp" : ""}`}>{data.body}</div>
-      {embedded && (
+      <div className={`ai-sum-body${embedded && clamp && !expanded ? " clamp" : ""}`}>{data.body}</div>
+      {embedded && clamp && (
         <button type="button" className="ai-sum-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
           {expanded ? "Show less" : "Read more"}
         </button>

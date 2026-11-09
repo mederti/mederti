@@ -99,6 +99,12 @@ function timeAgo(iso?: string | null) {
   if (d < 30) return `${d}d ago`;
   return `${Math.floor(d / 30)}mo ago`;
 }
+// Combination names ("Amoxicillin/Clavulanate") have no natural break point
+// and overflow narrow tiles; a zero-width space after each slash lets them wrap.
+function breakAtSlash(name: string): string {
+  return name.replace(/\//g, "/\u200B");
+}
+
 function monthYear(iso?: string | null) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -487,13 +493,6 @@ export default function V1DrugView({
   const marketLabel = `${cName} market`;
 
   // Product-card top-line status pill.
-  const statusPill = localShortage
-    ? anticipated
-      ? { cls: "sp-part", txt: `Anticipated · ${cName}` }
-      : isCrit
-        ? { cls: "sp-crit", txt: `In shortage · ${cName}` }
-        : { cls: "sp-part", txt: `Limited supply · ${cName}` }
-    : { cls: "sp-ok", txt: `In supply · ${cName}` };
 
 
   // Detailed product-attribute table (2-col label/value). Only emits rows with
@@ -534,14 +533,6 @@ export default function V1DrugView({
       { label: "Summary of product characteristics (SPC)", value: "Not on file", muted: true },
     ] as AttrRow[]
   ).filter((r) => r.value);
-
-  // Design-4 hero: the status in one plain sentence. Expected date is the
-  // sponsor's estimate; absence of a pathway is stated, never inverted.
-  const heroAnswer = localShortage
-    ? `${anticipated ? "Shortage anticipated" : isCrit ? "Critically short" : "Short"} in ${cName}${expected ? `, expected back around ${expected}` : estPassed ? ", and the sponsor's return date has passed without an update" : ", no return date published"}. ${s19aTileDetail ? "An approved substitute is available." : "No substitution pathway on record."}`
-    : elsewhereCount > 0
-      ? `In supply in ${cName}. Short in ${elsewhereCount} other market${elsewhereCount === 1 ? "" : "s"}.`
-      : `In supply in ${cName}. No active shortage reported.`;
 
   // Tab empty states — each tab says plainly when we hold nothing for it.
   const hasStatus = !!supplyInMarket || mineAll.length > 0 || regulators.length > 0 || shortages.length > 0 || events.length > 0;
@@ -630,7 +621,25 @@ export default function V1DrugView({
                 <div className="pc-titles">
                   <div className="pc-name-row">
                     <div className="d-name">{drug.generic_name}</div>
-                    <span className={`status-pill ${statusPill.cls}`}><span className="d" />{statusPill.txt}</span>
+                      {drug.who_essential_medicine ? (
+                        <a
+                          className="d-eml"
+                          href="https://list.essentialmeds.org/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={
+                            drug.who_eml_section
+                              ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
+                              : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+                          }
+                        >
+                          <span className="d-eml-dot" />
+                          WHO Essential Medicine
+                        </a>
+                      ) : null}
+                      {drug.is_controlled_substance === true ? (
+                        <span className="d-ctrl">Controlled substance</span>
+                      ) : null}
                   </div>
                   <div className="d-generic">
                     {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
@@ -648,27 +657,6 @@ export default function V1DrugView({
                 </div>
               </div>
 
-              <div className="pc-badges">
-                {drug.who_essential_medicine ? (
-                  <a
-                    className="d-eml"
-                    href="https://list.essentialmeds.org/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={
-                      drug.who_eml_section
-                        ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
-                        : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
-                    }
-                  >
-                    <span className="d-eml-dot" />
-                    WHO Essential Medicine
-                  </a>
-                ) : null}
-                {drug.is_controlled_substance === true ? (
-                  <span className="d-ctrl">Controlled substance</span>
-                ) : null}
-              </div>
 
               {(() => {
                 const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
@@ -704,66 +692,112 @@ export default function V1DrugView({
                 );
               })()}
             </div>
-          {/* Status band — design 4: the answer in one sentence + other markets
-              + AI summary on the left; the four key facts as tiles on the
-              right. "Yes" only when a real pathway is on file. */}
-          <div className={`hero-band ${localShortage ? (isCrit ? "crit" : "med") : "ok"}`}>
-            <div className="hb-cols">
-              <div className="hb-left">
-                <div className="hb-answer">{heroAnswer}</div>
-                {localShortage && mine?.reason && <div className="sc-sub">{String(mine.reason).replace(/^availability:\s*/i, "")}</div>}
-                {elsewhereCount > 0 && (
-                  <div className="hb-markets">
-                    <span className="hb-markets-l">{localShortage ? "Also short in" : "Short in"}</span>
-                    {footprint.slice(0, 8).map((f) => (
-                      <span
-                        key={f.cc}
-                        className={`scs-c${f.major ? " major" : ""}${f.sev >= 2 ? " crit" : ""}`}
-                        title={`${COUNTRY[f.cc] ?? f.cc}${f.sev >= 2 ? " · critical/high severity" : ""}`}
-                      >
-                        {flag(f.cc)} {f.cc}
-                      </span>
-                    ))}
-                    {footprint.length > 8 && <span className="scs-more">+{footprint.length - 8}</span>}
-                  </div>
+          {/* Status — design 3: a one-line status headline, then the three
+              questions a pharmacist asks (when's it back / what instead / what
+              does it cost), then "is it just us?". "Yes" on substitution only
+              when a real pathway is on file; absence is stated as absence. */}
+          <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok"}`}>
+            <div className="hq-head">
+              <span className="hq-ic" aria-hidden>
+                {localShortage ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                 )}
-                <V1AiSummary id={id} embedded />
+              </span>
+              <div className="hq-head-t">
+                <div className="hq-title">
+                  {localShortage ? (anticipated ? "Anticipated shortage" : isCrit ? "Critical shortage" : "Limited supply") : "In supply"} in {cName}
+                </div>
+                <div className="hq-sub">
+                  {localShortage && mine?.reason && <span className="hq-reason">{String(mine.reason).replace(/^availability:\s*/i, "")}</span>}
+                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</span>
+                </div>
               </div>
+            </div>
 
-                <div className="sc-facts hb-tiles">
-                  <div className="sc-fact">
-                    <div className="sc-fact-l">Expected back</div>
-                    <div className="sc-fact-v">{expected ?? (estPassed ? "Estimate passed" : "No estimate")}</div>
-                    <div className="sc-fact-d">{expected ? `Earliest sponsor est. via ${expSource} · may differ by brand` : estPassed ? "sponsor's date passed, not updated" : "none provided"}</div>
-                  </div>
-                  <a href="#alternatives" className="sc-fact sc-fact-link">
-                    <div className="sc-fact-l">Can I substitute?</div>
-                    <div className="sc-fact-v">{s19aTileDetail ? "Yes, approved substitute" : mine ? "No pathway on record" : "Not needed"}</div>
-                    <div className="sc-fact-d">{s19aTileDetail ?? (mine ? "prescriber decision required" : "no shortage here")}</div>
-                  </a>
-                  {topAlt?.id != null ? (
-                    <Link href={`/drugs/${topAlt.id}`} className="sc-fact sc-fact-link">
-                      <div className="sc-fact-l">Same-class drug</div>
-                      <div className="sc-fact-v">{topAlt.name}</div>
-                      <div className="sc-fact-d">different medicine · prescriber must approve</div>
-                    </Link>
-                  ) : (
-                    <div className="sc-fact">
-                      <div className="sc-fact-l">Same-class drug</div>
-                      <div className="sc-fact-v">{topAlt ? topAlt.name : "None listed"}</div>
-                      <div className="sc-fact-d">{topAlt ? "different medicine · prescriber must approve" : "refer to prescriber"}</div>
-                    </div>
-                  )}
-                  {!concession && heroPrice && (
-                    <a href="#trade-price" className="sc-fact sc-fact-link">
-                      <div className="sc-fact-l">{flag(userCountry)} {heroPrice.label}</div>
-                      <div className="sc-fact-v mono">{fmtPrice(heroPrice.value, heroPrice.currency)}</div>
-                      <div className="sc-fact-d">{heroPrice.extra ?? "official price"} · details →</div>
-                    </a>
+            <div className="hq-qs">
+              <div className="hq-q">
+                <div className="hq-q-l">When will it be back?</div>
+                <div className="hq-q-a">{!localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
+                <div className="hq-q-d">
+                  {!localShortage ? "No active shortage in this market." : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
+                </div>
+              </div>
+              <div className="hq-q">
+                <div className="hq-q-l">What can I use instead?</div>
+                <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine ? "No pathway on record" : "Not needed"}</div>
+                <div className="hq-q-d">
+                  {s19aTileDetail ?? (mine ? "Substitution is a prescriber decision." : "No shortage substitution needed.")}
+                  {topAlt && (
+                    <>
+                      {" "}Same class:{" "}
+                      {topAlt.id != null ? <Link href={`/drugs/${topAlt.id}`}>{breakAtSlash(topAlt.name)}</Link> : breakAtSlash(topAlt.name)}
+                      , a different medicine.
+                    </>
                   )}
                 </div>
+                <a href="#alternatives" className="hq-more">See alternatives →</a>
+              </div>
+              <div className="hq-q">
+                <div className="hq-q-l">What does it cost?</div>
+                {concession ? (
+                  <>
+                    <div className="hq-q-a mono">{fmtPrice(concession.price, concession.currency)}</div>
+                    <div className="hq-q-d">Price concession active{concession.pack ? ` · ${concession.pack}` : ""}, above the standard tariff.</div>
+                  </>
+                ) : heroPrice ? (
+                  <>
+                    <div className="hq-q-a mono">{fmtPrice(heroPrice.value, heroPrice.currency)}</div>
+                    <div className="hq-q-d">{heroPrice.label === "AEMP" ? "PBS ex-manufacturer (AEMP)" : heroPrice.label}{heroPrice.extra ? ` · ${heroPrice.extra}` : ""}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="hq-q-a">Not on file</div>
+                    <div className="hq-q-d">We don&apos;t hold an official price for {cName} yet.</div>
+                  </>
+                )}
+                <a href="#trade-price" className="hq-more">Price details →</a>
+              </div>
             </div>
-            <div className="sc-asof hb-asof">{localShortage ? `Based on ${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</div>
+
+            {(() => {
+              const marketsShort = [
+                ...(localShortage ? [{ cc: userCountry, sev: isCrit ? 2 : 1, mine: true }] : []),
+                ...footprint.map((f) => ({ cc: f.cc, sev: f.sev, mine: false })),
+              ];
+              const n = marketsShort.length;
+              return (
+                <div className="hq-just">
+                  <div className="hq-just-l">
+                    Is it just us?{" "}
+                    <strong>
+                      {n === 0
+                        ? "Not short in any market we track"
+                        : localShortage
+                          ? n === 1 ? `Only ${cName} so far` : `Short in ${n} countries`
+                          : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
+                    </strong>
+                  </div>
+                  {n > 0 && (
+                    <div className="hq-mkts">
+                      {marketsShort.slice(0, 12).map((m) => (
+                        <span key={m.cc} className={`hq-mk${m.mine ? " mine" : ""}`} title={m.sev >= 2 ? "critical/high severity" : undefined}>
+                          <span className={`hq-dot${m.sev >= 2 ? " crit" : ""}`} />
+                          {COUNTRY[m.cc] ?? m.cc}
+                        </span>
+                      ))}
+                      {n > 12 && <span className="hq-mk">+{n - 12} more</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <details className="hq-ai">
+              <summary>Mederti AI summary</summary>
+              <V1AiSummary id={id} embedded clamp={false} />
+            </details>
           </div>
           </div>
 
@@ -1852,6 +1886,50 @@ const CSS = `
 .pc-actions .find-supplier-hint{display:none}
 @container hero (max-width:820px){.hb-cols{grid-template-columns:1fr}.sc-facts.hb-tiles{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
 @container hero (max-width:560px){.pc-actions{justify-content:flex-start;width:100%}}
+.hq{border-top:1px solid var(--border)}
+.hq-head{display:flex;align-items:flex-start;gap:14px;padding:18px 22px}
+.hq-ic{width:44px;height:44px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid}
+.hq.crit .hq-ic{background:var(--crit-bg);border-color:var(--crit-b);color:var(--crit)}
+.hq.med .hq-ic{background:var(--med-bg);border-color:var(--med-b);color:var(--med)}
+.hq.ok .hq-ic{background:var(--ok-bg);border-color:var(--ok-b);color:var(--green-d)}
+.hq-head-t{min-width:0}
+.hq-title{font-size:22px;font-weight:700;letter-spacing:-.028em;color:var(--ink);line-height:1.2}
+.hq-reason{font-size:13px;color:var(--text-2);margin-top:3px}
+.hq-src{font-size:11.5px;color:var(--text-3);margin-top:3px;font-family:var(--font-geist-mono),ui-monospace,monospace}
+.hq-qs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--border)}
+.hq-q{padding:16px 22px;min-width:0;display:flex;flex-direction:column}
+.hq-q + .hq-q{border-left:1px solid var(--border)}
+.hq-q-l{font-size:13px;font-weight:600;color:var(--text-3)}
+.hq-q-a{font-size:19px;font-weight:700;letter-spacing:-.025em;color:var(--ink);margin-top:6px;line-height:1.2;overflow-wrap:anywhere}
+.hq-q-a.mono{font-family:var(--font-geist-mono),ui-monospace,monospace;font-weight:600}
+.hq-q-d{font-size:12.5px;color:var(--text-3);margin-top:5px;line-height:1.45;overflow-wrap:anywhere}
+.hq-q-d a{color:var(--green-d);font-weight:600;text-decoration:none}
+.hq-more{margin-top:auto;padding-top:10px;font-size:12.5px;font-weight:600;color:var(--green-d);text-decoration:none;align-self:flex-start;min-height:24px}
+.hq-more:hover,.hq-q-d a:hover{text-decoration:underline}
+.hq-just{padding:14px 22px;border-top:1px solid var(--border);background:var(--bg-2)}
+.hq-just-l{font-size:13px;color:var(--text-3);margin-bottom:8px}
+.hq-just-l strong{color:var(--ink);font-weight:600}
+.hq-mkts{display:flex;flex-wrap:wrap;gap:6px}
+.hq-mk{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)}
+.hq-mk.mine{border-color:var(--border-2);color:var(--ink)}
+.hq-dot{width:7px;height:7px;border-radius:50%;background:var(--med)}
+.hq-dot.crit{background:var(--crit)}
+.hq-ai{border-top:1px solid var(--border);padding:10px 22px 14px}
+.hq-ai summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--green-d);min-height:32px;display:flex;align-items:center}
+.hq-ai .ai-sum.embedded{border-top:0;padding-top:4px;margin-top:0}
+@container hero (max-width:700px){.hq-qs{grid-template-columns:1fr}.hq-q + .hq-q{border-left:0;border-top:1px solid var(--border)}}
+.hero-card .pc-body{padding:18px 22px 16px}
+.pc-name-row .d-eml,.pc-name-row .d-ctrl{margin-top:0}
+.hero-card .d-generic,.hero-card .d-localcode{display:inline}
+.hero-card .d-localcode::before{content:" · "}
+.hero-card .d-tags{margin-top:10px}
+.hq-head{padding:14px 22px;gap:12px;align-items:center}
+.hq-ic{width:36px;height:36px;border-radius:10px}
+.hq-ic svg{width:18px;height:18px}
+.hq-title{font-size:19px}
+.hq-reason,.hq-src{display:inline;margin-top:0}
+.hq-sub{margin-top:3px;font-size:13px;color:var(--text-2);line-height:1.4}
+.hq-reason + .hq-src::before{content:" · "}
 .sc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:14px;border-top:1px solid rgba(12,17,24,.07)}
 .sc-fact{padding:12px 14px 2px 0;min-width:0;text-decoration:none;color:inherit;display:block}
 .sc-fact + .sc-fact{padding-left:14px;border-left:1px solid rgba(12,17,24,.07)}
@@ -1860,6 +1938,8 @@ const CSS = `
 .sc-fact-v.mono{font-family:var(--font-geist-mono),ui-monospace,monospace}
 .sc-fact-d{font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.35}
 .sc-fact-link:hover .sc-fact-v{color:var(--green-d)}
+.sc-fact{min-width:0}
+.sc-fact-v,.sc-fact-d{overflow-wrap:anywhere}
 @media(max-width:680px){.sc-fact + .sc-fact{padding-left:0;border-left:0;border-top:1px solid rgba(12,17,24,.07)}}
 .ai-sum-body.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ai-sum-more{font:inherit;font-size:12px;font-weight:600;color:var(--green-d);background:none;border:0;padding:4px 0;margin-top:2px;cursor:pointer;min-height:32px}
@@ -1878,22 +1958,24 @@ const CSS = `
 .sw-d{font-size:11.5px;color:var(--text-3);margin-top:5px}
 .sec{margin-top:30px}
 .dtabs{margin-top:26px}
-.dtabs-bar{position:sticky;top:0;z-index:5;background:var(--bg-2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.dtabs-bar{position:sticky;top:0;z-index:5;background:var(--bg-2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;padding:8px 12px 0}
 .dtabs-bar::-webkit-scrollbar{display:none}
-.dtabs-list{display:flex;gap:22px;min-width:max-content}
-.dtab{font:inherit;font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--text-3);background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:12px 2px 11px;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
-.dtab:hover{color:var(--text)}
-.dtab.on{color:var(--ink);border-bottom-color:var(--green)}
-.dtab:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:4px}
+.dtabs-list{display:flex;gap:2px;min-width:max-content}
+.dtab{font:inherit;font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--text-3);background:none;border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;margin-bottom:-1px;padding:10px 16px 11px;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:background .12s,color .12s}
+.dtab:hover{color:var(--ink);background:rgba(12,17,24,.04)}
+.dtab.on{background:var(--bg);color:var(--ink);border-color:var(--border);box-shadow:inset 0 2px 0 var(--green)}
+.dtab:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
 .dtab-badge{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--border);color:var(--text-3);background:var(--bg)}
 .dtab-badge.crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-b)}
 .dtab-badge.med{color:var(--med);background:var(--med-bg);border-color:var(--med-b)}
 .dtab-badge.ok{color:var(--green-d);background:var(--ok-bg);border-color:var(--ok-b)}
 .dtabs-panel > .sec:first-of-type{margin-top:20px}
 .dtabs-panel > .status-card:first-of-type{margin-top:20px}
-.dtabs{margin-top:18px}
+.dtabs{margin-top:18px;background:var(--bg);border:1px solid var(--border);border-radius:18px;overflow:clip;box-shadow:var(--sh-card),var(--hi-inset)}
+.dtabs-panel{padding:2px 22px 24px}
+@media(max-width:620px){.dtabs-panel{padding:2px 14px 18px}}
 .dtabs-print-h{display:none}
-.dtabs-panel [id]{scroll-margin-top:60px}
+.dtabs-panel [id]{scroll-margin-top:64px}
 .ai-sum{margin:14px 0 0;border:1px solid var(--border);border-radius:16px;background:linear-gradient(135deg,var(--bg),var(--bg-2));padding:16px 18px}
 .ai-sum.embedded{margin:14px 0 0;border:0;border-top:1px solid var(--border);border-radius:0;background:none;padding:14px 0 0}
 .ai-sum-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}

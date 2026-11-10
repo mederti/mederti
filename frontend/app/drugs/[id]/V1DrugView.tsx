@@ -88,6 +88,12 @@ function abbr(name?: string, a?: string | null) {
   if (name.includes("Health Canada") || name.includes("Santé")) return "Health Canada";
   return name.length > 18 ? name.slice(0, 17) + "…" : name;
 }
+/** Whole days since an ISO timestamp; null when absent or unparseable. */
+function daysSince(iso: string | null) {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  return Number.isFinite(ms) ? Math.floor(ms / 864e5) : null;
+}
 function timeAgo(iso?: string | null) {
   if (!iso) return "";
   const ms = Date.now() - new Date(iso).getTime();
@@ -140,10 +146,14 @@ function namesBrand(published: string | null | undefined, brand: string): boolea
   const esc = brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|[^\\p{L}\\p{N}])${esc}($|[^\\p{L}\\p{N}])`, "iu").test(published);
 }
+/** The regulator whose shortage list covers a market (for plain-English copy). */
+function expSourceFor(cc: string): string {
+  return ({ AU: "TGA", CA: "Health Canada", US: "FDA", GB: "MHRA", NZ: "Medsafe" } as Record<string, string>)[cc] ?? "the regulator";
+}
 const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, marketCovered = null, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Anonymous free-tier views used (null = signed in). */
@@ -225,6 +235,8 @@ export default function V1DrugView({
   brandHint?: { brand: string; country: string; catId: string } | null;
   // Set when a brand chip was clicked: scopes the page to that brand.
   brandFocus?: BrandFocus | null;
+  /** False when Mederti holds no shortage notices at all for the user's market. */
+  marketCovered?: boolean | null;
 }) {
   // brand (lowercased) → SKU, for turning chips into links.
   const skuByBrand = new Map((brandSkus ?? []).map((s) => [s.brand.toLowerCase(), s]));
@@ -249,9 +261,11 @@ export default function V1DrugView({
   // Active notices whose regulator-published product name names the focused
   // brand. Ingredient-level sources publish no brand, so they never match.
   const brandNoticeSeen = new Set<string>();
+  const regDigits = (x: string | null | undefined) => (x ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  const brandRegSet = new Set((brandFocus?.regs ?? []).map((r) => regDigits(r.regNo)).filter(Boolean));
   const brandNotices = brandFocus
     ? active
-        .filter((s) => namesBrand(s.brand_name, brandFocus.brand))
+        .filter((s) => namesBrand(s.brand_name, brandFocus.brand) || (!!s.reg_no && brandRegSet.has(regDigits(s.reg_no))))
         // Collapse notices that would render identically (same as mineAll).
         .filter((s) => {
           const k = [s.country_code, s.brand_name, s.sponsor, s.status, s.severity, s.estimated_resolution_date].join("|").toLowerCase();
@@ -268,8 +282,18 @@ export default function V1DrugView({
   // single product's discontinuation: one discontinued brand must not make
   // the whole molecule read as leaving the market.
   const isDisc = (s: any) => (s.reason_category || "").toLowerCase() === "discontinuation";
-  const inMarket = active.filter((s) => (s.country_code || "").toUpperCase() === userCountry);
-  const mine = inMarket.find((s) => !isDisc(s)) || inMarket[0] || null;
+  // Then an active shortage over an anticipated one, worst severity first:
+  // the card said "Anticipated shortage" for propofol while five products
+  // were short now (it took whichever notice came first).
+  const isAnt = (s: any) => (s.status || "").toLowerCase() === "anticipated";
+  const inMarket = active
+    .filter((s) => (s.country_code || "").toUpperCase() === userCountry)
+    .sort((a, b) =>
+      Number(isDisc(a)) - Number(isDisc(b)) ||
+      Number(isAnt(a)) - Number(isAnt(b)) ||
+      (SEV[(b.severity || "").toLowerCase()] ?? 0) - (SEV[(a.severity || "").toLowerCase()] ?? 0),
+    );
+  const mine = inMarket[0] || null;
   // ALL events in the user's market — one row per regulator-reported product,
   // so multi-brand shortages stop collapsing into a single ingredient line.
   // Events that would render identically (same product, sponsor, status,
@@ -289,6 +313,42 @@ export default function V1DrugView({
       mineSeen.add(k);
       return true;
     });
+  // Focused brand in the user's market: its products in the supply table
+  // (matched by registration number), so the brand line and the table agree.
+  const brandLocal = (() => {
+    if (!brandFocus) return null;
+    const regs = brandFocus.regs.filter((r) => r.country === userCountry);
+    if (!regs.length) return null;
+    const set = new Set(regs.map((r) => regDigits(r.regNo)).filter(Boolean));
+    const prods = (supplyInMarket?.groups ?? []).flatMap((g) => g.products)
+      .filter((p) => p.regNos.some((x) => set.has(regDigits(x))));
+    const short = prods.filter((p) => p.status === "short");
+    const ant = prods.filter((p) => p.status === "anticipated");
+    const starts = new Map<string, number>();
+    let last: string | null = null;
+    for (const p of prods) {
+      if (!p.history) continue;
+      starts.set(p.name, p.history.count);
+      if (p.history.last && (!last || p.history.last > last)) last = p.history.last;
+    }
+    const pastCount = [...starts.values()].reduce((a, b) => a + b, 0);
+    const backs = short.map((p) => p.back).filter(Boolean) as string[];
+    return { regCount: regs.length, prodCount: prods.length, short: short.length, ant: ant.length,
+      back: backs.length === short.length && backs.length ? backs.sort()[backs.length - 1] : null,
+      pastCount, last };
+  })();
+  const brandLine = (() => {
+    if (!brandFocus || !brandLocal) return null;
+    const b = brandFocus.brand;
+    const hist = brandLocal.pastCount > 0
+      ? `Short ${brandLocal.pastCount === 1 ? "once" : `${brandLocal.pastCount}×`} in the past 2 years${brandLocal.last ? `, last ${monthYear(brandLocal.last)}` : ""}.`
+      : "";
+    if (brandLocal.short > 0) {
+      return `${b}: ${brandLocal.short} of ${brandLocal.prodCount} product${brandLocal.prodCount === 1 ? "" : "s"} short now${brandLocal.back ? `, back ~${monthYear(brandLocal.back)} (sponsor estimate)` : ""}. ${hist}`.trim();
+    }
+    if (brandLocal.ant > 0) return `${b}: shortage anticipated for ${brandLocal.ant} of ${brandLocal.prodCount} product${brandLocal.prodCount === 1 ? "" : "s"}. ${hist}`.trim();
+    return `${b}: none of its ${brandLocal.regCount} registration${brandLocal.regCount === 1 ? "" : "s"} in ${cName} is on ${expSourceFor(userCountry)}'s shortage list today. ${hist}`.trim();
+  })();
   const elsewhere = active.filter((s) => (s.country_code || "").toUpperCase() !== userCountry);
   const elsewhereCount = new Set(elsewhere.map((s) => (s.country_code || "").toUpperCase())).size;
 
@@ -309,9 +369,23 @@ export default function V1DrugView({
     .sort((a, b) => Number(b.major) - Number(a.major) || b.sev - a.sev || a.cc.localeCompare(b.cc));
 
   const localShortage = !!mine;
+  // No shortage source for this market: absence of notices proves nothing.
+  const noData = !localShortage && marketCovered === false;
+  // Days since the headline notice was last confirmed against its source.
+  const staleDays = daysSince(mine?.last_verified_at ?? null);
+  // The regulator's own impact rating, verbatim (TGA: Low / Medium / High /
+  // Critical), highest across the market's open notices.
+  const IMPACT_RANK: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+  const impacts = inMarket.map((s) => String(s.regulator_impact ?? "")).filter((x) => x.toLowerCase() in IMPACT_RANK);
+  const topImpact = impacts.sort((a, b) => IMPACT_RANK[b.toLowerCase()] - IMPACT_RANK[a.toLowerCase()])[0] ?? null;
+  const impactCount = impacts.length;
   const sev = (mine?.severity || "").toLowerCase();
   const isCrit = sev === "critical" || sev === "high";
-  const anticipated = (mine?.status || "").toLowerCase() === "anticipated";
+  // A discontinuation with a future cancellation date is stored "anticipated",
+  // but it is a market exit, not an expected shortage: it must read "Leaving
+  // the market" (Zabep showed "Anticipated shortage" while its ARTG
+  // registration ends 17 Nov 2026).
+  const anticipated = (mine?.status || "").toLowerCase() === "anticipated" && !(mine && isDisc(mine));
 
   // Discontinuation is a market exit, not a supply gap — it is never "back",
   // so it must not read as a "Critical shortage". The regulator-stated
@@ -503,6 +577,19 @@ export default function V1DrugView({
   // the global ATC. Country-scoped on purpose: a molecule has many local codes,
   // so we only assert the one for the market this page is framed around.
   const localReg = (() => {
+    if (brandFocus) {
+      const regs = brandFocus.regs.filter((r) => r.country === userCountry && r.regNo);
+      if (regs.length) {
+        const code = String(regs[0].regNo);
+        const label = /^[A-Za-z]/.test(code) ? null : CODE_LABEL[userCountry] ?? "Reg.";
+        return { country: userCountry, label, code: regs.length > 1 ? `${code} +${regs.length - 1} more` : code, sponsor: regs[0].sponsor || null };
+      }
+    }
+    // Molecule view: one product's code would single out an arbitrary
+    // brand (propofol showed B Braun's AUST R 220082), so state the count.
+    if (supplyInMarket && supplyInMarket.productCount > 0) {
+      return { country: userCountry, label: null, code: `${supplyInMarket.productCount} registered product${supplyInMarket.productCount === 1 ? "" : "s"}`, sponsor: supplyInMarket.registerSource };
+    }
     const p = (products ?? []).find(
       (x) => (x.country || "").toUpperCase() === userCountry && x.registry_id,
     );
@@ -686,14 +773,19 @@ export default function V1DrugView({
 
 
               {(() => {
-                const brands = cleanBrandNames(drug.brand_names, drug.generic_name);
+                const base = cleanBrandNames(drug.brand_names, drug.generic_name);
+                const brands = brandFocus
+                  ? [brandFocus.brand, ...base.filter((b) => !b.toLowerCase().startsWith(brandFocus.brand.toLowerCase()))]
+                  : base;
                 if (brands.length === 0) return null;
                 const shown = brands.slice(0, 5);
                 const rest = brands.length - shown.length;
                 return (
                   <div className="d-tags">
                     {shown.map((b) => {
-                      const sku = skuByBrand.get(b.toLowerCase());
+                      const sku = brandFocus && b === brandFocus.brand
+                        ? { catId: brandFocus.catId }
+                        : skuByBrand.get(b.toLowerCase());
                       return sku ? (
                         <a
                           key={b}
@@ -723,10 +815,12 @@ export default function V1DrugView({
               questions a pharmacist asks (when's it back / what instead / what
               does it cost), then "is it just us?". "Yes" on substitution only
               when a real pathway is on file; absence is stated as absence. */}
-          <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok"}`}>
+          <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : noData ? "med" : "ok"}`}>
             <div className="hq-head">
               <span className="hq-ic" aria-hidden>
-                {localShortage ? (
+                {noData ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+                ) : localShortage ? (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
                 ) : (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
@@ -737,8 +831,13 @@ export default function V1DrugView({
                   {localShortage
                     ? anticipated ? `Anticipated shortage in ${cName}`
                       : discontinued ? (withdrawalFuture ? `Leaving the market in ${cName}` : `Discontinued in ${cName}`)
-                      : `${isCrit ? "Critical shortage" : "Limited supply"} in ${cName}`
-                    : `In supply in ${cName}`}
+                      // Our own severity is availability-led; the regulator's
+                      // impact rating is quoted in the line below, not
+                      // re-labelled here ("Critical" over TGA's "Medium").
+                      : supplyInMarket && supplyInMarket.shortCount > 0
+                        ? `${supplyInMarket.shortCount} registered product${supplyInMarket.shortCount === 1 ? "" : "s"} short in ${cName}`
+                        : `Short in ${cName}`
+                    : noData ? `No shortage data for ${cName}` : `In supply in ${cName}`}
                 </div>
                 <div className="hq-sub">
                   {localShortage && discontinued ? (
@@ -748,9 +847,24 @@ export default function V1DrugView({
                       {mine?.regulator_impact ? ` · ${expSource} impact rating: ${mine.regulator_impact}` : ""}
                     </span>
                   ) : (
-                    localShortage && mine?.reason && <span className="hq-reason">{String(mine.reason).replace(/^availability:\s*/i, "")}</span>
+                    localShortage && (mine?.reason || topImpact) && (
+                      <span className="hq-reason">
+                        {mine?.reason ? String(mine.reason).replace(/^availability:\s*/i, "") : ""}
+                        {topImpact ? `${mine?.reason ? " · " : ""}${expSource} impact rating: ${topImpact}${impactCount > 1 ? ` (highest of ${impactCount} notices)` : ""}` : ""}
+                      </span>
+                    )
                   )}
-                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</span>
+                {brandLine && <span className="hq-reason" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{brandLine}</span>}
+                {noData && <span className="hq-reason">Mederti has no shortage source for {cName}, so we can&apos;t say whether it&apos;s in supply there. Check with your supplier or the national regulator.</span>}
+                {localShortage && staleDays !== null && staleDays > 7 && (
+                  // The regulator feed hasn't been read for a week+: say so
+                  // rather than present old notices as current (Health
+                  // Canada's site has blocked our reader since 13 Sep 2026).
+                  <span className="hq-reason" style={{ display: "block", color: "var(--crit, #b42318)", fontWeight: 600 }}>
+                    Out of date: we last confirmed this with {expSource} {staleDays} days ago. Check the regulator before relying on it.
+                  </span>
+                )}
+                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : noData ? "Coverage gap, not a supply status" : "Source: official regulators"}</span>
                 </div>
                 {localShortage && discontinued && (regGuidance || regStatementUrl) && (
                   <div className="sc-guid">
@@ -777,18 +891,36 @@ export default function V1DrugView({
                 ) : (
                   <>
                     <div className="hq-q-l">When will it be back?</div>
-                    <div className="hq-q-a">{!localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
-                    <div className="hq-q-d">
-                      {!localShortage ? "No active shortage in this market." : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
-                    </div>
+                    {brandFocus && brandLocal && brandLocal.short === 0 && brandLocal.ant === 0 ? (
+                      // The brand in focus isn't short: the molecule's date
+                      // belongs to another brand, so say so rather than quote it.
+                      <>
+                        <div className="hq-q-a">{brandFocus.brand} isn&apos;t short</div>
+                        <div className="hq-q-d">
+                          {localShortage && expected ? `Other brands of ${drug.generic_name}: around ${expected} (earliest sponsor estimate via ${expSource}).` : `None of its ${cName} registrations is on the list.`}
+                        </div>
+                      </>
+                    ) : brandFocus && brandLocal && brandLocal.short > 0 ? (
+                      <>
+                        <div className="hq-q-a">{brandLocal.back ? `Around ${monthYear(brandLocal.back)}` : "No estimate"}</div>
+                        <div className="hq-q-d">{brandLocal.back ? `${brandFocus.brand}: latest sponsor estimate via ${expSource} for its short products.` : `${brandFocus.brand}: the sponsor hasn't published a return date for every short product.`}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="hq-q-a">{noData ? "No data" : !localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
+                        <div className="hq-q-d">
+                          {noData ? `No shortage source for ${cName}.` : !localShortage ? "No active shortage in this market." : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
               <div className="hq-q">
                 <div className="hq-q-l">What can I use instead?</div>
-                <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine ? "No pathway on record" : "Not needed"}</div>
+                <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine ? "No pathway on record" : noData ? "Unknown" : "Not needed"}</div>
                 <div className="hq-q-d">
-                  {s19aTileDetail ?? (mine ? "Substitution is a prescriber decision." : "No shortage substitution needed.")}
+                  {s19aTileDetail ?? (mine ? "Substitution is a prescriber decision." : noData ? `We can't tell whether it's short in ${cName}.` : "No shortage substitution needed.")}
                   {topAlt && (
                     <>
                       {" "}Same class:{" "}
@@ -836,7 +968,9 @@ export default function V1DrugView({
                         ? "Not short in any market we track"
                         : localShortage
                           ? n === 1 ? `Only ${cName} so far` : `Short in ${n} countries`
-                          : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
+                          : noData
+                            ? `No data for ${cName}; short in ${n} other market${n === 1 ? "" : "s"}`
+                            : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
                     </strong>
                   </div>
                   {n > 0 && (
@@ -888,8 +1022,9 @@ export default function V1DrugView({
                   </div>
                   {brandNotices.length === 0 ? (
                     <div className="bf-empty">
-                      No active notice names {bf.brand}. Most regulators publish at ingredient level, so a shortage of{" "}
-                      {drug.generic_name} below can still affect this brand.
+                      {brandLine && (userCountry === "AU" || userCountry === "CA")
+                        ? <>{expSourceFor(userCountry)} lists shortages per registered product, and none of {bf.brand}&apos;s registrations is on its list today. Other brands of {drug.generic_name} may still be short; see the table below.</>
+                        : <>No active notice names {bf.brand}. Many regulators publish at ingredient level, so a shortage of {drug.generic_name} below can still affect this brand.</>}
                     </div>
                   ) : (
                     <div className="country-list">
@@ -946,8 +1081,8 @@ export default function V1DrugView({
               {
                 id: "status",
                 label: "Status",
-                badge: localShortage ? (anticipated ? "Anticipated" : discontinued ? "Market exit" : isCrit ? "Short" : "Limited") : "In supply",
-                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
+                badge: localShortage ? (anticipated ? "Anticipated" : discontinued ? "Market exit" : isCrit ? "Short" : "Limited") : noData ? "No data" : "In supply",
+                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : noData ? "med" : "ok",
                 content: (
             <>
           {/* Price-concession signal — promoted into the hero (Option B). A
@@ -1005,7 +1140,9 @@ export default function V1DrugView({
                       <Fragment key={g.form}>
                         <tr className="sim-form"><td colSpan={3}>{g.form}</td></tr>
                         {g.products.filter((p) => p.status !== "none").map((p) => (
-                          <tr key={p.name}>
+                          // data-* lets the nightly scenario suite check every
+                          // registration's status (the cell shows only two).
+                          <tr key={p.name} data-regs={p.regNos.join("|")} data-status={p.status}>
                             <td>
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
@@ -1025,7 +1162,7 @@ export default function V1DrugView({
                           </tr>
                         ))}
                         {g.products.filter((p) => p.status === "none").map((p, pi) => (
-                          <tr key={p.name} className={pi >= SIM_CLEAR_SHOWN ? "sim-extra" : undefined}>
+                          <tr key={p.name} className={pi >= SIM_CLEAR_SHOWN ? "sim-extra" : undefined} data-regs={p.regNos.join("|")} data-status={p.status}>
                             <td>
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>

@@ -208,6 +208,9 @@ class HSAScraper(BaseScraper):
             "generic_name":              generic_name,
             "brand_names":               brand_names,
             "status":                    status,
+            # HSA publishes no shortage list: a transfer or cancellation is a
+            # supply signal, never a shortage notice — kept out of counts.
+            "synthetic":                 True,
             "severity":                  severity,
             "reason":                    raw_reason,
             "reason_category":           reason_category,

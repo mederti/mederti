@@ -14,14 +14,20 @@ import { SCHEME_COPY, FALLBACK_SCHEME_COPY } from "@/lib/substitution";
 import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
 import Chat2Client from "@/app/chat/Chat2Client";
 import { classifyQuery, looksLikeQuestion, type QueryIntent } from "@/lib/search/classify";
+import { countryLandingPath } from "@/lib/search/country-intent";
+import { countryCodeFromSlug, countryName } from "@/lib/geo/country-names";
+
+const countryNameFromPath = (path: string) =>
+  countryName(countryCodeFromSlug(path.split("/")[2] ?? "") ?? "");
 import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
 import { useFreeTier } from "@/app/components/free-tier/useFreeTier";
 
-function statusOf(d: DrugHit): { cls: string; label: string } {
+function statusOf(d: DrugHit, covered: boolean | null = true): { cls: string; label: string } {
   if (d.source === "catalogue") return { cls: "sp-ok", label: "Registered product" };
   const n = d.active_shortage_count ?? 0;
   if (n >= 5) return { cls: "sp-crit", label: `${n} active shortages` };
   if (n >= 1) return { cls: "sp-part", label: `${n} active shortage${n > 1 ? "s" : ""}` };
+  if (covered === false) return { cls: "sp-part", label: "No data for this market" };
   return { cls: "sp-ok", label: "In supply" };
 }
 
@@ -54,6 +60,16 @@ function BrandLine({ d, className }: { d: DrugHit; className: string }) {
     </div>
   );
 }
+/** The typed brand's own status line (AU/CA, matched by registration number). */
+function brandStatusLine(d: DrugHit): string | null {
+  const b = d.brand_status;
+  if (!b) return null;
+  const now = b.short > 0
+    ? `${b.short} product${b.short === 1 ? "" : "s"} short now`
+    : b.anticipated > 0 ? "shortage anticipated" : `not on ${b.regulator}'s shortage list`;
+  const past = b.past > 0 ? ` · short ${b.past === 1 ? "once" : `${b.past}×`} in past 2 yrs` : "";
+  return `${b.brand}: ${now}${past}`;
+}
 function monthYear(iso?: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -80,7 +96,7 @@ const fmtPrice = (amt: number, cur: string): string => `${CUR_SYM[cur] ?? cur + 
 // Country-first supply verdict: answers "available in MY market or not", with
 // the global picture demoted to a subline.
 function marketStatus(
-  d: DrugHit, market: string, isGlobal: boolean
+  d: DrugHit, market: string, isGlobal: boolean, covered: boolean | null = true
 ): { cls: string; label: string; sub: string | null; warn: boolean } {
   if (d.source === "catalogue") {
     return { cls: "sp-ok", label: isGlobal ? "Registered product" : `Registered in ${market}`, sub: d.source_name || "Registered product", warn: false };
@@ -93,6 +109,10 @@ function marketStatus(
     return { cls, label: `Short in ${market}`, sub: other > 0 ? `+ ${other} other market${other > 1 ? "s" : ""} short` : null, warn: true };
   }
   if (isGlobal) return { cls: "sp-ok", label: "In supply", sub: null, warn: false };
+  if (covered === false) {
+    // No shortage source here: no notices proves nothing.
+    return { cls: "sp-part", label: `No data for ${market}`, sub: other > 0 ? `short in ${other} other market${other > 1 ? "s" : ""}` : "no shortage source for this market", warn: other > 0 };
+  }
   return {
     cls: "sp-ok",
     label: `Available in ${market}`,
@@ -182,6 +202,7 @@ function Results() {
   const [results, setResults] = useState<DrugHit[]>([]);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState<StatusFacets | null>(null);
+  const [marketCovered, setMarketCovered] = useState<boolean | null>(null);
   const [formFacet, setFormFacet] = useState<Record<string, number>>({});
   const [strengthFacet, setStrengthFacet] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
@@ -259,6 +280,7 @@ function Results() {
         setResults(data.results);
         setTotal(data.total);
         setFacets(data.facets?.status ?? null);
+        setMarketCovered(data.market_covered ?? null);
         setFormFacet(data.facets?.form ?? {});
         setStrengthFacet(data.facets?.strength ?? {});
       })
@@ -535,7 +557,7 @@ function Results() {
             </thead>
             <tbody>
               {results.map((d) => {
-                const ms = marketStatus(d, market, isGlobalMarket);
+                const ms = marketStatus(d, market, isGlobalMarket, marketCovered);
                 const eb = monthYear(d.estimated_resolution_date);
                 // Scheme-specific plain-language copy — "Yes" only when the
                 // pathway itself authorises substitute supply.
@@ -568,6 +590,7 @@ function Results() {
                     <td>
                       <span className={`status-pill ${ms.cls}`}><span className="d" />{ms.label}</span>
                       {ms.sub && <div className={`t-mktsub ${ms.warn ? "warn" : ""}`}>{ms.sub}</div>}
+                      {brandStatusLine(d) && <div className={`t-mktsub ${d.brand_status!.short > 0 ? "warn" : ""}`}>{brandStatusLine(d)}</div>}
                     </td>
                     <td>
                       {sub ? (
@@ -629,7 +652,18 @@ function Results() {
                         (brand) of this ingredient in the market — a specific
                         contracted brand may return later, so say so. */}
                     <td title={eb ? `Earliest sponsor-declared return date across all products containing this ingredient${isGlobalMarket ? "" : ` in ${mk.name}`}. A specific brand may return later.` : undefined}>
-                      {eb ? (
+                      {d.brand_status ? (
+                        // A brand search answers for that brand: the molecule's
+                        // earliest date belonged to another brand (Fresofol showed
+                        // B Braun's Propofol-Lipuro date).
+                        d.brand_status.short > 0 ? (
+                          d.brand_status.back
+                            ? <><div className="t-eb">{monthYear(d.brand_status.back)}</div><div className="t-sub2">{d.brand_status.brand} · sponsor est.</div></>
+                            : <><div className="t-eb none">No estimate</div><div className="t-sub2">{d.brand_status.brand}</div></>
+                        ) : (
+                          <><div className="t-eb none">{d.brand_status.brand} not short</div>{eb && <div className="t-sub2">other brands ~{eb}</div>}</>
+                        )
+                      ) : eb ? (
                         <><div className="t-eb">{eb}</div><div className="t-sub2">earliest sponsor est. — brands may differ</div></>
                       ) : inShortage ? (
                         <div className="t-eb none">No estimate</div>
@@ -651,7 +685,7 @@ function Results() {
       {/* ── Mobile: simple cards (table doesn't fit narrow screens) ── */}
       <div className="res-list">
         {results.map((d) => {
-          const st = statusOf(d);
+          const st = statusOf(d, marketCovered);
           const inner = (
             <div className="res-card">
               <div className="res-l">
@@ -661,6 +695,7 @@ function Results() {
                   {d.atc_code ? `ATC ${d.atc_code}` : "—"}
                   {d.alternatives_count ? ` · ${d.alternatives_count} same-class drug${d.alternatives_count > 1 ? "s" : ""}` : ""}
                 </div>
+                {brandStatusLine(d) && <div className="rmeta">{brandStatusLine(d)}</div>}
               </div>
               <span className={`status-pill ${st.cls}`}><span className="d" />{st.label}</span>
             </div>
@@ -773,6 +808,13 @@ function ResultsShell() {
 function UnifiedSearch() {
   const params = useSearchParams();
   const q = (params.get("q") ?? "").trim();
+  // Country-level queries ("drugs in short supply in india") land on that
+  // country's page, which hosts its own grounded chat.
+  const countryPath = q ? countryLandingPath(q) : null;
+  const router = useRouter();
+  useEffect(() => {
+    if (countryPath) router.replace(countryPath);
+  }, [countryPath, router]);
   // Note: the selected market is deliberately NOT read here — intent
   // classification (drug vs open question) is market-independent. See the
   // classify effect below for why market must not influence routing.
@@ -802,6 +844,14 @@ function UnifiedSearch() {
     return () => { cancelled = true; };
   }, [q]);
 
+  if (countryPath) {
+    // Shown only while router.replace swaps in the country page.
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "var(--font-geist-sans), system-ui, sans-serif", fontSize: 14, color: "#6a7280" }}>
+        Opening the {countryNameFromPath(countryPath)} shortage register…
+      </div>
+    );
+  }
   if (intent === "drug") return <ResultsShell />;
   // Empty home and open-question answer are both the chat experience. A drug
   // typed into its composer routes back here as /search?q=… (see Chat2Client).

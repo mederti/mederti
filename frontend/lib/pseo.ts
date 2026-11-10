@@ -251,6 +251,16 @@ export interface CountrySummary {
    */
   activeMedicines: number | null;
   recent: PseoShortageEventWithDrug[];
+  /**
+   * Regulator-announced future shortages: anticipated or active notices whose
+   * start date is still ahead. Facts published by the regulator — not
+   * a Mederti forecast. Soonest first.
+   */
+  upcoming: PseoShortageEventWithDrug[];
+  /** Total behind `upcoming` (uncapped): anticipated + active notices with start_date > today. */
+  upcomingTotal: number | null;
+  /** Active notices with a regulator-estimated resolution date, soonest first. */
+  resolving: PseoShortageEventWithDrug[];
 }
 
 export interface PseoShortageEventWithDrug extends PseoShortageEvent {
@@ -330,13 +340,81 @@ export async function countrySummary(code: string): Promise<CountrySummary> {
       .limit(50),
   ]);
 
+  const [anticipatedRes, futureActiveRes, resolvingRes] = await Promise.all([
+    realEventsFilter(
+      admin
+        .from("shortage_events")
+        .select(`drug_id, drugs(generic_name), ${EVENT_COLS}`)
+        .eq("country_code", code)
+        .eq("status", "anticipated")
+        .not("drug_id", "is", null)
+        // Only notices still ahead of us: an "anticipated" row whose start date
+        // has passed is stale, not upcoming.
+        .gt("start_date", today),
+    )
+      .order("start_date", { ascending: true })
+      .limit(50),
+    realEventsFilter(
+      admin
+        .from("shortage_events")
+        .select(`drug_id, drugs(generic_name), ${EVENT_COLS}`)
+        .eq("country_code", code)
+        .eq("status", "active")
+        .not("drug_id", "is", null)
+        .gt("start_date", today),
+    )
+      .order("start_date", { ascending: true })
+      .limit(50),
+    realEventsFilter(
+      admin
+        .from("shortage_events")
+        .select(`drug_id, drugs(generic_name), ${EVENT_COLS}`)
+        .eq("country_code", code)
+        .eq("status", "active")
+        .not("drug_id", "is", null)
+        .gte("estimated_resolution_date", today),
+    )
+      .order("estimated_resolution_date", { ascending: true })
+      .limit(50),
+  ]);
+
+  const countFuture = async (status: string): Promise<number | null> => {
+    try {
+      const { count, error } = await realEventsFilter(
+        admin
+          .from("shortage_events")
+          .select("id", { count: "exact", head: true })
+          .eq("country_code", code)
+          .eq("status", status)
+          .not("drug_id", "is", null)
+          .gt("start_date", today),
+      );
+      return error ? null : count;
+    } catch {
+      return null;
+    }
+  };
+  const [futureAnticipated, futureActive] = await Promise.all([
+    countFuture("anticipated"),
+    countFuture("active"),
+  ]);
+  const upcomingTotal =
+    futureAnticipated === null || futureActive === null ? null : futureAnticipated + futureActive;
+
+  const rows = (r: unknown) =>
+    ((r as { data: unknown[] | null }).data ?? []) as unknown as PseoShortageEventWithDrug[];
+
   return {
     active,
     anticipated,
     critical,
     activeMedicines,
-    recent: ((recentRes as { data: unknown[] | null }).data ??
-      []) as unknown as PseoShortageEventWithDrug[],
+    recent: rows(recentRes),
+    upcoming: [...rows(anticipatedRes), ...rows(futureActiveRes)]
+      .sort((a, b) => (a.start_date ?? "9999").localeCompare(b.start_date ?? "9999"))
+      .slice(0, 50),
+    upcomingTotal,
+    resolving: rows(resolvingRes),
   };
 }
 

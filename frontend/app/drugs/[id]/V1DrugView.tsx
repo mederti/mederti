@@ -1228,7 +1228,7 @@ export default function V1DrugView({
             return (
               <nav className="fpick" aria-label="Filter by form and strength">
                 <div className="fpick-row">
-                  <span className="fpick-l">Show</span>
+                  <span className="fpick-l">Filter by form</span>
                   <Link href={qs(null, null)} className={`fpick-chip${!formSlugSel ? " on" : ""}`} aria-current={!formSlugSel ? "true" : undefined} scroll={false}>
                     <span className={`fpick-dot ${tone(allAffected, supplyAll.productCount, allUnmatched)}`} />All forms
                     <span className="fpick-n">{count(allAffected, supplyAll.productCount, supplyAll.discCount)}</span>
@@ -2641,15 +2641,17 @@ const CSS = `
 .v1drug .sim-acts .sim-btn,.v1drug .sim-acts .watch-btn,.v1drug .sim-acts .find-supplier-btn{height:40px;display:inline-flex;align-items:center;gap:7px;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;line-height:1}
 .v1drug .sim-btn.primary{background:#fff;border:1px solid #D1D5DB;color:var(--navy)}
 .v1drug .sim-btn.primary:hover{background:#F9FAFB;border-color:#9CA3AF}
-/* Form / strength filter: a quiet text row just above the tabs. */
-.fpick{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-top:1px solid var(--border);font-size:13px}
-.fpick-row{display:flex;flex-wrap:wrap;align-items:center;gap:2px 16px}
-.fpick-l{color:var(--text-3);min-width:56px}
-.fpick-chip{display:inline-flex;align-items:center;gap:6px;min-height:28px;color:var(--text-2);font-weight:500;text-decoration:none;white-space:nowrap;border-bottom:2px solid transparent}
-.fpick-chip:hover{color:var(--ink)}
-.fpick-chip.on{color:var(--ink);font-weight:700;border-bottom-color:var(--ink)}
-.fpick-n{font-weight:400;color:var(--text-3);font-size:12px}
+/* Form / strength filter: a labelled row of pill buttons just above the tabs. */
+.fpick{display:flex;flex-direction:column;gap:8px;padding:14px 0 12px;border-top:1px solid var(--border);font-size:13px}
+.fpick-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.fpick-l{color:var(--ink);font-weight:600;min-width:104px}
+.fpick-chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:999px;border:1px solid #D1D5DB;background:#fff;color:var(--ink);font-weight:600;text-decoration:none;white-space:nowrap}
+.fpick-chip:hover{border-color:#9CA3AF;background:#F9FAFB}
+.fpick-chip.on,.fpick-chip.on:hover{background:var(--ink);border-color:var(--ink);color:#fff}
+.fpick-chip.on .fpick-n{color:rgba(255,255,255,.78)}
+.fpick-n{font-weight:500;color:var(--text-3);font-size:12px}
 .fpick-n:empty{display:none}
+@media(max-width:620px){.fpick-l{min-width:100%}}
 .fpick-dot{width:7px;height:7px;border-radius:50%;flex:none}
 .fpick-dot.ok{background:var(--ok)}.fpick-dot.med{background:var(--med)}.fpick-dot.crit{background:var(--crit)}
 /* Picker on the redesign's content line. */

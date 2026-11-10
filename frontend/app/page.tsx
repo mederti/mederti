@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { COVERAGE_COPY, liveCoverage } from "@/lib/coverage";
+import { COVERAGE_COPY, activeShortageCount, liveCoverage } from "@/lib/coverage";
 import { canonicalUrl } from "@/lib/seo";
 import V1Search from "@/app/components/v1/V1Search";
 import V1TrendingShortages from "@/app/components/v1/V1TrendingShortages";
@@ -72,7 +72,8 @@ export default async function Home() {
       // hit Postgres's statement_timeout under Vercel's pooler → null count →
       // a baked-in "—". The estimate is within a few rows and never times out.
       admin.from("drug_catalogue").select("id", { count: "estimated", head: true }),
-      admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active").or("synthetic.is.null,synthetic.eq.false"),
+      // Shared hourly-cached count (lib/coverage): an exact count scans every active row.
+      activeShortageCount(),
       // Countries with live shortage data right now (lib/coverage) — not every
       // data_sources row, several of which are scheduled but empty.
       liveCoverage(),
@@ -89,8 +90,7 @@ export default async function Home() {
     ]);
     if (catRes.error) console.error("[home] drug_catalogue count failed:", catRes.error.message);
     if (catRes.count) medicines = k(catRes.count);
-    if (activeRes.error) console.error("[home] shortage_events active count failed:", activeRes.error.message);
-    if (activeRes.count) activeShortages = activeRes.count.toLocaleString();
+    if (activeRes) activeShortages = activeRes.toLocaleString();
     if (ctyRes?.countries) countries = `${ctyRes.countries}`;
     if (trendRes.data) {
       const counts = new Map<string, number>();

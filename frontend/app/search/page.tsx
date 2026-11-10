@@ -205,7 +205,13 @@ function Results() {
   const [marketCovered, setMarketCovered] = useState<boolean | null>(null);
   const [formFacet, setFormFacet] = useState<Record<string, number>>({});
   const [strengthFacet, setStrengthFacet] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(false);
+  // One explicit lifecycle instead of a bare `loading` flag: a failed request
+  // (500, timeout, per-IP rate limit) must never render as "No results" — on a
+  // medicines database that reads as "no shortage data exists for this drug".
+  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const loading = searchStatus === "loading";
+  // Bumped by the "Try again" button to re-run the search effect for the same URL.
+  const [retryNonce, setRetryNonce] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
   // Google-style typo correction. `corrected` drives the "Showing results for X ·
   // Search instead for Y" banner. `triedRef` prevents re-correcting a term we
@@ -237,9 +243,11 @@ function Results() {
   // URL is the source of truth for filters → run search when q or any filter changes.
   useEffect(() => {
     const term = urlQ.trim();
-    if (!term) { setResults([]); setTotal(0); setFacets(null); setFormFacet({}); setStrengthFacet({}); return; }
+    // Cleared query → idle. Also releases a "loading" left behind by an
+    // in-flight search this effect's cleanup just cancelled.
+    if (!term) { setResults([]); setTotal(0); setFacets(null); setFormFacet({}); setStrengthFacet({}); setSearchStatus("idle"); return; }
     let cancelled = false;
-    setLoading(true);
+    setSearchStatus("loading");
     const sel = statusStr ? statusStr.split(",").filter(Boolean) : [];
     const formS = formStr ? formStr.split(",").filter(Boolean) : [];
     const strS = strengthStr ? strengthStr.split(",").filter(Boolean) : [];
@@ -283,13 +291,22 @@ function Results() {
         setMarketCovered(data.market_covered ?? null);
         setFormFacet(data.facets?.form ?? {});
         setStrengthFacet(data.facets?.strength ?? {});
+        setSearchStatus("done");
       })
-      .catch(() => { if (!cancelled) { setResults([]); setTotal(0); setFacets(null); } })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .catch(() => {
+        if (cancelled) return;
+        setResults([]); setTotal(0); setFacets(null);
+        setSearchStatus("error");
+      })
+      .finally(() => {
+        // The auto-correct / single-result redirect branches return early
+        // without results; they navigate away, so just leave "loading".
+        if (!cancelled) setSearchStatus((s) => (s === "loading" ? "done" : s));
+      });
     return () => { cancelled = true; };
     // setParams/corrected intentionally omitted — URL params are the source of truth.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlQ, market, statusStr, sort, formStr, strengthStr]);
+  }, [urlQ, market, statusStr, sort, formStr, strengthStr, retryNonce]);
 
   // Keep the input mirror in sync when the URL query changes externally.
   useEffect(() => { setQ(urlQ); }, [urlQ]);
@@ -712,7 +729,14 @@ function Results() {
         })}
       </div>
 
-      {!loading && q.trim() && results.length === 0 && (
+      {searchStatus === "error" && q.trim() && (
+        <div className="res-foot" role="alert">
+          Search couldn&apos;t be completed just now — this is a connection or server problem, not a
+          sign that &ldquo;{q.trim()}&rdquo; has no data.{" "}
+          <button className="link-btn" onClick={() => setRetryNonce((n) => n + 1)}>Try again</button>
+        </div>
+      )}
+      {searchStatus === "done" && q.trim() && results.length === 0 && (
         <div className="res-foot">
           No results for &ldquo;{q.trim()}&rdquo;{!isGlobalMarket && <> in {mk.name}</>}.
           {!isGlobalMarket ? (

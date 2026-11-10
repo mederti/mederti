@@ -317,11 +317,11 @@ class NoMAScraper(BaseScraper):
         if any(w in low for w in ["produksjon", "production", "manufactur"]):
             return "manufacturing_issue"
         if any(w in low for w in ["råvare", "raw material", "ingredients"]):
-            return "raw_material_shortage"
+            return "raw_material"
         if any(w in low for w in ["distribusjon", "distribution", "transport", "logistics"]):
-            return "distribution_issue"
+            return "distribution"
         if any(w in low for w in ["regulatorisk", "godkjenning", "regulatory"]):
-            return "regulatory"
+            return "regulatory_action"
         if any(w in low for w in ["etterspørsel", "demand"]):
             return "demand_surge"
         return "supply_chain"

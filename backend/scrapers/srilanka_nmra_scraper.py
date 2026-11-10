@@ -62,7 +62,19 @@ class SriLankaNMRAScraper(BaseScraper):
 
     RATE_LIMIT_DELAY: float = 2.5
     REQUEST_TIMEOUT: float  = 45.0
-    SCRAPER_VERSION: str    = "1.0.0"
+    SCRAPER_VERSION: str    = "1.1.0"
+
+    # The feed is the full announcements list (Jul 2024 → now as of Nov 2026),
+    # so a shortage notice NMRA has taken down is no longer a current notice.
+    # Until 2026-11 the unchanged-payload path kept bumping last_verified_at on
+    # the one open row (Lignocaine Throat Spray, Sep 2025) after NMRA had
+    # removed it. RECONCILE_ABSENT re-normalises every run and closes open
+    # rows the feed no longer lists.
+    RECONCILE_ABSENT: bool = True
+    # The open set here is 0–2 rows, so the base 50% guard is meaningless;
+    # protect against a broken fetch by feed size instead.
+    RECONCILE_MIN_FRACTION: float = 0.0
+    MIN_FEED_ITEMS: int = 50
 
     # Strong, precise phrases — deliberately narrow. The general keyword list
     # below ("shortage", "stock", "supply", ...) catches too much noise on
@@ -157,6 +169,7 @@ class SriLankaNMRAScraper(BaseScraper):
             raise ScraperError(f"NMRA fetch failed: {exc}") from exc
 
         self.log.info("NMRA fetch complete", extra={"records": len(records)})
+        self._feed_size = len(records)
         return records
 
     def _parse_announcements_page(self, html: str) -> list[dict]:
@@ -213,6 +226,23 @@ class SriLankaNMRAScraper(BaseScraper):
     # -------------------------------------------------------------------------
     # normalize()
     # -------------------------------------------------------------------------
+
+    def run(self) -> dict[str, Any]:
+        """Base run, plus: when a healthy feed holds NO shortage notices at all
+        (status 'empty'), close every open row. The base reconcile only runs
+        after a successful write, so it never sees this case."""
+        self._feed_size = 0
+        summary = super().run()
+        if summary.get("status") == "empty":
+            if self._feed_size >= self.MIN_FEED_ITEMS:
+                self._run_shortage_ids = {"__feed_has_no_shortage_notices__"}
+                summary["reconciled_absent"] = self.reconcile_absent(found=0)
+            else:
+                self.log.warning(
+                    "NMRA feed too small to reconcile; open rows left untouched",
+                    extra={"feed_size": self._feed_size},
+                )
+        return summary
 
     def normalize(self, raw: list[dict]) -> list[dict]:
         """Filter the full announcements feed down to genuine drug-shortage

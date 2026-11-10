@@ -156,6 +156,28 @@ def grade_write_outcome(
     return "success"
 
 
+# shortage_events.reason_category CHECK (001_initial_schema.sql). A value
+# outside it makes PostgREST 400 the row — NoMA lost 169 of 1,649 rows a run
+# that way (2026-11-10) to "distribution_issue" / "regulatory" /
+# "raw_material_shortage". Map known aliases; anything else becomes "other"
+# rather than dropping a real shortage.
+_REASON_CATEGORIES = frozenset({
+    "manufacturing_issue", "supply_chain", "demand_surge", "regulatory_action",
+    "discontinuation", "raw_material", "distribution", "other", "unknown",
+})
+_REASON_CATEGORY_ALIASES = {
+    "distribution_issue": "distribution",
+    "regulatory": "regulatory_action",
+    "raw_material_shortage": "raw_material",
+}
+
+
+def valid_reason_category(value: str | None) -> str | None:
+    if value is None or value in _REASON_CATEGORIES:
+        return value
+    return _REASON_CATEGORY_ALIASES.get(value, "other")
+
+
 class ScraperError(Exception):
     """Raised when a scraper encounters an unrecoverable error."""
 
@@ -757,7 +779,7 @@ class BaseScraper(ABC):
                 "status":                   new_status,
                 "severity":                 ev.get("severity"),
                 "reason":                   ev.get("reason"),
-                "reason_category":          ev.get("reason_category"),
+                "reason_category":          valid_reason_category(ev.get("reason_category")),
                 "start_date":               start_date,
                 "end_date":                 end_date,
                 "estimated_resolution_date": ev.get("estimated_resolution_date"),

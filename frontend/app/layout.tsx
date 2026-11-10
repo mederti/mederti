@@ -65,13 +65,13 @@ export const metadata: Metadata = {
   applicationName: "Mederti",
   // Windows/Edge pinned-site + taskbar tile colour (Edge still reads these).
   other: {
-    "msapplication-TileColor": "#0fa676",
+    "msapplication-TileColor": "#090E2C",
     "msapplication-config": "none",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0fa676",
+  themeColor: "#090E2C",
 };
 
 export default function RootLayout({

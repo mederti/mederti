@@ -5,11 +5,11 @@
    centralized here so every logged-in page shares one source of truth.
    ───────────────────────────────────────────────────────────────────────── */
 .v1app {
-  --ink: #0c1118;
-  --green: #0fa676; --green-d: #0c8a62; --green-bg: #e8f6f0; --green-b: #dcebe6;
+  --ink: var(--navy);
+  --green: var(--teal); --green-d: var(--teal-l); --green-bg: var(--acc-soft); --green-b: #C6F3E6;
   --bg: #ffffff; --bg-2: #fafbfc; --bg-3: #eef2f5;
   --border: #e8ecf0; --border-2: #dde3e9;
-  --text: #0c1118; --text-2: #3b434e; --text-3: #6a7280; --text-4: #98a1ac;
+  --text: var(--navy); --text-2: #3b434e; --text-3: #6a7280; --text-4: #98a1ac;
   --crit: #dc2647; --crit-bg: #fdeef1; --crit-b: #f8cdd6;
   --med: #b46708; --med-bg: #fdf6e9; --med-b: #f3dcae;
   --ok: #0fa676; --ok-bg: #e8f6f0; --ok-b: #bce4d4;
@@ -48,10 +48,20 @@
 /* Width is user-resizable via ChatColumn's divider (--chat-w, remembered per
    browser); max-width keeps ~480px for content beside an expanded sidebar. */
 .v1app .chat-col {
-  width: var(--chat-w, 380px); min-width: 300px; max-width: calc(100vw - 742px);
+  width: var(--chat-w, 380px); min-width: 340px; max-width: calc(100vw - 742px);
   flex-shrink: 0; display: flex; position: relative; background: var(--bg);
 }
 .v1app .chat-col > .context-rail { width: 100%; }
+/* Optional top strip (AppShell `chatTop`): the column stacks the strip over the
+   chat. The divider (.chat-col's own right border) runs the full height. */
+.v1app .chat-col { border-right: 1px solid #E5E7EB; }
+.v1app .chat-col > .context-rail { border-right-width: 0; }
+.v1app .chat-col--top { flex-direction: column; }
+.v1app .chat-col--top > .context-rail { flex: 1; min-height: 0; }
+.v1app .chat-col-top {
+  flex: none; height: 72px; padding: 0 16px; display: flex; align-items: center;
+  background: #fff; border-bottom: 1px solid #E5E7EB; min-width: 0;
+}
 .v1app .chat-col-resize {
   position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; z-index: 5;
   cursor: col-resize; touch-action: none; outline: none;
@@ -62,7 +72,7 @@
 }
 .v1app .chat-col-resize:hover::after,
 .v1app .chat-col-resize:focus-visible::after,
-.v1app .chat-col--dragging .chat-col-resize::after { background: var(--green, #0fa676); }
+.v1app .chat-col--dragging .chat-col-resize::after { background: var(--green); }
 .v1app .chat-col--dragging { user-select: none; }
 .v1app .chat-col--dragging ~ * { pointer-events: none; user-select: none; }
 @media (max-width: 1079px) { .v1app .chat-col { display: none; } }
@@ -102,3 +112,11 @@
   .v1app .shell--chat, .v1app .shell-main--scroll, .v1app .shell-main--fill { height: auto; overflow: visible; }
   .v1app .sb, .v1app .chat-col, .v1app .mtabbar { display: none !important; }
 }
+
+/* Chat answers with tables: let wide tables scroll inside the narrow column
+   instead of being squashed/clipped. Each table already sits in an
+   overflow-x:auto wrapper (parser2 / .msg-table-wrap). */
+.v1app .chat-col .overflow-x-auto,
+.v1app .chat-col .msg-table-wrap { max-width: 100%; }
+.v1app .chat-col .overflow-x-auto > table,
+.v1app .chat-col .msg-table-wrap > table { width: max-content; min-width: 100%; }

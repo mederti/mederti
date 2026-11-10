@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Search, TrendingUp, LayoutDashboard, Bookmark, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
@@ -30,7 +31,20 @@ import {
  */
 const COLLAPSE_KEY = "mederti-sidebar-collapsed";
 
+/** Top-level section the current route belongs to (drives the active state).
+ *  Medicine pages count as Search. Sub-items (history, watchlist) never highlight. */
+function sectionFor(path: string | null): "search" | "intelligence" | "dashboard" | null {
+  if (!path) return null;
+  if (path === "/search" || path.startsWith("/search/") || path.startsWith("/drugs/")) return "search";
+  if (path.startsWith("/insights/intelligence")) return "intelligence";
+  if (path.startsWith("/insights/dashboard")) return "dashboard";
+  return null;
+}
+
 export default function V1Sidebar() {
+  const section = sectionFor(usePathname());
+  const act = (key: string) => (section === key ? " sb-active" : "");
+  const cur = (key: string) => (section === key ? ("page" as const) : undefined);
   // Starts expanded on the server + first paint; the stored preference is
   // applied in an effect (no transition on that first sync, so no slide-in).
   const [collapsed, setCollapsed] = useState(false);
@@ -169,7 +183,7 @@ export default function V1Sidebar() {
         <Link href={signedIn ? "/search" : "/"} className="brand" aria-label="Mederti home">
           <span className="logo-clip">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-black.png" alt="mederti" className="logo-img" />
+            <img src="/logo-white.png" alt="mederti" className="logo-img" />
           </span>
         </Link>
         <button type="button" onClick={toggleCollapsed} className="sb-toggle" aria-label={toggleLabel} title={toggleLabel}>
@@ -178,9 +192,9 @@ export default function V1Sidebar() {
       </div>
       <div className="sb-scroll">
         <div className="sb-group">
-          <Link href="/search" className="sb-item" title={collapsed ? "Search" : undefined}><Search size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Search</span></Link>
-          <Link href="/insights/intelligence" className="sb-item" title={collapsed ? "Intelligence" : undefined}><TrendingUp size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Intelligence</span></Link>
-          <Link href="/insights/dashboard" className="sb-item" title={collapsed ? "Dashboard" : undefined}><LayoutDashboard size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Dashboard</span></Link>
+          <Link href="/search" className={`sb-item${act("search")}`} aria-current={cur("search")} title={collapsed ? "Search" : undefined}><Search size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Search</span></Link>
+          <Link href="/insights/intelligence" className={`sb-item${act("intelligence")}`} aria-current={cur("intelligence")} title={collapsed ? "Intelligence" : undefined}><TrendingUp size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Intelligence</span></Link>
+          <Link href="/insights/dashboard" className={`sb-item${act("dashboard")}`} aria-current={cur("dashboard")} title={collapsed ? "Dashboard" : undefined}><LayoutDashboard size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Dashboard</span></Link>
           {collapsed && (
             <Link href={signedIn ? "/account#watchlist" : "/login"} className="sb-item" title="Watchlist">
               <Bookmark size={17} strokeWidth={1.9} className="sb-ico" />
@@ -190,22 +204,6 @@ export default function V1Sidebar() {
               /map route + all code stay intact so it can be worked on via direct URL. */}
         </div>
         {!collapsed && (<>
-        <div className="sb-group">
-          <div className="sb-glabel">Search history</div>
-          {recentSearches.length > 0 ? (
-            recentSearches.map((term) => (
-              <Link
-                key={term}
-                href={`/search?q=${encodeURIComponent(term)}`}
-                className="sb-item sb-sub"
-              >
-                {truncateDrugName(term, 28)}
-              </Link>
-            ))
-          ) : (
-            <div className="sb-item sb-empty">No recent searches</div>
-          )}
-        </div>
         <div className="sb-group">
           <div className="sb-glabel">Watchlist</div>
           {myMedicines.length > 0 ? (
@@ -225,6 +223,22 @@ export default function V1Sidebar() {
             <div className="sb-item sb-empty">Loading…</div>
           ) : (
             <Link href="/login" className="sb-item sb-empty">Sign in to build a watchlist</Link>
+          )}
+        </div>
+        <div className="sb-group">
+          <div className="sb-glabel">Search history</div>
+          {recentSearches.length > 0 ? (
+            recentSearches.map((term) => (
+              <Link
+                key={term}
+                href={`/search?q=${encodeURIComponent(term)}`}
+                className="sb-item sb-sub"
+              >
+                {truncateDrugName(term, 28)}
+              </Link>
+            ))
+          ) : (
+            <div className="sb-item sb-empty">No recent searches</div>
           )}
         </div>
         </>)}
@@ -253,10 +267,10 @@ export default function V1Sidebar() {
 // itself (so children — including the inline-styled V1CountryPicker — inherit
 // them) and every selector is scoped under `.sb` so it can't affect the host.
 const SIDEBAR_CSS = `
-.sb{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;
-  --bg:#ffffff;--bg-2:#fafbfc;--border:#e8ecf0;--border-2:#dde3e9;
-  --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;--ok:#0fa676;
-  width:262px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg);
+.sb{--ink:#fff;--green:var(--aqua,#44EABC);--green-d:var(--aqua,#44EABC);--green-bg:#141A3A;
+  --bg:#090E2C;--bg-2:#141A3A;--border:#1F2648;--border-2:#252C50;
+  --text:#fff;--text-2:#D9E8E5;--text-3:#D9E8E5;--text-4:#98A6B8;--ok:#44EABC;
+  width:262px;flex-shrink:0;border-right:none;background:var(--bg);
   position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
   font-family:var(--font-geist-sans),system-ui,sans-serif;font-size:14px;
   letter-spacing:-.011em;-webkit-font-smoothing:antialiased;color:var(--text)}
@@ -267,11 +281,14 @@ const SIDEBAR_CSS = `
 .sb-top{height:64px;padding:0 14px 0 28px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .sb .logo-clip{display:block;overflow:hidden;width:126px}
 .sb-toggle{flex:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
-  border:none;border-radius:8px;background:none;color:var(--text-4);cursor:pointer}
-.sb-toggle:hover{background:var(--bg-2);color:var(--green-d)}
+  border:1px solid #252C50;border-radius:8px;background:#141A3A;color:#D9E8E5;cursor:pointer}
+.sb-toggle:hover{background:#1F2648;color:#fff}
 .sb-country{padding:10px 16px;border-top:1px solid var(--border)}
+/* Region button: quiet on navy (V1CountryPicker styles itself inline). */
+.sb-country > div > button{background:transparent!important;border-color:transparent!important;color:#98A6B8!important;box-shadow:none!important}
+.sb-country > div > button:hover{color:#D9E8E5!important;background:#141A3A!important}
 .sb-avatar{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;
-  background:var(--green-bg);color:var(--green-d);font-size:12px;font-weight:700}
+  background:#141A3A;color:#D9E8E5;font-size:12px;font-weight:700}
 /* Collapsed icon rail. aside.sb.sb-collapsed out-specifies the host pages'
    own .sb / .v1home .sb width rules. */
 aside.sb.sb-anim{transition:width .18s ease}
@@ -290,25 +307,26 @@ aside.sb.sb-collapsed{width:68px}
 .sb-scroll{flex:1;overflow-y:auto;padding:8px 14px 8px 19px}
 .sb-group{margin-top:14px}
 .sb-glabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--text-4);padding:6px 9px}
+  color:#98A6B8;padding:6px 9px}
 .sb-item{display:flex;align-items:center;gap:10px;padding:9px;border-radius:10px;font-size:13px;
-  font-weight:500;color:var(--text-2);text-decoration:none}
-.sb-item:hover{background:var(--bg-2)}
-.sb-item.sb-active{background:var(--green-bg);color:var(--green-d)}
-.sb-empty{color:var(--text-4);font-style:italic}
-.sb-viewall{padding-left:18px;color:var(--green-d);font-weight:600;font-size:12.5px}
-.sb-viewall:hover{background:var(--bg-2)}
-.sb-sub{padding-left:18px;color:var(--text-3);font-weight:500;white-space:nowrap;overflow:hidden;
+  font-weight:500;color:#D9E8E5;text-decoration:none}
+.sb-item:hover{background:#141A3A;color:#fff}
+.sb-item.sb-active,.sb-item.sb-active:hover{background:#44EABC;color:#090E2C;font-weight:600}
+.sb-empty{color:#98A6B8;font-style:italic}
+.sb-viewall{padding-left:18px;color:#D9E8E5;font-weight:600;font-size:12.5px}
+.sb-viewall:hover{background:#141A3A;color:#fff}
+.sb-sub{padding-left:18px;color:#D9E8E5;font-weight:500;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;display:block}
-.sb-sub:hover{color:var(--text);background:var(--bg-2)}
-.sb-ico{flex-shrink:0;color:var(--text-3)}
-.sb-item:hover .sb-ico{color:var(--green-d)}
-.sb-item.sb-active .sb-ico{color:var(--green-d)}
+.sb-sub:hover{color:#fff;background:#141A3A}
+.sb-ico{flex-shrink:0;color:#D9E8E5}
+.sb-item:hover .sb-ico{color:#fff}
+.sb-item.sb-active .sb-ico{color:#090E2C}
+.sb-item:focus-visible,.sb-toggle:focus-visible,.sb-profile:focus-visible,.sb-logout:focus-visible{outline:2px solid #44EABC;outline-offset:2px}
 .sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;
-  color:var(--text-2);text-decoration:none}
-.sb-profile:hover{color:var(--green-d)}
+  color:#D9E8E5;text-decoration:none}
+.sb-profile:hover{color:#fff}
 .sb-account{display:flex;align-items:center;border-top:1px solid var(--border)}
 .sb-account .sb-profile{border-top:none;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.sb-logout{flex:none;background:none;border:none;cursor:pointer;padding:16px;font-family:inherit;font-size:12px;font-weight:500;color:var(--text-4)}
-.sb-logout:hover{color:var(--green-d)}
+.sb-logout{flex:none;background:transparent;border:none;cursor:pointer;padding:16px;font-family:inherit;font-size:12px;font-weight:500;color:#98A6B8}
+.sb-logout:hover{color:#D9E8E5}
 `;

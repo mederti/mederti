@@ -52,7 +52,7 @@ export default function BetaBanner() {
 const CSS = `
 .beta-banner{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;padding:9px 44px;background:#0c1118;color:#fff;font-size:12.5px;line-height:1.4;text-align:center}
 .beta-banner .bb-text{margin:0;font-weight:500;letter-spacing:-.01em}
-.beta-banner .bb-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#0fa676;margin-right:8px;vertical-align:middle;animation:bbblink 1.6s infinite}
+.beta-banner .bb-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);margin-right:8px;vertical-align:middle;animation:bbblink 1.6s infinite}
 .beta-banner .bb-link{color:#fff;text-decoration:underline;text-underline-offset:2px;font-weight:600}
 .beta-banner .bb-link:hover{color:#34d399}
 .beta-banner .bb-x{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:0;color:rgba(255,255,255,.6);font-size:20px;line-height:1;cursor:pointer;padding:2px 8px;border-radius:6px}

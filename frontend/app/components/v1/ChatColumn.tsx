@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, typ
 
 const WIDTH_KEY = "mederti-chat-width";
 const DEFAULT_W = 380;
-const MIN_W = 300;
+const MIN_W = 340;
 const MAX_W = 720;
 const STEP = 16;
 
@@ -17,7 +17,16 @@ const clamp = (w: number) => Math.round(Math.min(MAX_W, Math.max(MIN_W, w)));
  * in localStorage, like V1Sidebar's collapsed state. CSS also caps the column so
  * the content column keeps a usable width on narrower screens (app-shell.css).
  */
-export default function ChatColumn({ className, children }: { className: string; children: ReactNode }) {
+export default function ChatColumn({
+  className,
+  top,
+  children,
+}: {
+  className: string;
+  /** Optional fixed strip above the chat (e.g. the drug page's search bar). */
+  top?: ReactNode;
+  children: ReactNode;
+}) {
   const [width, setWidth] = useState(DEFAULT_W);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; w: number } | null>(null);
@@ -75,7 +84,11 @@ export default function ChatColumn({ className, children }: { className: string;
   }
 
   return (
-    <aside className={`${className}${dragging ? " chat-col--dragging" : ""}`} style={{ ["--chat-w" as string]: `${width}px` }}>
+    <aside
+      className={`${className}${top ? " chat-col--top" : ""}${dragging ? " chat-col--dragging" : ""}`}
+      style={{ ["--chat-w" as string]: `${width}px` }}
+    >
+      {top ? <div className="chat-col-top">{top}</div> : null}
       {children}
       <div
         className="chat-col-resize"

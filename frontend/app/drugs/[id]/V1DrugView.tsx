@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { type ConcentrationTier, PEER_GROUPS, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
-import type { SupplyInMarket, SupplyStatus } from "@/lib/supply-in-market";
+import { scopeSupply, sameIngredientOptions, type SupplyInMarket, type SupplyProduct, type SupplyStatus } from "@/lib/supply-in-market";
 import Link from "next/link";
 import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
@@ -153,9 +153,12 @@ function expSourceFor(cc: string): string {
 const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, marketCovered = null, freeViewsUsed = null, sourcedAlternatives = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket: supplyAll = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null, marketCovered = null, formSel = null, strengthSel = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
+  /** Form picker: dose-form slug and normalised strength from the URL. */
+  formSel?: string | null;
+  strengthSel?: string | null;
   /** Anonymous free-tier views used (null = signed in). */
   freeViewsUsed?: number | null;
   id: string;
@@ -281,6 +284,13 @@ export default function V1DrugView({
   // Headline notice for the user's market. Prefer an ongoing shortage over a
   // single product's discontinuation: one discontinued brand must not make
   // the whole molecule read as leaving the market.
+  // Form/strength picker (URL ?form=&strength=): the banner, the three
+  // answers and the table all read this scoped view. An unknown slug falls
+  // back to all forms; an unknown strength to the whole form.
+  const formSlugSel = supplyAll && formSel && supplyAll.forms.some((f) => f.slug === formSel) ? formSel : null;
+  const scopedStrength = formSlugSel && strengthSel && supplyAll ? scopeSupply(supplyAll, formSlugSel, strengthSel) : null;
+  const strengthOn = !!scopedStrength;
+  const supplyInMarket = supplyAll ? (scopedStrength ?? scopeSupply(supplyAll, formSlugSel, null)) : null;
   const isDisc = (s: any) => (s.reason_category || "").toLowerCase() === "discontinuation";
   // Then an active shortage over an anticipated one, worst severity first:
   // the card said "Anticipated shortage" for propofol while five products
@@ -368,7 +378,30 @@ export default function V1DrugView({
     .map(([cc, r]) => ({ cc, sev: r, major: MAJOR_MARKETS.has(cc) }))
     .sort((a, b) => Number(b.major) - Number(a.major) || b.sev - a.sev || a.cc.localeCompare(b.cc));
 
-  const localShortage = !!mine;
+  // ── Scoped status (registered products × open notices) ───────────────────
+  // The banner must not generalise: "Discontinued in Australia" when 2 of 44
+  // Amoxicillin products were. Counts come from the supply table so the two
+  // always agree; a form is "short" only when every product in it is.
+  const scProducts: { p: SupplyProduct; form: string }[] = supplyInMarket
+    ? supplyInMarket.groups.flatMap((g) => g.products.map((p) => ({ p, form: g.form })))
+    : [];
+  const scTotal = scProducts.length;
+  const scHit = scProducts.filter((x) => x.p.status === "short");
+  const scAnt = scProducts.filter((x) => x.p.status === "anticipated");
+  const scUnmatched = supplyInMarket ? supplyInMarket.groups.flatMap((g) => g.notices).filter((n) => n.status === "short").length : 0;
+  const scClear = scProducts.filter((x) => x.p.status === "none").length;
+  const scDiscAll = scHit.length > 0 && scHit.every((x) => x.p.discontinued);
+  const scExitFuture = scDiscAll && scHit.every((x) => !!x.p.exitDate && isFuture(x.p.exitDate));
+  const scBrand = (() => {
+    const words = new Set(scHit.map((x) => x.p.label.split(/\s+/)[0]));
+    return words.size === 1 ? [...words][0] : null;
+  })();
+  const scPartial = scTotal > 0 && scHit.length > 0 && scHit.length < scTotal;
+  const scopeName = formSlugSel && supplyInMarket?.groups[0]
+    ? `${supplyInMarket.groups[0].form.toLowerCase()}${strengthOn && strengthSel ? ` ${strengthSel}` : ""}`
+    : null;
+  // With a form selected the banner speaks for that form only.
+  const localShortage = formSlugSel && supplyInMarket ? scHit.length + scAnt.length + scUnmatched > 0 : !!mine;
   // No shortage source for this market: absence of notices proves nothing.
   const noData = !localShortage && marketCovered === false;
   // Days since the headline notice was last confirmed against its source.
@@ -385,21 +418,32 @@ export default function V1DrugView({
   // but it is a market exit, not an expected shortage: it must read "Leaving
   // the market" (Zabep showed "Anticipated shortage" while its ARTG
   // registration ends 17 Nov 2026).
-  const anticipated = (mine?.status || "").toLowerCase() === "anticipated" && !(mine && isDisc(mine));
+  const anticipated = formSlugSel && supplyInMarket
+    ? scHit.length === 0 && scAnt.length > 0
+    : (mine?.status || "").toLowerCase() === "anticipated" && !(mine && isDisc(mine));
 
   // Discontinuation is a market exit, not a supply gap — it is never "back",
   // so it must not read as a "Critical shortage". The regulator-stated
   // withdrawal date (TGA ARTG cancellation) is the headline fact; TGA's own
   // impact rating, availability and guidance are quoted verbatim from the
   // notice, plus a link to any regulator statement it cites.
-  const discontinued = inMarket.length > 0 && inMarket.every(isDisc);
+  const discontinued = formSlugSel && supplyInMarket ? scDiscAll : inMarket.length > 0 && inMarket.every(isDisc);
   const withdrawalDate: string | null = mine?.withdrawal_date ?? null;
   const withdrawalFuture = isFuture(withdrawalDate);
   const noticeNotes = String(mine?.notes || "");
-  const regAvailability = /TGA availability:\s*(.+)/i.exec(noticeNotes)?.[1]?.trim() || null;
+  const availOf = (n: any) => /TGA availability:\s*(.+)/i.exec(String(n?.notes || ""))?.[1]?.trim() || null;
+  // Quoted only when every open notice in the market says the same thing —
+  // otherwise one product's wording would be read as the whole medicine's.
+  const regAvailability = new Set(inMarket.map(availOf)).size === 1 ? availOf(mine) : null;
   const regGuidanceRaw = /TGA guidance:\s*([\s\S]+?)(?:\n\n|$)/i.exec(noticeNotes)?.[1]?.trim() || null;
   const regStatementUrl = regGuidanceRaw?.match(/https:\/\/www\.tga\.gov\.au\/\S+/)?.[0]?.replace(/[.,)]+$/, "") ?? null;
-  const regGuidance = regGuidanceRaw?.replace(/\s*A TGA web statement is available at:?\s*\S+/i, "").trim() || null;
+  const guidanceOf = (n: any) =>
+    /TGA guidance:\s*([\s\S]+?)(?:\n\n|$)/i.exec(String(n?.notes || ""))?.[1]?.trim()
+      ?.replace(/\s*A TGA web statement is available at:?\s*\S+/i, "").trim() || null;
+  // Every distinct piece of advice across the market's open notices — one
+  // notice's wording must not stand in for products it doesn't cover.
+  const regGuidanceAll = [...new Set(inMarket.map(guidanceOf).filter(Boolean) as string[])];
+  const regGuidance = regGuidanceAll.length > 0 ? regGuidanceAll.map((g) => `\u201c${g}\u201d`).join(" · ") : null;
 
   // ── Pricing: headline price per market + active-concession signal ──────────
   const mkts = priceMarkets ?? [];
@@ -438,8 +482,14 @@ export default function V1DrugView({
   const futureEst = mineAll
     .filter((s) => s.estimated_resolution_date && s.estimated_resolution_date.slice(0, 10) >= todayIso)
     .sort((a, b) => a.estimated_resolution_date!.localeCompare(b.estimated_resolution_date!))[0] ?? null;
-  const estPassed = !futureEst && mineAll.some((s) => !!s.estimated_resolution_date);
-  const expected = monthYear(futureEst?.estimated_resolution_date);
+  const estPassed = formSlugSel && supplyInMarket
+    ? scHit.length > 0 && scHit.every((x) => !x.p.back) && scHit.some((x) => x.p.backPassed)
+    : !futureEst && mineAll.some((s) => !!s.estimated_resolution_date);
+  // With a form selected, the estimate comes from that form's short products.
+  const scBacks = scHit.map((x) => x.p.back).filter(Boolean) as string[];
+  const expected = formSlugSel && supplyInMarket
+    ? monthYear(scBacks.sort()[0] ?? null)
+    : monthYear(futureEst?.estimated_resolution_date);
   const expEvent = futureEst ?? mine;
   const expSource = abbr(expEvent?.data_sources?.name, expEvent?.data_sources?.abbreviation) || "regulator";
 
@@ -587,8 +637,8 @@ export default function V1DrugView({
     }
     // Molecule view: one product's code would single out an arbitrary
     // brand (propofol showed B Braun's AUST R 220082), so state the count.
-    if (supplyInMarket && supplyInMarket.productCount > 0) {
-      return { country: userCountry, label: null, code: `${supplyInMarket.productCount} registered product${supplyInMarket.productCount === 1 ? "" : "s"}`, sponsor: supplyInMarket.registerSource };
+    if (supplyAll && supplyAll.productCount > 0) {
+      return { country: userCountry, label: null, code: `${supplyAll.productCount} registered product${supplyAll.productCount === 1 ? "" : "s"}`, sponsor: supplyAll.registerSource };
     }
     const p = (products ?? []).find(
       (x) => (x.country || "").toUpperCase() === userCountry && x.registry_id,
@@ -648,6 +698,57 @@ export default function V1DrugView({
     ] as AttrRow[]
   ).filter((r) => r.value);
 
+  // ── Banner wording, scoped to what the register × notices show ───────────
+  const inWhere = `in ${cName}`;
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const hqTitle = (() => {
+    if (!localShortage) return noData ? `No shortage data for ${cName}` : scopeName ? `No shortage reported for ${scopeName} ${inWhere}` : `In supply ${inWhere}`;
+    if (scTotal > 0 && (scHit.length > 0 || scAnt.length > 0)) {
+      const n = scHit.length;
+      if (n === 0) {
+        return scAnt.length === scTotal ? `Anticipated shortage ${inWhere}` : `Shortage anticipated for ${scAnt.length} of ${plural(scTotal, "product")} ${inWhere}`;
+      }
+      if (n === scTotal) {
+        if (scDiscAll) return scExitFuture ? `Leaving the market ${inWhere}` : `Discontinued ${inWhere}`;
+        return scTotal === 1 ? `Short ${inWhere}` : `All ${scTotal} products short ${inWhere}`;
+      }
+      if (scDiscAll) {
+        const verb = scExitFuture ? "leaving the market" : "discontinued";
+        return scBrand ? `${plural(n, `${scBrand} product`)} ${verb} ${inWhere}` : `${n} of ${plural(scTotal, "product")} ${verb} ${inWhere}`;
+      }
+      return `${n} of ${plural(scTotal, "product")} ${scHit.some((x) => x.p.discontinued) ? "affected" : "short"} ${inWhere}`;
+    }
+    // No register to scope against (or only unmatched notices): notice wording.
+    return anticipated ? `Anticipated shortage ${inWhere}`
+      : discontinued ? (withdrawalFuture ? `Leaving the market ${inWhere}` : `Discontinued ${inWhere}`)
+      : `Short ${inWhere}`;
+  })();
+  const formWord = (form: string) =>
+    ({ Tablets: "tablet", Capsules: "capsule", "Oral liquid": "oral liquid", Injection: "injection", Inhaler: "inhaler", Topical: "topical", "Eye or ear": "eye/ear", Rectal: "rectal" } as Record<string, string>)[form] ?? form.toLowerCase();
+  // Bold first line: which products, and whether the rest of each affected
+  // form is clear. Shown whenever only part of the market is affected.
+  const scopeLine = (() => {
+    if (brandFocus || !scPartial) return null;
+    const items = scHit.slice(0, 4).map(({ p, form }) => {
+      const exit = p.discontinued
+        ? p.exitDate ? `, registration ${isFuture(p.exitDate) ? "ends" : "ended"} ${dayMonthYear(p.exitDate)}` : ", discontinued"
+        : "";
+      return `${p.label} ${formWord(form)}${exit}`;
+    });
+    const more = scHit.length > 4 ? `; +${scHit.length - 4} more` : "";
+    const hitForms = [...new Set(scHit.map((x) => x.form))];
+    const lacking = hitForms.filter((f) => !scProducts.some((x) => x.form === f && x.p.status === "none"));
+    const other = lacking.length === 0
+      ? `Other products in ${hitForms.length === 1 ? "the same form" : "the same forms"}: no shortage reported.`
+      : `No other ${lacking.map(formWord).join(" or ")} product without a notice.`;
+    return `Affects ${scHit.length} of ${plural(scTotal, "registered product")}: ${items.join("; ")}${more}. ${other}`;
+  })();
+  // Same medicine, same form and strength, no notice: the first answer to
+  // "what can I use instead?". A different medicine comes after, as a
+  // prescriber decision.
+  const sameOpts = localShortage && supplyInMarket ? sameIngredientOptions(supplyInMarket) : [];
+  const sameLabels = [...new Set(sameOpts.map((p) => p.label))];
+
   // Tab empty states — each tab says plainly when we hold nothing for it.
   const hasStatus = !!supplyInMarket || mineAll.length > 0 || regulators.length > 0 || shortages.length > 0 || events.length > 0;
   const hasAlts = userCountry === "AU" || !!sourcedAlternatives?.available || alts.length > 0;
@@ -661,6 +762,7 @@ export default function V1DrugView({
     <AppShell
       className="v1home v1drug"
       chatScope="panel"
+      chatTop={<V1DrugSearch initial={drug.generic_name} />}
       chatPanel={
               freeViewsUsed != null ? (
                 <ChatSignupGate
@@ -704,10 +806,13 @@ export default function V1DrugView({
               <FreeViewBanner used={freeViewsUsed} next={`/drugs/${id}`} />
             </>
           )}
-          <V1DrugSearch initial={drug.generic_name} />
+          {/* The search bar lives at the top of the chat column (chatTop); the
+              column is hidden below 1080px, so this copy shows only there. */}
+          <div className="dsearch-narrow"><V1DrugSearch initial={drug.generic_name} /></div>
 
           {brandHint && (
             <div
+              className="d-brandhint"
               style={{
                 display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8,
                 padding: "10px 14px", marginBottom: 14, borderRadius: 10,
@@ -731,53 +836,46 @@ export default function V1DrugView({
 
           <div className="product-card hero-card">
             <div className="pc-body">
-              <div className="pc-head">
-                <div className="pc-titles">
-                  <div className="pc-name-row">
-                    <div className="d-name">{drug.generic_name}</div>
-                      {drug.who_essential_medicine ? (
-                        <a
-                          className="d-eml"
-                          href="https://list.essentialmeds.org/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={
-                            drug.who_eml_section
-                              ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
-                              : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
-                          }
-                        >
-                          <span className="d-eml-dot" />
-                          WHO Essential Medicine
-                        </a>
-                      ) : null}
-                      {drug.is_controlled_substance === true ? (
-                        <span className="d-ctrl">Controlled substance</span>
-                      ) : null}
-                  </div>
-                  <div className="d-generic">
-                    {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
-                  </div>
-                  {localReg && (
-                    <div className="d-localcode">
-                      {flag(localReg.country)} {[localReg.label, localReg.code].filter(Boolean).join(" ")}
-                      {localReg.sponsor ? <> · {localReg.sponsor}</> : null}
-                    </div>
-                  )}
-                </div>
-                <div className="sc-actions pc-actions">
-                  <WatchButton drugId={id} />
-                  <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
-                </div>
+              {/* Line 1: name alone. Line 2: EML tag + ATC + local register code
+                  on one line. Line 3: brand tags left, actions right. */}
+              <div className="d-name">{drug.generic_name}</div>
+              <div className="d-meta">
+                {drug.who_essential_medicine ? (
+                  <a
+                    className="d-eml"
+                    href="https://list.essentialmeds.org/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={
+                      drug.who_eml_section
+                        ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
+                        : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+                    }
+                  >
+                    <span className="d-eml-dot" />
+                    WHO Essential Medicine
+                  </a>
+                ) : null}
+                {drug.is_controlled_substance === true ? (
+                  <span className="d-ctrl">Controlled substance</span>
+                ) : null}
+                <span className="d-generic">
+                  {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
+                </span>
+                {localReg && (
+                  <span className="d-localcode">
+                    {flag(localReg.country)} {[localReg.label, localReg.code].filter(Boolean).join(" ")}
+                    {localReg.sponsor ? <> · {localReg.sponsor}</> : null}
+                  </span>
+                )}
               </div>
-
-
+              <div className="d-tagrow">
               {(() => {
                 const base = cleanBrandNames(drug.brand_names, drug.generic_name);
                 const brands = brandFocus
                   ? [brandFocus.brand, ...base.filter((b) => !b.toLowerCase().startsWith(brandFocus.brand.toLowerCase()))]
                   : base;
-                if (brands.length === 0) return null;
+                if (brands.length === 0) return <div className="d-tags" />;
                 const shown = brands.slice(0, 5);
                 const rest = brands.length - shown.length;
                 return (
@@ -810,11 +908,68 @@ export default function V1DrugView({
                   </div>
                 );
               })()}
+                <div className="sc-actions pc-actions">
+                  <WatchButton drugId={id} />
+                  <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+                </div>
+              </div>
             </div>
           {/* Status — design 3: a one-line status headline, then the three
               questions a pharmacist asks (when's it back / what instead / what
               does it cost), then "is it just us?". "Yes" on substitution only
               when a real pathway is on file; absence is stated as absence. */}
+          {supplyAll && (supplyAll.forms.length > 1 || supplyAll.forms.some((f) => f.strengths.length > 1)) && (() => {
+            // Form picker: links (server-rendered), so the choice lives in the
+            // URL and can be bookmarked or shared. Dot: green none short, amber
+            // some, red all.
+            const base = `/drugs/${id}`;
+            const qs = (form: string | null, strength: string | null) => {
+              const q = new URLSearchParams();
+              if (brandFocus) q.set("brand_focus", brandFocus.catId);
+              // Keep the market the page is showing (#235): without it the
+              // picker would fall back to the saved country cookie.
+              q.set("market", userCountry);
+              if (form) q.set("form", form);
+              if (strength) q.set("strength", strength);
+              const t = q.toString();
+              return t ? `${base}?${t}` : base;
+            };
+            const tone = (affected: number, total: number, extra = 0) =>
+              affected + extra === 0 ? "ok" : total > 0 && affected === total ? "crit" : "med";
+            const allAffected = supplyAll.shortCount;
+            const allUnmatched = supplyAll.forms.reduce((n, f) => n + f.unmatched, 0);
+            const sel = supplyAll.forms.find((f) => f.slug === formSlugSel) ?? null;
+            const count = (affected: number, total: number, disc = 0) =>
+              affected === 0 ? `${total} not short`
+                : `${affected} of ${total} ${disc === affected ? "discontinued" : disc > 0 ? "affected" : "short"}`;
+            return (
+              <nav className="fpick" aria-label="Filter by form and strength">
+                <div className="fpick-row">
+                  <Link href={qs(null, null)} className={`fpick-chip${!formSlugSel ? " on" : ""}`} aria-current={!formSlugSel ? "true" : undefined} scroll={false}>
+                    <span className={`fpick-dot ${tone(allAffected, supplyAll.productCount, allUnmatched)}`} />All forms
+                    <span className="fpick-n">{count(allAffected, supplyAll.productCount, supplyAll.discCount)}</span>
+                  </Link>
+                  {supplyAll.forms.map((f) => (
+                    <Link key={f.slug} href={qs(f.slug, null)} className={`fpick-chip${formSlugSel === f.slug ? " on" : ""}`} aria-current={formSlugSel === f.slug ? "true" : undefined} scroll={false}>
+                      <span className={`fpick-dot ${tone(f.affected, f.total, f.unmatched)}`} />{f.form}
+                      <span className="fpick-n">{f.total > 0 ? count(f.affected, f.total, f.discontinued) : `${f.unmatched} notice${f.unmatched === 1 ? "" : "s"}`}</span>
+                    </Link>
+                  ))}
+                </div>
+                {sel && sel.strengths.length > 1 && (
+                  <div className="fpick-row fpick-sub">
+                    <Link href={qs(sel.slug, null)} className={`fpick-chip${!strengthOn ? " on" : ""}`} scroll={false}>All strengths</Link>
+                    {sel.strengths.map((st) => (
+                      <Link key={st.strength} href={qs(sel.slug, st.strength)} className={`fpick-chip${strengthOn && strengthSel === st.strength ? " on" : ""}`} aria-current={strengthOn && strengthSel === st.strength ? "true" : undefined} scroll={false}>
+                        <span className={`fpick-dot ${tone(st.affected, st.total)}`} />{st.strength}
+                        <span className="fpick-n">{count(st.affected, st.total, st.discontinued)}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </nav>
+            );
+          })()}
           <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : noData ? "med" : "ok"}`}>
             <div className="hq-head">
               <span className="hq-ic" aria-hidden>
@@ -827,24 +982,17 @@ export default function V1DrugView({
                 )}
               </span>
               <div className="hq-head-t">
-                <div className="hq-title">
-                  {localShortage
-                    ? anticipated ? `Anticipated shortage in ${cName}`
-                      : discontinued ? (withdrawalFuture ? `Leaving the market in ${cName}` : `Discontinued in ${cName}`)
-                      // Our own severity is availability-led; the regulator's
-                      // impact rating is quoted in the line below, not
-                      // re-labelled here ("Critical" over TGA's "Medium").
-                      : supplyInMarket && supplyInMarket.shortCount > 0
-                        ? `${supplyInMarket.shortCount} registered product${supplyInMarket.shortCount === 1 ? "" : "s"} short in ${cName}`
-                        : `Short in ${cName}`
-                    : noData ? `No shortage data for ${cName}` : `In supply in ${cName}`}
-                </div>
+                <div className="hq-title">{hqTitle}</div>
                 <div className="hq-sub">
                   {localShortage && discontinued ? (
                     <span className="hq-reason">
-                      {withdrawalDate ? `Registration ${withdrawalFuture ? "ends" : "ended"} ${dayMonthYear(withdrawalDate)}` : "Product discontinued"}
-                      {regAvailability ? ` · ${regAvailability}` : ""}
-                      {mine?.regulator_impact ? ` · ${expSource} impact rating: ${mine.regulator_impact}` : ""}
+                      {scopeLine
+                        ? [regAvailability, topImpact ? `${expSource} impact rating: ${topImpact}${impactCount > 1 && !formSlugSel ? ` (highest of ${impactCount} notices)` : ""}` : null].filter(Boolean).join(" · ")
+                        : <>
+                            {withdrawalDate ? `Registration ${withdrawalFuture ? "ends" : "ended"} ${dayMonthYear(withdrawalDate)}` : "Product discontinued"}
+                            {regAvailability ? ` · ${regAvailability}` : ""}
+                            {mine?.regulator_impact ? ` · ${expSource} impact rating: ${mine.regulator_impact}` : ""}
+                          </>}
                     </span>
                   ) : (
                     localShortage && (mine?.reason || topImpact) && (
@@ -854,6 +1002,7 @@ export default function V1DrugView({
                       </span>
                     )
                   )}
+                {scopeLine && <span className="hq-reason hq-scope" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{scopeLine}</span>}
                 {brandLine && <span className="hq-reason" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{brandLine}</span>}
                 {noData && <span className="hq-reason">Mederti has no shortage source for {cName}, so we can&apos;t say whether it&apos;s in supply there. Check with your supplier or the national regulator.</span>}
                 {localShortage && staleDays !== null && staleDays > 7 && (
@@ -868,7 +1017,7 @@ export default function V1DrugView({
                 </div>
                 {localShortage && discontinued && (regGuidance || regStatementUrl) && (
                   <div className="sc-guid">
-                    {regGuidance && <span>{expSource} advice: &ldquo;{regGuidance}&rdquo;</span>}
+                    {regGuidance && <span>{expSource} advice: {regGuidance}</span>}
                     {regStatementUrl && (
                       <a href={regStatementUrl} target="_blank" rel="noopener noreferrer">Read the {expSource} statement →</a>
                     )}
@@ -885,7 +1034,9 @@ export default function V1DrugView({
                     <div className="hq-q-l">When will it be back?</div>
                     <div className="hq-q-a">Not expected back</div>
                     <div className="hq-q-d">
-                      {withdrawalDate ? `Market exit: registration ${withdrawalFuture ? "ends" : "ended"} ${dayMonthYear(withdrawalDate)}, via ${expSource}.` : "Discontinued by the sponsor."}
+                      {scPartial && scDiscAll
+                        ? `Market exit for the ${plural(scHit.length, "discontinued product")}, via ${expSource}. ${plural(scClear, "other product")}: no shortage reported.`
+                        : withdrawalDate ? `Market exit: registration ${withdrawalFuture ? "ends" : "ended"} ${dayMonthYear(withdrawalDate)}, via ${expSource}.` : "Discontinued by the sponsor."}
                     </div>
                   </>
                 ) : (
@@ -909,7 +1060,7 @@ export default function V1DrugView({
                       <>
                         <div className="hq-q-a">{noData ? "No data" : !localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
                         <div className="hq-q-d">
-                          {noData ? `No shortage source for ${cName}.` : !localShortage ? "No active shortage in this market." : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
+                          {noData ? `No shortage source for ${cName}.` : !localShortage ? (scopeName ? `No active shortage for ${scopeName}.` : "No active shortage in this market.") : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
                         </div>
                       </>
                     )}
@@ -918,17 +1069,33 @@ export default function V1DrugView({
               </div>
               <div className="hq-q">
                 <div className="hq-q-l">What can I use instead?</div>
-                <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine ? "No pathway on record" : noData ? "Unknown" : "Not needed"}</div>
-                <div className="hq-q-d">
-                  {s19aTileDetail ?? (mine ? "Substitution is a prescriber decision." : noData ? `We can't tell whether it's short in ${cName}.` : "No shortage substitution needed.")}
-                  {topAlt && (
-                    <>
-                      {" "}Same class:{" "}
-                      {topAlt.id != null ? <Link href={`/drugs/${topAlt.id}`}>{breakAtSlash(topAlt.name)}</Link> : breakAtSlash(topAlt.name)}
-                      , a different medicine.
-                    </>
-                  )}
-                </div>
+                {sameLabels.length > 0 ? (
+                  <>
+                    <div className="hq-q-a">{plural(sameOpts.length, "other product")} not short</div>
+                    <div className="hq-q-d">
+                      Same medicine, same form and strength: {sameLabels.slice(0, 3).join(", ")}
+                      {sameLabels.length > 3 ? ` +${sameLabels.length - 3} more` : ""}. No shortage notice on file; that isn&apos;t proof of stock.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine && localShortage ? "Ask the prescriber" : noData ? "Unknown" : "Not needed"}</div>
+                    <div className="hq-q-d">
+                      {s19aTileDetail ?? (mine && localShortage
+                        ? supplyInMarket
+                          ? "No other product of this medicine in the same form and strength is clear of a shortage notice. A different medicine is a prescriber decision."
+                          : "We hold no registered substitute for this market. A different medicine is a prescriber decision."
+                        : noData ? `We can't tell whether it's short in ${cName}.` : "No shortage substitution needed.")}
+                      {topAlt && localShortage && (
+                        <>
+                          {" "}Same class (prescriber decision):{" "}
+                          {topAlt.id != null ? <Link href={`/drugs/${topAlt.id}`}>{breakAtSlash(topAlt.name)}</Link> : breakAtSlash(topAlt.name)}
+                          , a different medicine.
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
                 <a href="#alternatives" className="hq-more">See alternatives →</a>
               </div>
               <div className="hq-q">
@@ -945,10 +1112,11 @@ export default function V1DrugView({
                   </>
                 ) : (
                   <>
-                    <div className="hq-q-a">Not on file</div>
-                    <div className="hq-q-d">We don&apos;t hold an official price for {cName} yet.</div>
+                    <div className="hq-q-a empty">Not on file</div>
+                    <div className="hq-q-d empty">We don&apos;t hold an official price for {cName} yet.</div>
                   </>
                 )}
+                {formSlugSel && <div className="hq-q-d">Price is for the medicine, not the selected form.</div>}
                 <a href="#trade-price" className="hq-more">Price details →</a>
               </div>
             </div>
@@ -1147,8 +1315,8 @@ export default function V1DrugView({
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
                             </td>
-                            <td><SupplyPill status={p.status} since={p.since} history={p.history} /></td>
-                            <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} /></td>
+                            <td><SupplyPill status={p.status} since={p.since} history={p.history} discontinued={p.discontinued} /></td>
+                            <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} exitDate={p.discontinued ? p.exitDate : undefined} discontinued={p.discontinued} /></td>
                           </tr>
                         ))}
                         {g.notices.map((n, i) => (
@@ -1157,8 +1325,8 @@ export default function V1DrugView({
                               <div className="sim-name">{n.label}</div>
                               <div className="alt-f">Notice not matched to a registered product</div>
                             </td>
-                            <td><SupplyPill status={n.status} since={n.since} /></td>
-                            <td className="sim-hide"><BackCell status={n.status} back={n.back} passed={n.backPassed} url={n.sourceUrl} /></td>
+                            <td><SupplyPill status={n.status} since={n.since} discontinued={n.discontinued} /></td>
+                            <td className="sim-hide"><BackCell status={n.status} back={n.back} passed={n.backPassed} url={n.sourceUrl} discontinued={n.discontinued} /></td>
                           </tr>
                         ))}
                         {g.products.filter((p) => p.status === "none").map((p, pi) => (
@@ -1167,8 +1335,8 @@ export default function V1DrugView({
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
                             </td>
-                            <td><SupplyPill status={p.status} since={p.since} history={p.history} /></td>
-                            <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} /></td>
+                            <td><SupplyPill status={p.status} since={p.since} history={p.history} discontinued={p.discontinued} /></td>
+                            <td className="sim-hide"><BackCell status={p.status} back={p.back} passed={p.backPassed} url={p.sourceUrl} exitDate={p.discontinued ? p.exitDate : undefined} discontinued={p.discontinued} /></td>
                           </tr>
                         ))}
                       </Fragment>
@@ -1908,9 +2076,9 @@ const CSS = `
    global tuned palette (globals.css :root) and uses Geist. Kept component-
    local because V1DrugView was authored as a self-contained surface. */
 .v1home .d-name,.v1home .sc-title,.v1home .sec-title,.v1home .chat-title{font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;font-weight:600;letter-spacing:-.03em}
-.v1home{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;--grad-soft:linear-gradient(135deg,#34d399,#0fa676 45%,#0c1118 120%);--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
+.v1home{--ink:var(--navy);--green:var(--teal);--green-d:var(--teal-l);--green-bg:var(--acc-soft);--green-b:#C6F3E6;--grad-soft:linear-gradient(135deg,#34d399,#0fa676 45%,#0c1118 120%);--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
   --violet:#6366f1;--violet-b:#c7d2fe;--bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
-  --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;--crit:#dc2647;--crit-b:#f8cdd6;--med:#b46708;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;--crit-bg:#fdeef1;--med-bg:#fdf6e9;
+  --text:var(--navy);--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;--crit:#dc2647;--crit-b:#f8cdd6;--med:#b46708;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;--crit-bg:#fdeef1;--med-bg:#fdf6e9;
   --hi-inset:inset 0 1px 0 rgba(255,255,255,.7);--sh-card:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06);--sh-pop:0 2px 4px rgba(12,17,24,.05),0 12px 28px -10px rgba(12,17,24,.16);
   background:var(--bg-2);color:var(--text);font-family:var(--font-geist-sans),system-ui,sans-serif;font-size:14px;letter-spacing:-.011em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
@@ -1920,22 +2088,6 @@ const CSS = `
 .home-nav{position:sticky;top:0;z-index:50;height:58px;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
 .nav-actions{display:flex;gap:10px;align-items:center}
 .shell{display:flex;align-items:flex-start;min-height:100vh}
-.sb{width:262px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.sb-top{height:64px;padding:0 28px;display:flex;align-items:center}
-.sb-new{margin:0 14px 10px;display:flex;align-items:center;gap:8px;justify-content:center;padding:11px;border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text-2);background:var(--bg);text-decoration:none}
-.sb-new:hover{border-color:var(--green);color:var(--green-d);background:var(--green-bg)}
-.sb-scroll{flex:1;overflow-y:auto;padding:8px 14px 8px 19px}
-.sb-group{margin-top:14px}
-.sb-glabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-4);padding:6px 9px}
-.sb-item{display:flex;align-items:center;gap:10px;padding:9px;border-radius:10px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none}
-.sb-item:hover{background:var(--bg-2)}
-.sb-empty{color:var(--text-4);font-style:italic}
-.sb-sub{padding-left:18px;color:var(--text-3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-.sb-sub:hover{color:var(--text);background:var(--bg-2)}
-.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.sb-dot.green{background:var(--ok)}
-.sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
-.sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
 .v1app.v1drug .dg-main{flex:1;min-width:0;max-width:none;padding:18px 48px 80px;width:100%;background:#eef1f5}
 .dsearch{display:flex;align-items:center;gap:8px;margin:18px 0 0;background:var(--bg);border:1.5px solid var(--border-2);border-radius:12px;padding:5px 6px 5px 14px;transition:.15s}
@@ -2296,7 +2448,7 @@ const CSS = `
 .sim-back{font-weight:500;color:var(--ink)}
 .sim-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 16px;border-top:1px solid var(--border)}
 .sim-btn{font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:8px;border:1px solid var(--border);text-decoration:none;color:var(--ink)}
-.sim-btn.primary{background:var(--teal,#0fa676);border-color:var(--teal,#0fa676);color:#fff}
+.sim-btn.primary{background:var(--bg);border-color:#D1D5DB;color:var(--navy)}
 .sim-ctx{display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px;font-size:12px;color:var(--text-3);border-top:1px solid var(--border);background:var(--bg-2)}
 .sim-up{border-top:1px solid var(--border)}
 .sim-up summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;font-size:12.5px;color:var(--text-3);cursor:pointer;list-style:none}
@@ -2304,10 +2456,10 @@ const CSS = `
 .sim-hidetxt{display:none}
 .sim-note{padding:8px 16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-4)}
 .sim-extra{display:none}.sim:has(.sim-all input:checked) .sim-extra{display:table-row}
-.sim-all{display:block;position:relative;padding:9px 16px;border-top:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--teal,#0fa676);cursor:pointer}
+.sim-all{display:block;position:relative;padding:9px 16px;border-top:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--teal);cursor:pointer}
 .sim-all input{position:absolute;opacity:0;pointer-events:none}
 .sim-all:has(input:checked) .sim-show{display:none}.sim-all:has(input:checked) .sim-hidetxt{display:inline}.sim-up[open] .sim-show{display:none}.sim-up[open] .sim-hidetxt{display:inline}
-.sim-more{font-size:12px;font-weight:600;color:var(--teal,#0fa676);white-space:nowrap}
+.sim-more{font-size:12px;font-weight:600;color:var(--teal);white-space:nowrap}
 .sim-uptable{border-top:1px solid var(--border)}
 @media(max-width:560px){.sim-hide{display:none}.sim-table td,.sim-table th{padding-left:12px;padding-right:12px}}
 .status-pill{font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
@@ -2396,6 +2548,101 @@ const CSS = `
 /* Print / Export PDF — strip the app chrome and lay the report out as a clean
    document. Sections avoid breaking mid-block; the collapsible record is forced
    open so nothing is hidden in the exported file. */
+/* ── Navy/aqua redesign (2026-11) ─────────────────────────────────────────
+   Flat, edge-to-edge product area. Sections run full width; their content
+   sits on one inset line (--gut: 48px desktop, narrower on small screens).
+   Status colours (crit/med/ok) are unchanged. */
+.v1drug{--gut:48px}
+@media(max-width:820px){.v1drug{--gut:24px}}
+@media(max-width:620px){.v1drug{--gut:16px}}
+.v1app.v1drug{background:#fff}
+.v1app.v1drug .dg-main{padding:0 0 80px;margin:0;max-width:none;background:#fff}
+.v1app.v1drug .dg-main > *{margin-left:var(--gut);margin-right:var(--gut)}
+.v1app.v1drug .dg-main > .product-card,.v1app.v1drug .dg-main > .dtabs{margin-left:0;margin-right:0}
+.v1drug .d-brandhint{margin-top:16px}
+/* Search bar: chat-column strip on desktop; inline fallback below 1080px,
+   where the chat column is hidden. */
+.v1drug .dsearch-narrow{display:none}
+@media(max-width:1079px){.v1drug .dsearch-narrow{display:block;padding-top:16px}}
+.v1drug .dsearch{width:100%;min-width:0;margin:0;gap:8px;padding:4px 4px 4px 12px;background:#F4F5F7;border:1px solid #E5E7EB;border-radius:10px;box-shadow:none}
+.v1drug .dsearch:focus-within{border-color:var(--teal);box-shadow:0 0 0 3px rgba(18,122,99,.15)}
+.v1drug .dsearch-ic{flex:none}
+.v1drug .dsearch input{flex:1;min-width:0;padding:7px 0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:transparent;border:none;outline:none;color:var(--navy)}
+.v1drug .dsearch button{flex:none;height:32px;padding:0 14px;border-radius:8px;background:#fff;border:1px solid #D1D5DB;color:var(--navy);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.v1drug .dsearch button:hover{background:#F9FAFB;border-color:#9CA3AF}
+/* Medicine header (~136px): name / meta line / tags + actions */
+.v1drug .product-card.hero-card{margin-top:0;padding:0;border:0;border-radius:0;box-shadow:none;background:#fff;overflow:visible}
+.v1drug .hero-card .pc-body{padding:20px var(--gut) 16px}
+.v1drug .d-name{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1.15;color:var(--navy);overflow-wrap:anywhere}
+.v1drug .d-meta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;margin-top:6px;min-width:0;font-size:12.5px;color:#6B7280}
+.v1drug .d-meta .d-eml,.v1drug .d-meta .d-ctrl{margin-top:0;font-size:11px;padding:2px 8px}
+.v1drug .hero-card .d-generic,.v1drug .hero-card .d-localcode{display:inline;margin-top:0;font-size:12.5px;color:#6B7280}
+.v1drug .hero-card .d-localcode::before{content:"·";margin-right:10px}
+.v1drug .d-tagrow{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-top:10px}
+.v1drug .d-tagrow .d-tags{flex:1 1 240px;min-width:0;margin-top:0}
+.v1drug .d-tagrow .pc-actions{margin-left:auto;flex-wrap:nowrap}
+/* One primary action: "Find a supplier" is the only filled button. */
+.v1drug .watch-btn,.v1drug .find-supplier-btn{height:36px;padding:0 14px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:none;transform:none}
+.v1drug .watch-btn{background:#fff;border:1px solid #D1D5DB;color:var(--navy)}
+.v1drug .watch-btn:hover:not(:disabled){background:#F9FAFB;border-color:#9CA3AF;color:var(--navy)}
+.v1drug .watch-btn.on{background:var(--acc-soft);border-color:var(--teal);color:var(--teal-l)}
+.v1drug .find-supplier-btn{background:var(--navy);border:1px solid var(--navy);color:#fff}
+.v1drug .find-supplier-btn:hover{background:#141A3A;filter:none;transform:none}
+.v1drug .watch-btn:focus-visible,.v1drug .find-supplier-btn:focus-visible,.v1drug .sim-btn:focus-visible,.v1drug .dsearch button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+/* Status banner */
+.v1drug .hq{border-top:1px solid #E5E7EB}
+.v1drug .hq-head{padding:18px var(--gut);gap:12px;align-items:flex-start}
+.v1drug .hq-title{font-size:20px;line-height:1.3}
+.v1drug .hq-sub{margin-top:4px;font-size:13.5px;line-height:1.5;color:var(--text-2)}
+.v1drug .hq-reason{font-size:13.5px;line-height:1.5}
+.v1drug .hq-src{font-family:inherit;font-size:13.5px;line-height:1.5;color:#6B7280}
+.v1drug .sc-guid{margin-top:4px;font-size:13.5px;line-height:1.5}
+/* Answer boxes: first text on the content line; empty answers stay quiet. */
+.v1drug .hq-q{padding:16px 24px}
+.v1drug .hq-q:first-child{padding-left:var(--gut)}
+.v1drug .hq-q:last-child{padding-right:var(--gut)}
+@container hero (max-width:700px){.v1drug .hq-q{padding-left:var(--gut);padding-right:var(--gut)}}
+.v1drug .hq-q-a.empty{font-size:15px;font-weight:500;letter-spacing:-.01em;color:#6B7280}
+.v1drug .hq-q-d.empty{display:none}
+.v1drug .hq-just,.v1drug .hq-ai{padding-left:var(--gut);padding-right:var(--gut)}
+/* Tabs: flat row, 2px link-teal underline on the active tab. */
+.v1drug .dtabs{margin-top:0;border:0;border-radius:0;box-shadow:none;background:#fff;overflow:visible}
+.v1drug .dtabs-bar{padding:0 var(--gut);background:#fff;border-bottom:1px solid #E5E7EB}
+.v1drug .dtabs-list{gap:24px}
+.v1drug .dtab{margin-bottom:-1px;padding:12px 0;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;box-shadow:none;color:#6B7280}
+.v1drug .dtab:hover{background:none;color:var(--navy)}
+.v1drug .dtab.on{background:none;color:var(--navy);border-bottom-color:#127A63;box-shadow:none}
+.v1drug .dtab:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.v1drug .dtabs-panel{padding:0 var(--gut) 24px}
+/* Flat panels: no floating-card shadows inside any tab. */
+.v1drug .dtabs-panel .subpath,.v1drug .dtabs-panel .alt-card,.v1drug .dtabs-panel .cmp-row,.v1drug .dtabs-panel .price-panel,.v1drug .dtabs-panel .sw-card,.v1drug .dtabs-panel .status-card{box-shadow:none}
+/* Product table: full width, rows edge to edge, text on the content line. */
+.v1drug .dtabs-panel .sim{margin:0 calc(-1 * var(--gut));border:0;border-radius:0;background:#fff}
+.v1drug .sim-ans{padding:14px var(--gut);border-bottom:1px solid #E5E7EB}
+.v1drug .sim-table th:first-child,.v1drug .sim-table td:first-child,.v1drug .sim-form td{padding-left:var(--gut)}
+.v1drug .sim-table th:last-child,.v1drug .sim-table td:last-child{padding-right:var(--gut)}
+.v1drug .sim-all,.v1drug .sim-note,.v1drug .sim-ctx,.v1drug .sim-up summary{padding-left:var(--gut);padding-right:var(--gut)}
+/* Action row under the table: equal 40px buttons on one line; helper text
+   moves to the far right. */
+.v1drug .sim-acts{padding:14px var(--gut);gap:10px;align-items:center}
+.v1drug .sim-acts .find-supplier-row{display:contents}
+.v1drug .sim-acts .find-supplier-hint{order:99;margin-left:auto;font-size:12.5px;color:#6B7280}
+.v1drug .sim-acts .sim-btn,.v1drug .sim-acts .watch-btn,.v1drug .sim-acts .find-supplier-btn{height:40px;display:inline-flex;align-items:center;gap:7px;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;line-height:1}
+.v1drug .sim-btn.primary{background:#fff;border:1px solid #D1D5DB;color:var(--navy)}
+.v1drug .sim-btn.primary:hover{background:#F9FAFB;border-color:#9CA3AF}
+/* Form / strength picker (B3) */
+.fpick{display:flex;flex-direction:column;gap:8px;padding:12px 22px;border-top:1px solid var(--border)}
+.fpick-row{display:flex;flex-wrap:wrap;gap:6px}
+.fpick-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;border:1px solid var(--border-2);background:var(--bg);color:var(--text-2);font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap}
+.fpick-chip:hover{border-color:var(--text-4);color:var(--ink)}
+.fpick-chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.fpick-chip.on .fpick-n{color:rgba(255,255,255,.75)}
+.fpick-n{font-weight:500;color:var(--text-3);font-size:12px}
+.fpick-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.fpick-dot.ok{background:var(--ok)}.fpick-dot.med{background:var(--med)}.fpick-dot.crit{background:var(--crit)}
+.fpick-sub .fpick-chip{font-size:12px;padding:5px 10px}
+/* Picker on the redesign's content line. */
+.v1drug .fpick{padding:12px var(--gut)}
 @media print{
   .v1home{background:#fff;font-size:11px}
   .sb,.chat-col,.dsearch,.report-export,.sb-profile,.home-nav{display:none !important}
@@ -2418,10 +2665,15 @@ const CSS = `
 // register ~100 presentations of a common molecule (GB amoxicillin).
 const SIM_CLEAR_SHOWN = 4;
 
-function SupplyPill({ status, since, history }: {
+function SupplyPill({ status, since, history, discontinued = false }: {
   status: SupplyStatus; since: string | null;
   history?: { count: number; last: string | null } | null;
+  discontinued?: boolean;
 }) {
+  // A discontinuation is a permanent market exit, not a temporary shortage.
+  if (status === "short" && discontinued) {
+    return <span className="status-pill sp-crit"><span className="d" />Discontinued</span>;
+  }
   if (status === "none") {
     // A clean pill alone hid a product that had been short on and off — say
     // when the regulator last listed it (past notices, last 2 years).
@@ -2449,8 +2701,20 @@ function SupplyPill({ status, since, history }: {
     : <span className="status-pill sp-part"><span className="d" />Anticipated{when ? ` from ${when}` : ""}</span>;
 }
 
-function BackCell({ status, back, passed, url }: { status: SupplyStatus; back: string | null; passed: boolean; url: string | null }) {
+function BackCell({ status, back, passed, url, discontinued = false, exitDate }: { status: SupplyStatus; back: string | null; passed: boolean; url: string | null; discontinued?: boolean; exitDate?: string | null }) {
   if (status === "none") return <span className="alt-f">—</span>;
+  if (discontinued) {
+    const d = exitDate ? new Date(exitDate + "T00:00:00Z").toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null;
+    return (
+      <div>
+        <div className="sim-back">Not coming back</div>
+        <div className="alt-f">
+          {d ? `registration ${isFuture(exitDate ?? null) ? "ends" : "ended"} ${d}` : "market exit"}
+          {url ? <> · <a href={url} target="_blank" rel="noopener noreferrer">notice ↗</a></> : null}
+        </div>
+      </div>
+    );
+  }
   const label = back
     ? new Date(back + "T00:00:00Z").toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
     : passed ? "Estimate passed, not updated" : "No estimate";

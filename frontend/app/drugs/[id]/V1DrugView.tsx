@@ -45,6 +45,19 @@ export type EligibilityEntry = {
   country_code: string | null;
 };
 
+// What to call an eligibility entry: the product's name (with its origin,
+// when the description states one) where the source gives one; otherwise the
+// scheme's own reference. TGA s19A references are URL slugs
+// ("diazepam-injection-10mg-2ml-ampoules-hameln-uk") and always come with a
+// product name; MHRA SSP references ("SSP067") are the instrument's real name.
+function eligibilityName(e: EligibilityEntry): string | null {
+  if (e.brand_name) {
+    const origin = /Origin:\s*([^.]+)\./.exec(e.description ?? "")?.[1]?.trim();
+    return `${e.brand_name}${origin ? ` (${origin})` : ""}`;
+  }
+  return e.scheme_reference;
+}
+
 // Human labels for the substitution schemes. Drives the pathways block so a new
 // scraper (MHRA SSP etc.) renders correctly with no further UI change.
 const SCHEME_LABEL: Record<string, string> = {
@@ -516,10 +529,7 @@ export default function V1DrugView({
     // The product's name, not the scheme_reference (a URL slug such as
     // "diazepam-injection-10mg-2ml-ampoules-hameln-uk").
     ? s19aStructured.brand_name
-      ? `${s19aStructured.brand_name}${(() => {
-          const origin = /Origin:\s*([^.]+)\./.exec(s19aStructured.description ?? "")?.[1]?.trim();
-          return origin ? ` (${origin})` : "";
-        })()} · TGA s19A`
+      ? `${eligibilityName(s19aStructured)} · TGA s19A`
       : "TGA-approved overseas product (s19A)"
     : s19aNotesText
       ? "TGA-approved overseas product"
@@ -1527,7 +1537,7 @@ export default function V1DrugView({
                           <div>
                             <div className="subpath-n">
                               {SCHEME_LABEL[e.scheme] ?? "Substitution instrument in force"}
-                              {e.scheme_reference ? ` · ${e.scheme_reference}` : ""}
+                              {eligibilityName(e) ? ` · ${eligibilityName(e)}` : ""}
                             </div>
                             <div className="subpath-d">
                               {e.description || "TGA-approved overseas-registered product may be supplied during this shortage."}

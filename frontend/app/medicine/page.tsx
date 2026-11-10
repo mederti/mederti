@@ -88,8 +88,8 @@ export default async function MedicineHubPage() {
           shortage notices right now — or search the full database with a free account.
         </p>
         <p style={{ fontSize: 13, color: "var(--app-text-3)", margin: "0 0 28px" }}>
-          Browse by <Link href="/country" style={{ color: "var(--teal, #0fa676)" }}>country</Link> or{" "}
-          <Link href="/regulator" style={{ color: "var(--teal, #0fa676)" }}>regulator</Link>.
+          Browse by <Link href="/country" style={{ color: "var(--teal, #127A63)" }}>country</Link> or{" "}
+          <Link href="/regulator" style={{ color: "var(--teal, #127A63)" }}>regulator</Link>.
         </p>
 
         {top.length > 0 ? (
@@ -118,7 +118,7 @@ export default async function MedicineHubPage() {
           <p style={{ fontSize: 15, margin: "0 0 14px", color: "var(--app-text-2)" }}>
             Looking for a specific medicine? Search {COVERAGE_COPY.medicines} and {COVERAGE_COPY.products}.
           </p>
-          <Link href="/signup" style={{ display: "inline-block", background: "var(--teal, #0fa676)", color: "#fff", padding: "10px 22px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+          <Link href="/signup" style={{ display: "inline-block", background: "var(--navy, #090E2C)", color: "#fff", padding: "10px 22px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
             Search free
           </Link>
         </div>

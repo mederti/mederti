@@ -54,13 +54,13 @@ export default function ControlCentrePage() {
       <main style={{ minHeight: "100vh" }}>
         <SiteNav />
         <div style={{ maxWidth: 480, margin: "120px auto", textAlign: "center", padding: "0 20px" }}>
-          <Shield size={32} style={{ color: "var(--teal, #0fa676)", margin: "0 auto 16px" }} />
+          <Shield size={32} style={{ color: "var(--teal, #127A63)", margin: "0 auto 16px" }} />
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Admin sign-in required</h1>
           <Link
             href="/login?redirect=/admin/control-centre"
             style={{
               display: "inline-flex", gap: 8, alignItems: "center", padding: "10px 20px",
-              background: "var(--teal, #0fa676)", color: "#fff", borderRadius: 8,
+              background: "var(--navy, #090E2C)", color: "#fff", borderRadius: 8,
               textDecoration: "none", fontWeight: 600,
             }}
           >

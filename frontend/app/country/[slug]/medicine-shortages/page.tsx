@@ -232,7 +232,7 @@ export default async function CountryShortagesPage(
             <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 2 }}>
               {countryRegs.map((r) => (
                 <li key={r.id}>
-                  <Link href={`/regulator/${regulatorSlug(r)}`} style={{ color: "#0fa676", textDecoration: "none", fontWeight: 500 }}>
+                  <Link href={`/regulator/${regulatorSlug(r)}`} style={{ color: "var(--teal, #127A63)", textDecoration: "none", fontWeight: 500 }}>
                     {r.name} ({r.abbreviation})
                   </Link>
                   {" — "}

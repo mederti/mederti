@@ -567,7 +567,7 @@ export default function SiteNav() {
                 padding: "7px 20px", borderRadius: 7,
                 fontSize: 13, fontWeight: 600, whiteSpace: "nowrap",
                 color: "#fff", textDecoration: "none",
-                background: "var(--teal)", border: "none",
+                background: "var(--navy)", border: "none",
                 transition: "opacity 0.15s",
               }}
               onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.88"; }}

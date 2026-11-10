@@ -107,7 +107,7 @@ export default async function RegulatorPage(
         </h1>
         <p style={{ fontSize: 15, color: "var(--app-text-2)", lineHeight: 1.7, margin: "0 0 24px", maxWidth: 640 }}>
           {reg.name} is the official source of medicine shortage information for{" "}
-          <Link href={`/country/${countrySlug(reg.country_code)}/medicine-shortages`} style={{ color: "var(--teal, #0fa676)", textDecoration: "none", fontWeight: 500 }}>
+          <Link href={`/country/${countrySlug(reg.country_code)}/medicine-shortages`} style={{ color: "var(--teal, #127A63)", textDecoration: "none", fontWeight: 500 }}>
             {cn}
           </Link>
           {reg.region ? ` (${reg.region})` : ""}. Mederti checks its register{" "}
@@ -119,7 +119,7 @@ export default async function RegulatorPage(
           <div>
             <dt style={{ fontSize: 12, color: "var(--app-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Official register</dt>
             <dd style={{ margin: "2px 0 0", fontSize: 14 }}>
-              <a href={reg.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--teal, #0fa676)" }}>
+              <a href={reg.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--teal, #127A63)" }}>
                 {new URL(reg.source_url).hostname}
               </a>
             </dd>
@@ -149,7 +149,7 @@ export default async function RegulatorPage(
               {recent.map((e) => (
                 <li key={e.id}>
                   {e.drugs?.generic_name ? (
-                    <Link href={`/medicine/${slugify(e.drugs.generic_name)}`} style={{ color: "var(--teal, #0fa676)", textDecoration: "none", fontWeight: 500 }}>
+                    <Link href={`/medicine/${slugify(e.drugs.generic_name)}`} style={{ color: "var(--teal, #127A63)", textDecoration: "none", fontWeight: 500 }}>
                       {e.drugs.generic_name}
                     </Link>
                   ) : (
@@ -181,7 +181,7 @@ export default async function RegulatorPage(
           <p style={{ fontSize: 14, color: "var(--app-text-2)", margin: "0 0 16px" }}>
             Search {cn}&apos;s full register alongside 50+ other countries — free for individual pharmacists and clinicians.
           </p>
-          <Link href="/signup" style={{ display: "inline-block", background: "var(--teal, #0fa676)", color: "#fff", padding: "10px 22px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+          <Link href="/signup" style={{ display: "inline-block", background: "var(--navy, #090E2C)", color: "#fff", padding: "10px 22px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
             Create a free account
           </Link>
         </div>

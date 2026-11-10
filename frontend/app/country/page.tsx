@@ -51,8 +51,8 @@ export default async function CountryHubPage() {
           of dozens of regulator websites in a dozen languages. Choose a country for its live list.
         </p>
         <p style={{ fontSize: 13, color: "var(--app-text-3)", margin: "0 0 28px" }}>
-          Or browse by <Link href="/medicine" style={{ color: "var(--teal, #0fa676)" }}>medicine</Link> or{" "}
-          <Link href="/regulator" style={{ color: "var(--teal, #0fa676)" }}>regulator</Link>.
+          Or browse by <Link href="/medicine" style={{ color: "var(--teal, #127A63)" }}>medicine</Link> or{" "}
+          <Link href="/regulator" style={{ color: "var(--teal, #127A63)" }}>regulator</Link>.
         </p>
 
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>

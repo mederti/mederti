@@ -23,12 +23,12 @@ export default function ChatBackdrop() {
         display: "flex", flexDirection: "column", gap: 14,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px 8px" }}>
-          <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#0c1118" }} />
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#0c1118" }}>mederti</div>
+          <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#090E2C" }} />
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#090E2C" }}>mederti</div>
         </div>
 
         <div style={{
-          background: "#0c1118", color: "#fff",
+          background: "#090E2C", color: "#fff",
           padding: "10px 12px", borderRadius: 10,
           fontSize: 13, fontWeight: 500,
         }}>
@@ -74,12 +74,12 @@ export default function ChatBackdrop() {
         <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 10, padding: "10px 6px" }}>
           <div style={{
             width: 32, height: 32, borderRadius: "50%",
-            background: "#0c1118", color: "#fff",
+            background: "#090E2C", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 13, fontWeight: 600,
           }}>R</div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#0c1118" }}>Rob</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#090E2C" }}>Rob</div>
             <div style={{ fontSize: 11, color: "#6a7280" }}>Mederti · Founder</div>
           </div>
         </div>
@@ -99,7 +99,7 @@ export default function ChatBackdrop() {
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div style={{
               fontSize: 13, padding: "6px 12px", borderRadius: 8,
-              border: "1px solid #e8ecf0", color: "#0c1118",
+              border: "1px solid #e8ecf0", color: "#090E2C",
             }}>🇦🇺 AU ▾</div>
             <div style={{ fontSize: 18, color: "#6a7280" }}>🔔</div>
           </div>
@@ -110,7 +110,7 @@ export default function ChatBackdrop() {
           alignItems: "center", justifyContent: "center", padding: 24,
         }}>
           <h1 style={{
-            fontSize: 32, fontWeight: 700, color: "#0c1118",
+            fontSize: 32, fontWeight: 700, color: "#090E2C",
             marginBottom: 16, textAlign: "center",
           }}>
             What do you need to know?
@@ -168,7 +168,7 @@ function SidebarRow({
 }: { children: React.ReactNode; indent?: number; bold?: boolean }) {
   return (
     <div style={{
-      fontSize: 13, color: bold ? "#0c1118" : "#3b434e",
+      fontSize: 13, color: bold ? "#090E2C" : "#3b434e",
       padding: "6px 6px", paddingLeft: 6 + indent * 16,
       display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between",
       fontWeight: bold ? 500 : 400,
@@ -197,7 +197,7 @@ function NavTab({ children, active = false }: { children: React.ReactNode; activ
     <div style={{
       fontSize: 13, padding: "6px 12px", borderRadius: 8,
       background: active ? "#f5f7f9" : "transparent",
-      color: active ? "#0c1118" : "#6a7280",
+      color: active ? "#090E2C" : "#6a7280",
       fontWeight: active ? 600 : 500,
     }}>{children}</div>
   );
@@ -207,9 +207,9 @@ function Chip({ children, highlight = false }: { children: React.ReactNode; high
   return (
     <div style={{
       fontSize: 13, padding: "8px 16px", borderRadius: 999,
-      border: `1px solid ${highlight ? "#0c8a62" : "#e8ecf0"}`,
-      background: highlight ? "#e8f6f0" : "#fff",
-      color: "#0c1118", textAlign: "center",
+      border: `1px solid ${highlight ? "#127A63" : "#e8ecf0"}`,
+      background: highlight ? "#E6FBF5" : "#fff",
+      color: "#090E2C", textAlign: "center",
     }}>{children}</div>
   );
 }

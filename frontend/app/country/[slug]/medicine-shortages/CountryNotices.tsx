@@ -96,8 +96,8 @@ export default function CountryNotices({ name, latest, upcoming, resolving, acti
   const td: React.CSSProperties = { padding: "10px 12px", fontSize: 14, borderTop: "1px solid var(--app-border, #e8ecf0)", verticalAlign: "top" };
   const chip = (on: boolean): React.CSSProperties => ({
     padding: "5px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-    border: `1px solid ${on ? "#0fa676" : "var(--app-border, #dde3e9)"}`,
-    background: on ? "#e8f6f0" : "#fff", color: on ? "#0c8a62" : "var(--app-text-2, #3b434e)",
+    border: `1px solid ${on ? "#127A63" : "var(--app-border, #dde3e9)"}`,
+    background: on ? "#E6FBF5" : "#fff", color: on ? "#0B5A49" : "var(--app-text-2, #3b434e)",
   });
 
   return (
@@ -111,7 +111,7 @@ export default function CountryNotices({ name, latest, upcoming, resolving, acti
             onClick={() => { setTab(t.key); setSev(null); }}
             style={{
               padding: "10px 14px", fontSize: 14, fontWeight: 600, background: "none", border: "none",
-              borderBottom: `2px solid ${tab === t.key ? "#0fa676" : "transparent"}`, marginBottom: -1,
+              borderBottom: `2px solid ${tab === t.key ? "#127A63" : "transparent"}`, marginBottom: -1,
               color: tab === t.key ? "var(--app-text, #0c1118)" : "var(--app-text-3, #6a7280)",
               cursor: "pointer", whiteSpace: "nowrap",
             }}
@@ -168,7 +168,7 @@ export default function CountryNotices({ name, latest, upcoming, resolving, acti
                 <tr key={r.id}>
                   <td style={td}>
                     {r.medicineSlug ? (
-                      <Link href={`/medicine/${r.medicineSlug}`} style={{ color: "#0fa676", textDecoration: "none", fontWeight: 500 }}>
+                      <Link href={`/medicine/${r.medicineSlug}`} style={{ color: "var(--teal, #127A63)", textDecoration: "none", fontWeight: 500 }}>
                         {r.medicine}
                       </Link>
                     ) : (

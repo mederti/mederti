@@ -212,11 +212,11 @@ export default async function MethodologyPage() {
 
 const CSS = `
 .methpage{
-  --ink:#0c1118;--green:#0fa676;--green-l:#34d399;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;
+  --ink:#090E2C;--green:#127A63;--green-l:#44EABC;--green-d:#0B5A49;--green-bg:#E6FBF5;--green-b:#C6F3E6;
   --bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
-  --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;
+  --text:#090E2C;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;
   --crit:#dc2647;--crit-bg:#fdf0f3;--crit-b:#f8cdd6;--med:#b46708;--med-bg:#fdf6e8;--med-b:#f3dcae;
-  --grad-brand:linear-gradient(135deg,#0c1118 0%,#0c3a30 48%,#34d399 100%);
+  --grad-brand:linear-gradient(135deg,#090E2C 0%,#0B5A49 48%,#44EABC 100%);
   position:relative;isolation:isolate;background:var(--bg-2);color:var(--text);
   font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;font-size:14px;line-height:1.5;
   letter-spacing:-.011em;-webkit-font-smoothing:antialiased;min-height:100vh;padding-bottom:64px;overflow-x:clip;
@@ -233,7 +233,7 @@ const CSS = `
 @keyframes methblink{0%,100%{opacity:1}50%{opacity:.25}}
 @media(prefers-reduced-motion:reduce){.methpage .kicker .pulse,.methpage .audit-label .dot{animation:none}}
 .methpage .hero h1{font-size:clamp(38px,6vw,58px);line-height:1.06;font-weight:800;margin-bottom:16px}
-.methpage .hero h1 .em{background:linear-gradient(110deg,#0fa676,#0c1118 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.methpage .hero h1 .em{background:linear-gradient(110deg,#127A63,#090E2C 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .methpage .hero .sub{font-size:17px;color:var(--text-3);max-width:560px;margin:0 auto;letter-spacing:-.01em}
 .methpage .hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;max-width:680px;margin:38px auto 0;text-align:center}
 .methpage .stat-n{font-size:clamp(24px,3.2vw,34px);font-weight:700;letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
@@ -312,7 +312,7 @@ const CSS = `
 .methpage .split-card li{font-size:13px;display:flex;gap:9px;align-items:flex-start;color:var(--text-2);line-height:1.45}
 .methpage .split-card.locked li{color:#c5cdd8}
 .methpage .split-card li .ic{flex-shrink:0;width:16px;height:16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;margin-top:1px;background:var(--green-bg);color:var(--green-d);border:1px solid var(--green-b)}
-.methpage .split-card.locked li .ic{background:rgba(52,211,153,.15);color:var(--green-l);border-color:rgba(52,211,153,.3)}
+.methpage .split-card.locked li .ic{background:rgba(68,234,188,.15);color:var(--green-l);border-color:rgba(68,234,188,.3)}
 .methpage .cta-band{position:relative;max-width:1000px;margin:clamp(56px,7vw,88px) auto 0;padding:52px 24px;border-radius:26px;text-align:center;color:#fff;overflow:hidden;background:var(--ink)}
 .methpage .cta-band::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 120% at 8% 0%,rgba(52,211,153,.5),transparent 60%),radial-gradient(70% 130% at 100% 100%,rgba(16,185,129,.42),transparent 55%),radial-gradient(40% 90% at 60% 10%,rgba(99,102,241,.28),transparent 60%)}
 .methpage .cta-band>*{position:relative}

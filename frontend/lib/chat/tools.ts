@@ -16,6 +16,7 @@ import type {
   SupplierPriceRow,
 } from "./types";
 import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
+import { extractEventBrand, extractEventMarketExit } from "@/lib/event-brand";
 import { ALTERNATIVES_CAVEAT, ALTERNATIVES_SOURCE, atcMatchLabel } from "@/lib/alternatives";
 import { SOURCE_LABELS, fetchSourcedAlternatives } from "@/lib/alternatives-evidence";
 
@@ -557,12 +558,51 @@ function worstSeverity(rows: ShortageRow[]): string | null {
   return best;
 }
 
+/** One verdict per product (country + registration number, else product name):
+ *  discontinued / short / anticipated when it has an open notice, otherwise
+ *  "no current notice" with the date its last notice closed. */
+function buildProductStatus(rows: ShortageRow[]) {
+  const by = new Map<string, ShortageRow[]>();
+  for (const r of rows) {
+    if (!r.product && !r.reg_no) continue;
+    const k = `${r.country_code ?? ""}|${r.reg_no ?? (r.product ?? "").toLowerCase()}`;
+    by.set(k, [...(by.get(k) ?? []), r]);
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const out = [...by.values()].map((all) => {
+    // Most recently verified scrape day wins: an older duplicate left
+    // "resolved" on another drug row must not override today's open notice.
+    const lastDay = (all.map((r) => r.last_verified_at ?? "").sort().pop() ?? "").slice(0, 10);
+    const rs = lastDay ? all.filter((r) => (r.last_verified_at ?? "").slice(0, 10) === lastDay) : all;
+    const open = rs.filter((r) => r.notice_state === "open");
+    const latest = (xs: (string | null | undefined)[]) => (xs.filter(Boolean) as string[]).sort().pop() ?? null;
+    const base = { country_code: rs[0].country_code, product: rs[0].product ?? null, reg_no: rs[0].reg_no ?? null,
+      verified_at: latest(rs.map((r) => r.last_verified_at))?.slice(0, 10) ?? null };
+    if (open.length) {
+      const disc = open.every((r) => (r.reason_category ?? "").toLowerCase() === "discontinuation");
+      const exit = latest(open.map((r) => r.market_exit_date));
+      const ant = open.every((r) => r.status === "anticipated");
+      return { ...base,
+        status: disc ? (exit && exit > today ? "leaving the market (discontinuation)" : "discontinued (permanent market exit)")
+          : ant ? "shortage anticipated" : "short",
+        market_exit_date: disc ? exit : null,
+        since: latest(open.map((r) => r.start_date)),
+        expected_back: disc ? null : latest(open.map((r) => r.estimated_resolution_date)) };
+    }
+    return { ...base, status: "no current notice", last_notice_closed: latest(rs.map((r) => r.end_date)) };
+  });
+  const rank = (s: string) => (s === "no current notice" ? 1 : 0);
+  return out.sort((a, b) => rank(a.status) - rank(b.status)).slice(0, 40);
+}
+
 function shortageSummary(rows: ShortageRow[]) {
   const active = rows.filter((r) => r.status === "active");
   const countries = Array.from(new Set(active.map((r) => r.country_code).filter(Boolean) as string[]));
   return {
     active_shortage_count: active.length,
-    worst_severity: worstSeverity(rows),
+    // Severity of what is open now — a resolved critical notice from last
+    // year is not today's severity.
+    worst_severity: worstSeverity(rows.filter((r) => r.status === "active" || r.status === "anticipated")),
     countries_affected: countries,
   };
 }
@@ -653,14 +693,51 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
   }
   const d: any = drug.data;
 
-  const shortages = await sb
-    .from("shortage_events")
-    .select("country,country_code,status,severity,reason,start_date,estimated_resolution_date,source_url")
-    .eq("drug_id", args.drug_id)
-    .order("start_date", { ascending: false })
-    .limit(50);
+  // Open notices are fetched in full (a 50-row cap ordered by date could drop
+  // an old, still-open notice); closed ones only as recent history.
+  const SEL = "country,country_code,status,severity,reason,reason_category,start_date,end_date,estimated_resolution_date,source_url,last_verified_at,data_source_id,raw_data";
+  const [openRes, closedRes] = await Promise.all([
+    sb.from("shortage_events").select(SEL).eq("drug_id", args.drug_id)
+      .in("status", ["active", "anticipated"]).or("synthetic.is.null,synthetic.eq.false")
+      .order("start_date", { ascending: false }).limit(200),
+    sb.from("shortage_events").select(SEL).eq("drug_id", args.drug_id)
+      .not("status", "in", "(active,anticipated)").or("synthetic.is.null,synthetic.eq.false")
+      .order("start_date", { ascending: false }).limit(30),
+  ]);
+  const shortages = { data: [...(openRes.data ?? []), ...(closedRes.data ?? [])] };
 
-  const rows: ShortageRow[] = (shortages.data ?? []) as ShortageRow[];
+  // Each row says which product it covers and whether it is open today. A
+  // closed (resolved) notice is history: the product has no current notice.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toRow = ({ raw_data, data_source_id, ...r }: any): ShortageRow => {
+    const brand = extractEventBrand(data_source_id ?? null, raw_data);
+    const st = String(r.status || "").toLowerCase();
+    return {
+      ...r,
+      product: brand.brand_name ?? null,
+      sponsor: brand.sponsor ?? null,
+      reg_no: raw_data?.artg_numb ?? raw_data?.din ?? null,
+      market_exit_date: extractEventMarketExit(data_source_id ?? null, raw_data).withdrawal_date,
+      notice_state: st === "active" || st === "anticipated" ? "open" : "closed",
+    } as ShortageRow;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows: ShortageRow[] = ((shortages.data ?? []) as any[]).map(toRow);
+  // The same product's notice can be filed under several drugs rows (salt /
+  // spelling variants). The canonical Amoxicillin row held older, resolved
+  // duplicates of notices that are open on Amoxicillin-Trihydrate. So the
+  // per-product verdict reads every notice for each registration number,
+  // across drug rows, and trusts the most recently verified one.
+  const regRows: ShortageRow[] = [];
+  for (const [cc, field] of [["AU", "artg_numb"], ["CA", "din"]] as const) {
+    const regs = [...new Set(rows.filter((r) => r.country_code === cc && r.reg_no).map((r) => String(r.reg_no)))].slice(0, 100);
+    if (!regs.length) continue;
+    const { data } = await sb.from("shortage_events").select(SEL).eq("country_code", cc)
+      .in(`raw_data->>${field}`, regs).or("synthetic.is.null,synthetic.eq.false").limit(500);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    regRows.push(...((data ?? []) as any[]).map(toRow));
+  }
+  const productStatus = buildProductStatus([...rows, ...regRows]);
   const summary = shortageSummary(rows);
 
   // Per-drug provenance — only attribute regulators where this drug has an
@@ -702,6 +779,10 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     who_essential_medicine: !!d.who_essential_medicine,
     critical_medicine_eu: !!d.critical_medicine_eu,
     shortages: rows,
+    product_status: productStatus,
+    product_status_note: productStatus.length
+      ? "Per-product verdict from the regulator's own shortage register, re-checked by Mederti daily (see verified_at). It is the current status: it overrides web pages, news and search snippets, which often describe an earlier state. A product marked 'no current notice' is not short today."
+      : undefined,
     ...summary,
     sources_consulted: sourcesConsulted,
     external_identifiers: Object.keys(externalIdentifiers).length > 0

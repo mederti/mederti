@@ -1,5 +1,8 @@
 {
   "dependencies": {
     "docx": "^9.7.1"
+  },
+  "devDependencies": {
+    "railway": "^3.16.0"
   }
 }

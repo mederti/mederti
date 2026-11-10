@@ -365,6 +365,13 @@ export default function V1DrugView({
   const localShortage = !!mine;
   // No shortage source for this market: absence of notices proves nothing.
   const noData = !localShortage && marketCovered === false;
+  // Days since the headline notice was last confirmed against its source.
+  const staleDays = (() => {
+    const v = mine?.last_verified_at ?? null;
+    if (!v) return null;
+    const ms = Date.now() - new Date(v).getTime();
+    return Number.isFinite(ms) ? Math.floor(ms / 864e5) : null;
+  })();
   // The regulator's own impact rating, verbatim (TGA: Low / Medium / High /
   // Critical), highest across the market's open notices.
   const IMPACT_RANK: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
@@ -373,7 +380,11 @@ export default function V1DrugView({
   const impactCount = impacts.length;
   const sev = (mine?.severity || "").toLowerCase();
   const isCrit = sev === "critical" || sev === "high";
-  const anticipated = (mine?.status || "").toLowerCase() === "anticipated";
+  // A discontinuation with a future cancellation date is stored "anticipated",
+  // but it is a market exit, not an expected shortage: it must read "Leaving
+  // the market" (Zabep showed "Anticipated shortage" while its ARTG
+  // registration ends 17 Nov 2026).
+  const anticipated = (mine?.status || "").toLowerCase() === "anticipated" && !(mine && isDisc(mine));
 
   // Discontinuation is a market exit, not a supply gap — it is never "back",
   // so it must not read as a "Critical shortage". The regulator-stated
@@ -844,6 +855,14 @@ export default function V1DrugView({
                   )}
                 {brandLine && <span className="hq-reason" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{brandLine}</span>}
                 {noData && <span className="hq-reason">Mederti has no shortage source for {cName}, so we can&apos;t say whether it&apos;s in supply there. Check with your supplier or the national regulator.</span>}
+                {localShortage && staleDays !== null && staleDays > 7 && (
+                  // The regulator feed hasn't been read for a week+: say so
+                  // rather than present old notices as current (Health
+                  // Canada's site has blocked our reader since 13 Sep 2026).
+                  <span className="hq-reason" style={{ display: "block", color: "var(--crit, #b42318)", fontWeight: 600 }}>
+                    Out of date: we last confirmed this with {expSource} {staleDays} days ago. Check the regulator before relying on it.
+                  </span>
+                )}
                 <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : noData ? "Coverage gap, not a supply status" : "Source: official regulators"}</span>
                 </div>
                 {localShortage && discontinued && (regGuidance || regStatementUrl) && (
@@ -1120,7 +1139,9 @@ export default function V1DrugView({
                       <Fragment key={g.form}>
                         <tr className="sim-form"><td colSpan={3}>{g.form}</td></tr>
                         {g.products.filter((p) => p.status !== "none").map((p) => (
-                          <tr key={p.name}>
+                          // data-* lets the nightly scenario suite check every
+                          // registration's status (the cell shows only two).
+                          <tr key={p.name} data-regs={p.regNos.join("|")} data-status={p.status}>
                             <td>
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
@@ -1140,7 +1161,7 @@ export default function V1DrugView({
                           </tr>
                         ))}
                         {g.products.filter((p) => p.status === "none").map((p, pi) => (
-                          <tr key={p.name} className={pi >= SIM_CLEAR_SHOWN ? "sim-extra" : undefined}>
+                          <tr key={p.name} className={pi >= SIM_CLEAR_SHOWN ? "sim-extra" : undefined} data-regs={p.regNos.join("|")} data-status={p.status}>
                             <td>
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>

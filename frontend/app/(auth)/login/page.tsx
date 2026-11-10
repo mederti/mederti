@@ -258,14 +258,14 @@ function LoginForm() {
               {loading ? "Sending link…" : "Send magic link"}
             </button>
             <p style={{ fontSize: 12, color: "var(--app-text-4)", marginTop: 10, textAlign: "center" }}>
-              We'll email you a one-click sign-in link — no password needed.
+              We&apos;ll email you a one-click sign-in link — no password needed.
             </p>
           </form>
         )}
 
         {/* Footer links */}
         <div style={{ marginTop: 24, textAlign: "center", fontSize: 13, color: "var(--app-text-3)" }}>
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href={`/signup${next !== "/home" ? `?next=${encodeURIComponent(next)}` : ""}`}
             style={{ color: "var(--teal)", fontWeight: 500 }}>
             Sign up

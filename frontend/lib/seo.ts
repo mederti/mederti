@@ -8,6 +8,8 @@
  *   single highest-leverage rich-results unlock for B2B pharma search.
  */
 
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
+
 // Env vars pasted into the Vercel dashboard can carry stray whitespace or a
 // trailing newline. That newline survived string interpolation and shipped
 // literal "https://www.mederti.com\n/drugs/..." URLs in the live sitemap and
@@ -33,6 +35,13 @@ export function siteUrl(): string {
   if (process.env.VERCEL_ENV === "production") return "https://mederti.com";
   if (process.env.VERCEL_URL) return cleanOrigin(`https://${process.env.VERCEL_URL}`);
   return "https://mederti.com";
+}
+
+// Next.js merges metadata shallowly: a page that sets its own `openGraph`
+// replaces the layout's whole object, images included. Spread this into any
+// page-level openGraph that has no image of its own.
+export function defaultOgImages() {
+  return [{ url: `${siteUrl()}/api/og`, width: 1200, height: 630, alt: "Mederti — global medicine shortage intelligence" }];
 }
 
 export function canonicalUrl(path: string): string {
@@ -248,7 +257,7 @@ export function organizationJsonLd(): Record<string, unknown> {
       "url": `${base}/logo-black.png`,
     },
     "description":
-      "Mederti is a global medicine shortage intelligence platform. It aggregates, normalises and monitors drug shortage and recall notices published by official medicines regulators across 50+ countries, updated daily.",
+      `Mederti is a global medicine shortage intelligence platform. It aggregates, normalises and monitors drug shortage and recall notices published by official medicines regulators across ${COVERAGE_COPY.countries}, updated daily.`,
     "email": "hello@mederti.com",
     "sameAs": [
       "https://www.linkedin.com/company/mederti",

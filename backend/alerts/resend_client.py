@@ -22,6 +22,43 @@ _API_URL       = "https://api.resend.com/emails"
 _STUBBED = not RESEND_API_KEY or RESEND_API_KEY.startswith("re_placeholder")
 
 
+def send_email(
+    to: str,
+    subject: str,
+    html: str,
+    headers: dict[str, str] | None = None,
+) -> tuple[bool, str | None, str | None]:
+    """Send one email. Returns (sent, provider_message_id, error).
+
+    Reads the key and sender at call time (the module constants above are
+    read at import, before a script's load_dotenv runs). Never raises.
+    """
+    key = os.getenv("RESEND_API_KEY", "")
+    sender = os.getenv("RESEND_FROM_EMAIL", "intelligence@mederti.com")
+    if not key or key.startswith("re_placeholder"):
+        log.info("RESEND_API_KEY not configured — stubbing email", extra={"to": to, "subject": subject})
+        return False, None, "stubbed: RESEND_API_KEY not set"
+    payload: dict = {"from": sender, "to": [to], "subject": subject, "html": html}
+    if headers:
+        payload["headers"] = headers
+    try:
+        resp = httpx.post(
+            _API_URL,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=15.0,
+        )
+        if resp.status_code >= 400:
+            # Resend's body says why (e.g. 403 "domain is not verified").
+            error = f"HTTP {resp.status_code}: {resp.text[:300]}"
+            log.error("Email send failed", extra={"to": to, "subject": subject, "error": error})
+            return False, None, error
+        return True, (resp.json() or {}).get("id"), None
+    except Exception as exc:  # noqa: BLE001
+        log.error("Email send failed", extra={"to": to, "subject": subject, "error": str(exc)})
+        return False, None, str(exc)
+
+
 def send_shortage_alert(
     to: str,
     drug_name: str,

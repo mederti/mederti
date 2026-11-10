@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { ALTERNATIVES_CAVEAT, atcMatchLabel } from "@/lib/alternatives";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import SiteNav from "@/app/components/landing-nav";
-import MinimalFooter from "@/app/components/minimal-footer";
+import AppShell from "@/app/components/v1/AppShell";
+import MedicineChatPanel from "./MedicineChatPanel";
 import {
   jsonLdSafe,
   drugJsonLd,
@@ -22,6 +23,7 @@ import {
   fmtDate,
   reasonLabel,
   type PseoShortageEvent,
+  type AlternativeRow,
 } from "@/lib/pseo";
 import { countryName, countrySlug } from "@/lib/geo/country-names";
 import { cleanBrandNames } from "@/lib/brand";
@@ -87,6 +89,51 @@ function rollupByCountry(active: PseoShortageEvent[]): CountryRollup[] {
       (SEV_ORDER[a.worstSeverity ?? ""] ?? 9) - (SEV_ORDER[b.worstSeverity ?? ""] ?? 9) ||
       b.count - a.count,
   );
+}
+
+// Grounding text for the page's chat: exactly what the page shows (per-country
+// status, the notices behind it with dates and sources, and the same-class
+// alternatives), plus how to treat forward-looking questions honestly.
+function groundingText(
+  name: string,
+  rollup: CountryRollup[],
+  active: PseoShortageEvent[],
+  anticipated: PseoShortageEvent[],
+  resolved: PseoShortageEvent[],
+  alternatives: AlternativeRow[],
+  lastUpdated: string | undefined,
+): string {
+  const src = (e: PseoShortageEvent) =>
+    `${e.data_sources?.abbreviation ?? e.data_sources?.name ?? "source"}${e.source_url ? ` <${e.source_url}>` : ""}`;
+  const notice = (e: PseoShortageEvent) =>
+    `- ${countryName(e.country_code ?? e.country)} | ${e.status}${e.severity ? ` | ${e.severity}` : ""}${
+      reasonLabel(e.reason_category) ? ` | ${reasonLabel(e.reason_category)}` : ""
+    } | start ${e.start_date ?? "unknown"} | est. resolution ${e.estimated_resolution_date ?? "not stated"}${
+      e.end_date ? ` | ended ${e.end_date}` : ""
+    } | ${src(e)}`;
+  const parts = [
+    `Medicine: ${name}. Data last updated ${lastUpdated ?? "unknown"}, from official national medicines regulators.`,
+    `Counts are shortage NOTICES, not products — regulators list each strength/pack separately. Active notices ${active.length} across ${rollup.length} countr${rollup.length === 1 ? "y" : "ies"}; anticipated ${anticipated.length}. Countries not listed below have no active notice in Mederti's data — that is NOT the same as confirmed "in supply"; some markets have no shortage source at all.`,
+    `HOW TO ANSWER FORWARD-LOOKING QUESTIONS ("when will it be back", "will it go short", "should I buy now"): Mederti has no validated shortage forecast — its backtests did not hold up — so never present a prediction or risk score as fact. Answer only from regulator-announced facts: the estimated resolution dates and anticipated notices below, each cited with its regulator and date. If a notice has no estimated resolution date, say the regulator has not stated one. Today is ${new Date().toISOString().slice(0, 10)}: an ACTIVE notice whose estimated resolution date has already passed means the regulator's estimate lapsed and the notice is still listed active — say exactly that, never that the medicine is back in supply. For purchasing or stocking questions, frame as "what the published notices suggest", cite the notices, and say it is not procurement advice.`,
+    `PER-COUNTRY STATUS (worst severity | notices | earliest start | latest est. resolution | sources):`,
+    ...rollup.map(
+      (r) =>
+        `- ${r.name} (${r.code}) | ${r.worstSeverity ?? "severity not stated"} | ${r.count} | ${r.since ?? "unknown"} | ${r.estResolution ?? "not stated"} | ${r.sources.map((s) => s.abbr).join(", ")}`,
+    ),
+    `SAME-CLASS ALTERNATIVES SHOWN ON THIS PAGE (${alternatives.length}) — WHO ATC classification only, NOT a clinical substitution recommendation, not dose-equivalent; a prescriber must confirm any switch. If you use tools to find regulator-cited alternatives, name the citing source and keep them distinct from these:`,
+    ...alternatives.map(
+      (a) => `- ${a.drugs?.generic_name ?? "Unnamed"}${atcMatchLabel(a.atc_match_level, a.drugs?.atc_code) ? ` | ${atcMatchLabel(a.atc_match_level, a.drugs?.atc_code)}` : ""}`,
+    ),
+    // The chat route truncates context at 12k chars, so the long notice lists
+    // come last and are capped; the per-country rollup above covers every market.
+    `ACTIVE NOTICES (${Math.min(active.length, 30)} most recent of ${active.length}):`,
+    ...active.slice(0, 30).map(notice),
+    `ANTICIPATED NOTICES (${Math.min(anticipated.length, 15)} of ${anticipated.length}):`,
+    ...anticipated.slice(0, 15).map(notice),
+    `RECENTLY RESOLVED (${resolved.length} most recent shown on page):`,
+    ...resolved.map(notice),
+  ];
+  return parts.join("\n");
 }
 
 export async function generateMetadata(
@@ -191,13 +238,23 @@ export default async function MedicinePage(
   const th = { padding: "10px 12px", fontSize: 12, textTransform: "uppercase" as const, letterSpacing: "0.05em", color: "var(--app-text-3)", textAlign: "left" as const };
 
   return (
-    <div style={{ background: "#fff", minHeight: "100vh", color: "var(--app-text)", fontFamily: "var(--font-geist-sans), sans-serif" }}>
+    <AppShell
+      className="medicine-landing"
+      chatScope="panel"
+      chatPanel={
+        <MedicineChatPanel
+          drugId={drug.id}
+          name={drug.generic_name}
+          slug={slug}
+          bodyText={groundingText(drug.generic_name, rollup, active, anticipated, resolved, alternatives, lastUpdated ?? undefined)}
+        />
+      }
+    >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(crumbs) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(faqJsonLd(faqs)) }} />
-      <SiteNav />
 
-      <main style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px 80px" }}>
+      <div style={{ maxWidth: 760, color: "var(--app-text)" }}>
         <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--app-text-3)", marginBottom: 16 }}>
           <Link href="/" style={{ color: "inherit" }}>Home</Link>
           {" / "}
@@ -348,9 +405,9 @@ export default async function MedicinePage(
         {/* ── Alternatives ── */}
         {alternatives.length > 0 && (
           <>
-            <h2 style={h2}>Alternatives to {drug.generic_name}</h2>
+            <h2 style={h2}>Drugs in the same class as {drug.generic_name}</h2>
             <p style={{ fontSize: 13, color: "var(--app-text-3)", margin: "0 0 12px" }}>
-              Clinically related options from Mederti&apos;s curated alternatives data. Always confirm suitability with a pharmacist or prescriber before substituting.
+              {ALTERNATIVES_CAVEAT}
             </p>
             <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.9 }}>
               {alternatives.map((a) => (
@@ -360,7 +417,7 @@ export default async function MedicinePage(
                       {a.drugs.generic_name}
                     </Link>
                   ) : "Unnamed"}
-                  {a.relationship_type ? <span style={{ color: "var(--app-text-3)" }}> — {a.relationship_type.replace(/_/g, " ")}</span> : null}
+                  {atcMatchLabel(a.atc_match_level, a.drugs?.atc_code) ? <span style={{ color: "var(--app-text-3)" }}> — {atcMatchLabel(a.atc_match_level, a.drugs?.atc_code)}</span> : null}
                 </li>
               ))}
             </ul>
@@ -430,9 +487,7 @@ export default async function MedicinePage(
           It is provided for information only and requires verification before clinical use. Mederti is
           not affiliated with or endorsed by any regulator.
         </p>
-      </main>
-
-      <MinimalFooter />
-    </div>
+      </div>
+    </AppShell>
   );
 }

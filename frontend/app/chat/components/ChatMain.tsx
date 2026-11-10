@@ -276,9 +276,9 @@ export function ChatMain({
       // Frame matched to the /search bar (.searchbox.v1sb) for a consistent
       // look across surfaces: 1.5px border, 14px radius, soft drop shadow, and
       // a brand-green focus border + green glow.
-      className={`bg-white border-[1.5px] rounded-[14px] shadow-[0_12px_36px_-22px_rgba(10,15,26,0.28)] focus-within:border-[#0fa676] focus-within:shadow-[0_12px_36px_-18px_rgba(16,185,129,0.4)] transition-all overflow-hidden relative ${
+      className={`bg-white border-[1.5px] rounded-[14px] shadow-[0_12px_36px_-22px_rgba(10,15,26,0.28)] focus-within:border-[var(--teal)] focus-within:shadow-[0_12px_36px_-18px_rgba(16,185,129,0.4)] transition-all overflow-hidden relative ${
         isDragging
-          ? "border-[#0fa676] ring-2 ring-emerald-100"
+          ? "border-[var(--teal)] ring-2 ring-emerald-100"
           : "border-[#dde3e9]"
       }`}
       onDragEnter={(e) => {
@@ -343,7 +343,7 @@ export function ChatMain({
           disabled={pending}
           title="Attach files (CSV, Excel, PDF, images)"
           aria-label="Attach files"
-          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-[#0fa676] hover:bg-slate-50 transition-colors shrink-0"
+          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-[var(--teal)] hover:bg-slate-50 transition-colors shrink-0"
         >
           <Paperclip size={16} />
         </button>
@@ -353,7 +353,7 @@ export function ChatMain({
           disabled={pending}
           title="Scan barcode or take photo of product"
           aria-label="Scan barcode or take photo"
-          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-[#0fa676] hover:bg-slate-50 transition-colors shrink-0"
+          className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-[var(--teal)] hover:bg-slate-50 transition-colors shrink-0"
         >
           <ScanBarcode size={16} />
         </button>
@@ -445,7 +445,7 @@ export function ChatMain({
                   What Drug Are You Looking For
                 </h1>
                 <p className="text-[14px] text-slate-500 max-w-[480px] mx-auto">
-                  Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what's not covered.
+                  Ask about drug shortages, recalls, or substitutes across the markets Mederti indexes. Live regulator data — and honest about what&apos;s not covered.
                 </p>
               </div>
               {/* Search bar lifted directly under the heading + subheading on the

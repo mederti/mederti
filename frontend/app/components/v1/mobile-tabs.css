@@ -41,7 +41,7 @@
     cursor: pointer;
   }
   .mtab svg { width: 20px; height: 20px; }
-  .mtab-on { color: #0c8a62; }
+  .mtab-on { color: var(--teal); }
 
   /* Nav + chat → full-screen overlays that sit above content, hidden until
      their tab is active. `.context-rail` is ContextChat's own column (insights,

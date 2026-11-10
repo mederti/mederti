@@ -5,17 +5,13 @@
 // own route so the two dashboards can be public in the soft-launch tier WITHOUT
 // exposing the full /chat product. Reuses the exact view components + the
 // generalized ContextChat so there's a single source of truth for both.
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { DesktopOnly } from "@/app/components/DesktopOnly";
-import V1Sidebar from "@/app/components/v1/V1Sidebar";
+import AppShell from "@/app/components/v1/AppShell";
 import { EarlyWarningView } from "@/app/chat/components/views/EarlyWarningView";
 import { GovDashboardView } from "@/app/chat/components/views/GovDashboardView";
-import { ContextChat } from "@/app/chat/components/ContextChat";
-import MobileTabBar from "@/app/components/v1/MobileTabBar";
-// Scoped chat.css powers ContextChat's rich answer rendering under
-// .mederti-chat-root (same wrapper /chat uses).
-import "@/app/chat/chat.css";
 
 export type InsightKind = "intelligence" | "dashboard";
 
@@ -36,23 +32,23 @@ const CONFIG: Record<
   intelligence: {
     Component: EarlyWarningView,
     title: "Early-warning radar",
-    category: "Predictive early-warning radar (global)",
+    category: "Early-warning radar (peer markets)",
     headerLabel: "Ask about the radar",
     bodyText:
-      "Mederti predictive early-warning radar (global). Forecasts which drugs are likely to go into shortage BEFORE official declaration, using upstream signals from 22 countries (e.g. India CDSCO GMP flags, China NMPA precursor export drops, environmental closures, recurring seasonal patterns, sponsor deregistrations). Drugs are ranked by probability × clinical impact, each with a signal driver, a predicted window, a probability, and a confidence score. Also surfaces a live upstream-site feed and the model's forecast-confidence / calibration.",
+      "Mederti early-warning radar. Lists drugs in active shortage in two or more of the user's peer markets but not yet reported short in the user's market, from official regulator shortage reports (" + COVERAGE_COPY.countries + "). Each row shows the peer markets short, the worst severity and how long the peers have been short. It is an observation, not a forecast: in Mederti's 2025–26 history such drugs were 2.5–6× more likely to be reported short in the user's market within six months (13–39% vs 3–11%), but most were not. There are no probabilities, predicted windows, confidence scores or upstream site feeds on this page.",
     starters: [
-      "Why is cephalexin flagged as high-risk?",
-      "What upstream signals feed amoxicillin supply?",
-      "How accurate are these forecasts historically?",
+      "Which of these are WHO essential medicines?",
+      "Which peer markets are short on the top flagged drug?",
+      "How often do these flags turn into local shortages?",
     ],
   },
   dashboard: {
     Component: GovDashboardView,
     title: "National Shortage Dashboard",
-    category: "National medicines-supply dashboard (Australia)",
+    category: "National medicines-supply dashboard",
     headerLabel: "Ask about this dashboard",
     bodyText:
-      "Mederti National Shortage Dashboard for Australia — the national medicines-supply picture across the TGA plus benchmarked regulators. Headline metrics: active shortages, essential medicines in shortage (WHO EML affected), medicines single-sourced nationally, median resolution time vs peers, and upstream alerts (India/China API sites). It lists the essential medicines currently in shortage (drug, class/ATC, suppliers active, duration, clinical risk, forecast return window), shows concentration risk by drug class (share dependent on a single API source), and benchmarks Australia's essential-medicine shortage burden against peer countries.",
+      "Mederti National Shortage Dashboard for the user's market (from the sidebar country picker), built live from regulator shortage reports. Headline metrics: active shortage reports and how many started in the last 30 days; essential medicines (WHO Model List or EU Union list of critical medicines) short now, and how many of those have concentrated supply; median duration of shortages resolved in the last 12 months; and essential medicines short in two or more peer markets but not reported here. It lists the essential medicines short now (days since first report, number of API makers and US finished-dose firms, top API-making country, countries short), plots supply concentration against how many countries are short, compares essential shortages across peer markets, and shows where essential-medicine APIs are made. Supply concentration describes the supply base; Mederti's backtest found it predicts neither when a shortage starts nor how long it lasts. There are no forecasts, clinical-risk scores or upstream site alerts on this page.",
     starters: [
       "Which essential medicines are at critical risk right now?",
       "How does Australia's shortage burden compare to peer countries?",
@@ -67,34 +63,26 @@ export default function InsightsClient({ kind }: { kind: InsightKind }) {
 
   return (
     <DesktopOnly>
-      <div
-        className="mederti-chat-root flex h-screen overflow-hidden bg-white text-slate-900"
-        style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}
-      >
-        {/* ── Left sidebar (shared app shell, identical to /chat, /search, /drugs) ── */}
-        <V1Sidebar />
-
-        {/* ── Middle: grounded chat (new template — chat drives, reading
-             left-to-right as nav → conversation → detail) ── */}
-        <ContextChat
-          key={`insight:${kind}`}
-          contextKey={kind}
-          title={cfg.title}
-          category={cfg.category}
-          bodyText={cfg.bodyText}
-          headerLabel={cfg.headerLabel}
-          placement="left"
-          emptyLead={
+      {/* Shared AppShell, `fill` mode: V1Sidebar → grounded chat (middle) →
+          the operational view (right), which owns its own scrolling. */}
+      <AppShell
+        fill
+        chat={{
+          contextKey: kind,
+          title: cfg.title,
+          category: cfg.category,
+          bodyText: cfg.bodyText,
+          headerLabel: cfg.headerLabel,
+          emptyLead: (
             <>
               You&apos;re viewing{" "}
               <span className="font-medium text-slate-700">{cfg.title}</span>. Ask me anything
               about it — I&apos;ll use live Mederti data for specifics.
             </>
-          }
-          starters={cfg.starters}
-        />
-
-        {/* ── Right: the operational view, full-width detail panel ── */}
+          ),
+          starters: cfg.starters,
+        }}
+      >
         <main className="flex-1 min-w-0 flex flex-col h-screen bg-white">
           <div className="h-14 flex items-center px-6 gap-3 shrink-0 border-b border-slate-100">
             <Link
@@ -112,9 +100,7 @@ export default function InsightsClient({ kind }: { kind: InsightKind }) {
             <ViewComp />
           </div>
         </main>
-
-        <MobileTabBar />
-      </div>
+      </AppShell>
     </DesktopOnly>
   );
 }

@@ -97,3 +97,6 @@ node_modules/
 # Kept on disk for the pipeline; must never enter git history.
 /exports/
 /catalogue_inn_targets.tsv
+
+# Weekly SEO report output (scripts/seo_weekly_report.py)
+reports/seo/

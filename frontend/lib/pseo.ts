@@ -17,6 +17,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { COVERAGE_COPY } from "@/lib/coverage-copy";
 
 // ─── Slugs ──────────────────────────────────────────────────────────────────
 
@@ -149,14 +150,22 @@ export async function drugBySlug(slug: string): Promise<PseoDrug | null> {
 
   // 2) Fallback: a slug hyphen can also stand for "-", "/", " / ", "(" etc.
   //    Wildcard-match, then verify below so over-matching is harmless.
+  //    slugify() also drops leading/trailing punctuation ("Rabipur,",
+  //    "Acetylcysteine(600Mg)"), so the pattern must be open at the ends or
+  //    those sitemap URLs render "Medicine not found". The trailing-only
+  //    pattern goes first so a common name can't be crowded out of the limit.
   if (candidates.length === 0) {
     const pattern = clean.replace(/-/g, "%");
-    const fuzzy = await admin
-      .from("drugs")
-      .select(DRUG_COLS)
-      .ilike("generic_name_normalised", pattern)
-      .limit(25);
-    candidates = (fuzzy.data ?? []) as unknown as PseoDrug[];
+    for (const p of [`${pattern}%`, `%${pattern}%`]) {
+      const fuzzy = await admin
+        .from("drugs")
+        .select(DRUG_COLS)
+        .ilike("generic_name_normalised", p)
+        .limit(50);
+      candidates = ((fuzzy.data ?? []) as unknown as PseoDrug[])
+        .filter((d) => slugify(d.generic_name) === clean);
+      if (candidates.length > 0) break;
+    }
   }
 
   const verified = candidates.filter((d) => slugify(d.generic_name) === clean);
@@ -189,10 +198,8 @@ export async function eventsForDrug(drugId: string): Promise<PseoShortageEvent[]
 export interface AlternativeRow {
   alternative_drug_id: string;
   relationship_type: string | null;
-  clinical_evidence_level: string | null;
-  similarity_score: number | null;
-  availability_note: string | null;
-  drugs: { generic_name: string; brand_names: string[] | null } | null;
+  atc_match_level: number | null;
+  drugs: { generic_name: string; brand_names: string[] | null; atc_code: string | null } | null;
 }
 
 export async function alternativesForDrug(drugId: string): Promise<AlternativeRow[]> {
@@ -200,11 +207,11 @@ export async function alternativesForDrug(drugId: string): Promise<AlternativeRo
   const { data } = await admin
     .from("drug_alternatives")
     .select(
-      "alternative_drug_id, relationship_type, clinical_evidence_level, similarity_score, availability_note, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name, brand_names)",
+      "alternative_drug_id, relationship_type, atc_match_level, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name, brand_names, atc_code)",
     )
     .eq("drug_id", drugId)
     .eq("is_approved", true)
-    .order("similarity_score", { ascending: false })
+    .order("atc_match_level", { ascending: false })
     .limit(6);
   return (data ?? []) as unknown as AlternativeRow[];
 }
@@ -219,8 +226,10 @@ export async function relatedDrugs(
     .select("id, generic_name, atc_description")
     .neq("id", drug.id)
     .limit(6);
-  if (drug.atc_code && drug.atc_code.length >= 4) {
-    q = q.ilike("atc_code", `${drug.atc_code.slice(0, 4)}%`);
+  // Same class = shared ATC level 4 (first 5 characters, e.g. N02BE), not
+  // level 3 (N02B), which grouped Paracetamol with Gabapentin.
+  if (drug.atc_code && drug.atc_code.length >= 5) {
+    q = q.ilike("atc_code", `${drug.atc_code.slice(0, 5)}%`).neq("atc_code", drug.atc_code);
   } else if (drug.drug_class) {
     q = q.eq("drug_class", drug.drug_class);
   } else {
@@ -236,7 +245,24 @@ export interface CountrySummary {
   active: number | null;
   anticipated: number | null;
   critical: number | null;
+  /**
+   * Distinct canonical medicines behind the active notices. Regulators list
+   * each strength/pack separately, so `active` counts notices and runs well
+   * above official per-medicine tallies; this is the comparable figure.
+   * null when it couldn't be computed (or the country is too large to page).
+   */
+  activeMedicines: number | null;
   recent: PseoShortageEventWithDrug[];
+  /**
+   * Regulator-announced future shortages: anticipated or active notices whose
+   * start date is still ahead. Facts published by the regulator — not
+   * a Mederti forecast. Soonest first.
+   */
+  upcoming: PseoShortageEventWithDrug[];
+  /** Total behind `upcoming` (uncapped): anticipated + active notices with start_date > today. */
+  upcomingTotal: number | null;
+  /** Active notices with a regulator-estimated resolution date, soonest first. */
+  resolving: PseoShortageEventWithDrug[];
 }
 
 export interface PseoShortageEventWithDrug extends PseoShortageEvent {
@@ -261,10 +287,40 @@ export async function countrySummary(code: string): Promise<CountrySummary> {
     }
   };
 
-  const [active, anticipated, critical, recentRes] = await Promise.all([
+  // Distinct drug_id across active notices. PostgREST aggregates are disabled,
+  // so page the column (1,000-row cap per request); bail out past 20k rows
+  // rather than hammer the DB for a figure that's only context.
+  const distinctActiveMedicines = async (): Promise<number | null> => {
+    try {
+      const ids = new Set<string>();
+      for (let from = 0; from < 20000; from += 1000) {
+        const { data, error } = await realEventsFilter(
+          admin
+            .from("shortage_events")
+            .select("drug_id")
+            .eq("country_code", code)
+            .eq("status", "active")
+            .not("drug_id", "is", null),
+        )
+          .order("id")
+          .range(from, from + 999);
+        if (error || !data) return null;
+        for (const r of data as { drug_id: string }[]) ids.add(r.drug_id);
+        if (data.length < 1000) return ids.size;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [active, anticipated, critical, activeMedicines, recentRes] = await Promise.all([
     countWhere({ status: "active" }),
     countWhere({ status: "anticipated" }),
     countWhere({ status: "active", severity: "critical" }),
+    distinctActiveMedicines(),
     // Only events resolved to a canonical molecule: each row links out to its
     // /medicine page, and unlinked catalogue-level rows would render as an
     // unclickable "Unlinked product" wall on a public page.
@@ -276,18 +332,91 @@ export async function countrySummary(code: string): Promise<CountrySummary> {
         )
         .eq("country_code", code)
         .not("drug_id", "is", null)
-        .in("status", ["active", "anticipated"]),
+        .in("status", ["active", "anticipated"])
+        // "Latest notices" sorts by start_date desc, so forward-dated notices
+        // (TGA discontinuations effective 2027) would otherwise pin the top
+        // of the table with dates that haven't happened yet.
+        .lte("start_date", today),
     )
       .order("start_date", { ascending: false, nullsFirst: false })
       .limit(50),
   ]);
 
+  const [anticipatedRes, futureActiveRes, resolvingRes] = await Promise.all([
+    realEventsFilter(
+      admin
+        .from("shortage_events")
+        .select(`drug_id, drugs(generic_name), ${EVENT_COLS}`)
+        .eq("country_code", code)
+        .eq("status", "anticipated")
+        .not("drug_id", "is", null)
+        // Only notices still ahead of us: an "anticipated" row whose start date
+        // has passed is stale, not upcoming.
+        .gt("start_date", today),
+    )
+      .order("start_date", { ascending: true })
+      .limit(50),
+    realEventsFilter(
+      admin
+        .from("shortage_events")
+        .select(`drug_id, drugs(generic_name), ${EVENT_COLS}`)
+        .eq("country_code", code)
+        .eq("status", "active")
+        .not("drug_id", "is", null)
+        .gt("start_date", today),
+    )
+      .order("start_date", { ascending: true })
+      .limit(50),
+    realEventsFilter(
+      admin
+        .from("shortage_events")
+        .select(`drug_id, drugs(generic_name), ${EVENT_COLS}`)
+        .eq("country_code", code)
+        .eq("status", "active")
+        .not("drug_id", "is", null)
+        .gte("estimated_resolution_date", today),
+    )
+      .order("estimated_resolution_date", { ascending: true })
+      .limit(50),
+  ]);
+
+  const countFuture = async (status: string): Promise<number | null> => {
+    try {
+      const { count, error } = await realEventsFilter(
+        admin
+          .from("shortage_events")
+          .select("id", { count: "exact", head: true })
+          .eq("country_code", code)
+          .eq("status", status)
+          .not("drug_id", "is", null)
+          .gt("start_date", today),
+      );
+      return error ? null : count;
+    } catch {
+      return null;
+    }
+  };
+  const [futureAnticipated, futureActive] = await Promise.all([
+    countFuture("anticipated"),
+    countFuture("active"),
+  ]);
+  const upcomingTotal =
+    futureAnticipated === null || futureActive === null ? null : futureAnticipated + futureActive;
+
+  const rows = (r: unknown) =>
+    ((r as { data: unknown[] | null }).data ?? []) as unknown as PseoShortageEventWithDrug[];
+
   return {
     active,
     anticipated,
     critical,
-    recent: ((recentRes as { data: unknown[] | null }).data ??
-      []) as unknown as PseoShortageEventWithDrug[],
+    activeMedicines,
+    recent: rows(recentRes),
+    upcoming: [...rows(anticipatedRes), ...rows(futureActiveRes)]
+      .sort((a, b) => (a.start_date ?? "9999").localeCompare(b.start_date ?? "9999"))
+      .slice(0, 50),
+    upcomingTotal,
+    resolving: rows(resolvingRes),
   };
 }
 
@@ -394,15 +523,15 @@ export function buildDrugFaqs(
   if (alternativesCount > 0) {
     faqs.push({
       question: `What are the alternatives to ${name}?`,
-      answer: `Mederti lists ${alternativesCount} clinically related ${
-        alternativesCount === 1 ? "alternative" : "alternatives"
-      } for ${name} (see the alternatives section above). Alternatives require clinical judgement — always confirm suitability with a pharmacist or prescriber and your national guidance before substituting.`,
+      answer: `Mederti lists ${alternativesCount} ${
+        alternativesCount === 1 ? "drug" : "drugs"
+      } in the same WHO ATC class as ${name} (see above). These are classification context only — not clinically reviewed substitutes. Always confirm any switch with a pharmacist or prescriber and your national guidance.`,
     });
   }
 
   faqs.push({
     question: `Where does this ${name} shortage data come from?`,
-    answer: `Every shortage notice on this page is scraped daily from an official national medicines regulator (such as the FDA, TGA, MHRA or EMA) and linked back to its source. Mederti aggregates 40+ regulators across 50+ countries and never publishes unsourced shortage claims.`,
+    answer: `Every shortage notice on this page is scraped daily from an official national medicines regulator (such as the FDA, TGA, MHRA or EMA) and linked back to its source. Mederti aggregates ${COVERAGE_COPY.regulators} across ${COVERAGE_COPY.countries} and never publishes unsourced shortage claims.`,
   });
 
   return faqs;

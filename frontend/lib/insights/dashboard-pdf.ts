@@ -1,21 +1,23 @@
 /**
  * Build a neat, structured PDF of the national Shortage Dashboard (the middle
- * column) — real text + tables, not a screenshot — from the same snapshot the
- * cards render. jsPDF + autotable are loaded dynamically so they stay out of
+ * column) — real text + tables, not a screenshot — from the same live data the
+ * cards render (lib/insights/dashboard-data.ts). jsPDF + autotable are loaded dynamically so they stay out of
  * the initial bundle.
  */
 
-import type { DashboardSnapshot } from "./dashboard-snapshot";
+import type { DashboardData } from "./dashboard-data-shared";
+import { COUNTRY_NAMES, TIER_LABEL } from "./dashboard-data-shared";
 
-// jsPDF's default fonts are WinAnsi — the ▲/▼ triangles fall outside it and
-// render as tofu. Em/en dashes are fine, so only the arrows need swapping.
-function san(s: string): string {
-  return s.replace(/▲\s*/g, "+").replace(/▼\s*/g, "-").replace(/—\s*/g, "").trim();
+function supplyFacts(e: { nApiMakers: number | null; nFinishedFirms: number | null }): string {
+  return [
+    e.nApiMakers != null ? `${e.nApiMakers} API makers` : null,
+    e.nFinishedFirms != null ? `${e.nFinishedFirms} US finished-dose firms` : null,
+  ].filter(Boolean).join(", ");
 }
 
 export async function generateDashboardPdf(
-  snapshot: DashboardSnapshot,
-  summary: string,
+  data: DashboardData,
+  summary: string | null,
 ): Promise<void> {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
@@ -61,6 +63,7 @@ export async function generateDashboardPdf(
   };
 
   // ── Header ────────────────────────────────────────────────────────────────
+  const market = COUNTRY_NAMES[data.country] ?? data.country;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.setTextColor(...ink);
@@ -70,10 +73,10 @@ export async function generateDashboardPdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...muted);
-  doc.text(`${snapshot.market} · ${snapshot.coverage}`, margin, y);
+  doc.text(`${market} · live data from regulator shortage reports`, margin, y);
   y += 13;
-  const stamp = new Date().toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
-  doc.text(`Window: ${snapshot.rangeLabel}  ·  Generated ${stamp}`, margin, y);
+  const stamp = new Date(data.generatedAt).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
+  doc.text(`Generated ${stamp}`, margin, y);
   y += 10;
   doc.setDrawColor(225);
   doc.line(margin, y, pageW - margin, y);
@@ -98,69 +101,72 @@ export async function generateDashboardPdf(
   }
 
   // ── Headline KPIs ───────────────────────────────────────────────────────────
-  const k = snapshot.kpis;
+  const k = data.kpis;
   sectionTitle("Headline metrics");
   autoTable(doc, {
     ...baseTable,
     startY: y,
-    head: [["Metric", "Value", "Change"]],
+    head: [["Metric", "Value"]],
     body: [
-      ["Active shortages", String(k.activeShortages.value), san(k.activeShortages.delta)],
-      ["Essential medicines short", `${k.essentialShort.value} of ${k.essentialShort.of}`, san(k.essentialShort.delta)],
-      ["Single-source nationally", String(k.singleSource.value), san(k.singleSource.delta)],
-      ["Median resolution", `${k.medianResolutionDays.value} days`, san(k.medianResolutionDays.delta)],
-      ["Upstream alerts", String(k.upstreamAlerts.value), san(k.upstreamAlerts.delta)],
+      ["Active shortage reports", `${k.activeReports} (${k.newLast30} new in 30 days)`],
+      ["Essential or critical medicines short", `${k.essentialShort} of ${data.universeSize}`],
+      ["...with concentrated API supply", String(k.essentialShortConcentrated)],
+      ["Median resolution, last 12 months", k.medianResolutionDays == null ? "n/a" : `${k.medianResolutionDays} days (${k.resolvedLast12mo} resolved)`],
+      ["Short in 2+ peer markets, not reported here", String(k.earlyWarning)],
     ],
   });
   afterTable();
 
   // ── Essential medicines in shortage ─────────────────────────────────────────
-  sectionTitle(`Essential medicines in shortage (${k.essentialShort.value} active)`);
+  sectionTitle(`Essential medicines short in ${market} (${k.essentialShort})`);
   autoTable(doc, {
     ...baseTable,
     startY: y,
-    head: [["Drug", "Class", "Suppliers", "Duration", "Risk", "Forecast"]],
-    body: snapshot.topEssential.map((d) => [
-      d.drug,
-      d.klass,
-      d.suppliers,
-      `${d.durationDays} days`,
-      d.risk,
-      d.forecast,
+    head: [["Medicine", "Lists", "Days since first report", "Supply base", "Countries short"]],
+    body: data.essential.map((e) => [
+      e.name,
+      [e.whoList ? `WHO ${e.whoList}` : null, e.euCritical ? "EU critical" : null].filter(Boolean).join(", "),
+      e.daysShort == null ? "n/a" : String(e.daysShort),
+      e.tier === "unknown" ? "Unknown" : `${TIER_LABEL[e.tier]} (${supplyFacts(e)})`,
+      String(e.countriesShort),
     ]),
   });
   afterTable();
 
-  // ── Concentration risk by class ─────────────────────────────────────────────
-  sectionTitle("Concentration risk by class (single-API-source share)");
+  // ── Early warning ───────────────────────────────────────────────────────────
+  sectionTitle("Short in 2+ peer markets, not reported here");
   autoTable(doc, {
     ...baseTable,
     startY: y,
-    head: [["Class", "Single-source share"]],
-    body: snapshot.concentration.map((c) => [c.klass, `${c.singleSourcePct}%`]),
+    head: [["Medicine", "Peer markets short", "API supply"]],
+    body: data.earlyWarning.slice(0, 30).map((e) => [e.name, e.peers.join(", "), TIER_LABEL[e.tier]]),
   });
   afterTable();
 
-  // ── Shortage burden vs peers ────────────────────────────────────────────────
-  sectionTitle("Shortage burden vs peers (per 1,000 listings)");
+  // ── Peers ───────────────────────────────────────────────────────────────────
+  sectionTitle("Essential medicines short, by peer market");
   autoTable(doc, {
     ...baseTable,
     startY: y,
-    head: [["Market", "Active essential shortages / 1,000"]],
-    body: snapshot.peers.map((p) => [p.self ? `${p.country} (this market)` : p.country, String(p.shortagesPer1000)]),
+    head: [["Market", "Essential medicines short"]],
+    body: data.peers.map((p) => [p.self ? `${p.country} (this market)` : p.country, String(p.essentialShort)]),
   });
   afterTable();
 
-  // ── Upstream early-warning signals ──────────────────────────────────────────
-  sectionTitle("Upstream early-warning signals");
-  autoTable(doc, {
-    ...baseTable,
-    columnStyles: { 2: { cellWidth: 230 } },
-    startY: y,
-    head: [["Site", "Severity", "Signal"]],
-    body: snapshot.upstream.map((u) => [`${u.site} (${u.country})`, u.severity, u.note]),
-  });
-  afterTable();
+  // ── Method note ─────────────────────────────────────────────────────────────
+  ensure(40);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...muted);
+  for (const line of doc.splitTextToSize(
+    "Essential = on the WHO Model List of Essential Medicines or the EU Union list of critical medicines. " +
+    "API supply concentration counts distinct API manufacturers in FDA Drug Master File and WHO prequalification data (US-centric). " +
+    "Concentration describes the supply base; Mederti's backtest found it does not predict when a shortage starts or how long it lasts.",
+    contentW,
+  ) as string[]) {
+    doc.text(line, margin, y);
+    y += 11;
+  }
 
   // ── Footer on every page ────────────────────────────────────────────────────
   const pages = doc.getNumberOfPages();
@@ -173,5 +179,5 @@ export async function generateDashboardPdf(
     doc.text(`${i} / ${pages}`, pageW - margin, pageH - 22, { align: "right" });
   }
 
-  doc.save(`mederti-shortage-dashboard-${snapshot.range}.pdf`);
+  doc.save(`mederti-shortage-dashboard-${data.country}-${data.generatedAt.slice(0, 10)}.pdf`);
 }

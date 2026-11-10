@@ -135,6 +135,15 @@ export function WatchlistRiskBoard() {
                     <div className="rb-name">
                       {truncateDrugName(it.name, 40)}
                       {it.who_essential && <span className="rb-who" title="WHO Essential Medicine">WHO EML</span>}
+                      {it.eu_critical && <span className="rb-who" title="EU Union list of critical medicines">EU critical</span>}
+                      {(it.supply_tier === "highly_concentrated" || it.supply_tier === "concentrated") && (
+                        <span
+                          className={`rb-supply ${it.supply_tier}`}
+                          title={`${it.n_api_makers ?? "?"} API makers in FDA DMF / WHO PQ data. Describes the supply base; it doesn't predict shortages.`}
+                        >
+                          {SUPPLY_LABEL[it.supply_tier]}
+                        </span>
+                      )}
                     </div>
                     <div className="rb-detail">{detailFor(it, data.imminent_window_days)}</div>
                   </Link>
@@ -150,6 +159,11 @@ export function WatchlistRiskBoard() {
     </div>
   );
 }
+
+const SUPPLY_LABEL: Record<"highly_concentrated" | "concentrated", string> = {
+  highly_concentrated: "Highly concentrated supply",
+  concentrated: "Concentrated supply",
+};
 
 const RB_CSS = `
 .rb-wrap{--crit:#c0392b;--crit-bg:#fdecea;--crit-b:#f5c6c0;--warn:#b8860b;--warn-bg:#fdf6e3;--warn-b:#f0e0b0;
@@ -171,6 +185,9 @@ const RB_CSS = `
   background:var(--bg-2);border:1px solid var(--border);text-decoration:none;transition:border-color .12s}
 .rb-row:hover{border-color:var(--info)}
 .rb-name{font-size:13.5px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;min-width:0}
+.rb-supply{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:99px;letter-spacing:.03em;white-space:nowrap}
+.rb-supply.highly_concentrated{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-b)}
+.rb-supply.concentrated{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-b)}
 .rb-who{font-size:9.5px;font-weight:700;color:var(--quiet);background:var(--quiet-bg);border:1px solid var(--quiet-b);
   padding:1px 6px;border-radius:99px;letter-spacing:.03em}
 .rb-detail{font-size:11.5px;color:var(--text-3);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

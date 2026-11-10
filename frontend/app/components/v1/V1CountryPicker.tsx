@@ -22,14 +22,23 @@ const COUNTRIES: { code: string; name: string; flag: string }[] = [
   { code: "DK", name: "Denmark", flag: "🇩🇰" },
 ];
 
-export default function V1CountryPicker() {
+// Module-level so the write isn't a mutation inside the component body.
+function saveCountry(c: string) {
+  document.cookie = `mederti-country=${c};path=/;max-age=${60 * 60 * 24 * 365}`;
+}
+
+export default function V1CountryPicker({ compact = false }: { compact?: boolean }) {
+  // `compact` = flag-only button, for the collapsed V1Sidebar icon rail.
   const [code, setCode] = useState("AU");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const m = document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/);
-    if (m) setCode(m[1].toUpperCase());
+    const restore = () => {
+      const m = document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/);
+      if (m) setCode(m[1].toUpperCase());
+    };
+    restore();
   }, []);
 
   useEffect(() => {
@@ -41,7 +50,7 @@ export default function V1CountryPicker() {
   }, []);
 
   function pick(c: string) {
-    document.cookie = `mederti-country=${c};path=/;max-age=${60 * 60 * 24 * 365}`;
+    saveCountry(c);
     setOpen(false);
     // Full reload so server components re-render with the new market.
     window.location.reload();
@@ -55,17 +64,22 @@ export default function V1CountryPicker() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label="Choose your market"
+        title={compact ? cur.name : undefined}
         style={{
           display: "inline-flex", alignItems: "center", gap: 7,
-          padding: "8px 12px", borderRadius: 10,
+          padding: compact ? "8px 9px" : "8px 12px", borderRadius: 10,
           border: "1px solid var(--border)", background: "var(--bg)",
           fontSize: 13, fontWeight: 600, color: "var(--text-2)", cursor: "pointer",
           fontFamily: "inherit",
         }}
       >
         <span style={{ fontSize: 15 }}>{cur.flag}</span>
-        {cur.name}
-        <span style={{ fontSize: 9, color: "var(--text-4)" }}>▾</span>
+        {!compact && (
+          <>
+            {cur.name}
+            <span style={{ fontSize: 9, color: "var(--text-4)" }}>▾</span>
+          </>
+        )}
       </button>
 
       {open && (

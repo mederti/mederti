@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { fetchSourcedAlternatives, type SourcedAlternativesResult } from "@/lib/alternatives-evidence";
 import {
   fetchDrugDetail,
   fetchManufacturersForDrug,
@@ -41,7 +42,7 @@ export async function GET(
     const supabase = getSupabaseAdmin();
     const homeCountry = (country || "AU").toUpperCase();
 
-    const [drug, substitutes, recalls, manufacturers, history, products, tradePrice] = await Promise.all([
+    const [drug, substitutes, recalls, manufacturers, history, products, tradePrice, sourcedAlternatives] = await Promise.all([
       fetchDrugDetail(id),
       fetchSubstitutesFor(id, country, 8),
       fetchRecallsForDrug(id, 8),
@@ -51,6 +52,10 @@ export async function GET(
       computeTradePrice(supabase, id, homeCountry).catch((err) => {
         console.error("[drug/[id]] computeTradePrice failed:", err);
         return null;
+      }),
+      fetchSourcedAlternatives(id).catch((err): SourcedAlternativesResult => {
+        console.error("[drug/[id]] fetchSourcedAlternatives failed:", err);
+        return { available: false, reason: "lookup failed" };
       }),
     ]);
 
@@ -82,6 +87,7 @@ export async function GET(
       {
         drug,
         substitutes: substitutesWithSuppliers,
+        sourcedAlternatives,
         recalls,
         suppliers,
         manufacturers,

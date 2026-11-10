@@ -124,7 +124,7 @@ export default async function FreshnessPage() {
         <h1 className="text-3xl font-semibold text-slate-900">Source freshness</h1>
         <p className="mt-2 text-slate-600 max-w-2xl">
           Mederti scrapes every regulator on this list daily. The timestamps below are{" "}
-          <strong>not</strong> claimed cadences — they're the real{" "}
+          <strong>not</strong> claimed cadences — they&apos;re the real{" "}
           <code className="px-1 py-0.5 bg-slate-100 rounded text-xs">last_scraped_at</code> values
           from the database. Sources past our 7-day stale threshold are flagged in red.
         </p>
@@ -163,8 +163,8 @@ export default async function FreshnessPage() {
             Generated {new Date(data.generated_at).toLocaleString()}. Cached 5 minutes.
             The stale threshold is {Math.round(data.stale_threshold_hours / 24)} days — past this,
             shortage data from that regulator is excluded from default chat answers and the source
-            chip carries an explicit "stale" flag. The reliability weight is the per-source factor
-            used by Mederti's confidence calibration (0–1, higher is more trustworthy).
+            chip carries an explicit &quot;stale&quot; flag. The reliability weight is the per-source factor
+            used by Mederti&apos;s confidence calibration (0–1, higher is more trustworthy).
           </div>
         </>
       )}

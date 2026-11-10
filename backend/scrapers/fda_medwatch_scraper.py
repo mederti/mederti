@@ -176,6 +176,11 @@ class FdaMedwatchScraper(BaseScraper):
                     "severity":        severity,
                     "reason":          reason[:500] if reason else None,
                     "reason_category": "regulatory_action",
+                    # These are openFDA enforcement RECALLS, not declared
+                    # shortages. Flag them synthetic (migration 046) so public
+                    # counts and pages exclude them — unflagged, they were
+                    # 2,570 of 3,601 US "active shortages", back to 2012.
+                    "synthetic":       True,
                     "start_date":      start_date,
                     "end_date":        end_date if status == "resolved" else None,
                     "source_url":      self.BASE_URL,

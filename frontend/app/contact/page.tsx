@@ -17,6 +17,7 @@ function ContactForm() {
 
   useEffect(() => {
     const s = params.get("subject");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
     if (s) setSubject(decodeURIComponent(s));
   }, [params]);
 

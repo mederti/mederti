@@ -25,7 +25,7 @@ export const HOME_PROMPTS: string[] = [
   "What antibiotics are short in AU right now?",
   "Substitute for amoxicillin 500mg in adult sinusitis",
   "Which GLP-1s have stock in pharmacies this week?",
-  "Compare insulin trade prices · AU vs UK vs US",
+  "Compare atorvastatin prices · UK vs US vs France",
   "What's likely to be short in Q3 from India API issues?",
   "Show me all paediatric formulations in shortage",
 ];
@@ -180,7 +180,7 @@ export default function ConversationalHome({
 }
 
 const CSS = `
-.chome{--ch-teal:#0fa676;--ch-teal-d:#0c8a62;--ch-teal-bg:#e8f6f0;--ch-teal-b:#bce4d4;
+.chome{--ch-teal:var(--teal);--ch-teal-d:var(--teal-l);--ch-teal-bg:var(--acc-soft);--ch-teal-b:#bce4d4;
   --ch-bg:#fff;--ch-bg-2:#fafbfc;--ch-border:#e8ecf0;--ch-border-2:#dde3e9;
   --ch-text:#0c1118;--ch-text-3:#6a7280;--ch-text-4:#98a1ac;
   --ch-crit:#dc2647;--ch-crit-bg:#fdeef1;--ch-crit-b:#f8cdd6;

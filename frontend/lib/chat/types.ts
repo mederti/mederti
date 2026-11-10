@@ -1,3 +1,4 @@
+import type { SourcedAlternativesResult } from "@/lib/alternatives-sources";
 export type DrugSummary = {
   drug_id: string;
   name: string;
@@ -23,6 +24,17 @@ export type ShortageRow = {
   start_date: string | null;
   estimated_resolution_date: string | null;
   source_url: string | null;
+  // Product-level identity from the regulator record, so the model never has
+  // to guess which brand a notice covers (it once called a resolved Alphamox
+  // notice "to be discontinued").
+  product?: string | null;       // trade name / brand on the notice
+  sponsor?: string | null;
+  reg_no?: string | null;        // TGA AUST R / Health Canada DIN
+  reason_category?: string | null; // "discontinuation" = permanent market exit
+  end_date?: string | null;      // date the regulator closed the notice
+  market_exit_date?: string | null; // discontinuation: registration end / deletion date
+  last_verified_at?: string | null;
+  notice_state?: "open" | "closed"; // open = active/anticipated today
 };
 
 export type SourceConsulted = {
@@ -115,6 +127,9 @@ export type DrugExternalIdentifiers = {
 
 export type DrugDetail = DrugSummary & {
   shortages: ShortageRow[];
+  /** One verdict per product from the regulator register (see buildProductStatus). */
+  product_status?: Array<Record<string, string | null>>;
+  product_status_note?: string;
   active_shortage_count: number;
   worst_severity: string | null;
   countries_affected: string[];
@@ -131,17 +146,24 @@ export type DrugDetail = DrugSummary & {
   confidence?: Confidence;
 };
 
+// Alternatives on file are ATC-class pairings only (see lib/alternatives.ts).
+// similarity_score / clinical_evidence_level / dose_conversion_notes /
+// availability_note are ALWAYS null: the stored values were fixed lookups or
+// template text, not evidence. Kept on the type so old renderers degrade to
+// "not shown" instead of crashing.
 export type SubstituteRow = {
   drug_id: string;
   name: string;
   atc_code: string | null;
   drug_class: string | null;
-  similarity_score: number | null;
+  similarity_score: null;
   atc_match_level: number | null;
-  clinical_evidence_level: string | null;
-  requires_monitoring: boolean;
-  availability_note: string | null;
-  dose_conversion_notes: string | null;
+  match_basis: string | null;
+  source: string;
+  clinical_evidence_level: null;
+  requires_monitoring: false;
+  availability_note: null;
+  dose_conversion_notes: null;
   active_shortage_count: number;
 };
 
@@ -237,6 +259,8 @@ export type ShortageHistoryStats = {
 export type DrugDetailBundle = {
   drug: DrugDetail;
   substitutes: SubstituteWithSuppliers[];
+  /** Source-backed alternatives (migration 071); available=false hides the section. */
+  sourcedAlternatives?: SourcedAlternativesResult;
   recalls: RecallRow[];
   suppliers: SupplierStock[];
   manufacturers: ManufacturerRow[];

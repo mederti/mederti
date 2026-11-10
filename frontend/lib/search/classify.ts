@@ -11,7 +11,7 @@ export type QueryIntent = "empty" | "drug" | "open";
 
 // Natural-language openers / analytical cues. If a query starts with one of
 // these (or reads like a sentence), it's a question for the answer engine — even
-// when it mentions a drug ("Compare insulin trade prices…" is an analysis, not a
+// when it mentions a drug ("Compare atorvastatin prices…" is an analysis, not a
 // jump to the insulin product page).
 const QUESTION_STARTERS =
   /^(what|whats|why|how|when|which|who|whose|whom|where|is|are|am|do|does|did|can|could|should|would|will|may|might|have|has|compare|explain|tell|show|list|find|give|summar|describe|recommend|suggest)\b/i;

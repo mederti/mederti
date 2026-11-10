@@ -45,7 +45,10 @@ export function PersonaToggle({
 const STORAGE_KEY = "mederti.chat.persona";
 export function readStoredPersona(): Persona {
   if (typeof window === "undefined") return "pharmacist";
-  const v = window.localStorage.getItem(STORAGE_KEY);
+  // Guarded: Edge/Chrome throw SecurityError on localStorage access when a
+  // managed (hospital IT) policy blocks site data.
+  let v: string | null = null;
+  try { v = window.localStorage.getItem(STORAGE_KEY); } catch { /* storage blocked */ }
   if (v === "pharmacist" || v === "procurement" || v === "supplier") return v;
   return "pharmacist";
 }

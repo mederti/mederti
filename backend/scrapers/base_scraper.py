@@ -156,6 +156,28 @@ def grade_write_outcome(
     return "success"
 
 
+# shortage_events.reason_category CHECK (001_initial_schema.sql). A value
+# outside it makes PostgREST 400 the row — NoMA lost 169 of 1,649 rows a run
+# that way (2026-11-10) to "distribution_issue" / "regulatory" /
+# "raw_material_shortage". Map known aliases; anything else becomes "other"
+# rather than dropping a real shortage.
+_REASON_CATEGORIES = frozenset({
+    "manufacturing_issue", "supply_chain", "demand_surge", "regulatory_action",
+    "discontinuation", "raw_material", "distribution", "other", "unknown",
+})
+_REASON_CATEGORY_ALIASES = {
+    "distribution_issue": "distribution",
+    "regulatory": "regulatory_action",
+    "raw_material_shortage": "raw_material",
+}
+
+
+def valid_reason_category(value: str | None) -> str | None:
+    if value is None or value in _REASON_CATEGORIES:
+        return value
+    return _REASON_CATEGORY_ALIASES.get(value, "other")
+
+
 class ScraperError(Exception):
     """Raised when a scraper encounters an unrecoverable error."""
 
@@ -202,6 +224,22 @@ class BaseScraper(ABC):
     # run — 58k phantom shortages across JP + CH by Sep 2026.
     SNAPSHOT_IDENTITY: bool = False
 
+    # Complete-feed sources (TGA MSI) publish EVERY current shortage in one
+    # payload. For them, an open row the feed no longer lists is no longer a
+    # current shortage — the regulator revised its dates (new shortage_id) or
+    # dropped the record. Without reconciliation those rows stayed "active"
+    # forever, and the duplicate-payload path below kept bumping their
+    # last_verified_at as if re-confirmed. Found 2026-11-06 via Barwon Health
+    # feedback: 591 of 1,429 open AU rows (41%) were absent from the live TGA
+    # feed, e.g. a Propofol-Lipuro "short since 27 Mar, estimate passed" row
+    # TGA had replaced with a 2 Nov record. Opt-in: only set this on sources
+    # whose fetch() returns the whole list, never a page or a delta.
+    RECONCILE_ABSENT: bool = False
+    # Refuse to reconcile when the feed shrinks below this fraction of the
+    # currently-open rows it would be compared against — a truncated or
+    # half-broken fetch must never mass-close real shortages.
+    RECONCILE_MIN_FRACTION: float = 0.5
+
     DEFAULT_HEADERS: dict[str, str] = {
         "User-Agent": (
             "Mederti-Scraper/1.0 (+https://mederti.com/bot; "
@@ -221,6 +259,8 @@ class BaseScraper(ABC):
         # Accept an injected client for testing / dry-run; otherwise build one.
         self.db: Client = db_client if db_client is not None else get_supabase_client()
         self._last_request_time: float = 0.0
+        # shortage_ids the source listed in the current run (see reconcile_absent)
+        self._run_shortage_ids: set[str] = set()
         # Per-run cache of generic_name_normalised → drug_id. Pre-warmed in
         # bulk by upsert() and consulted by _find_or_create_drug() so a run
         # resolves each distinct drug name at most once instead of once per
@@ -665,6 +705,9 @@ class BaseScraper(ABC):
         existing_by_shortage_id: dict[str, dict] = {}
         failed_lookup_ids: set[str] = set()
         all_shortage_ids = [p["shortage_id"] for p in pending]
+        # Everything the source listed this run — including ids whose lookup
+        # failed below — counts as "seen" for reconcile_absent().
+        self._run_shortage_ids.update(all_shortage_ids)
         for chunk in _chunks(all_shortage_ids, 100):
             try:
                 resp = (
@@ -708,6 +751,16 @@ class BaseScraper(ABC):
 
             new_status = ev.get("status", "active")
 
+            # A shortage that hasn't started yet isn't active. TGA publishes
+            # future-dated discontinuations (status D, shortage_start in 2027)
+            # and other feeds post forward-dated notices; counting them as
+            # active inflated live totals and put future dates in "Since"
+            # columns. Demote to anticipated and surface the onset date.
+            if new_status == "active" and start_date > date.today().isoformat():
+                new_status = "anticipated"
+                if ev.get("anticipated_start_date") is None:
+                    ev["anticipated_start_date"] = start_date
+
             # Auto-set end_date when transitioning to resolved
             end_date = ev.get("end_date")
             if new_status == "resolved" and not end_date:
@@ -726,7 +779,7 @@ class BaseScraper(ABC):
                 "status":                   new_status,
                 "severity":                 ev.get("severity"),
                 "reason":                   ev.get("reason"),
-                "reason_category":          ev.get("reason_category"),
+                "reason_category":          valid_reason_category(ev.get("reason_category")),
                 "start_date":               start_date,
                 "end_date":                 end_date,
                 "estimated_resolution_date": ev.get("estimated_resolution_date"),
@@ -743,6 +796,12 @@ class BaseScraper(ABC):
                 record["available_alternatives"] = ev["available_alternatives"]
             if ev.get("source_confidence_score") is not None:
                 record["source_confidence_score"] = ev["source_confidence_score"]
+
+            # ── Recall-derived flag (migration 046) ───────────────
+            # Sources that emit recalls/enforcement actions rather than
+            # declared shortages set this so public queries exclude them.
+            if ev.get("synthetic") is not None:
+                record["synthetic"] = ev["synthetic"]
 
             # ── Tier 3 clinical-priority flag (migration 048) ─────
             # Only sources that emit it (Health Canada) set this; every
@@ -841,6 +900,104 @@ class BaseScraper(ABC):
     # ─────────────────────────────────────────────────────────────────────────
 
     _VERIFY_PAGE = 500
+
+    def _open_rows_for_source(self) -> list[dict[str, Any]]:
+        """Every active/anticipated/stale row of this source (paged)."""
+        rows: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            page = (
+                self.db.table("shortage_events")
+                .select("id, shortage_id, drug_id, status, severity, notes")
+                .eq("data_source_id", self.SOURCE_ID)
+                .in_("status", ["active", "anticipated", "stale"])
+                .order("id")
+                .range(offset, offset + self._VERIFY_PAGE - 1)
+                .execute()
+            )
+            batch = page.data or []
+            rows.extend(batch)
+            if len(batch) < self._VERIFY_PAGE:
+                return rows
+            offset += self._VERIFY_PAGE
+
+    def reconcile_absent(self, *, found: int, execute: bool = True) -> dict[str, Any]:
+        """
+        Close this source's open rows that the complete feed no longer lists.
+
+        Only meaningful for RECONCILE_ABSENT sources, after a run whose upsert
+        populated self._run_shortage_ids. A closed row becomes 'resolved' with
+        end_date left NULL — the source stopped listing it but did not publish
+        an end date, and we never invent one — plus a dated note saying so.
+        The change is written to shortage_status_log like any status change.
+
+        Returns {"open": n, "absent": n, "closed": n, "skipped_reason": str|None}.
+        """
+        result: dict[str, Any] = {"open": 0, "absent": 0, "closed": 0,
+                                  "skipped_reason": None}
+        seen = self._run_shortage_ids
+        if not seen:
+            result["skipped_reason"] = "no shortage_ids recorded this run"
+            return result
+        try:
+            open_rows = self._open_rows_for_source()
+        except Exception as exc:
+            result["skipped_reason"] = f"could not list open rows: {exc}"
+            self.log.warning("reconcile_absent: listing failed",
+                             extra={"error": str(exc), "source": self.SOURCE_NAME})
+            return result
+
+        result["open"] = len(open_rows)
+        absent = [r for r in open_rows if r["shortage_id"] not in seen]
+        result["absent"] = len(absent)
+
+        # Truncated-feed guard: the rows still listed must be a healthy share
+        # of what is open, otherwise this is a broken fetch, not a real drop.
+        still_listed = len(open_rows) - len(absent)
+        if open_rows and still_listed < self.RECONCILE_MIN_FRACTION * len(open_rows):
+            result["skipped_reason"] = (
+                f"feed lists only {still_listed}/{len(open_rows)} open rows "
+                f"(< {self.RECONCILE_MIN_FRACTION:.0%}); refusing to mass-close"
+            )
+            self.log.warning("reconcile_absent: guard tripped",
+                             extra={**result, "found": found, "source": self.SOURCE_NAME})
+            return result
+        if not execute or not absent:
+            return result
+
+        today = date.today().isoformat()
+        note = (f"No longer listed by {self.SOURCE_NAME} as of {today}; "
+                "the source did not publish a resolution date.")
+        log_entries: list[dict[str, Any]] = []
+        for r in absent:
+            prior = (r.get("notes") or "").strip()
+            try:
+                self.db.table("shortage_events").update({
+                    "status": "resolved",
+                    "notes":  f"{prior}\n{note}".strip() if prior else note,
+                }).eq("id", r["id"]).execute()
+            except Exception as exc:
+                self.log.warning("reconcile_absent: close failed",
+                                 extra={"error": str(exc), "id": r["id"]})
+                continue
+            result["closed"] += 1
+            log_entries.append({
+                "shortage_event_id": r["id"],
+                "drug_id":           r["drug_id"],
+                "old_status":        r["status"],
+                "new_status":        "resolved",
+                "old_severity":      r.get("severity"),
+                "new_severity":      r.get("severity"),
+            })
+        for chunk in _chunks(log_entries, 100):
+            try:
+                self.db.table("shortage_status_log").insert(chunk).execute()
+            except Exception as exc:
+                self.log.warning("reconcile_absent: status-log insert failed",
+                                 extra={"error": str(exc), "chunk": len(chunk)})
+        self.log.info("reconcile_absent complete",
+                      extra={**result, "source": self.SOURCE_NAME})
+        return result
 
     def _refresh_verified_chunked(
         self,
@@ -969,7 +1126,14 @@ class BaseScraper(ABC):
                 .single()
                 .execute()
             )
-            if scrape_row.data and scrape_row.data["status"] == "duplicate":
+            # Complete-feed sources always re-normalise (TGA is ~1k records):
+            # bulk-refreshing last_verified_at on every open row would vouch
+            # for rows the feed no longer contains.
+            if (
+                scrape_row.data
+                and scrape_row.data["status"] == "duplicate"
+                and not self.RECONCILE_ABSENT
+            ):
                 summary["status"] = "duplicate"
                 self.log.info(
                     "Skipping normalisation — payload unchanged",
@@ -1028,6 +1192,7 @@ class BaseScraper(ABC):
             )
 
             # ── 4. Upsert ─────────────────────────────────────────────────────
+            self._run_shortage_ids = set()
             counts = self.upsert(events)
             summary.update({
                 "status":            "success",
@@ -1051,6 +1216,16 @@ class BaseScraper(ABC):
                 write_failures=counts.get("write_failures", 0),
                 summary=summary,
             )
+
+            # ── 4c. Close open rows the complete feed no longer lists ─────────
+            if (
+                self.RECONCILE_ABSENT
+                and summary["status"] == "success"
+                and not counts.get("write_failures")
+            ):
+                summary["reconciled_absent"] = self.reconcile_absent(
+                    found=len(events),
+                )
 
             # ── 5. Mark raw scrape processed ──────────────────────────────────
             self._update_raw_scrape(

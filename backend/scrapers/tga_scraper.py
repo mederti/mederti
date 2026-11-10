@@ -39,7 +39,8 @@ Confirmed response format (probed 2026-02-22):
 Status codes (verified 2026-06-03 against the live MSI feed):
     C  → active       (Current shortage — availability Unavailable/Limited, past start)
     R  → resolved     (Resolved shortage — now Available)
-    D  → active       (Discontinued — reason_category=discontinuation; deleted_date set)
+    D  → active       (Discontinued — reason_category=discontinuation; deleted_date set.
+                       Future-dated D records become anticipated in BaseScraper.upsert)
     A  → anticipated  (Anticipated shortage — FUTURE shortage_start, still Available now;
                        shortage_start is the anticipated onset → anticipated_start_date)
 
@@ -71,6 +72,10 @@ class TGAScraper(BaseScraper):
 
     # TGA is polite about scraping; 2 s gives comfortable headroom
     RATE_LIMIT_DELAY: float = 2.0
+
+    # The MSI search API returns the full current list in one payload, so a
+    # row it stops listing is no longer current (see BaseScraper docs).
+    RECONCILE_ABSENT: bool = True
 
     # ─────────────────────────────────────────────────────────────────────────
     # Status mapping
@@ -374,6 +379,12 @@ class TGAScraper(BaseScraper):
                 "shortage_end":   rec.get("shortage_end"),
                 "last_updated":   rec.get("last_updated"),
                 "availability":   rec.get("availability"),
+                # deleted_date on 'D' records is the ARTG cancellation date —
+                # the day the product legally leaves the market (often future).
+                "deleted_date":   rec.get("deleted_date"),
+                # TGA's own impact rating, kept verbatim: severity above is
+                # availability-led and can disagree with it.
+                "shortage_impact": rec.get("shortage_impact"),
             },
         }
 

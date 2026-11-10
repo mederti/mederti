@@ -110,6 +110,7 @@ export function SearchChatsModal({
 
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when the dep changes; a key-based remount would also drop other state
     setQuery("");
     setSelectedIdx(0);
     // Focus on next tick so the input is mounted.
@@ -119,8 +120,14 @@ export function SearchChatsModal({
 
   // Reset selection when query changes — top result is the most relevant.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when the dep changes; a key-based remount would also drop other state
     setSelectedIdx(0);
   }, [query]);
+
+  const handleOpen = (id: string) => {
+    onClose();
+    router.push(`/chat/${id}`);
+  };
 
   // Keyboard nav (Esc / arrow keys / Enter).
   useEffect(() => {
@@ -157,11 +164,6 @@ export function SearchChatsModal({
     const el = listRef.current.querySelector<HTMLElement>(`[data-idx="${selectedIdx}"]`);
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIdx]);
-
-  const handleOpen = (id: string) => {
-    onClose();
-    router.push(`/chat/${id}`);
-  };
 
   if (!open) return null;
 
@@ -205,7 +207,7 @@ export function SearchChatsModal({
             </div>
           ) : matches.length === 0 ? (
             <div className="px-4 py-10 text-center text-[13px] text-slate-500">
-              No chats match <span className="font-medium text-slate-700">"{query}"</span>
+              No chats match <span className="font-medium text-slate-700">&quot;{query}&quot;</span>
             </div>
           ) : (
             matches.map((m, i) => (

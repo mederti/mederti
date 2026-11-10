@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { RiskTier, RiskItem } from "@/lib/watchlist-risk";
+import { type ConcentrationTier, tierFor } from "@/lib/insights/dashboard-data-shared";
 
 // Watchlist risk board (hospital-pharmacist feedback #5). The national
 // dashboard is broad and noisy; a pharmacist wants THEIR products, tiered by
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
 
   // Active + anticipated events for exactly these drugs (small id set → cheap,
   // indexed by drug_id). Resolved events are irrelevant to forward risk.
-  const [{ data: evData }, { data: drugData }] = await Promise.all([
+  const [{ data: evData }, { data: drugData }, { data: profData }] = await Promise.all([
     sb
       .from("shortage_events")
       .select("drug_id, country_code, status, severity, anticipated_start_date, estimated_resolution_date")
@@ -81,7 +82,18 @@ export async function POST(req: Request) {
       .from("drugs")
       .select("id, generic_name, who_essential_medicine")
       .in("id", ids),
+    // Molecule supply facts — same source as the dashboard and drug page.
+    sb
+      .from("inn_risk_scores")
+      .select("drug_ids, fragility, eu_critical, n_api_makers")
+      .overlaps("drug_ids", ids),
   ]);
+
+  const profMap = new Map<string, { tier: ConcentrationTier; eu: boolean; nApi: number | null }>();
+  for (const p of (profData ?? []) as Array<{ drug_ids: string[]; fragility: number | null; eu_critical: boolean; n_api_makers: number | null }>) {
+    const v = { tier: tierFor(p.fragility == null ? null : Number(p.fragility)), eu: !!p.eu_critical, nApi: p.n_api_makers };
+    for (const d of p.drug_ids) if (ids.includes(d)) profMap.set(d, v);
+  }
 
   const nameMap = new Map<string, { name: string; who: boolean }>();
   for (const d of (drugData ?? []) as Array<{ id: string; generic_name: string; who_essential_medicine: boolean }>) {
@@ -158,6 +170,9 @@ export async function POST(req: Request) {
       days_until: daysBetween(anticipatedStart),
       peer_count: peerList.length,
       peers: peerList,
+      eu_critical: profMap.get(id)?.eu ?? false,
+      supply_tier: profMap.get(id)?.tier ?? "unknown",
+      n_api_makers: profMap.get(id)?.nApi ?? null,
     };
   });
 

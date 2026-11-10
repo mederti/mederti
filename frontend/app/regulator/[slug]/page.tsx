@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import SiteNav from "@/app/components/landing-nav";
 import MinimalFooter from "@/app/components/minimal-footer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { jsonLdSafe, breadcrumbJsonLd, canonicalUrl } from "@/lib/seo";
+import { jsonLdSafe, breadcrumbJsonLd, canonicalUrl, defaultOgImages } from "@/lib/seo";
 import { regulatorBySlug, slugify, fmtDate } from "@/lib/pseo";
 import { countryName, countrySlug } from "@/lib/geo/country-names";
 
@@ -27,7 +27,7 @@ export async function generateMetadata(
     title,
     description,
     alternates: { canonical: `/regulator/${slug}` },
-    openGraph: { title, description, url: canonicalUrl(`/regulator/${slug}`), type: "website" },
+    openGraph: { title, description, url: canonicalUrl(`/regulator/${slug}`), type: "website", images: defaultOgImages() },
   };
 }
 

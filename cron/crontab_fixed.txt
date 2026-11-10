@@ -45,7 +45,9 @@ SHELL=/bin/bash
 30  2 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py sukl          >> logs/cron.log 2>&1
 45  2 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py ogyei         >> logs/cron.log 2>&1
 0   3 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py swissmedic    >> logs/cron.log 2>&1
-15  3 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py noma          >> logs/cron.log 2>&1
+# noma moved 03:15 → 13:15 (2026-11-10): the 01:00–04:00 band almost never
+# fires (laptop asleep) — noma last ran 2026-11-01 and went stale on prod.
+15 13 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py noma          >> logs/cron.log 2>&1
 30  3 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py ages          >> logs/cron.log 2>&1
 
 # ─── Phase 9+: New country scrapers (daily, staggered 15 min) ───
@@ -104,7 +106,8 @@ SHELL=/bin/bash
 # estonia_ravimiamet     11:30     3 events only — narrow coverage, see follow-up headless-browser task
 # peru_digemid           11:40     2,675 events — high confidence
 # senegal_arp            11:50     Low volume (~2 events) — scanned-image PDFs, title-only parsing
-# taiwan_tfda            12:00     10 events/7 drugs — hand-maintained bulletin ID list, needs periodic upkeep
+# taiwan_tfda            12:00     ~207 drugs active — TFDA open-data feeds 104/105/106 + licence register (v2, 2026-10-26)
+# tfda_alternatives      12:20     ~380 cited substitutes → alternative_evidence (same feeds; expires statements TFDA drops)
 # srilanka_nmra          12:10     1 genuine event — correctly filters 145 unrelated announcements
 0  10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py slovenia_jazmp       >> logs/cron.log 2>&1
 10 10 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py iceland_lyfjastofnun >> logs/cron.log 2>&1
@@ -119,6 +122,7 @@ SHELL=/bin/bash
 40 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py peru_digemid        >> logs/cron.log 2>&1
 50 11 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py senegal_arp         >> logs/cron.log 2>&1
 0  12 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py taiwan_tfda         >> logs/cron.log 2>&1
+20 12 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.tfda_alternatives_importer >> logs/cron.log 2>&1
 10 12 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py srilanka_nmra       >> logs/cron.log 2>&1
 
 # ─── Recall scrapers (daily at 06:00-07:15 UTC) ───
@@ -162,6 +166,14 @@ SHELL=/bin/bash
 15  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_decrs      >> logs/cron.log 2>&1
 30  9 1 1,4,7,10 *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda_inspections >> logs/cron.log 2>&1
 
+# EU/UK counterparts (wired 2026-10-26). edqm_cep = valid EDQM CEP holders per
+# substance (EU API-supplier census, ~1,200 queries / ~40 min); it queries the
+# substances fda_dmf + who_pq already resolved, so it runs after them — monthly
+# on the 1st at 10:00. mhra_gmdp = MHRA GMP certificate / non-compliance
+# register, updated continuously by MHRA — weekly, Wed 09:20.
+0  10 1 * *         cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py edqm_cep       >> logs/cron.log 2>&1
+20  9 * * 3         cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py mhra_gmdp      >> logs/cron.log 2>&1
+
 # ─── Log rotation (weekly: Sun 18:30 UTC, before the 19:00 scraper cycle) ───
 # Rotates cron.log past 50MB, gzips >7-day scraper logs, drops archives >60d.
 # cron.log had reached 500MB+ unrotated before this existed.
@@ -174,7 +186,11 @@ SHELL=/bin/bash
 0  21 1 * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.importers.pbs_pricing_importer >> logs/cron.log 2>&1
 
 # ─── Pricing connectors (drug_pricing_history — migration 055) ───
-# NADAC: CMS refreshes Wednesdays → fetch Thursdays.
+# NADAC: CMS refreshes Wednesdays. Was weekly at Thu 07:15 local, which the
+# laptop slept through every week: no nadac run appears in cron.log from
+# 2026-08-09 onward and the last US rows landed 2026-07-02, so US pricing went
+# ~3.5 months stale. Same fix as NHS below: daily, afternoon slot. Re-runs are
+# idempotent (dedup_hash), so a run on an unchanged snapshot writes nothing.
 #
 # NHS tariff was weekly at Mon 06:50 local. On a laptop that is asleep at
 # 06:50 a weekly slot means one missed fire costs a full week, and it did:
@@ -188,7 +204,7 @@ SHELL=/bin/bash
 # week), and moved to an afternoon slot when the machine is actually awake.
 # The real fix is Railway — see cron/RAILWAY_SERVICES.md. This just stops the
 # laptop's sleep schedule deciding how fresh UK data is.
-15  7 * * 4  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nadac           >> logs/cron.log 2>&1
+20 15 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nadac           >> logs/cron.log 2>&1
 50 14 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py nhs_drug_tariff >> logs/cron.log 2>&1
 # BDPM: ANSM refreshes the public medicines DB ~weekly → fetch Tuesdays.
 30  6 * * 2  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py france_bdpm    >> logs/cron.log 2>&1
@@ -202,3 +218,23 @@ SHELL=/bin/bash
 # active/anticipated → stale after 7 days without re-confirmation. Without this,
 # truly-gone shortages stay 'active' forever and the site over-reports. Idempotent.
 0   7 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 cron/run_mark_stale.py >> logs/cron.log 2>&1
+
+# ─── Portfolio risk score (daily 16:00 local, after the last daily scraper) ───
+# Recomputes inn_risk_scores (clinical importance × supply vulnerability) for
+# every molecule on the WHO Model List / EU Union list and appends the day's
+# snapshot to inn_risk_score_history — the only record of what we flagged and
+# when. Full refresh, ~2 min, read-heavy. See docs/portfolio-risk-score-scope.md.
+0  16 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.analysis.risk_score >> logs/cron.log 2>&1
+
+# ─── Watchlist digest (daily 17:00 local, after scrapers + the 16:00 risk score) ───
+# One email per user, only when a watched medicine changes tier in their market
+# (short now / anticipated / short in peers / watching). Replaces per-row alerts
+# from run_all_scrapers' old dispatch_pending_alerts(). Needs a verified sending
+# domain in Resend — until then sends fail and are recorded as failed.
+0  17 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.alerts.watchlist_digest >> logs/cron.log 2>&1
+
+# ─── Scenario suite (daily 18:00 local, after the scrapers, risk score and digest) ───
+# Checks the LIVE site against the regulator records for every scenario in the
+# data-accuracy plan (backend/scenarios/run_scenarios.py). Report:
+# logs/scenarios/<date>.md. Exit 1 = a scenario regressed (see cron.log).
+0  18 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.scenarios.run_scenarios >> logs/cron.log 2>&1

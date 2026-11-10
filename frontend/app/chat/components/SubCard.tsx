@@ -3,15 +3,12 @@
 import { useContext } from "react";
 import type { SubstituteRow } from "@/lib/chat/types";
 import { ChatContext } from "./ChatContext";
+import { ALTERNATIVES_CAVEAT } from "@/lib/alternatives";
 
-export function SubCard({ sub, matchOverride }: { sub: SubstituteRow; matchOverride?: string }) {
+// matchOverride is accepted (older answers carry match="NN") but ignored: no
+// validated similarity score exists, so no percentage is ever shown.
+export function SubCard({ sub }: { sub: SubstituteRow; matchOverride?: string }) {
   const chat = useContext(ChatContext);
-  const matchPct =
-    matchOverride && matchOverride.length > 0
-      ? matchOverride.endsWith("%") ? matchOverride : `${matchOverride}%`
-      : sub.similarity_score != null
-        ? `${Math.round(sub.similarity_score * 100)}%`
-        : "—";
 
   const inShortage = sub.active_shortage_count > 0;
 
@@ -27,14 +24,12 @@ export function SubCard({ sub, matchOverride }: { sub: SubstituteRow; matchOverr
         <div className="sub-card-meta">
           {sub.atc_code ? <span className="font-mono">{sub.atc_code}</span> : null}
           {sub.drug_class ? <> · {sub.drug_class}</> : null}
-          {sub.clinical_evidence_level ? <> · evidence {sub.clinical_evidence_level}</> : null}
-          {sub.requires_monitoring ? <> · monitoring required</> : null}
           {inShortage ? (
             <> · <span style={{ color: "var(--high)" }}>also in shortage ({sub.active_shortage_count})</span></>
           ) : null}
         </div>
       </div>
-      <div className="sub-card-match">{matchPct} match</div>
+      <div className="sub-card-match" title={ALTERNATIVES_CAVEAT}>{sub.match_basis ?? "Same ATC class"}</div>
     </button>
   );
 }

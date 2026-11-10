@@ -255,6 +255,9 @@ class FDAEnforcementScraper(BaseScraper):
             "estimated_resolution_date": None,
             "source_url":                source_url,
             "notes":                     notes,
+            # A recall is a supply-side signal, not a shortage notice: kept
+            # for analysis, excluded from every shortage count and page.
+            "synthetic":                 True,
             "raw_record": {
                 "recall_number":   recall_no or None,
                 "classification":  classification,

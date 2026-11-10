@@ -45,6 +45,11 @@ const KPIS_RE = /<kpis>([\s\S]*?)<\/kpis>/g;
 const KPIS_UNCLOSED_RE = /<kpis>([\s\S]*?)$/g;
 const SOURCES_RE = /<sources>([\s\S]*?)<\/sources>/g;
 const SOURCES_UNCLOSED_RE = /<sources>([\s\S]*?)$/g;
+// Safety net: any self-closing snake_case tag the renderer doesn't handle
+// (e.g. a legacy <class_card atc="J01" /> from the old /chat vocabulary, or a
+// tag the model invents) is stripped from prose — users must never see raw
+// markup. Recognised tags are consumed as hits before text is emitted.
+const UNKNOWN_SELF_CLOSING_TAG_RE = /<[a-z]+(?:_[a-z]+)+(?:\s[^<>]*)?\/>/g;
 
 function parseSourcesBody(inner: string): SourceChip[] {
   return inner
@@ -85,6 +90,7 @@ function extractAttr(attrs: string, name: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- payload shape varies per `kind`; a discriminated union is a parser refactor, not lint cleanup.
 type Hit = { kind: "drug" | "sub" | "followup" | "alternates" | "kpis" | "sources"; index: number; length: number; data: any };
 
 export function parseAgentResponse(raw: string): ParsedPart[] {
@@ -195,9 +201,13 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
   hits.sort((a, b) => a.index - b.index);
 
   const parts: ParsedPart[] = [];
+  const pushText = (text: string) => {
+    const clean = text.replace(UNKNOWN_SELF_CLOSING_TAG_RE, "");
+    if (clean.trim()) parts.push({ kind: "text", text: clean });
+  };
   let cursor = 0;
   for (const h of hits) {
-    if (h.index > cursor) parts.push({ kind: "text", text: raw.slice(cursor, h.index) });
+    if (h.index > cursor) pushText(raw.slice(cursor, h.index));
     if (h.kind === "drug") parts.push({ kind: "drug", id: h.data.id });
     else if (h.kind === "sub") parts.push({ kind: "sub", id: h.data.id, match: h.data.match });
     else if (h.kind === "alternates") parts.push({ kind: "alternates", items: h.data.items });
@@ -206,7 +216,7 @@ export function parseAgentResponse(raw: string): ParsedPart[] {
     else parts.push({ kind: "followups", items: h.data.items });
     cursor = h.index + h.length;
   }
-  if (cursor < raw.length) parts.push({ kind: "text", text: raw.slice(cursor) });
+  if (cursor < raw.length) pushText(raw.slice(cursor));
   return parts;
 }
 
@@ -284,13 +294,8 @@ export function Chat2SubRow({
           {sub.atc_code ? `${sub.atc_code} · ` : ""}{sub.drug_class || "Alternative"}
         </div>
       </div>
-      {sub.similarity_score != null ? (
-        <span
-          className="text-[12px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded whitespace-nowrap"
-          style={{ fontFamily: "var(--font-dm-mono), ui-monospace, monospace" }}
-        >
-          {Math.round(sub.similarity_score * 100)}% match
-        </span>
+      {sub.match_basis ? (
+        <span className="text-[12px] text-slate-500 whitespace-nowrap">{sub.match_basis}</span>
       ) : null}
     </button>
   );

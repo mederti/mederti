@@ -379,7 +379,7 @@ export default function ProcurementView({
           >
             {topAlternative
               ? `${affinity(topAlternative.matchPercent) ? `${affinity(topAlternative.matchPercent)} · ` : ""}${
-                  topAlternative.isAvailable ? "available" : "limited"
+                  topAlternative.isAvailable ? "no shortage listed" : "shortage listed"
                 }`
               : "none found"}
           </div>
@@ -546,7 +546,7 @@ export default function ProcurementView({
             <div style={moduleBase}>
               <div style={moduleHead}>
                 <div style={moduleTitle}>
-                  Alternatives — ranked by clinical match
+                  Same-class drugs (ATC) — not reviewed substitutes
                 </div>
                 <div style={moduleMeta}>
                   {alternatives.length} option
@@ -613,7 +613,7 @@ export default function ProcurementView({
                           fontWeight: 500,
                         }}
                       >
-                        {affinity(alt.matchPercent) ?? "listed alternative"}
+                        {affinity(alt.matchPercent) ?? "same ATC class"}
                       </div>
                       <div
                         style={{
@@ -632,7 +632,7 @@ export default function ProcurementView({
                           }`,
                         }}
                       >
-                        {alt.isAvailable ? "Available" : "Limited"}
+                        {alt.isAvailable ? "No shortage listed" : "Shortage listed"}
                       </div>
                     </div>
                   );

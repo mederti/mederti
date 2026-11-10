@@ -82,12 +82,14 @@ export function EarlyWarningView() {
       typeof document !== "undefined"
         ? document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/)
         : null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
     if (m) setCountry(m[1].toUpperCase());
   }, []);
 
   // Live predictive signals — drugs short in peer markets but not yet here.
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setSignalsLoading(true);
     fetch(`/api/predictive-signals?country=${country}&limit=60`)
       .then((r) => (r.ok ? r.json() : null))
@@ -130,6 +132,7 @@ export function EarlyWarningView() {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("ew-prealerts") || "[]");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
       if (Array.isArray(saved)) setAlerted(new Set(saved as string[]));
     } catch {}
   }, []);
@@ -266,7 +269,7 @@ export function EarlyWarningView() {
     if (pulse) lines.push("## Market read", pulse, "");
     lines.push(
       `## Short in peer markets, not yet in ${countryName} (${flaggedCount})`,
-      "A drug short in several peer markets at once usually signals an upstream (API or finished-dose) cause that crosses borders, typically reaching the remaining markets within 60–90 days.",
+      "In Mederti's 2025–26 history, essential medicines short in two or more peer markets were 2.5–6× more likely to be reported short here within six months (13–39% vs 3–11%), but most were not. An observation to watch, not a forecast.",
       "",
       "| Drug | Peer markets short | Peers | Worst severity | Peer lead |",
       "|---|---|---|---|---|",
@@ -277,7 +280,7 @@ export function EarlyWarningView() {
       "",
       `Severity filter: ${sevFilter === "all" ? "all" : sevFilter === "high" ? "high + critical" : "critical only"}.`,
       "",
-      "Source: Mederti predictive signals — drugs short in peer markets ahead of local declaration. Not medical advice.",
+      "Source: regulator shortage reports aggregated by Mederti — drugs short in peer markets, not yet reported here. Not medical advice.",
     );
 
     const blob = new Blob([lines.join("\n")], {
@@ -307,7 +310,7 @@ export function EarlyWarningView() {
           font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;color:#0c1118;
           --bg:#fafafa; --bg-2:#f4f4f5; --bg-3:#e4e4e7; --card:#fff; --border:#e4e4e7; --border-2:#d4d4d8;
           --text:#0c1118; --text-2:#3f3f46; --text-3:#71717a; --text-4:#a1a1aa;
-          --teal:#0fa676; --teal-l:#0c8a62; --teal-bg:#e8f6f0; --teal-b:#bce4d4;
+          --teal:var(--brand-teal); --teal-l:var(--brand-teal-d); --teal-bg:var(--brand-tint); --teal-b:#C6F3E6;
           --crit:#dc2626; --crit-bg:#fef2f2; --crit-b:#fecaca;
           --med:#ca8a04; --med-bg:#fefce8; --med-b:#f3dcae;
           --ok:#0fa676; --ok-bg:#e8f6f0; --ok-b:#bce4d4;
@@ -421,13 +424,13 @@ export function EarlyWarningView() {
       <div className="gov-head">
         <div className="gov-head-l">
           <div className="gov-crumb">
-            Predictive layer · {FLAGS[country] ?? ""} {country}
+            Early warning · {FLAGS[country] ?? ""} {country}
           </div>
           <h1 className="gov-title">Intelligence</h1>
           <div className="gov-sub">
-            Drugs short in peer markets but not yet in {countryName} — a shortage
-            in several markets at once usually means an upstream cause that
-            reaches the rest within 60–90 days.
+            Drugs short in peer markets but not yet reported in {countryName}. In
+            our history these were 2.5–6× more likely to be reported here within six
+            months than other medicines — but most were not.
           </div>
         </div>
         <div className="gov-head-r">
@@ -628,9 +631,11 @@ export function EarlyWarningView() {
               })}
             </div>
             <div className="peer-note">
-              When a drug is short in three or more peer markets at once, the
-              cause is usually upstream — an API or finished-dose failure that
-              crosses borders before it reaches {countryName}.
+              Tested on 2025–26 data for essential medicines: of those short in two
+              or more peer markets, 13–39% were reported short here within six
+              months (median 45–100 days), against 3–11% of the rest. A signal to
+              watch, not a forecast; markets whose regulator publishes little
+              will show many flags.
             </div>
           </div>
         </div>

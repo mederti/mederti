@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { atcMatchLabel } from "@/lib/alternatives";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -16,9 +17,9 @@ interface ShortageRow {
 interface AlternativeRow {
   alternative_drug_id: string;
   similarity_score: number | null;
-  clinical_evidence_level: string | null;
+  atc_match_level: number | null;
   relationship_type: string | null;
-  drugs: { generic_name: string } | { generic_name: string }[] | null;
+  drugs: { generic_name: string; atc_code: string | null } | { generic_name: string; atc_code: string | null }[] | null;
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -45,9 +46,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       .in("status", ["active", "anticipated"]),
     sb
       .from("drug_alternatives")
-      .select("alternative_drug_id, similarity_score, clinical_evidence_level, relationship_type, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name)")
+      .select("alternative_drug_id, similarity_score, atc_match_level, relationship_type, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name, atc_code)")
       .eq("drug_id", id)
-      .order("similarity_score", { ascending: false })
+      .eq("is_approved", true)
+      .order("atc_match_level", { ascending: false })
       .limit(4),
   ]);
 
@@ -81,8 +83,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     .map((a) => ({
       alt_drug_id: a.alternative_drug_id,
       alt_generic_name: pickGeneric(a.drugs) ?? "",
-      similarity_score: a.similarity_score,
-      evidence_grade: a.clinical_evidence_level,
+      // ATC-class pairing only: no evidence grade or validated score exists.
+      similarity_score: null,
+      evidence_grade: null,
+      match_basis: atcMatchLabel(a.atc_match_level, (Array.isArray(a.drugs) ? a.drugs[0] : a.drugs)?.atc_code ?? null),
     }))
     .filter((a) => a.alt_generic_name);
 

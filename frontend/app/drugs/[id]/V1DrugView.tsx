@@ -88,6 +88,12 @@ function abbr(name?: string, a?: string | null) {
   if (name.includes("Health Canada") || name.includes("Santé")) return "Health Canada";
   return name.length > 18 ? name.slice(0, 17) + "…" : name;
 }
+/** Whole days since an ISO timestamp; null when absent or unparseable. */
+function daysSince(iso: string | null) {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  return Number.isFinite(ms) ? Math.floor(ms / 864e5) : null;
+}
 function timeAgo(iso?: string | null) {
   if (!iso) return "";
   const ms = Date.now() - new Date(iso).getTime();
@@ -366,12 +372,7 @@ export default function V1DrugView({
   // No shortage source for this market: absence of notices proves nothing.
   const noData = !localShortage && marketCovered === false;
   // Days since the headline notice was last confirmed against its source.
-  const staleDays = (() => {
-    const v = mine?.last_verified_at ?? null;
-    if (!v) return null;
-    const ms = Date.now() - new Date(v).getTime();
-    return Number.isFinite(ms) ? Math.floor(ms / 864e5) : null;
-  })();
+  const staleDays = daysSince(mine?.last_verified_at ?? null);
   // The regulator's own impact rating, verbatim (TGA: Low / Medium / High /
   // Critical), highest across the market's open notices.
   const IMPACT_RANK: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };

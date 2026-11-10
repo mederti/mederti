@@ -24,6 +24,17 @@ export type ShortageRow = {
   start_date: string | null;
   estimated_resolution_date: string | null;
   source_url: string | null;
+  // Product-level identity from the regulator record, so the model never has
+  // to guess which brand a notice covers (it once called a resolved Alphamox
+  // notice "to be discontinued").
+  product?: string | null;       // trade name / brand on the notice
+  sponsor?: string | null;
+  reg_no?: string | null;        // TGA AUST R / Health Canada DIN
+  reason_category?: string | null; // "discontinuation" = permanent market exit
+  end_date?: string | null;      // date the regulator closed the notice
+  market_exit_date?: string | null; // discontinuation: registration end / deletion date
+  last_verified_at?: string | null;
+  notice_state?: "open" | "closed"; // open = active/anticipated today
 };
 
 export type SourceConsulted = {
@@ -116,6 +127,9 @@ export type DrugExternalIdentifiers = {
 
 export type DrugDetail = DrugSummary & {
   shortages: ShortageRow[];
+  /** One verdict per product from the regulator register (see buildProductStatus). */
+  product_status?: Array<Record<string, string | null>>;
+  product_status_note?: string;
   active_shortage_count: number;
   worst_severity: string | null;
   countries_affected: string[];

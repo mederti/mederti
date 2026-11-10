@@ -67,6 +67,36 @@ export async function liveCoverage(): Promise<LiveCoverage | null> {
   }
 }
 
+// Count of active, non-synthetic shortage rows — the homepage and methodology
+// headline figure. An exact count has to visit every active row, and both
+// pages re-ran it on each 5-minute revalidation (the top disk-reading
+// statement in pg_stat_statements, Nov 2026). The figure moves when scrapers
+// run, a few times a day, so one shared hourly entry is plenty. Throws on
+// failure so an error is never cached.
+const cachedActiveShortageCount = unstable_cache(
+  async (): Promise<number> => {
+    const { count, error } = await getSupabaseAdmin()
+      .from("shortage_events")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active")
+      .or("synthetic.is.null,synthetic.eq.false");
+    if (error || count == null) throw new Error(`active shortage count failed: ${error?.message ?? "no count"}`);
+    return count;
+  },
+  ["mederti-active-shortage-count"],
+  { revalidate: 3600 },
+);
+
+/** Null on failure (callers show "—"); failures are never cached. */
+export async function activeShortageCount(): Promise<number | null> {
+  try {
+    return await cachedActiveShortageCount();
+  } catch (err) {
+    console.error("[coverage] active shortage count failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 // Per-market: does Mederti hold ANY open, non-synthetic shortage notice for
 // this country? A market with none has no working shortage source (e.g.
 // Singapore: HSA publishes no shortage list), and a page there must say "no

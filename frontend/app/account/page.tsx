@@ -83,26 +83,32 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [watchlist, setWatchlist] = useState<WatchlistRow[]>([]);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
-  const [removingId, setRemovingId] = useState<string | null>(null);
+  // Row id with a watchlist write in flight (remove or email toggle) — one at a
+  // time per row, so a double-click can't fire two writes from a stale row.
+  const [busyRowId, setBusyRowId] = useState<string | null>(null);
+  // Last failed watchlist write, shown above the list. The UI only changes
+  // after the database confirms a write.
+  const [watchlistError, setWatchlistError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [enquiries, setEnquiries] = useState<EnquiryRow[]>([]);
   const [enquiriesLoading, setEnquiriesLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"watchlist" | "enquiries" | "settings">("watchlist");
-  const [role, setRole] = useState<string>("default");
-  const [roleSaving, setRoleSaving] = useState(false);
-  const [roleSaved, setRoleSaved] = useState(false);
   const [displayName, setDisplayName] = useState("");
-  const [nameSaving, setNameSaving] = useState(false);
-  const [nameSaved, setNameSaved] = useState(false);
+  // Display-name save lifecycle as one value — "saved" only after the auth
+  // server accepted it.
+  const [nameStatus, setNameStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [nameError, setNameError] = useState<string | null>(null);
 
   async function fetchWatchlist(uid: string) {
     setWatchlistLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("user_watchlists")
       .select("id, drug_id, is_active, notification_channels, created_at, drugs(generic_name, brand_names)")
       .eq("user_id", uid)
       .eq("is_active", true)
       .order("created_at", { ascending: false });
+    // A failed load must not read as "you aren't watching anything".
+    if (error) setWatchlistError("Couldn't load your watchlist just now. Refresh to try again.");
     setWatchlist((data ?? []) as WatchlistRow[]);
     setWatchlistLoading(false);
   }
@@ -125,9 +131,6 @@ export default function AccountPage() {
       if (session?.user) {
         fetchWatchlist(session.user.id);
         fetchEnquiries(session.user.id);
-        // Fetch user profile for role
-        supabase.from("user_profiles").select("role").eq("user_id", session.user.id).single()
-          .then(({ data }) => { if (data?.role) setRole(data.role); });
         // Load display name from user metadata
         const meta = session.user.user_metadata ?? {};
         setDisplayName(meta.full_name || meta.name || meta.display_name || "");
@@ -152,15 +155,36 @@ export default function AccountPage() {
   }, []);
 
   async function removeWatch(id: string) {
-    setRemovingId(id);
-    await supabase.from("user_watchlists").update({ is_active: false }).eq("id", id);
+    if (busyRowId) return;
+    setBusyRowId(id);
+    setWatchlistError(null);
+    const { error } = await supabase.from("user_watchlists").update({ is_active: false }).eq("id", id);
+    setBusyRowId(null);
+    if (error) {
+      setWatchlistError("Couldn't remove that medicine — it's still on your watchlist. Please try again.");
+      return;
+    }
     setWatchlist(w => w.filter(r => r.id !== id));
-    setRemovingId(null);
+    // Keep the sidebar's Watchlist section in step without a reload.
+    window.dispatchEvent(new Event("watchlist:changed"));
   }
 
   async function toggleEmailAlert(row: WatchlistRow) {
-    const updated = { ...row.notification_channels, email: !row.notification_channels.email };
-    await supabase.from("user_watchlists").update({ notification_channels: updated }).eq("id", row.id);
+    if (busyRowId) return;
+    setBusyRowId(row.id);
+    setWatchlistError(null);
+    const turningOn = !row.notification_channels.email;
+    const updated = { ...row.notification_channels, email: turningOn };
+    const { error } = await supabase.from("user_watchlists").update({ notification_channels: updated }).eq("id", row.id);
+    setBusyRowId(null);
+    if (error) {
+      setWatchlistError(
+        turningOn
+          ? "Couldn't turn email alerts on — they're still off. Please try again."
+          : "Couldn't turn email alerts off — they're still on. Please try again.",
+      );
+      return;
+    }
     setWatchlist(w => w.map(r => r.id === row.id ? { ...r, notification_channels: updated } : r));
   }
 
@@ -170,30 +194,20 @@ export default function AccountPage() {
     router.push("/");
   }
 
-  async function saveRole(newRole: string) {
-    if (!user) return;
-    setRoleSaving(true);
-    setRoleSaved(false);
-    await supabase.from("user_profiles").upsert(
-      { user_id: user.id, role: newRole },
-      { onConflict: "user_id" },
-    );
-    setRole(newRole);
-    setRoleSaving(false);
-    setRoleSaved(true);
-    setTimeout(() => setRoleSaved(false), 2000);
-  }
-
   async function saveName() {
-    if (!user) return;
-    setNameSaving(true);
-    setNameSaved(false);
-    await supabase.auth.updateUser({
+    if (!user || nameStatus === "saving") return;
+    setNameStatus("saving");
+    setNameError(null);
+    const { error } = await supabase.auth.updateUser({
       data: { full_name: displayName.trim() },
     });
-    setNameSaving(false);
-    setNameSaved(true);
-    setTimeout(() => setNameSaved(false), 2000);
+    if (error) {
+      setNameStatus("error");
+      setNameError(`Your name wasn't saved: ${error.message}`);
+      return;
+    }
+    setNameStatus("saved");
+    setTimeout(() => setNameStatus((s) => (s === "saved" ? "idle" : s)), 2000);
   }
 
   const inputStyle = {
@@ -313,7 +327,16 @@ export default function AccountPage() {
                   </div>
                 )}
 
-                {!watchlistLoading && watchlist.length === 0 && (
+                {watchlistError && (
+                  <div role="alert" style={{
+                    marginBottom: 12, padding: "10px 14px", borderRadius: 8,
+                    background: "var(--crit-bg)", border: "1px solid var(--crit-b)",
+                    fontSize: 13, color: "var(--crit)",
+                  }}>
+                    {watchlistError}
+                  </div>
+                )}
+                {!watchlistLoading && !watchlistError && watchlist.length === 0 && (
                   <div style={{
                     background: "#fff", border: "1px solid var(--app-border)", borderRadius: 12,
                     padding: "48px 32px", textAlign: "center",
@@ -362,11 +385,14 @@ export default function AccountPage() {
                           <span style={{ fontSize: 11, color: "var(--app-text-4)" }}>Email</span>
                           <button
                             onClick={() => toggleEmailAlert(row)}
+                            disabled={busyRowId === row.id}
+                            aria-pressed={row.notification_channels.email}
+                            aria-label={`Email alerts for ${row.drugs?.[0]?.generic_name ?? "this medicine"}`}
                             style={{
                               width: 36, height: 20, borderRadius: 10,
                               background: row.notification_channels.email ? "var(--teal)" : "var(--app-border-2)",
-                              border: "none", cursor: "pointer", position: "relative",
-                              transition: "background 0.15s",
+                              border: "none", cursor: busyRowId === row.id ? "wait" : "pointer", position: "relative",
+                              transition: "background 0.15s", opacity: busyRowId === row.id ? 0.6 : 1,
                             }}
                           >
                             <span style={{
@@ -380,14 +406,14 @@ export default function AccountPage() {
 
                         <button
                           onClick={() => removeWatch(row.id)}
-                          disabled={removingId === row.id}
+                          disabled={busyRowId === row.id}
                           style={{
                             fontSize: 12, color: "var(--app-text-4)", background: "none",
                             border: "none", cursor: "pointer", padding: "4px 8px",
                             borderRadius: 5, flexShrink: 0,
                           }}
                         >
-                          {removingId === row.id ? "…" : "Remove"}
+                          {busyRowId === row.id ? "…" : "Remove"}
                         </button>
                       </div>
                     ))}
@@ -508,20 +534,25 @@ export default function AccountPage() {
                       />
                       <button
                         onClick={saveName}
-                        disabled={nameSaving}
+                        disabled={nameStatus === "saving"}
                         style={{
                           padding: "10px 20px", borderRadius: 8,
                           fontSize: 13, fontWeight: 600,
                           background: "var(--teal)", color: "#fff",
-                          border: "none", cursor: nameSaving ? "wait" : "pointer",
+                          border: "none", cursor: nameStatus === "saving" ? "wait" : "pointer",
                           flexShrink: 0,
                           fontFamily: "var(--font-inter), sans-serif",
                         }}
                       >
-                        {nameSaving ? "Saving…" : "Save"}
+                        {nameStatus === "saving" ? "Saving…" : "Save"}
                       </button>
                     </div>
-                    {nameSaved && (
+                    {nameStatus === "error" && nameError && (
+                      <div role="alert" style={{ fontSize: 12, color: "var(--crit)", marginTop: 10, fontWeight: 500 }}>
+                        {nameError}
+                      </div>
+                    )}
+                    {nameStatus === "saved" && (
                       <div style={{ fontSize: 12, color: "var(--teal)", marginTop: 10, fontWeight: 500 }}>
                         Name updated — refresh to see it in the nav bar.
                       </div>

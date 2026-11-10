@@ -708,7 +708,6 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
 
   // Each row says which product it covers and whether it is open today. A
   // closed (resolved) notice is history: the product has no current notice.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toRow = ({ raw_data, data_source_id, ...r }: any): ShortageRow => {
     const brand = extractEventBrand(data_source_id ?? null, raw_data);
     const st = String(r.status || "").toLowerCase();
@@ -721,7 +720,6 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
       notice_state: st === "active" || st === "anticipated" ? "open" : "closed",
     } as ShortageRow;
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows: ShortageRow[] = ((shortages.data ?? []) as any[]).map(toRow);
   // The same product's notice can be filed under several drugs rows (salt /
   // spelling variants). The canonical Amoxicillin row held older, resolved
@@ -734,7 +732,6 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     if (!regs.length) continue;
     const { data } = await sb.from("shortage_events").select(SEL).eq("country_code", cc)
       .in(`raw_data->>${field}`, regs).or("synthetic.is.null,synthetic.eq.false").limit(500);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     regRows.push(...((data ?? []) as any[]).map(toRow));
   }
   const productStatus = buildProductStatus([...rows, ...regRows]);

@@ -3,7 +3,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import AppShell from "@/app/components/v1/AppShell";
 import CountryChatPanel from "./CountryChatPanel";
-import CountryNotices, { type NoticeRow } from "./CountryNotices";
+import CountryNotices from "./CountryNotices";
+import CountryWeek from "./CountryWeek";
+import CountryAlternatives from "./CountryAlternatives";
+import {
+  toNoticeRow,
+  countryWeek,
+  countryAlternatives,
+  type CountryWeek as Week,
+  type CountryAlternatives as Alternatives,
+} from "@/lib/country-profile";
 import CountrySwitcher from "./CountrySwitcher";
 import {
   jsonLdSafe,
@@ -17,7 +26,6 @@ import {
   countrySummary,
   allRegulators,
   regulatorSlug,
-  slugify,
   fmtDate,
   reasonLabel,
   type Faq,
@@ -31,22 +39,6 @@ import { countryCodeFromSlug, countryName, countrySlug, COUNTRY_NAMES } from "@/
 // and AI retrieval.
 export const revalidate = 3600;
 
-function toRow(e: PseoShortageEventWithDrug): NoticeRow {
-  const med = e.drugs?.generic_name ?? null;
-  return {
-    id: e.id,
-    medicine: med,
-    medicineSlug: med ? slugify(med) : null,
-    status: e.status,
-    severity: e.severity,
-    reason: reasonLabel(e.reason_category),
-    startDate: e.start_date,
-    resolutionDate: e.estimated_resolution_date,
-    sourceUrl: e.source_url,
-    sourceLabel: e.data_sources?.abbreviation ?? e.data_sources?.name ?? "Source",
-  };
-}
-
 // Grounding text for the page's chat: exactly what the page shows, plus how to
 // treat forward-looking questions honestly.
 function groundingText(
@@ -54,6 +46,8 @@ function groundingText(
   code: string,
   s: Awaited<ReturnType<typeof countrySummary>>,
   regs: { name: string; abbreviation: string | null }[],
+  week: Week | null,
+  alts: Alternatives | null,
 ): string {
   const line = (e: PseoShortageEventWithDrug, dateLabel: string, date: string | null) =>
     `- ${e.drugs?.generic_name ?? "Unlinked product"} | ${e.status}${e.severity ? ` | ${e.severity}` : ""}${
@@ -63,6 +57,27 @@ function groundingText(
     `Country: ${name} (${code}). Official sources: ${regs.map((r) => `${r.name}${r.abbreviation ? ` (${r.abbreviation})` : ""}`).join(", ") || "unknown"}.`,
     `Counts (notices, not medicines — regulators list each strength/pack separately): active ${s.active ?? "unknown"}, distinct medicines affected ${s.activeMedicines ?? "unknown"}, anticipated (any start date) ${s.anticipated ?? "unknown"}, announced upcoming (start date still ahead) ${s.upcomingTotal ?? "unknown"}, critical ${s.critical ?? "unknown"}.`,
     `HOW TO ANSWER FORWARD-LOOKING QUESTIONS ("what will be short in 6 months", "what should I buy now"): Mederti has no validated shortage forecast — its backtests did not hold up — so never present a prediction or risk score as fact. Answer from regulator facts: (1) the announced-upcoming notices below (anticipated or future start date), (2) active notices with estimated resolution dates, (3) critical active notices, and you may use tools to check whether the same medicines are short in other markets, labelled as context not prediction. For purchasing questions, frame as "what the published notices suggest preparing for", cite the notices and dates, and say it is not procurement advice. If the lists are empty, say so plainly.`,
+    ...(week
+      ? [
+          `THIS WEEK (${week.from} to ${week.to}, regulator dates): ${week.started.notices ?? "unknown"} notices started (${week.started.items.slice(0, 15).map((i) => i.medicine).join(", ") || "none"}); ${week.resolved.notices ?? "unknown"} closed by the regulator (${week.resolved.items.slice(0, 15).map((i) => i.medicine).join(", ") || "none"}); ${week.startingSoon.notices ?? "unknown"} announced to start by ${week.soonTo} (${week.startingSoon.items.slice(0, 15).map((i) => i.medicine).join(", ") || "none"}).`,
+        ]
+      : []),
+    ...(alts && alts.medicines.length
+      ? [
+          `SHORT MEDICINES WITH AN OFFICIAL ALTERNATIVE IN ${name.toUpperCase()} (regulator-published; not a substitution recommendation):`,
+          ...alts.medicines
+            .filter((m) => m.approvals.length || m.alternatives.length)
+            .slice(0, 40)
+            .map(
+              (m) =>
+                `- ${m.medicine}${m.critical ? " (critical)" : ""}: ${[
+                  ...m.approvals.map((a) => `${a.schemeLabel}: ${a.product}${a.expiresAt ? ` (approval ends ${a.expiresAt})` : ""}`),
+                  ...m.alternatives.map((a) => `${a.authorisedHere ? "authorised substitute" : a.sameMedicine ? "other product of same medicine" : "different medicine cited"}: ${a.name} [${a.publishers.join(", ")}]`),
+                ].join("; ")}`,
+            ),
+          `Critical medicines with no official alternative on file: ${alts.medicines.filter((m) => m.critical && !m.approvals.length && !m.alternatives.length).length} of ${alts.criticalMedicines ?? "unknown"}.`,
+        ]
+      : []),
     `ANNOUNCED UPCOMING (soonest ${s.upcoming.length} of ${s.upcomingTotal ?? "unknown"}):`,
     ...s.upcoming.map((e) => line(e, "starts", e.start_date)),
     `ACTIVE WITH ESTIMATED RESOLUTION (${s.resolving.length}):`,
@@ -98,9 +113,13 @@ export default async function CountryShortagesPage(
   if (!code) notFound();
 
   const name = countryName(code);
-  const [summary, regulators] = await Promise.all([
+  // The two profile sections degrade to "not shown" on failure — the register
+  // itself must still render.
+  const [summary, regulators, week, alts] = await Promise.all([
     countrySummary(code),
     allRegulators(),
+    countryWeek(code).catch(() => null),
+    countryAlternatives(code).catch(() => null),
   ]);
   const countryRegs = regulators.filter((r) => r.country_code === code && r.is_active);
 
@@ -178,7 +197,7 @@ export default async function CountryShortagesPage(
           code={code}
           name={name}
           slug={slug}
-          bodyText={groundingText(name, code, summary, countryRegs)}
+          bodyText={groundingText(name, code, summary, countryRegs, week, alts)}
         />
       }
     >
@@ -199,32 +218,34 @@ export default async function CountryShortagesPage(
         <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15, margin: "0 0 8px" }}>
           Medicine shortages in {name}
         </h1>
-        <p style={{ fontSize: 15, color: "var(--app-text-2, #3b434e)", lineHeight: 1.65, margin: "0 0 20px", maxWidth: 680 }}>
+        <p style={{ fontSize: 15, color: "var(--app-text-2, #3b434e)", lineHeight: 1.65, margin: "0", maxWidth: 680 }}>
           Live register of drug shortage notices in {name}, aggregated daily from official
           regulator publications and linked back to every source.
           {lastChecked ? <> Last checked {fmtDate(lastChecked)}.</> : null}
         </p>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {stat("Active notices", summary.active, "#b42318")}
-          {stat("Medicines affected", summary.activeMedicines)}
-          {stat("Announced upcoming", summary.upcomingTotal, "#b54708", "start date still ahead")}
-          {stat("Critical severity", summary.critical)}
-        </div>
-        <p style={{ fontSize: 13, color: "var(--app-text-3, #6a7280)", lineHeight: 1.6, margin: "10px 0 0", maxWidth: 680 }}>
-          Regulators list each strength and pack separately, so one medicine can carry several
-          notices — compare official per-medicine tallies against &ldquo;Medicines affected&rdquo;.{" "}
-          <Link href="/methodology" style={{ color: "inherit" }}>How we count</Link>
-        </p>
-
         <CountryNotices
+          code={code}
           name={name}
-          latest={summary.recent.map(toRow)}
-          upcoming={summary.upcoming.map(toRow)}
+          latest={summary.recent.map(toNoticeRow)}
+          upcoming={summary.upcoming.map(toNoticeRow)}
+          resolving={summary.resolving.map(toNoticeRow)}
           upcomingTotal={summary.upcomingTotal}
-          resolving={summary.resolving.map(toRow)}
-          activeTotal={summary.active}
-        />
+        >
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 20 }}>
+            {stat("Active notices", summary.active, "#b42318")}
+            {stat("Medicines affected", summary.activeMedicines)}
+            {stat("Announced upcoming", summary.upcomingTotal, "#b54708", "start date still ahead")}
+            {stat("Critical severity", summary.critical)}
+          </div>
+          <p style={{ fontSize: 13, color: "var(--app-text-3, #6a7280)", lineHeight: 1.6, margin: "10px 0 0", maxWidth: 680 }}>
+            Regulators list each strength and pack separately, so one medicine can carry several
+            notices — compare official per-medicine tallies against &ldquo;Medicines affected&rdquo;.{" "}
+            <Link href="/methodology" style={{ color: "inherit" }}>How we count</Link>
+          </p>
+          {week ? <CountryWeek name={name} week={week} /> : null}
+          {alts ? <CountryAlternatives name={name} data={alts} /> : null}
+        </CountryNotices>
 
         {countryRegs.length > 0 && (
           <>

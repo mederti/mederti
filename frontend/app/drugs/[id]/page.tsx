@@ -13,6 +13,7 @@ import SiteNav from "@/app/components/landing-nav";
 import AppShell from "@/app/components/v1/AppShell";
 import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand, extractEventMarketExit } from "@/lib/event-brand";
+import { marketHasShortageData } from "@/lib/coverage";
 import { buildSupplyInMarket, isCombo, type CatalogueRow } from "@/lib/supply-in-market";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
@@ -876,6 +877,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
     ),
   );
 
+  // A market with no shortage source must not read "In supply".
+  const marketCovered = await marketHasShortageData(userCountry);
+
   const apiConcentration =
     makerCount > 0
       ? {
@@ -1053,6 +1057,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       apiConcentration={apiConcentration}
       supplyProfile={supplyProfile}
       supplyInMarket={supplyInMarket}
+      marketCovered={marketCovered}
       recalls={recalls}
       approvalFootprint={approvalFootprint}
       eligibility={eligibility}

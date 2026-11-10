@@ -10,6 +10,8 @@ interface Props {
   drugId: string;
   name: string;
   slug: string;
+  /** Page path the signup gate returns to; defaults to /medicine/[slug]. */
+  basePath?: string;
   /** Server-built grounding: the per-country status, notices and alternatives shown on the page. */
   bodyText: string;
 }
@@ -21,11 +23,11 @@ interface Props {
  * (chat is account-only), which echoes their question and returns them here
  * with it after signup.
  */
-function Panel({ drugId, name, slug, bodyText }: Props) {
+function Panel({ drugId, name, slug, basePath, bodyText }: Props) {
   const { anon } = useFreeTier();
   const params = useSearchParams();
   const ask = (params.get("ask") ?? "").trim().slice(0, 300) || undefined;
-  const base = `/medicine/${slug}`;
+  const base = basePath ?? `/medicine/${slug}`;
   const here = ask ? `${base}?ask=${encodeURIComponent(ask)}` : base;
 
   if (anon === null) return <></>;
@@ -50,8 +52,8 @@ function Panel({ drugId, name, slug, bodyText }: Props) {
 
   return (
     <ContextChat
-      key={`medicine-${drugId}`}
-      contextKey={`medicine-${drugId}`}
+      key={`medicine-${drugId}${basePath ? `:${basePath}` : ""}`}
+      contextKey={`medicine-${drugId}${basePath ? `:${basePath}` : ""}`}
       title={`${name} shortage status`}
       category={`Medicine shortage status — ${name}`}
       bodyText={bodyText}

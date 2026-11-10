@@ -22,7 +22,7 @@ import {
   canonicalUrl,
   defaultOgImages,
 } from "@/lib/seo";
-import {
+import { trackedCountries,
   countrySummary,
   allRegulators,
   regulatorSlug,
@@ -97,9 +97,15 @@ export async function generateMetadata(
   const name = countryName(code);
   const title = `Medicine shortages in ${name} — live list & daily updates | Mederti`;
   const description = `Current drug shortages in ${name}: live register of active and anticipated shortage notices, severity, causes and official regulator sources. Updated daily.`;
+  // A country with no shortage rows at all (several listed countries have a
+  // dormant or blocked source) is a thin page: keep it reachable, not indexed.
+  // On a coverage-probe failure (null) keep the default (indexable).
+  const tracked = await trackedCountries();
+  const noData = tracked !== null && !tracked[code];
   return {
     title,
     description,
+    ...(noData ? { robots: { index: false, follow: true } } : {}),
     alternates: { canonical: `/country/${slug}/medicine-shortages` },
     openGraph: { title, description, url: canonicalUrl(`/country/${slug}/medicine-shortages`), type: "website", images: defaultOgImages() },
   };

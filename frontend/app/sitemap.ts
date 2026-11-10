@@ -1,7 +1,13 @@
 import { MetadataRoute } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { siteUrl } from "@/lib/seo";
-import { slugify, regulatorSlug, isQualityDrugSlug } from "@/lib/pseo";
+import {
+  slugify,
+  regulatorSlug,
+  isQualityDrugSlug,
+  openCountryMedicinePairs,
+  trackedCountries,
+} from "@/lib/pseo";
 import { COUNTRY_NAMES, countrySlug } from "@/lib/geo/country-names";
 
 // Sitemap is regenerated on every request rather than baked into the build,
@@ -20,7 +26,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
 
   const medicinePages: MetadataRoute.Sitemap = [];
+  const medicineCountryPages: MetadataRoute.Sitemap = [];
   let regulatorPages: MetadataRoute.Sitemap = [];
+  let tracked: Awaited<ReturnType<typeof trackedCountries>> = null;
   try {
     if (
       (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL) &&
@@ -35,6 +43,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // The !inner embed keeps only drugs that have events; the embed is
       // capped at one row since we only need existence. Paged because
       // PostgREST caps responses at 1000.
+      // Medicine × country pairs with an open notice (cached 6h). Also gives
+      // each medicine an honest lastModified: the latest source verification
+      // of its open notices, not drugs.updated_at (which entity clean-ups bump).
+      const [pairs, trackedRes] = await Promise.all([openCountryMedicinePairs(), trackedCountries()]);
+      tracked = trackedRes;
+      const latestBySlugVerified = new Map<string, string>();
+      for (const p of pairs ?? []) {
+        if (!p.lastModified) continue;
+        const prev = latestBySlugVerified.get(p.slug);
+        if (!prev || p.lastModified > prev) latestBySlugVerified.set(p.slug, p.lastModified);
+      }
+
       const seen = new Set<string>();
       for (let page = 0; page < 12; page++) {
         const { data, error } = await supabase
@@ -51,12 +71,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           seen.add(slug);
           medicinePages.push({
             url: `${base}/medicine/${slug}`,
-            lastModified: new Date(drug.updated_at),
+            lastModified: new Date(latestBySlugVerified.get(slug) ?? drug.updated_at),
             changeFrequency: "daily",
             priority: 0.8,
           });
         }
         if (data.length < 1000) break;
+      }
+
+      // /medicine/[slug]/[country]: only for medicines that made the list above
+      // (same identity gate) and countries with a page — mirrors
+      // isIndexableCountryView() on the page itself.
+      for (const p of pairs ?? []) {
+        if (!seen.has(p.slug) || !COUNTRY_NAMES[p.countryCode]) continue;
+        medicineCountryPages.push({
+          url: `${base}/medicine/${p.slug}/${countrySlug(p.countryCode)}`,
+          ...(p.lastModified ? { lastModified: new Date(p.lastModified) } : {}),
+          changeFrequency: "daily",
+          priority: 0.7,
+        });
       }
 
       // Regulator profiles from the live source catalogue.
@@ -86,15 +119,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn("sitemap: programmatic page generation skipped:", err);
   }
 
-  // Country registers — static list, one page per tracked country.
-  const countryPages: MetadataRoute.Sitemap = Object.keys(COUNTRY_NAMES).map(
-    (code) => ({
+  // Country registers — only countries Mederti actually holds shortage data
+  // for (a name in COUNTRY_NAMES is not coverage: several have no rows), with
+  // lastModified = the latest source verification. Falls back to the full
+  // list only if the coverage probe failed.
+  const countryCodes = tracked
+    ? Object.keys(tracked).filter((c) => COUNTRY_NAMES[c])
+    : Object.keys(COUNTRY_NAMES);
+  const countryPages: MetadataRoute.Sitemap = countryCodes.map((code) => {
+    const verified = tracked?.[code]?.latestVerified;
+    return {
       url: `${base}/country/${countrySlug(code)}/medicine-shortages`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
+      ...(verified ? { lastModified: new Date(verified) } : {}),
+      changeFrequency: "daily" as const,
       priority: 0.7,
-    }),
-  );
+    };
+  });
 
   const allStatic: MetadataRoute.Sitemap = [
     { url: `${base}`,            changeFrequency: "daily",   priority: 1.0, lastModified: new Date() },
@@ -117,5 +157,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ]),
   ];
 
-  return [...allStatic, ...countryPages, ...medicinePages, ...regulatorPages];
+  return [...allStatic, ...countryPages, ...medicinePages, ...medicineCountryPages, ...regulatorPages];
 }

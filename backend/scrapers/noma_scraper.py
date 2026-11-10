@@ -230,6 +230,18 @@ class NoMAScraper(BaseScraper):
                 status_raw = col(status_col) if status_col else ""
                 status = self._map_status(status_raw)
 
+                # NoMA occasionally publishes a resolved period that ends
+                # before it starts (7 of 1,649 rows, Nov 2026). The DB's
+                # chk_dates rejects those, and we don't invent either date —
+                # skip them visibly instead of 400-ing the write.
+                if status == "resolved" and end_date and end_date < start_date:
+                    skipped += 1
+                    self.log.warning(
+                        "NoMA: resolved row ends before it starts; skipped",
+                        extra={"drug": generic_name, "from": start_date, "to": end_date},
+                    )
+                    continue
+
                 # Reason
                 aarsak = col("Årsak")  # Norwegian: reason
                 reason_cat = self._map_reason_category(aarsak)

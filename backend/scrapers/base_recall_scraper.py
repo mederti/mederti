@@ -326,8 +326,8 @@ class BaseRecallScraper(ABC):
             self.log.warning("Could not fetch shortages for linking", extra={"error": str(exc)})
             return 0
 
-        linked = 0
         announced_dt = datetime.fromisoformat(announced_date)
+        links: list[dict[str, Any]] = []
 
         for s in shortages:
             start_raw = s.get("start_date")
@@ -345,20 +345,29 @@ class BaseRecallScraper(ABC):
                 link_type = "concurrent"
             else:
                 link_type = "shortage_preceded_recall"
+            links.append({"recall_id": recall_uuid, "shortage_id": s["id"], "link_type": link_type})
 
+        if not links:
+            return 0
+        # One request for all of this recall's links (was one per link — ~10k
+        # requests a run). If the batch is rejected, fall back to one at a time
+        # so a single bad row doesn't drop the rest.
+        try:
+            self.db.table("recall_shortage_links").upsert(
+                links, on_conflict="recall_id,shortage_id",
+            ).execute()
+            return len(links)
+        except Exception as exc:
+            self.log.debug("Link batch upsert failed, retrying per row", extra={"error": str(exc)})
+        linked = 0
+        for link in links:
             try:
                 self.db.table("recall_shortage_links").upsert(
-                    {
-                        "recall_id":   recall_uuid,
-                        "shortage_id": s["id"],
-                        "link_type":   link_type,
-                    },
-                    on_conflict="recall_id,shortage_id",
+                    link, on_conflict="recall_id,shortage_id",
                 ).execute()
                 linked += 1
             except Exception as exc:
                 self.log.debug("Link upsert skipped", extra={"error": str(exc)})
-
         return linked
 
     def _auto_create_shortage(self, drug_id: str, recall_uuid: str, recall: dict) -> bool:
@@ -405,6 +414,9 @@ class BaseRecallScraper(ABC):
                     "start_date":       announced_date,
                     "source_url":       recall.get("press_release_url", self.BASE_URL),
                     "notes":            f"Auto-generated from Class I recall {recall_uuid}",
+                    # Inferred from a recall, not published as a shortage:
+                    # synthetic, like recall_linker's copies (migration 046).
+                    "synthetic":        True,
                     "last_verified_at": datetime.now(timezone.utc).isoformat(),
                 },
                 on_conflict="shortage_id",
@@ -421,6 +433,9 @@ class BaseRecallScraper(ABC):
     # ─────────────────────────────────────────────────────────────────────────
     # Upsert
     # ─────────────────────────────────────────────────────────────────────────
+
+    # Rows per recalls upsert request.
+    UPSERT_BATCH = 200
 
     def upsert(self, recalls: list[dict]) -> dict[str, int]:
         """
@@ -441,6 +456,11 @@ class BaseRecallScraper(ABC):
         counts = {"upserted": 0, "skipped": 0, "linked": 0, "auto_shortages": 0,
                   "write_failures": 0}
 
+        # Phase 1 — build every record (drug resolution is per recall).
+        # Keyed by recall_id: Postgres rejects a batch that touches the same
+        # conflict key twice, and a later duplicate should win, as it did when
+        # rows were written one at a time.
+        pending: dict[str, tuple[dict[str, Any], dict]] = {}
         for recall in recalls:
             try:
                 generic_name = (recall.get("generic_name") or "").strip()
@@ -481,31 +501,69 @@ class BaseRecallScraper(ABC):
                     "confidence_score": recall.get("confidence_score", 80),
                     "raw_data":         recall.get("raw_record", {}),
                 }
-
-                upsert_resp = (
-                    self.db.table("recalls")
-                    .upsert(record, on_conflict="recall_id")
-                    .execute()
-                )
-                recall_uuid: str = upsert_resp.data[0]["id"]
-                counts["upserted"] += 1
-
-                # Link to existing shortage events
-                if drug_id:
-                    linked = self._link_to_shortages(
-                        recall_uuid, drug_id, self.COUNTRY_CODE, announced_date
-                    )
-                    counts["linked"] += linked
-
-                # Auto-create anticipated shortage for Class I recalls
-                if recall.get("recall_class") == "I" and drug_id:
-                    created = self._auto_create_shortage(drug_id, recall_uuid, recall)
-                    if created:
-                        counts["auto_shortages"] += 1
-
+                if recall_id in pending:
+                    # Same recall twice in one run: the old per-row path wrote
+                    # both (second overwrote first) and counted both.
+                    counts["upserted"] += 1
+                pending[recall_id] = (record, recall)
             except Exception as exc:
                 self.log.error(
                     "Failed to upsert recall",
+                    extra={"error": str(exc), "generic_name": recall.get("generic_name")},
+                )
+                counts["write_failures"] += 1
+
+        # Phase 2 — write in batches (was one HTTP request per recall, ~10k a
+        # run, which is what loaded the database). A rejected batch is retried
+        # row by row so one bad record costs one write_failure, not the batch.
+        uuid_by_recall_id: dict[str, str] = {}
+        items = list(pending.values())
+        for i in range(0, len(items), self.UPSERT_BATCH):
+            chunk = items[i:i + self.UPSERT_BATCH]
+            try:
+                resp = (
+                    self.db.table("recalls")
+                    .upsert([rec for rec, _ in chunk], on_conflict="recall_id")
+                    .execute()
+                )
+                returned = {row["recall_id"]: row["id"] for row in (resp.data or [])}
+                if len(returned) != len(chunk):
+                    raise RuntimeError(f"batch returned {len(returned)} of {len(chunk)} rows")
+                uuid_by_recall_id.update(returned)
+            except Exception as exc:
+                self.log.warning("Recall batch upsert failed, retrying per row", extra={"error": str(exc)})
+                for rec, recall in chunk:
+                    try:
+                        resp = self.db.table("recalls").upsert(rec, on_conflict="recall_id").execute()
+                        uuid_by_recall_id[rec["recall_id"]] = resp.data[0]["id"]
+                    except Exception as row_exc:
+                        self.log.error(
+                            "Failed to upsert recall",
+                            extra={"error": str(row_exc), "generic_name": recall.get("generic_name")},
+                        )
+                        counts["write_failures"] += 1
+
+        # Phase 3 — link and auto-create shortages for what was written.
+        for rec, recall in items:
+            recall_uuid = uuid_by_recall_id.get(rec["recall_id"])
+            if not recall_uuid:
+                continue
+            counts["upserted"] += 1
+            drug_id = rec["drug_id"]
+            try:
+                # Link to existing shortage events
+                if drug_id:
+                    counts["linked"] += self._link_to_shortages(
+                        recall_uuid, drug_id, self.COUNTRY_CODE, rec["announced_date"]
+                    )
+                # Auto-create anticipated shortage for Class I recalls
+                if recall.get("recall_class") == "I" and drug_id:
+                    if self._auto_create_shortage(drug_id, recall_uuid, recall):
+                        counts["auto_shortages"] += 1
+            except Exception as exc:
+                # The recall itself is written; only its follow-up failed.
+                self.log.error(
+                    "Failed to link recall",
                     extra={"error": str(exc), "generic_name": recall.get("generic_name")},
                 )
                 counts["write_failures"] += 1

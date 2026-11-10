@@ -14,14 +14,20 @@ import { SCHEME_COPY, FALLBACK_SCHEME_COPY } from "@/lib/substitution";
 import { addRecentMedicine, addRecentSearch } from "@/lib/recent-activity";
 import Chat2Client from "@/app/chat/Chat2Client";
 import { classifyQuery, looksLikeQuestion, type QueryIntent } from "@/lib/search/classify";
+import { countryLandingPath } from "@/lib/search/country-intent";
+import { countryCodeFromSlug, countryName } from "@/lib/geo/country-names";
+
+const countryNameFromPath = (path: string) =>
+  countryName(countryCodeFromSlug(path.split("/")[2] ?? "") ?? "");
 import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
 import { useFreeTier } from "@/app/components/free-tier/useFreeTier";
 
-function statusOf(d: DrugHit): { cls: string; label: string } {
+function statusOf(d: DrugHit, covered: boolean | null = true): { cls: string; label: string } {
   if (d.source === "catalogue") return { cls: "sp-ok", label: "Registered product" };
   const n = d.active_shortage_count ?? 0;
   if (n >= 5) return { cls: "sp-crit", label: `${n} active shortages` };
   if (n >= 1) return { cls: "sp-part", label: `${n} active shortage${n > 1 ? "s" : ""}` };
+  if (covered === false) return { cls: "sp-part", label: "No data for this market" };
   return { cls: "sp-ok", label: "In supply" };
 }
 
@@ -39,10 +45,14 @@ function resultBrands(d: DrugHit): { matched: string | null; others: string[] } 
   return { matched, others };
 }
 /** Brand hits open the molecule page scoped to that brand's products. */
-function resultHref(d: DrugHit): string {
-  return d.matched_brand && d.matched_catalogue_id
-    ? `/drugs/${d.drug_id}?brand_focus=${d.matched_catalogue_id}`
-    : `/drugs/${d.drug_id}`;
+function resultHref(d: DrugHit, market: string): string {
+  const qs = new URLSearchParams();
+  if (d.matched_brand && d.matched_catalogue_id) qs.set("brand_focus", d.matched_catalogue_id);
+  // Carry the searched market so the drug page shows the same market the
+  // result row's verdict was computed for ("ALL" = no market → page default).
+  if (/^[A-Z]{2}$/.test(market)) qs.set("market", market);
+  const q = qs.toString();
+  return `/drugs/${d.drug_id}${q ? `?${q}` : ""}`;
 }
 function BrandLine({ d, className }: { d: DrugHit; className: string }) {
   const { matched, others } = resultBrands(d);
@@ -53,6 +63,16 @@ function BrandLine({ d, className }: { d: DrugHit; className: string }) {
       {others.slice(0, matched ? 2 : 3).join(" · ")}
     </div>
   );
+}
+/** The typed brand's own status line (AU/CA, matched by registration number). */
+function brandStatusLine(d: DrugHit): string | null {
+  const b = d.brand_status;
+  if (!b) return null;
+  const now = b.short > 0
+    ? `${b.short} product${b.short === 1 ? "" : "s"} short now`
+    : b.anticipated > 0 ? "shortage anticipated" : `not on ${b.regulator}'s shortage list`;
+  const past = b.past > 0 ? ` · short ${b.past === 1 ? "once" : `${b.past}×`} in past 2 yrs` : "";
+  return `${b.brand}: ${now}${past}`;
 }
 function monthYear(iso?: string | null): string | null {
   if (!iso) return null;
@@ -80,7 +100,7 @@ const fmtPrice = (amt: number, cur: string): string => `${CUR_SYM[cur] ?? cur + 
 // Country-first supply verdict: answers "available in MY market or not", with
 // the global picture demoted to a subline.
 function marketStatus(
-  d: DrugHit, market: string, isGlobal: boolean
+  d: DrugHit, market: string, isGlobal: boolean, covered: boolean | null = true
 ): { cls: string; label: string; sub: string | null; warn: boolean } {
   if (d.source === "catalogue") {
     return { cls: "sp-ok", label: isGlobal ? "Registered product" : `Registered in ${market}`, sub: d.source_name || "Registered product", warn: false };
@@ -93,6 +113,10 @@ function marketStatus(
     return { cls, label: `Short in ${market}`, sub: other > 0 ? `+ ${other} other market${other > 1 ? "s" : ""} short` : null, warn: true };
   }
   if (isGlobal) return { cls: "sp-ok", label: "In supply", sub: null, warn: false };
+  if (covered === false) {
+    // No shortage source here: no notices proves nothing.
+    return { cls: "sp-part", label: `No data for ${market}`, sub: other > 0 ? `short in ${other} other market${other > 1 ? "s" : ""}` : "no shortage source for this market", warn: other > 0 };
+  }
   return {
     cls: "sp-ok",
     label: `Available in ${market}`,
@@ -182,9 +206,16 @@ function Results() {
   const [results, setResults] = useState<DrugHit[]>([]);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState<StatusFacets | null>(null);
+  const [marketCovered, setMarketCovered] = useState<boolean | null>(null);
   const [formFacet, setFormFacet] = useState<Record<string, number>>({});
   const [strengthFacet, setStrengthFacet] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(false);
+  // One explicit lifecycle instead of a bare `loading` flag: a failed request
+  // (500, timeout, per-IP rate limit) must never render as "No results" — on a
+  // medicines database that reads as "no shortage data exists for this drug".
+  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const loading = searchStatus === "loading";
+  // Bumped by the "Try again" button to re-run the search effect for the same URL.
+  const [retryNonce, setRetryNonce] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
   // Google-style typo correction. `corrected` drives the "Showing results for X ·
   // Search instead for Y" banner. `triedRef` prevents re-correcting a term we
@@ -216,9 +247,11 @@ function Results() {
   // URL is the source of truth for filters → run search when q or any filter changes.
   useEffect(() => {
     const term = urlQ.trim();
-    if (!term) { setResults([]); setTotal(0); setFacets(null); setFormFacet({}); setStrengthFacet({}); return; }
+    // Cleared query → idle. Also releases a "loading" left behind by an
+    // in-flight search this effect's cleanup just cancelled.
+    if (!term) { setResults([]); setTotal(0); setFacets(null); setFormFacet({}); setStrengthFacet({}); setSearchStatus("idle"); return; }
     let cancelled = false;
-    setLoading(true);
+    setSearchStatus("loading");
     const sel = statusStr ? statusStr.split(",").filter(Boolean) : [];
     const formS = formStr ? formStr.split(",").filter(Boolean) : [];
     const strS = strengthStr ? strengthStr.split(",").filter(Boolean) : [];
@@ -253,21 +286,31 @@ function Results() {
           lastTypedRef.current !== term &&
           !statusStr && !formStr && !strengthStr
         ) {
-          router.replace(resultHref(data.results[0]));
+          router.replace(resultHref(data.results[0], market));
           return;
         }
         setResults(data.results);
         setTotal(data.total);
         setFacets(data.facets?.status ?? null);
+        setMarketCovered(data.market_covered ?? null);
         setFormFacet(data.facets?.form ?? {});
         setStrengthFacet(data.facets?.strength ?? {});
+        setSearchStatus("done");
       })
-      .catch(() => { if (!cancelled) { setResults([]); setTotal(0); setFacets(null); } })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .catch(() => {
+        if (cancelled) return;
+        setResults([]); setTotal(0); setFacets(null);
+        setSearchStatus("error");
+      })
+      .finally(() => {
+        // The auto-correct / single-result redirect branches return early
+        // without results; they navigate away, so just leave "loading".
+        if (!cancelled) setSearchStatus((s) => (s === "loading" ? "done" : s));
+      });
     return () => { cancelled = true; };
     // setParams/corrected intentionally omitted — URL params are the source of truth.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlQ, market, statusStr, sort, formStr, strengthStr]);
+  }, [urlQ, market, statusStr, sort, formStr, strengthStr, retryNonce]);
 
   // Keep the input mirror in sync when the URL query changes externally.
   useEffect(() => { setQ(urlQ); }, [urlQ]);
@@ -350,7 +393,7 @@ function Results() {
           onKeyDown={(e) => {
             // Typed query with a single hit: Enter opens it.
             if (e.key === "Enter" && !loading && results.length === 1 && q.trim() === urlQ.trim()) {
-              router.push(resultHref(results[0]));
+              router.push(resultHref(results[0], market));
             }
           }}
           placeholder="Search a drug — e.g. amoxicillin, cisplatin, metformin"
@@ -535,7 +578,7 @@ function Results() {
             </thead>
             <tbody>
               {results.map((d) => {
-                const ms = marketStatus(d, market, isGlobalMarket);
+                const ms = marketStatus(d, market, isGlobalMarket, marketCovered);
                 const eb = monthYear(d.estimated_resolution_date);
                 // Scheme-specific plain-language copy — "Yes" only when the
                 // pathway itself authorises substitute supply.
@@ -549,7 +592,7 @@ function Results() {
                 // catalogue fallback that renders a registration page.
                 const go = () => {
                   addRecentMedicine({ id: String(d.drug_id), name: d.generic_name });
-                  router.push(resultHref(d));
+                  router.push(resultHref(d, market));
                 };
                 return (
                   <tr
@@ -568,6 +611,7 @@ function Results() {
                     <td>
                       <span className={`status-pill ${ms.cls}`}><span className="d" />{ms.label}</span>
                       {ms.sub && <div className={`t-mktsub ${ms.warn ? "warn" : ""}`}>{ms.sub}</div>}
+                      {brandStatusLine(d) && <div className={`t-mktsub ${d.brand_status!.short > 0 ? "warn" : ""}`}>{brandStatusLine(d)}</div>}
                     </td>
                     <td>
                       {sub ? (
@@ -629,7 +673,18 @@ function Results() {
                         (brand) of this ingredient in the market — a specific
                         contracted brand may return later, so say so. */}
                     <td title={eb ? `Earliest sponsor-declared return date across all products containing this ingredient${isGlobalMarket ? "" : ` in ${mk.name}`}. A specific brand may return later.` : undefined}>
-                      {eb ? (
+                      {d.brand_status ? (
+                        // A brand search answers for that brand: the molecule's
+                        // earliest date belonged to another brand (Fresofol showed
+                        // B Braun's Propofol-Lipuro date).
+                        d.brand_status.short > 0 ? (
+                          d.brand_status.back
+                            ? <><div className="t-eb">{monthYear(d.brand_status.back)}</div><div className="t-sub2">{d.brand_status.brand} · sponsor est.</div></>
+                            : <><div className="t-eb none">No estimate</div><div className="t-sub2">{d.brand_status.brand}</div></>
+                        ) : (
+                          <><div className="t-eb none">{d.brand_status.brand} not short</div>{eb && <div className="t-sub2">other brands ~{eb}</div>}</>
+                        )
+                      ) : eb ? (
                         <><div className="t-eb">{eb}</div><div className="t-sub2">earliest sponsor est. — brands may differ</div></>
                       ) : inShortage ? (
                         <div className="t-eb none">No estimate</div>
@@ -651,7 +706,7 @@ function Results() {
       {/* ── Mobile: simple cards (table doesn't fit narrow screens) ── */}
       <div className="res-list">
         {results.map((d) => {
-          const st = statusOf(d);
+          const st = statusOf(d, marketCovered);
           const inner = (
             <div className="res-card">
               <div className="res-l">
@@ -661,6 +716,7 @@ function Results() {
                   {d.atc_code ? `ATC ${d.atc_code}` : "—"}
                   {d.alternatives_count ? ` · ${d.alternatives_count} same-class drug${d.alternatives_count > 1 ? "s" : ""}` : ""}
                 </div>
+                {brandStatusLine(d) && <div className="rmeta">{brandStatusLine(d)}</div>}
               </div>
               <span className={`status-pill ${st.cls}`}><span className="d" />{st.label}</span>
             </div>
@@ -670,14 +726,21 @@ function Results() {
           // "in supply" page when the id resolves to a drug_catalogue row.
           return <Link
                 key={d.drug_id}
-                href={resultHref(d)}
+                href={resultHref(d, market)}
                 style={{ textDecoration: "none", color: "inherit" }}
                 onClick={() => addRecentMedicine({ id: String(d.drug_id), name: d.generic_name })}
               >{inner}</Link>;
         })}
       </div>
 
-      {!loading && q.trim() && results.length === 0 && (
+      {searchStatus === "error" && q.trim() && (
+        <div className="res-foot" role="alert">
+          Search couldn&apos;t be completed just now — this is a connection or server problem, not a
+          sign that &ldquo;{q.trim()}&rdquo; has no data.{" "}
+          <button className="link-btn" onClick={() => setRetryNonce((n) => n + 1)}>Try again</button>
+        </div>
+      )}
+      {searchStatus === "done" && q.trim() && results.length === 0 && (
         <div className="res-foot">
           No results for &ldquo;{q.trim()}&rdquo;{!isGlobalMarket && <> in {mk.name}</>}.
           {!isGlobalMarket ? (
@@ -773,6 +836,13 @@ function ResultsShell() {
 function UnifiedSearch() {
   const params = useSearchParams();
   const q = (params.get("q") ?? "").trim();
+  // Country-level queries ("drugs in short supply in india") land on that
+  // country's page, which hosts its own grounded chat.
+  const countryPath = q ? countryLandingPath(q) : null;
+  const router = useRouter();
+  useEffect(() => {
+    if (countryPath) router.replace(countryPath);
+  }, [countryPath, router]);
   // Note: the selected market is deliberately NOT read here — intent
   // classification (drug vs open question) is market-independent. See the
   // classify effect below for why market must not influence routing.
@@ -802,6 +872,14 @@ function UnifiedSearch() {
     return () => { cancelled = true; };
   }, [q]);
 
+  if (countryPath) {
+    // Shown only while router.replace swaps in the country page.
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "var(--font-geist-sans), system-ui, sans-serif", fontSize: 14, color: "#6a7280" }}>
+        Opening the {countryNameFromPath(countryPath)} shortage register…
+      </div>
+    );
+  }
   if (intent === "drug") return <ResultsShell />;
   // Empty home and open-question answer are both the chat experience. A drug
   // typed into its composer routes back here as /search?q=… (see Chat2Client).

@@ -41,6 +41,7 @@ import { LeadContext } from "@/app/chat/components/LeadContext";
 import "@/app/chat/chat.css";
 import { DesktopOnly } from "@/app/components/DesktopOnly";
 import { classifyQuery } from "@/lib/search/classify";
+import { countryLandingPath } from "@/lib/search/country-intent";
 
 // /chat2 is intentionally public during layout iteration — no auth gate. The
 // chat backend handles its own rate limiting; flip back on when promoting.
@@ -290,6 +291,13 @@ export default function Chat2Client({ chatId }: { chatId: string | null }) {
       // stay here and get answered. Mid-conversation follow-ups always stay in
       // the chat (so "amoxicillin" as a follow-up keeps its context).
       if (turns.length === 0) {
+        // Country-level ("what's short in India?") → that country's page,
+        // which carries the same question into its grounded chat.
+        const countryPath = countryLandingPath(q);
+        if (countryPath) {
+          router.push(countryPath);
+          return;
+        }
         const intent = await classifyQuery(q);
         if (intent === "drug") {
           router.push(`/search?q=${encodeURIComponent(q)}`);

@@ -38,6 +38,9 @@ export interface ContextChatProps {
   // = right rail with a left border; "left" = middle column (chat sits left of the
   // content panel) with a right border.
   placement?: "left" | "right";
+  // Asked automatically once on mount — e.g. a search query that routed here
+  // ("what will be short in India in 6 months?" → the India landing page).
+  initialQuestion?: string;
 }
 
 const DEFAULT_STARTERS = [
@@ -62,6 +65,7 @@ export function ContextChat({
   emptyLead,
   starters = DEFAULT_STARTERS,
   placement = "right",
+  initialQuestion,
 }: ContextChatProps) {
   const router = useRouter();
   const hostPane = useContext(PaneContext);
@@ -288,6 +292,16 @@ export function ContextChat({
   );
 
   const isEmpty = turns.length === 0;
+
+
+  // Auto-ask a routed-in question once per context.
+  const askedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const q = initialQuestion?.trim();
+    if (!q || askedRef.current === contextKey) return;
+    askedRef.current = contextKey;
+    void send(q);
+  }, [initialQuestion, contextKey, send]);
 
   return (
     <PaneContext.Provider value={pane}>

@@ -101,8 +101,9 @@ Against ~195 UN-recognized countries, that's **~26% direct national coverage** (
 | Recalls | tga_recalls, fda_recalls, fda_medwatch, health_canada_recalls, ema_recalls, mhra_recalls, aifa_recalls, ansm_recalls, medsafe_recalls, aemps_recalls, bfarm_recalls |
 | Pricing (→ `drug_pricing_history`) | nadac (US, weekly), nhs_drug_tariff (GB, weekly), france_bdpm (FR, weekly), aifa_pricing (IT, weekly), spain_nomenclator (ES, weekly) |
 | Quarterly (API supply-chain) | fda_dmf, who_pq, fda_decrs, fda_inspections |
+| EU/UK supply-chain (wired 2026-10-26) | edqm_cep (monthly — valid EDQM CEP holders → `api_suppliers`), mhra_gmdp (weekly — MHRA GMP register → `manufacturing_facilities`; file is `eudragmdp_scraper.py` but the source is MHRA, not EudraGMDP) |
 
-**Dark scraper files present but NOT in cron** (verify before relying on any of these): `india_cdsco` (was briefly wired 2026-06-03 per memory, silently dropped by a later "reconcile crontab with live" pass — never actually ran on the Mac), `israel_moh`, `hsa_recalls`, plus non-country signal scrapers `ashp`, `clinicaltrials`, `edqm_cep`, `ema_chmp`, `eudragmdp`, `fda_adcomm`, `drugs_at_fda`, and the utility `recall_linker.py` (recall→shortage causal-link populator, unclear if wired into the pipeline).
+**Dark scraper files present but NOT in cron** (verify before relying on any of these): `india_cdsco` (was briefly wired 2026-06-03 per memory, silently dropped by a later "reconcile crontab with live" pass — never actually ran on the Mac), `israel_moh`, `hsa_recalls`, plus non-country signal scrapers `ashp`, `clinicaltrials`, `ema_chmp`, `fda_adcomm`, `drugs_at_fda`, and the utility `recall_linker.py` (recall→shortage causal-link populator, unclear if wired into the pipeline).
 
 **Cadence:** 30-min stagger on the core phase, 15-min stagger on phases 8–9+. All scrapers dedupe via MD5 `shortage_id` so repeated runs are idempotent.
 

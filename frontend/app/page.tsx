@@ -165,8 +165,11 @@ export default async function Home() {
         <div className="pp-head">
           <h2 className="pp-title">See a medicine&apos;s full picture at a glance.</h2>
           <p className="pp-sub">Live status by regulator, substitutes, sourcing, a verified event timeline and AI insight — every claim sourced and timestamped.</p>
+          <p className="pp-demo-note">Illustrative example of the product. Not live shortage data.</p>
         </div>
-        <div className="pp-stage">
+        {/* data-nosnippet: the mock-up's statuses, dates and suppliers are
+            sample data — keep them out of search snippets and AI answers. */}
+        <div className="pp-stage" data-nosnippet="" aria-label="Illustrative product example with sample data">
           <div className="pp-frame">
             <div className="pp-bar"><span className="pp-dot" /><span className="pp-dot" /><span className="pp-dot" /><div className="pp-url">🔒 mederti.com/amoxicillin-500mg</div></div>
             <div className="pp-body">
@@ -203,7 +206,7 @@ export default async function Home() {
       {/* ── Value props ── */}
       <div className="props">
         <div className="prop">
-          <div className="hexwrap">
+          <div className="hexwrap" data-nosnippet="" aria-hidden="true">
             <div className="hex">
               <div className="hex-bg status" />
               <div className="ss">
@@ -217,7 +220,7 @@ export default async function Home() {
           <p>See whether a drug is in a declared shortage right now — and in which countries — with the regulator and timestamp behind every status.</p>
         </div>
         <div className="prop">
-          <div className="hexwrap">
+          <div className="hexwrap" data-nosnippet="" aria-hidden="true">
             <div className="hex">
               <div className="hex-bg source" />
               <div className="ss">
@@ -231,7 +234,7 @@ export default async function Home() {
           <p>See same-class alternatives with their own shortage status — and connect with registered suppliers who can supply, including under shortage provisions.</p>
         </div>
         <div className="prop">
-          <div className="hexwrap">
+          <div className="hexwrap" data-nosnippet="" aria-hidden="true">
             <div className="hex">
               <div className="hex-bg alert" />
               <div className="ss">
@@ -336,6 +339,7 @@ const CSS = `
 .searchbox input::placeholder{color:var(--text-4)}
 .searchbox button{background:#090E2C;color:#fff;border:none;padding:12px 22px;border-radius:11px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px -6px rgba(16,185,129,.5)}
 .searchbox button:hover{background:var(--green-d)}
+.pp-demo-note{font-size:12px;color:var(--text-4);margin:8px 0 0;letter-spacing:.01em}
 .samples{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:20px}
 .sample{font-size:12.5px;font-weight:500;color:var(--text-3);background:var(--bg);border:1px solid var(--border);padding:7px 14px;border-radius:99px;transition:.15s;cursor:pointer}
 .sample:hover{border-color:var(--green);color:var(--green-d);background:var(--green-bg)}

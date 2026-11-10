@@ -17,6 +17,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { unstable_cache } from "next/cache";
 import { COVERAGE_COPY } from "@/lib/coverage-copy";
 
 // ─── Slugs ──────────────────────────────────────────────────────────────────
@@ -238,6 +239,219 @@ export async function relatedDrugs(
   const { data } = await q;
   return data ?? [];
 }
+
+// ─── Medicine × country ─────────────────────────────────────────────────────
+
+export interface PseoEventDetail extends PseoShortageEvent {
+  data_source_id: string | null;
+  anticipated_start_date: string | null;
+  availability_status: string | null;
+  raw_data: Record<string, unknown> | null;
+}
+
+// raw_data is heavy; only the per-country page (≤ a few hundred rows for one
+// drug in one market) selects it, and it is reduced to a product label
+// server-side before anything reaches a client component.
+const EVENT_DETAIL_COLS = `${EVENT_COLS}, data_source_id, anticipated_start_date, availability_status, raw_data`;
+
+/** Every real notice for one drug in one country, newest first. */
+export async function eventsForDrugInCountry(
+  drugId: string,
+  countryCode: string,
+): Promise<PseoEventDetail[]> {
+  const admin = getSupabaseAdmin();
+  const { data } = await realEventsFilter(
+    admin
+      .from("shortage_events")
+      .select(EVENT_DETAIL_COLS)
+      .eq("drug_id", drugId)
+      .eq("country_code", countryCode.toUpperCase()),
+  )
+    .order("start_date", { ascending: false, nullsFirst: false })
+    .limit(500);
+  return (data ?? []) as unknown as PseoEventDetail[];
+}
+
+/**
+ * The country-specific view is indexable only when the medicine itself passes
+ * the index gate AND the country has at least one open (active/anticipated)
+ * notice for it. Mirrors openCountryMedicinePairs(), which feeds the sitemap —
+ * keep the two rules identical.
+ */
+export function isIndexableCountryView(
+  drug: Pick<PseoDrug, "generic_name" | "rxcui" | "atc_code">,
+  totalEventCount: number,
+  openInCountry: number,
+): boolean {
+  return openInCountry > 0 && isIndexableDrug(drug, totalEventCount);
+}
+
+export interface TrackedCountry {
+  /** Most recent last_verified_at across this country's shortage feeds. */
+  latestVerified: string | null;
+  sources: Array<{ name: string; abbreviation: string | null }>;
+}
+
+/**
+ * Countries where Mederti actually holds shortage data — at least one real
+ * notice from one of the country's regulator feeds — keyed by ISO-2 code
+ * (plus "EU" for the EMA bloc feed). This is what separates "no shortage on
+ * record" from "data unavailable": a data_sources row alone is not coverage
+ * (12 'covered' countries had never written a row, 2026-11-09).
+ * Throws on any probe error so a transient failure is never cached.
+ */
+async function computeTrackedCountries(): Promise<Record<string, TrackedCountry>> {
+  const admin = getSupabaseAdmin();
+  const { data: sources, error } = await admin
+    .from("data_sources")
+    .select("id, name, abbreviation, country_code");
+  if (error || !sources) throw new Error(`data_sources lookup failed: ${error?.message ?? "no data"}`);
+
+  const out: Record<string, TrackedCountry> = {};
+  for (let i = 0; i < sources.length; i += 10) {
+    const batch = sources.slice(i, i + 10);
+    const probes = await Promise.all(
+      batch.map((s) =>
+        realEventsFilter(
+          admin
+            .from("shortage_events")
+            .select("last_verified_at")
+            .eq("data_source_id", s.id),
+        )
+          .order("last_verified_at", { ascending: false, nullsFirst: false })
+          .limit(1),
+      ),
+    );
+    probes.forEach((p, j) => {
+      const src = batch[j] as { name: string; abbreviation: string | null; country_code: string | null };
+      if (p.error) throw new Error(`coverage probe failed for ${src.name}: ${p.error.message}`);
+      const row = (p.data ?? [])[0] as { last_verified_at: string | null } | undefined;
+      const code = (src.country_code ?? "").toUpperCase();
+      if (!row || !code || code === "ZZ") return;
+      const entry = (out[code] ??= { latestVerified: null, sources: [] });
+      entry.sources.push({ name: src.name, abbreviation: src.abbreviation });
+      if (row.last_verified_at && (!entry.latestVerified || row.last_verified_at > entry.latestVerified)) {
+        entry.latestVerified = row.last_verified_at;
+      }
+    });
+  }
+  return out;
+}
+
+const cachedTrackedCountries = unstable_cache(computeTrackedCountries, ["pseo-tracked-countries-v1"], {
+  revalidate: 21600,
+});
+
+/** null on failure — callers must then avoid any "no shortage" claim. */
+export async function trackedCountries(): Promise<Record<string, TrackedCountry> | null> {
+  try {
+    return await cachedTrackedCountries();
+  } catch (err) {
+    console.warn("trackedCountries failed:", err);
+    return null;
+  }
+}
+
+export interface CountryMedicinePair {
+  slug: string;
+  countryCode: string;
+  lastModified: string | null;
+}
+
+/**
+ * Every (medicine, country) pair with an open notice whose medicine passes
+ * the slug/identity part of the index gate — the sitemap's source for
+ * /medicine/[slug]/[country]. Paged (PostgREST caps at 1,000 rows) and cached
+ * 6h because it walks every open notice.
+ */
+async function computeOpenCountryMedicinePairs(): Promise<CountryMedicinePair[]> {
+  const admin = getSupabaseAdmin();
+  const pairs = new Map<string, CountryMedicinePair>();
+  const page = (from: number) =>
+    realEventsFilter(
+      admin
+        .from("shortage_events")
+        .select("id, country_code, last_verified_at, drugs!inner(generic_name, rxcui, atc_code)")
+        .in("status", ["active", "anticipated"])
+        .not("drug_id", "is", null)
+        .not("country_code", "is", null),
+    )
+      .or("rxcui.not.is.null,atc_code.not.is.null", { referencedTable: "drugs" })
+      .order("id")
+      .range(from, from + 999);
+  // ~18k qualifying open notices (2026-11-11) ≈ 19 pages at ~1s each, so
+  // fetch 5 pages at a time; stop at the first short page.
+  let done = false;
+  for (let base = 0; base < 100000 && !done; base += 5000) {
+    const results = await Promise.all([0, 1, 2, 3, 4].map((k) => page(base + k * 1000)));
+    for (const { data, error } of results) {
+      if (error) throw new Error(`open pair scan failed: ${error.message}`);
+      const rows = (data ?? []) as unknown as Array<{
+        country_code: string;
+        last_verified_at: string | null;
+        drugs: { generic_name: string } | null;
+      }>;
+      for (const r of rows) {
+        if (!r.drugs) continue;
+        const slug = slugify(r.drugs.generic_name);
+        if (!slug || !isQualityDrugSlug(slug)) continue;
+        const code = r.country_code.toUpperCase();
+        const key = `${slug}|${code}`;
+        const prev = pairs.get(key);
+        if (!prev) {
+          pairs.set(key, { slug, countryCode: code, lastModified: r.last_verified_at });
+        } else if (r.last_verified_at && (!prev.lastModified || r.last_verified_at > prev.lastModified)) {
+          prev.lastModified = r.last_verified_at;
+        }
+      }
+      if (rows.length < 1000) done = true;
+    }
+  }
+  return [...pairs.values()];
+}
+
+const cachedOpenPairs = unstable_cache(computeOpenCountryMedicinePairs, ["pseo-open-country-pairs-v1"], {
+  revalidate: 21600,
+});
+
+export async function openCountryMedicinePairs(): Promise<CountryMedicinePair[] | null> {
+  try {
+    return await cachedOpenPairs();
+  } catch (err) {
+    console.warn("openCountryMedicinePairs failed:", err);
+    return null;
+  }
+}
+
+// ─── Status vocabulary (one place; rendered on every public medicine page) ──
+
+export const STATUS_DEFINITIONS: Array<{ term: string; definition: string }> = [
+  {
+    term: "Active shortage",
+    definition:
+      "A national regulator currently lists the notice as an ongoing shortage or supply disruption for at least one product (strength, form or pack) of the medicine.",
+  },
+  {
+    term: "Anticipated shortage",
+    definition:
+      "The regulator or manufacturer has announced a shortage that has not started yet, or is expected. Not a Mederti prediction.",
+  },
+  {
+    term: "Resolved",
+    definition:
+      "The regulator has closed the notice or removed it from its shortage list. This does not confirm that every product is back in stock.",
+  },
+  {
+    term: "No shortage notice on record",
+    definition:
+      "Mederti receives data from this country's regulator but holds no notice linked to this medicine record. Some regulators file notices under a salt or local-language name (for example \"amoxicillin trihydrate\" or \"amoxicillinum\") that may be held as a separate record, so check the country's register. Never confirmation of supply at any pharmacy or wholesaler.",
+  },
+  {
+    term: "Data unavailable",
+    definition:
+      "Mederti has no shortage data source for this country, so its status is unknown.",
+  },
+];
 
 // ─── Country data ───────────────────────────────────────────────────────────
 
@@ -516,7 +730,7 @@ export function buildDrugFaqs(
   } else {
     faqs.push({
       question: `Is ${name} currently in shortage?`,
-      answer: `No active shortage of ${name} is currently reported by any of the national medicines regulators Mederti tracks. Shortages can emerge quickly — this page updates daily from official sources.`,
+      answer: `No active shortage notice is currently linked to ${name} in Mederti's data from the national medicines regulators it tracks. Some regulators list notices under a salt or local-language name, so check the relevant country register too. Shortages can emerge quickly — this page updates daily from official sources.`,
     });
   }
 

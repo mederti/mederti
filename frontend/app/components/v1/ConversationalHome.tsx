@@ -180,7 +180,7 @@ export default function ConversationalHome({
 }
 
 const CSS = `
-.chome{--ch-teal:#0fa676;--ch-teal-d:#0c8a62;--ch-teal-bg:#e8f6f0;--ch-teal-b:#bce4d4;
+.chome{--ch-teal:var(--teal);--ch-teal-d:var(--teal-l);--ch-teal-bg:var(--acc-soft);--ch-teal-b:#bce4d4;
   --ch-bg:#fff;--ch-bg-2:#fafbfc;--ch-border:#e8ecf0;--ch-border-2:#dde3e9;
   --ch-text:#0c1118;--ch-text-3:#6a7280;--ch-text-4:#98a1ac;
   --ch-crit:#dc2647;--ch-crit-bg:#fdeef1;--ch-crit-b:#f8cdd6;

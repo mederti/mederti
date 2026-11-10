@@ -201,7 +201,7 @@ export function ShortageTrendChart({
   return (
     <div className="strend">
       <style>{`
-        .strend{--t:#0fa676;--t-l:#0c8a62;--t-fill:rgba(15,166,118,.14);--line:#0c1118;
+        .strend{--t:var(--brand-teal);--t-l:var(--brand-teal-d);--t-fill:rgba(18,122,99,.14);--line:var(--navy);
           --ax:#98a1ac;--grid:#eef2f5;--fut:#6366f1;--fut-bg:rgba(99,102,241,.10);--up:#c2410c;--down:#0c8a62}
         .strend .st-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:10px}
         .strend .st-quote{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-height:30px}
@@ -243,7 +243,7 @@ export function ShortageTrendChart({
         .strend .st-tip .fut{color:#a5b4fc}
         .strend .st-skel{height:200px;border-radius:8px;background:linear-gradient(90deg,#eef2f5 25%,#f6f8fa 50%,#eef2f5 75%);background-size:200% 100%;animation:stsk 1.3s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#6a7280;font-size:12.5px;font-weight:500}
         .strend .st-skel-bars{display:flex;align-items:flex-end;gap:5px;height:28px}
-        .strend .st-skel-bars i{width:6px;border-radius:2px;background:#0fa676;opacity:.75;animation:stbar 1s ease-in-out infinite}
+        .strend .st-skel-bars i{width:6px;border-radius:2px;background:var(--t);opacity:.75;animation:stbar 1s ease-in-out infinite}
         .strend .st-skel-bars i:nth-child(2){animation-delay:.15s}
         .strend .st-skel-bars i:nth-child(3){animation-delay:.3s}
         .strend .st-skel-bars i:nth-child(4){animation-delay:.45s}

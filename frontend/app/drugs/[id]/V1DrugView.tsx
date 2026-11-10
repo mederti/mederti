@@ -762,6 +762,7 @@ export default function V1DrugView({
     <AppShell
       className="v1home v1drug"
       chatScope="panel"
+      chatTop={<V1DrugSearch initial={drug.generic_name} />}
       chatPanel={
               freeViewsUsed != null ? (
                 <ChatSignupGate
@@ -805,10 +806,13 @@ export default function V1DrugView({
               <FreeViewBanner used={freeViewsUsed} next={`/drugs/${id}`} />
             </>
           )}
-          <V1DrugSearch initial={drug.generic_name} />
+          {/* The search bar lives at the top of the chat column (chatTop); the
+              column is hidden below 1080px, so this copy shows only there. */}
+          <div className="dsearch-narrow"><V1DrugSearch initial={drug.generic_name} /></div>
 
           {brandHint && (
             <div
+              className="d-brandhint"
               style={{
                 display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8,
                 padding: "10px 14px", marginBottom: 14, borderRadius: 10,
@@ -832,53 +836,46 @@ export default function V1DrugView({
 
           <div className="product-card hero-card">
             <div className="pc-body">
-              <div className="pc-head">
-                <div className="pc-titles">
-                  <div className="pc-name-row">
-                    <div className="d-name">{drug.generic_name}</div>
-                      {drug.who_essential_medicine ? (
-                        <a
-                          className="d-eml"
-                          href="https://list.essentialmeds.org/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={
-                            drug.who_eml_section
-                              ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
-                              : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
-                          }
-                        >
-                          <span className="d-eml-dot" />
-                          WHO Essential Medicine
-                        </a>
-                      ) : null}
-                      {drug.is_controlled_substance === true ? (
-                        <span className="d-ctrl">Controlled substance</span>
-                      ) : null}
-                  </div>
-                  <div className="d-generic">
-                    {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
-                  </div>
-                  {localReg && (
-                    <div className="d-localcode">
-                      {flag(localReg.country)} {[localReg.label, localReg.code].filter(Boolean).join(" ")}
-                      {localReg.sponsor ? <> · {localReg.sponsor}</> : null}
-                    </div>
-                  )}
-                </div>
-                <div className="sc-actions pc-actions">
-                  <WatchButton drugId={id} />
-                  <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
-                </div>
+              {/* Line 1: name alone. Line 2: EML tag + ATC + local register code
+                  on one line. Line 3: brand tags left, actions right. */}
+              <div className="d-name">{drug.generic_name}</div>
+              <div className="d-meta">
+                {drug.who_essential_medicine ? (
+                  <a
+                    className="d-eml"
+                    href="https://list.essentialmeds.org/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={
+                      drug.who_eml_section
+                        ? `WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""} — ${drug.who_eml_section}`
+                        : `On the WHO Model List of Essential Medicines${drug.who_eml_year ? ` (${drug.who_eml_year})` : ""}`
+                    }
+                  >
+                    <span className="d-eml-dot" />
+                    WHO Essential Medicine
+                  </a>
+                ) : null}
+                {drug.is_controlled_substance === true ? (
+                  <span className="d-ctrl">Controlled substance</span>
+                ) : null}
+                <span className="d-generic">
+                  {[drug.atc_code ? `ATC ${drug.atc_code}` : null, klass].filter(Boolean).join(" · ") || "—"}
+                </span>
+                {localReg && (
+                  <span className="d-localcode">
+                    {flag(localReg.country)} {[localReg.label, localReg.code].filter(Boolean).join(" ")}
+                    {localReg.sponsor ? <> · {localReg.sponsor}</> : null}
+                  </span>
+                )}
               </div>
-
-
+              <div className="d-tagrow">
               {(() => {
                 const base = cleanBrandNames(drug.brand_names, drug.generic_name);
                 const brands = brandFocus
                   ? [brandFocus.brand, ...base.filter((b) => !b.toLowerCase().startsWith(brandFocus.brand.toLowerCase()))]
                   : base;
-                if (brands.length === 0) return null;
+                if (brands.length === 0) return <div className="d-tags" />;
                 const shown = brands.slice(0, 5);
                 const rest = brands.length - shown.length;
                 return (
@@ -911,6 +908,11 @@ export default function V1DrugView({
                   </div>
                 );
               })()}
+                <div className="sc-actions pc-actions">
+                  <WatchButton drugId={id} />
+                  <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
+                </div>
+              </div>
             </div>
           {/* Status — design 3: a one-line status headline, then the three
               questions a pharmacist asks (when's it back / what instead / what
@@ -1110,8 +1112,8 @@ export default function V1DrugView({
                   </>
                 ) : (
                   <>
-                    <div className="hq-q-a">Not on file</div>
-                    <div className="hq-q-d">We don&apos;t hold an official price for {cName} yet.</div>
+                    <div className="hq-q-a empty">Not on file</div>
+                    <div className="hq-q-d empty">We don&apos;t hold an official price for {cName} yet.</div>
                   </>
                 )}
                 {formSlugSel && <div className="hq-q-d">Price is for the medicine, not the selected form.</div>}
@@ -2074,9 +2076,9 @@ const CSS = `
    global tuned palette (globals.css :root) and uses Geist. Kept component-
    local because V1DrugView was authored as a self-contained surface. */
 .v1home .d-name,.v1home .sc-title,.v1home .sec-title,.v1home .chat-title{font-family:var(--font-geist-sans),'SF Pro Display',system-ui,sans-serif;font-weight:600;letter-spacing:-.03em}
-.v1home{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;--green-b:#dcebe6;--grad-soft:linear-gradient(135deg,#34d399,#0fa676 45%,#0c1118 120%);--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
+.v1home{--ink:var(--navy);--green:var(--teal);--green-d:var(--teal-l);--green-bg:var(--acc-soft);--green-b:#C6F3E6;--grad-soft:linear-gradient(135deg,#34d399,#0fa676 45%,#0c1118 120%);--grad-brand:linear-gradient(135deg,#0c1118,#0c3a30 48%,#34d399);
   --violet:#6366f1;--violet-b:#c7d2fe;--bg:#ffffff;--bg-2:#fafbfc;--bg-3:#eef2f5;--border:#e8ecf0;--border-2:#dde3e9;
-  --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;--crit:#dc2647;--crit-b:#f8cdd6;--med:#b46708;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;--crit-bg:#fdeef1;--med-bg:#fdf6e9;
+  --text:var(--navy);--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;--crit:#dc2647;--crit-b:#f8cdd6;--med:#b46708;--med-b:#f3dcae;--ok:#0fa676;--ok-bg:#e8f6f0;--ok-b:#bce4d4;--crit-bg:#fdeef1;--med-bg:#fdf6e9;
   --hi-inset:inset 0 1px 0 rgba(255,255,255,.7);--sh-card:0 1px 1px rgba(12,17,24,.04),0 2px 6px -2px rgba(12,17,24,.06);--sh-pop:0 2px 4px rgba(12,17,24,.05),0 12px 28px -10px rgba(12,17,24,.16);
   background:var(--bg-2);color:var(--text);font-family:var(--font-geist-sans),system-ui,sans-serif;font-size:14px;letter-spacing:-.011em;-webkit-font-smoothing:antialiased;min-height:100vh}
 .v1home *{box-sizing:border-box}
@@ -2086,22 +2088,6 @@ const CSS = `
 .home-nav{position:sticky;top:0;z-index:50;height:58px;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
 .nav-actions{display:flex;gap:10px;align-items:center}
 .shell{display:flex;align-items:flex-start;min-height:100vh}
-.sb{width:262px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg);position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.sb-top{height:64px;padding:0 28px;display:flex;align-items:center}
-.sb-new{margin:0 14px 10px;display:flex;align-items:center;gap:8px;justify-content:center;padding:11px;border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text-2);background:var(--bg);text-decoration:none}
-.sb-new:hover{border-color:var(--green);color:var(--green-d);background:var(--green-bg)}
-.sb-scroll{flex:1;overflow-y:auto;padding:8px 14px 8px 19px}
-.sb-group{margin-top:14px}
-.sb-glabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-4);padding:6px 9px}
-.sb-item{display:flex;align-items:center;gap:10px;padding:9px;border-radius:10px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none}
-.sb-item:hover{background:var(--bg-2)}
-.sb-empty{color:var(--text-4);font-style:italic}
-.sb-sub{padding-left:18px;color:var(--text-3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-.sb-sub:hover{color:var(--text);background:var(--bg-2)}
-.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.sb-dot.green{background:var(--ok)}
-.sb-profile{border-top:1px solid var(--border);padding:16px;font-size:13px;font-weight:600;color:var(--text-2);text-decoration:none}
-.sb-profile:hover{color:var(--green-d)}
 .shell-main{flex:1;min-width:0}
 .v1app.v1drug .dg-main{flex:1;min-width:0;max-width:none;padding:18px 48px 80px;width:100%;background:#eef1f5}
 .dsearch{display:flex;align-items:center;gap:8px;margin:18px 0 0;background:var(--bg);border:1.5px solid var(--border-2);border-radius:12px;padding:5px 6px 5px 14px;transition:.15s}
@@ -2462,7 +2448,7 @@ const CSS = `
 .sim-back{font-weight:500;color:var(--ink)}
 .sim-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 16px;border-top:1px solid var(--border)}
 .sim-btn{font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:8px;border:1px solid var(--border);text-decoration:none;color:var(--ink)}
-.sim-btn.primary{background:var(--teal,#0fa676);border-color:var(--teal,#0fa676);color:#fff}
+.sim-btn.primary{background:var(--bg);border-color:#D1D5DB;color:var(--navy)}
 .sim-ctx{display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px;font-size:12px;color:var(--text-3);border-top:1px solid var(--border);background:var(--bg-2)}
 .sim-up{border-top:1px solid var(--border)}
 .sim-up summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;font-size:12.5px;color:var(--text-3);cursor:pointer;list-style:none}
@@ -2470,10 +2456,10 @@ const CSS = `
 .sim-hidetxt{display:none}
 .sim-note{padding:8px 16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-4)}
 .sim-extra{display:none}.sim:has(.sim-all input:checked) .sim-extra{display:table-row}
-.sim-all{display:block;position:relative;padding:9px 16px;border-top:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--teal,#0fa676);cursor:pointer}
+.sim-all{display:block;position:relative;padding:9px 16px;border-top:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--teal);cursor:pointer}
 .sim-all input{position:absolute;opacity:0;pointer-events:none}
 .sim-all:has(input:checked) .sim-show{display:none}.sim-all:has(input:checked) .sim-hidetxt{display:inline}.sim-up[open] .sim-show{display:none}.sim-up[open] .sim-hidetxt{display:inline}
-.sim-more{font-size:12px;font-weight:600;color:var(--teal,#0fa676);white-space:nowrap}
+.sim-more{font-size:12px;font-weight:600;color:var(--teal);white-space:nowrap}
 .sim-uptable{border-top:1px solid var(--border)}
 @media(max-width:560px){.sim-hide{display:none}.sim-table td,.sim-table th{padding-left:12px;padding-right:12px}}
 .status-pill{font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
@@ -2562,6 +2548,88 @@ const CSS = `
 /* Print / Export PDF — strip the app chrome and lay the report out as a clean
    document. Sections avoid breaking mid-block; the collapsible record is forced
    open so nothing is hidden in the exported file. */
+/* ── Navy/aqua redesign (2026-11) ─────────────────────────────────────────
+   Flat, edge-to-edge product area. Sections run full width; their content
+   sits on one inset line (--gut: 48px desktop, narrower on small screens).
+   Status colours (crit/med/ok) are unchanged. */
+.v1drug{--gut:48px}
+@media(max-width:820px){.v1drug{--gut:24px}}
+@media(max-width:620px){.v1drug{--gut:16px}}
+.v1app.v1drug{background:#fff}
+.v1app.v1drug .dg-main{padding:0 0 80px;margin:0;max-width:none;background:#fff}
+.v1app.v1drug .dg-main > *{margin-left:var(--gut);margin-right:var(--gut)}
+.v1app.v1drug .dg-main > .product-card,.v1app.v1drug .dg-main > .dtabs{margin-left:0;margin-right:0}
+.v1drug .d-brandhint{margin-top:16px}
+/* Search bar: chat-column strip on desktop; inline fallback below 1080px,
+   where the chat column is hidden. */
+.v1drug .dsearch-narrow{display:none}
+@media(max-width:1079px){.v1drug .dsearch-narrow{display:block;padding-top:16px}}
+.v1drug .dsearch{width:100%;min-width:0;margin:0;gap:8px;padding:4px 4px 4px 12px;background:#F4F5F7;border:1px solid #E5E7EB;border-radius:10px;box-shadow:none}
+.v1drug .dsearch:focus-within{border-color:var(--teal);box-shadow:0 0 0 3px rgba(18,122,99,.15)}
+.v1drug .dsearch-ic{flex:none}
+.v1drug .dsearch input{flex:1;min-width:0;padding:7px 0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:transparent;border:none;outline:none;color:var(--navy)}
+.v1drug .dsearch button{flex:none;height:32px;padding:0 14px;border-radius:8px;background:#fff;border:1px solid #D1D5DB;color:var(--navy);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.v1drug .dsearch button:hover{background:#F9FAFB;border-color:#9CA3AF}
+/* Medicine header (~136px): name / meta line / tags + actions */
+.v1drug .product-card.hero-card{margin-top:0;padding:0;border:0;border-radius:0;box-shadow:none;background:#fff;overflow:visible}
+.v1drug .hero-card .pc-body{padding:20px var(--gut) 16px}
+.v1drug .d-name{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1.15;color:var(--navy);overflow-wrap:anywhere}
+.v1drug .d-meta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;margin-top:6px;min-width:0;font-size:12.5px;color:#6B7280}
+.v1drug .d-meta .d-eml,.v1drug .d-meta .d-ctrl{margin-top:0;font-size:11px;padding:2px 8px}
+.v1drug .hero-card .d-generic,.v1drug .hero-card .d-localcode{display:inline;margin-top:0;font-size:12.5px;color:#6B7280}
+.v1drug .hero-card .d-localcode::before{content:"·";margin-right:10px}
+.v1drug .d-tagrow{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-top:10px}
+.v1drug .d-tagrow .d-tags{flex:1 1 240px;min-width:0;margin-top:0}
+.v1drug .d-tagrow .pc-actions{margin-left:auto;flex-wrap:nowrap}
+/* One primary action: "Find a supplier" is the only filled button. */
+.v1drug .watch-btn,.v1drug .find-supplier-btn{height:36px;padding:0 14px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:none;transform:none}
+.v1drug .watch-btn{background:#fff;border:1px solid #D1D5DB;color:var(--navy)}
+.v1drug .watch-btn:hover:not(:disabled){background:#F9FAFB;border-color:#9CA3AF;color:var(--navy)}
+.v1drug .watch-btn.on{background:var(--acc-soft);border-color:var(--teal);color:var(--teal-l)}
+.v1drug .find-supplier-btn{background:var(--navy);border:1px solid var(--navy);color:#fff}
+.v1drug .find-supplier-btn:hover{background:#141A3A;filter:none;transform:none}
+.v1drug .watch-btn:focus-visible,.v1drug .find-supplier-btn:focus-visible,.v1drug .sim-btn:focus-visible,.v1drug .dsearch button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+/* Status banner */
+.v1drug .hq{border-top:1px solid #E5E7EB}
+.v1drug .hq-head{padding:18px var(--gut);gap:12px;align-items:flex-start}
+.v1drug .hq-title{font-size:20px;line-height:1.3}
+.v1drug .hq-sub{margin-top:4px;font-size:13.5px;line-height:1.5;color:var(--text-2)}
+.v1drug .hq-reason{font-size:13.5px;line-height:1.5}
+.v1drug .hq-src{font-family:inherit;font-size:13.5px;line-height:1.5;color:#6B7280}
+.v1drug .sc-guid{margin-top:4px;font-size:13.5px;line-height:1.5}
+/* Answer boxes: first text on the content line; empty answers stay quiet. */
+.v1drug .hq-q{padding:16px 24px}
+.v1drug .hq-q:first-child{padding-left:var(--gut)}
+.v1drug .hq-q:last-child{padding-right:var(--gut)}
+@container hero (max-width:700px){.v1drug .hq-q{padding-left:var(--gut);padding-right:var(--gut)}}
+.v1drug .hq-q-a.empty{font-size:15px;font-weight:500;letter-spacing:-.01em;color:#6B7280}
+.v1drug .hq-q-d.empty{display:none}
+.v1drug .hq-just,.v1drug .hq-ai{padding-left:var(--gut);padding-right:var(--gut)}
+/* Tabs: flat row, 2px link-teal underline on the active tab. */
+.v1drug .dtabs{margin-top:0;border:0;border-radius:0;box-shadow:none;background:#fff;overflow:visible}
+.v1drug .dtabs-bar{padding:0 var(--gut);background:#fff;border-bottom:1px solid #E5E7EB}
+.v1drug .dtabs-list{gap:24px}
+.v1drug .dtab{margin-bottom:-1px;padding:12px 0;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;box-shadow:none;color:#6B7280}
+.v1drug .dtab:hover{background:none;color:var(--navy)}
+.v1drug .dtab.on{background:none;color:var(--navy);border-bottom-color:#127A63;box-shadow:none}
+.v1drug .dtab:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.v1drug .dtabs-panel{padding:0 var(--gut) 24px}
+/* Flat panels: no floating-card shadows inside any tab. */
+.v1drug .dtabs-panel .subpath,.v1drug .dtabs-panel .alt-card,.v1drug .dtabs-panel .cmp-row,.v1drug .dtabs-panel .price-panel,.v1drug .dtabs-panel .sw-card,.v1drug .dtabs-panel .status-card{box-shadow:none}
+/* Product table: full width, rows edge to edge, text on the content line. */
+.v1drug .dtabs-panel .sim{margin:0 calc(-1 * var(--gut));border:0;border-radius:0;background:#fff}
+.v1drug .sim-ans{padding:14px var(--gut);border-bottom:1px solid #E5E7EB}
+.v1drug .sim-table th:first-child,.v1drug .sim-table td:first-child,.v1drug .sim-form td{padding-left:var(--gut)}
+.v1drug .sim-table th:last-child,.v1drug .sim-table td:last-child{padding-right:var(--gut)}
+.v1drug .sim-all,.v1drug .sim-note,.v1drug .sim-ctx,.v1drug .sim-up summary{padding-left:var(--gut);padding-right:var(--gut)}
+/* Action row under the table: equal 40px buttons on one line; helper text
+   moves to the far right. */
+.v1drug .sim-acts{padding:14px var(--gut);gap:10px;align-items:center}
+.v1drug .sim-acts .find-supplier-row{display:contents}
+.v1drug .sim-acts .find-supplier-hint{order:99;margin-left:auto;font-size:12.5px;color:#6B7280}
+.v1drug .sim-acts .sim-btn,.v1drug .sim-acts .watch-btn,.v1drug .sim-acts .find-supplier-btn{height:40px;display:inline-flex;align-items:center;gap:7px;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;line-height:1}
+.v1drug .sim-btn.primary{background:#fff;border:1px solid #D1D5DB;color:var(--navy)}
+.v1drug .sim-btn.primary:hover{background:#F9FAFB;border-color:#9CA3AF}
 /* Form / strength picker (B3) */
 .fpick{display:flex;flex-direction:column;gap:8px;padding:12px 22px;border-top:1px solid var(--border)}
 .fpick-row{display:flex;flex-wrap:wrap;gap:6px}
@@ -2573,6 +2641,8 @@ const CSS = `
 .fpick-dot{width:8px;height:8px;border-radius:50%;flex:none}
 .fpick-dot.ok{background:var(--ok)}.fpick-dot.med{background:var(--med)}.fpick-dot.crit{background:var(--crit)}
 .fpick-sub .fpick-chip{font-size:12px;padding:5px 10px}
+/* Picker on the redesign's content line. */
+.v1drug .fpick{padding:12px var(--gut)}
 @media print{
   .v1home{background:#fff;font-size:11px}
   .sb,.chat-col,.dsearch,.report-export,.sb-profile,.home-nav{display:none !important}

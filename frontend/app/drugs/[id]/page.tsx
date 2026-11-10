@@ -278,6 +278,9 @@ interface Props {
     // the brand's registrations + the regulator notices that name it, inside
     // the same V1 drug template (brand chips link here).
     brand_focus?: string;
+    // market=<ISO2> is set by /search so the page shows the market the user
+    // searched in; it overrides the saved mederti-country cookie for this view.
+    market?: string;
   }>;
 }
 
@@ -642,7 +645,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // Validate the cookie: a malformed/legacy value (e.g. 3 letters) flows into
   // the arbitrage API's destination param, fails its ^[A-Z]{2}$ check → 400,
   // and used to crash the whole drug page. Fall back to AU on anything invalid.
-  const rawCountry = (cookieStore.get("mederti-country")?.value ?? "").toUpperCase();
+  const rawCountry = (sp.market || cookieStore.get("mederti-country")?.value || "").toUpperCase();
   const userCountry = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : "AU";
 
   // Anonymous free-tier meter: the proxy reports how many of the free drug

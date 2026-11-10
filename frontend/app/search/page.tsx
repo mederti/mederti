@@ -45,10 +45,14 @@ function resultBrands(d: DrugHit): { matched: string | null; others: string[] } 
   return { matched, others };
 }
 /** Brand hits open the molecule page scoped to that brand's products. */
-function resultHref(d: DrugHit): string {
-  return d.matched_brand && d.matched_catalogue_id
-    ? `/drugs/${d.drug_id}?brand_focus=${d.matched_catalogue_id}`
-    : `/drugs/${d.drug_id}`;
+function resultHref(d: DrugHit, market: string): string {
+  const qs = new URLSearchParams();
+  if (d.matched_brand && d.matched_catalogue_id) qs.set("brand_focus", d.matched_catalogue_id);
+  // Carry the searched market so the drug page shows the same market the
+  // result row's verdict was computed for ("ALL" = no market → page default).
+  if (/^[A-Z]{2}$/.test(market)) qs.set("market", market);
+  const q = qs.toString();
+  return `/drugs/${d.drug_id}${q ? `?${q}` : ""}`;
 }
 function BrandLine({ d, className }: { d: DrugHit; className: string }) {
   const { matched, others } = resultBrands(d);
@@ -282,7 +286,7 @@ function Results() {
           lastTypedRef.current !== term &&
           !statusStr && !formStr && !strengthStr
         ) {
-          router.replace(resultHref(data.results[0]));
+          router.replace(resultHref(data.results[0], market));
           return;
         }
         setResults(data.results);
@@ -389,7 +393,7 @@ function Results() {
           onKeyDown={(e) => {
             // Typed query with a single hit: Enter opens it.
             if (e.key === "Enter" && !loading && results.length === 1 && q.trim() === urlQ.trim()) {
-              router.push(resultHref(results[0]));
+              router.push(resultHref(results[0], market));
             }
           }}
           placeholder="Search a drug — e.g. amoxicillin, cisplatin, metformin"
@@ -588,7 +592,7 @@ function Results() {
                 // catalogue fallback that renders a registration page.
                 const go = () => {
                   addRecentMedicine({ id: String(d.drug_id), name: d.generic_name });
-                  router.push(resultHref(d));
+                  router.push(resultHref(d, market));
                 };
                 return (
                   <tr
@@ -722,7 +726,7 @@ function Results() {
           // "in supply" page when the id resolves to a drug_catalogue row.
           return <Link
                 key={d.drug_id}
-                href={resultHref(d)}
+                href={resultHref(d, market)}
                 style={{ textDecoration: "none", color: "inherit" }}
                 onClick={() => addRecentMedicine({ id: String(d.drug_id), name: d.generic_name })}
               >{inner}</Link>;

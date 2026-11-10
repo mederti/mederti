@@ -115,7 +115,7 @@ function ContactForm() {
         disabled={status === "sending"}
         style={{
           padding: "12px 24px", borderRadius: 8, fontSize: 14, fontWeight: 600,
-          background: status === "sending" ? "var(--app-bg-2)" : "var(--teal)",
+          background: status === "sending" ? "var(--app-bg-2)" : "var(--navy)",
           color: status === "sending" ? "var(--app-text-4)" : "#fff",
           border: "none", cursor: status === "sending" ? "not-allowed" : "pointer",
           fontFamily: "var(--font-inter), sans-serif",

@@ -277,7 +277,7 @@ export default async function MedicinePage(
             </>
           ) : (
             <>
-              <strong style={{ color: "var(--teal, #0fa676)" }}>No active shortage</strong> currently
+              <strong style={{ color: "var(--teal, #127A63)" }}>No active shortage</strong> currently
               reported by the regulators Mederti tracks
               {anticipated.length > 0 ? <> — {anticipated.length} anticipated notice{anticipated.length === 1 ? "" : "s"} on file</> : null}.
             </>
@@ -349,7 +349,7 @@ export default async function MedicinePage(
                   {rollup.map((r) => (
                     <tr key={r.code}>
                       <td style={td}>
-                        <Link href={`/country/${countrySlug(r.code)}/medicine-shortages`} style={{ color: "var(--teal, #0fa676)", textDecoration: "none", fontWeight: 500 }}>
+                        <Link href={`/country/${countrySlug(r.code)}/medicine-shortages`} style={{ color: "var(--teal, #127A63)", textDecoration: "none", fontWeight: 500 }}>
                           {r.name}
                         </Link>
                       </td>
@@ -413,7 +413,7 @@ export default async function MedicinePage(
               {alternatives.map((a) => (
                 <li key={a.alternative_drug_id}>
                   {a.drugs?.generic_name ? (
-                    <Link href={`/medicine/${slugify(a.drugs.generic_name)}`} style={{ color: "var(--teal, #0fa676)", textDecoration: "none", fontWeight: 500 }}>
+                    <Link href={`/medicine/${slugify(a.drugs.generic_name)}`} style={{ color: "var(--teal, #127A63)", textDecoration: "none", fontWeight: 500 }}>
                       {a.drugs.generic_name}
                     </Link>
                   ) : "Unnamed"}
@@ -457,7 +457,7 @@ export default async function MedicinePage(
               {related.map((r, i) => (
                 <span key={r.id}>
                   {i > 0 && " · "}
-                  <Link href={`/medicine/${slugify(r.generic_name)}`} style={{ color: "var(--teal, #0fa676)", textDecoration: "none" }}>
+                  <Link href={`/medicine/${slugify(r.generic_name)}`} style={{ color: "var(--teal, #127A63)", textDecoration: "none" }}>
                     {r.generic_name}
                   </Link>
                 </span>
@@ -476,7 +476,7 @@ export default async function MedicinePage(
           </p>
           <Link
             href={`/signup?next=${encodeURIComponent(`/drugs/${drug.id}`)}`}
-            style={{ display: "inline-block", background: "var(--teal, #0fa676)", color: "#fff", padding: "10px 22px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}
+            style={{ display: "inline-block", background: "var(--navy, #090E2C)", color: "#fff", padding: "10px 22px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}
           >
             Create a free account
           </Link>

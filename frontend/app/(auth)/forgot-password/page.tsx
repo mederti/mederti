@@ -96,7 +96,7 @@ function ForgotPasswordForm() {
               disabled={loading}
               style={{
                 width: "100%", padding: "12px", borderRadius: 8,
-                background: loading ? "var(--app-bg-2)" : "var(--teal)",
+                background: loading ? "var(--app-bg-2)" : "var(--navy)",
                 color: loading ? "var(--app-text-4)" : "#fff",
                 border: "none", fontSize: 14, fontWeight: 600,
                 cursor: loading ? "not-allowed" : "pointer",

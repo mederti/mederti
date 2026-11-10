@@ -58,7 +58,11 @@ Example URLs (live after deploy):
 - JSON-LD parses; the graph is Drug + WebPage(publisher, isBasedOn), plus BreadcrumbList.
 - `/sitemap.xml`: 8,618 unique URLs, about 8s cold (then cached). `/robots.txt` groups as intended.
 - `/api/drugs/{id}/shortage-episodes` unchanged after the refactor. `tsc` and ESLint are clean on the touched files.
-- **Not verified:** the Google Rich Results test and Search Console (need the deployed URL), and a production build on Vercel.
+- **Vercel preview (2026-11-11):** both builds pass. Pages, sitemap (8,624 URLs), robots and llms.txt match local. Rich Results Test on `/medicine/amoxicillin/canada`:
+  - Breadcrumbs ✅ and Organisation ✅ are valid.
+  - "Crawl failed" is only Vercel's `X-Robots-Tag: noindex` on preview deployments.
+  - **Product snippets: 1 invalid item.** Google treats schema.org `Drug` as a `Product` and wants `offers`/`review`/`aggregateRating`. This has been the case on prod since Aug (not introduced here). Fixing it would mean fabricating commercial data, so it's left as is: the item is just ineligible for a product rich result. Indexing is unaffected, but expect this error in Search Console's Product snippets report.
+- **Not verified:** Search Console on the production URL.
 
 ## 4. Deployment and registration steps (human)
 

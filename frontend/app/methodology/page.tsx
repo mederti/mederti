@@ -3,7 +3,7 @@ import Link from "next/link";
 import SiteNav from "@/app/components/landing-nav";
 import MinimalFooter from "@/app/components/minimal-footer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { COVERAGE_COPY, liveCoverage } from "@/lib/coverage";
+import { COVERAGE_COPY, activeShortageCount, liveCoverage } from "@/lib/coverage";
 import SourceRegistry from "./SourceRegistry";
 
 // Public methodology page — the credibility lever from the known-issues list.
@@ -28,11 +28,11 @@ export default async function MethodologyPage() {
     const admin = getSupabaseAdmin();
     const [ctyRes, activeRes, totalRes] = await Promise.all([
       liveCoverage(),
-      admin.from("shortage_events").select("id", { count: "exact", head: true }).eq("status", "active").or("synthetic.is.null,synthetic.eq.false"),
+      activeShortageCount(),
       admin.from("shortage_events").select("id", { count: "estimated", head: true }),
     ]);
     if (ctyRes?.countries) countries = `${ctyRes.countries}`;
-    if (activeRes.count) activeShortages = activeRes.count.toLocaleString();
+    if (activeRes) activeShortages = activeRes.toLocaleString();
     if (totalRes.count) totalEvents = `${Math.floor(totalRes.count / 1000)}K+`;
   } catch {
     /* honest "—" fallbacks */

@@ -1,8 +1,11 @@
 -- ============================================================================
 -- Migration 078: registration-number lookups on shortage_events
 -- ============================================================================
--- NOT APPLIED. Needs Rob's or the CEO's approval before it is run on
--- production (drafted 2026-11-10 from the redesign review, item B5).
+-- APPLIED to production 2026-11-10 (~01:40 UTC) with CREATE INDEX
+-- CONCURRENTLY, statement by statement, via `supabase db query --linked`.
+-- Both indexes valid (artg 440 kB, din 456 kB). Post-apply EXPLAIN of the
+-- open-notices query: Index Scan on idx_shortage_events_country_artg,
+-- 10 buffers (was 705), 0.16 ms. Drafted from the redesign review, item B5.
 --
 -- The drug page ties regulator notices to registered products by the
 -- registration number inside raw_data:

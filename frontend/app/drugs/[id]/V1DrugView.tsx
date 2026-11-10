@@ -513,9 +513,14 @@ export default function V1DrugView({
 
   // Short detail line for the "Can I substitute?" tile.
   const s19aTileDetail = s19aStructured
-    ? s19aStructured.scheme_reference
-      ? `TGA s19A · ${s19aStructured.scheme_reference}`
-      : "TGA-approved overseas product"
+    // The product's name, not the scheme_reference (a URL slug such as
+    // "diazepam-injection-10mg-2ml-ampoules-hameln-uk").
+    ? s19aStructured.brand_name
+      ? `${s19aStructured.brand_name}${(() => {
+          const origin = /Origin:\s*([^.]+)\./.exec(s19aStructured.description ?? "")?.[1]?.trim();
+          return origin ? ` (${origin})` : "";
+        })()} · TGA s19A`
+      : "TGA-approved overseas product (s19A)"
     : s19aNotesText
       ? "TGA-approved overseas product"
       : null;
@@ -741,7 +746,8 @@ export default function V1DrugView({
     const other = lacking.length === 0
       ? `Other products in ${hitForms.length === 1 ? "the same form" : "the same forms"}: no shortage reported.`
       : `No other ${lacking.map(formWord).join(" or ")} product without a notice.`;
-    return `Affects ${scHit.length} of ${plural(scTotal, "registered product")}: ${items.join("; ")}${more}. ${other}`;
+    // The title already gives "N of M"; this line only names the products.
+    return `${items.join("; ")}${more}. ${other}`;
   })();
   // Same medicine, same form and strength, no notice: the first answer to
   // "what can I use instead?". A different medicine comes after, as a
@@ -918,58 +924,6 @@ export default function V1DrugView({
               questions a pharmacist asks (when's it back / what instead / what
               does it cost), then "is it just us?". "Yes" on substitution only
               when a real pathway is on file; absence is stated as absence. */}
-          {supplyAll && (supplyAll.forms.length > 1 || supplyAll.forms.some((f) => f.strengths.length > 1)) && (() => {
-            // Form picker: links (server-rendered), so the choice lives in the
-            // URL and can be bookmarked or shared. Dot: green none short, amber
-            // some, red all.
-            const base = `/drugs/${id}`;
-            const qs = (form: string | null, strength: string | null) => {
-              const q = new URLSearchParams();
-              if (brandFocus) q.set("brand_focus", brandFocus.catId);
-              // Keep the market the page is showing (#235): without it the
-              // picker would fall back to the saved country cookie.
-              q.set("market", userCountry);
-              if (form) q.set("form", form);
-              if (strength) q.set("strength", strength);
-              const t = q.toString();
-              return t ? `${base}?${t}` : base;
-            };
-            const tone = (affected: number, total: number, extra = 0) =>
-              affected + extra === 0 ? "ok" : total > 0 && affected === total ? "crit" : "med";
-            const allAffected = supplyAll.shortCount;
-            const allUnmatched = supplyAll.forms.reduce((n, f) => n + f.unmatched, 0);
-            const sel = supplyAll.forms.find((f) => f.slug === formSlugSel) ?? null;
-            const count = (affected: number, total: number, disc = 0) =>
-              affected === 0 ? `${total} not short`
-                : `${affected} of ${total} ${disc === affected ? "discontinued" : disc > 0 ? "affected" : "short"}`;
-            return (
-              <nav className="fpick" aria-label="Filter by form and strength">
-                <div className="fpick-row">
-                  <Link href={qs(null, null)} className={`fpick-chip${!formSlugSel ? " on" : ""}`} aria-current={!formSlugSel ? "true" : undefined} scroll={false}>
-                    <span className={`fpick-dot ${tone(allAffected, supplyAll.productCount, allUnmatched)}`} />All forms
-                    <span className="fpick-n">{count(allAffected, supplyAll.productCount, supplyAll.discCount)}</span>
-                  </Link>
-                  {supplyAll.forms.map((f) => (
-                    <Link key={f.slug} href={qs(f.slug, null)} className={`fpick-chip${formSlugSel === f.slug ? " on" : ""}`} aria-current={formSlugSel === f.slug ? "true" : undefined} scroll={false}>
-                      <span className={`fpick-dot ${tone(f.affected, f.total, f.unmatched)}`} />{f.form}
-                      <span className="fpick-n">{f.total > 0 ? count(f.affected, f.total, f.discontinued) : `${f.unmatched} notice${f.unmatched === 1 ? "" : "s"}`}</span>
-                    </Link>
-                  ))}
-                </div>
-                {sel && sel.strengths.length > 1 && (
-                  <div className="fpick-row fpick-sub">
-                    <Link href={qs(sel.slug, null)} className={`fpick-chip${!strengthOn ? " on" : ""}`} scroll={false}>All strengths</Link>
-                    {sel.strengths.map((st) => (
-                      <Link key={st.strength} href={qs(sel.slug, st.strength)} className={`fpick-chip${strengthOn && strengthSel === st.strength ? " on" : ""}`} aria-current={strengthOn && strengthSel === st.strength ? "true" : undefined} scroll={false}>
-                        <span className={`fpick-dot ${tone(st.affected, st.total)}`} />{st.strength}
-                        <span className="fpick-n">{count(st.affected, st.total, st.discontinued)}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </nav>
-            );
-          })()}
           <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : noData ? "med" : "ok"}`}>
             <div className="hq-head">
               <span className="hq-ic" aria-hidden>
@@ -984,6 +938,7 @@ export default function V1DrugView({
               <div className="hq-head-t">
                 <div className="hq-title">{hqTitle}</div>
                 <div className="hq-sub">
+                {scopeLine && <span className="hq-scope" style={{ display: "block", color: "var(--text)" }}>{scopeLine}</span>}
                   {localShortage && discontinued ? (
                     <span className="hq-reason">
                       {scopeLine
@@ -1002,7 +957,6 @@ export default function V1DrugView({
                       </span>
                     )
                   )}
-                {scopeLine && <span className="hq-reason hq-scope" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{scopeLine}</span>}
                 {brandLine && <span className="hq-reason" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{brandLine}</span>}
                 {noData && <span className="hq-reason">Mederti has no shortage source for {cName}, so we can&apos;t say whether it&apos;s in supply there. Check with your supplier or the national regulator.</span>}
                 {localShortage && staleDays !== null && staleDays > 7 && (
@@ -1129,29 +1083,31 @@ export default function V1DrugView({
               const n = marketsShort.length;
               return (
                 <div className="hq-just">
-                  <div className="hq-just-l">
-                    Is it just us?{" "}
-                    <strong>
-                      {n === 0
-                        ? "Not short in any market we track"
-                        : localShortage
-                          ? n === 1 ? `Only ${cName} so far` : `Short in ${n} countries`
-                          : noData
-                            ? `No data for ${cName}; short in ${n} other market${n === 1 ? "" : "s"}`
-                            : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
-                    </strong>
-                  </div>
-                  {n > 0 && (
-                    <div className="hq-mkts">
-                      {marketsShort.slice(0, 12).map((m) => (
-                        <span key={m.cc} className={`hq-mk${m.mine ? " mine" : ""}`} title={m.sev >= 2 ? "critical/high severity" : undefined}>
-                          <span className={`hq-dot${m.sev >= 2 ? " crit" : ""}`} />
-                          {COUNTRY[m.cc] ?? m.cc}
-                        </span>
-                      ))}
-                      {n > 12 && <span className="hq-mk">+{n - 12} more</span>}
-                    </div>
-                  )}
+                  {(() => {
+                    // One line: the count, then the other markets by name.
+                    // Full list on hover; per-market detail is in the Status tab.
+                    const regionName = (cc: string) => {
+                      if (COUNTRY[cc]) return COUNTRY[cc];
+                      try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) ?? cc; } catch { return cc; }
+                    };
+                    const others = marketsShort.filter((m) => !m.mine).map((m) => regionName(m.cc));
+                    const shown = others.slice(0, 4);
+                    return (
+                      <div className="hq-just-l" title={others.length > shown.length ? others.join(", ") : undefined}>
+                        Is it just us?{" "}
+                        <strong>
+                          {n === 0
+                            ? "Not short in any market we track"
+                            : localShortage
+                              ? n === 1 ? `Only ${cName} so far` : `No, also short in ${n - 1} other countr${n - 1 === 1 ? "y" : "ies"}`
+                              : noData
+                                ? `No data for ${cName}; short in ${n} other market${n === 1 ? "" : "s"}`
+                                : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
+                        </strong>
+                        {shown.length > 0 && <>: {shown.join(", ")}{others.length > shown.length ? ` +${others.length - shown.length} more` : ""}</>}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
@@ -1244,6 +1200,61 @@ export default function V1DrugView({
             );
           })()}
 
+          {supplyAll && (supplyAll.forms.length > 1 || supplyAll.forms.some((f) => f.strengths.length > 1)) && (() => {
+            // Form picker: links (server-rendered), so the choice lives in the
+            // URL and can be bookmarked or shared. Dot: green none short, amber
+            // some, red all.
+            const base = `/drugs/${id}`;
+            const qs = (form: string | null, strength: string | null) => {
+              const q = new URLSearchParams();
+              if (brandFocus) q.set("brand_focus", brandFocus.catId);
+              // Keep the market the page is showing (#235): without it the
+              // picker would fall back to the saved country cookie.
+              q.set("market", userCountry);
+              if (form) q.set("form", form);
+              if (strength) q.set("strength", strength);
+              const t = q.toString();
+              return t ? `${base}?${t}` : base;
+            };
+            const tone = (affected: number, total: number, extra = 0) =>
+              affected + extra === 0 ? "ok" : total > 0 && affected === total ? "crit" : "med";
+            const allAffected = supplyAll.shortCount;
+            const allUnmatched = supplyAll.forms.reduce((n, f) => n + f.unmatched, 0);
+            const sel = supplyAll.forms.find((f) => f.slug === formSlugSel) ?? null;
+            const count = (affected: number, total: number, disc = 0) =>
+              // Quiet row: a count only where something is affected.
+              affected === 0 ? ""
+                : `${affected} of ${total} ${disc === affected ? "discontinued" : disc > 0 ? "affected" : "short"}`;
+            return (
+              <nav className="fpick" aria-label="Filter by form and strength">
+                <div className="fpick-row">
+                  <span className="fpick-l">Show</span>
+                  <Link href={qs(null, null)} className={`fpick-chip${!formSlugSel ? " on" : ""}`} aria-current={!formSlugSel ? "true" : undefined} scroll={false}>
+                    <span className={`fpick-dot ${tone(allAffected, supplyAll.productCount, allUnmatched)}`} />All forms
+                    <span className="fpick-n">{count(allAffected, supplyAll.productCount, supplyAll.discCount)}</span>
+                  </Link>
+                  {supplyAll.forms.map((f) => (
+                    <Link key={f.slug} href={qs(f.slug, null)} className={`fpick-chip${formSlugSel === f.slug ? " on" : ""}`} aria-current={formSlugSel === f.slug ? "true" : undefined} scroll={false}>
+                      <span className={`fpick-dot ${tone(f.affected, f.total, f.unmatched)}`} />{f.form}
+                      <span className="fpick-n">{f.total > 0 ? count(f.affected, f.total, f.discontinued) : `${f.unmatched} notice${f.unmatched === 1 ? "" : "s"}`}</span>
+                    </Link>
+                  ))}
+                </div>
+                {sel && sel.strengths.length > 1 && (
+                  <div className="fpick-row fpick-sub">
+                    <span className="fpick-l">Strength</span>
+                    <Link href={qs(sel.slug, null)} className={`fpick-chip${!strengthOn ? " on" : ""}`} scroll={false}>All strengths</Link>
+                    {sel.strengths.map((st) => (
+                      <Link key={st.strength} href={qs(sel.slug, st.strength)} className={`fpick-chip${strengthOn && strengthSel === st.strength ? " on" : ""}`} aria-current={strengthOn && strengthSel === st.strength ? "true" : undefined} scroll={false}>
+                        <span className={`fpick-dot ${tone(st.affected, st.total)}`} />{st.strength}
+                        <span className="fpick-n">{count(st.affected, st.total, st.discontinued)}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </nav>
+            );
+          })()}
           <DrugTabs
             tabs={[
               {
@@ -2267,7 +2278,7 @@ const CSS = `
 .hq-more{margin-top:auto;padding-top:10px;font-size:12.5px;font-weight:600;color:var(--green-d);text-decoration:none;align-self:flex-start;min-height:24px}
 .hq-more:hover,.hq-q-d a:hover{text-decoration:underline}
 .hq-just{padding:14px 22px;border-top:1px solid var(--border);background:var(--bg-2)}
-.hq-just-l{font-size:13px;color:var(--text-3);margin-bottom:8px}
+.hq-just-l{font-size:13px;color:var(--text-3)}
 .hq-just-l strong{color:var(--ink);font-weight:600}
 .hq-mkts{display:flex;flex-wrap:wrap;gap:6px}
 .hq-mk{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)}
@@ -2594,7 +2605,7 @@ const CSS = `
 .v1drug .hq-head{padding:18px var(--gut);gap:12px;align-items:flex-start}
 .v1drug .hq-title{font-size:20px;line-height:1.3}
 .v1drug .hq-sub{margin-top:4px;font-size:13.5px;line-height:1.5;color:var(--text-2)}
-.v1drug .hq-reason{font-size:13.5px;line-height:1.5}
+.v1drug .hq-reason,.v1drug .hq-scope{font-size:13.5px;line-height:1.5}
 .v1drug .hq-src{font-family:inherit;font-size:13.5px;line-height:1.5;color:#6B7280}
 .v1drug .sc-guid{margin-top:4px;font-size:13.5px;line-height:1.5}
 /* Answer boxes: first text on the content line; empty answers stay quiet. */
@@ -2630,19 +2641,19 @@ const CSS = `
 .v1drug .sim-acts .sim-btn,.v1drug .sim-acts .watch-btn,.v1drug .sim-acts .find-supplier-btn{height:40px;display:inline-flex;align-items:center;gap:7px;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;line-height:1}
 .v1drug .sim-btn.primary{background:#fff;border:1px solid #D1D5DB;color:var(--navy)}
 .v1drug .sim-btn.primary:hover{background:#F9FAFB;border-color:#9CA3AF}
-/* Form / strength picker (B3) */
-.fpick{display:flex;flex-direction:column;gap:8px;padding:12px 22px;border-top:1px solid var(--border)}
-.fpick-row{display:flex;flex-wrap:wrap;gap:6px}
-.fpick-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;border:1px solid var(--border-2);background:var(--bg);color:var(--text-2);font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap}
-.fpick-chip:hover{border-color:var(--text-4);color:var(--ink)}
-.fpick-chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
-.fpick-chip.on .fpick-n{color:rgba(255,255,255,.75)}
-.fpick-n{font-weight:500;color:var(--text-3);font-size:12px}
-.fpick-dot{width:8px;height:8px;border-radius:50%;flex:none}
+/* Form / strength filter: a quiet text row just above the tabs. */
+.fpick{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-top:1px solid var(--border);font-size:13px}
+.fpick-row{display:flex;flex-wrap:wrap;align-items:center;gap:2px 16px}
+.fpick-l{color:var(--text-3);min-width:56px}
+.fpick-chip{display:inline-flex;align-items:center;gap:6px;min-height:28px;color:var(--text-2);font-weight:500;text-decoration:none;white-space:nowrap;border-bottom:2px solid transparent}
+.fpick-chip:hover{color:var(--ink)}
+.fpick-chip.on{color:var(--ink);font-weight:700;border-bottom-color:var(--ink)}
+.fpick-n{font-weight:400;color:var(--text-3);font-size:12px}
+.fpick-n:empty{display:none}
+.fpick-dot{width:7px;height:7px;border-radius:50%;flex:none}
 .fpick-dot.ok{background:var(--ok)}.fpick-dot.med{background:var(--med)}.fpick-dot.crit{background:var(--crit)}
-.fpick-sub .fpick-chip{font-size:12px;padding:5px 10px}
 /* Picker on the redesign's content line. */
-.v1drug .fpick{padding:12px var(--gut)}
+.v1drug .fpick{border-top:1px solid #E5E7EB}
 @media print{
   .v1home{background:#fff;font-size:11px}
   .sb,.chat-col,.dsearch,.report-export,.sb-profile,.home-nav{display:none !important}

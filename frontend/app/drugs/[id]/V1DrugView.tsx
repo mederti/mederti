@@ -88,6 +88,12 @@ function abbr(name?: string, a?: string | null) {
   if (name.includes("Health Canada") || name.includes("Santé")) return "Health Canada";
   return name.length > 18 ? name.slice(0, 17) + "…" : name;
 }
+/** Whole days since an ISO timestamp; null when absent or unparseable. */
+function daysSince(iso: string | null) {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  return Number.isFinite(ms) ? Math.floor(ms / 864e5) : null;
+}
 function timeAgo(iso?: string | null) {
   if (!iso) return "";
   const ms = Date.now() - new Date(iso).getTime();
@@ -147,7 +153,7 @@ function expSourceFor(cc: string): string {
 const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket: supplyAll = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null, formSel = null, strengthSel = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket: supplyAll = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null, marketCovered = null, formSel = null, strengthSel = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Form picker: dose-form slug and normalised strength from the URL. */
@@ -232,6 +238,8 @@ export default function V1DrugView({
   brandHint?: { brand: string; country: string; catId: string } | null;
   // Set when a brand chip was clicked: scopes the page to that brand.
   brandFocus?: BrandFocus | null;
+  /** False when Mederti holds no shortage notices at all for the user's market. */
+  marketCovered?: boolean | null;
 }) {
   // brand (lowercased) → SKU, for turning chips into links.
   const skuByBrand = new Map((brandSkus ?? []).map((s) => [s.brand.toLowerCase(), s]));
@@ -394,6 +402,10 @@ export default function V1DrugView({
     : null;
   // With a form selected the banner speaks for that form only.
   const localShortage = formSlugSel && supplyInMarket ? scHit.length + scAnt.length + scUnmatched > 0 : !!mine;
+  // No shortage source for this market: absence of notices proves nothing.
+  const noData = !localShortage && marketCovered === false;
+  // Days since the headline notice was last confirmed against its source.
+  const staleDays = daysSince(mine?.last_verified_at ?? null);
   // The regulator's own impact rating, verbatim (TGA: Low / Medium / High /
   // Critical), highest across the market's open notices.
   const IMPACT_RANK: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
@@ -402,9 +414,13 @@ export default function V1DrugView({
   const impactCount = impacts.length;
   const sev = (mine?.severity || "").toLowerCase();
   const isCrit = sev === "critical" || sev === "high";
+  // A discontinuation with a future cancellation date is stored "anticipated",
+  // but it is a market exit, not an expected shortage: it must read "Leaving
+  // the market" (Zabep showed "Anticipated shortage" while its ARTG
+  // registration ends 17 Nov 2026).
   const anticipated = formSlugSel && supplyInMarket
     ? scHit.length === 0 && scAnt.length > 0
-    : (mine?.status || "").toLowerCase() === "anticipated";
+    : (mine?.status || "").toLowerCase() === "anticipated" && !(mine && isDisc(mine));
 
   // Discontinuation is a market exit, not a supply gap — it is never "back",
   // so it must not read as a "Critical shortage". The regulator-stated
@@ -686,7 +702,7 @@ export default function V1DrugView({
   const inWhere = `in ${cName}`;
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const hqTitle = (() => {
-    if (!localShortage) return scopeName ? `No shortage reported for ${scopeName} ${inWhere}` : `In supply ${inWhere}`;
+    if (!localShortage) return noData ? `No shortage data for ${cName}` : scopeName ? `No shortage reported for ${scopeName} ${inWhere}` : `In supply ${inWhere}`;
     if (scTotal > 0 && (scHit.length > 0 || scAnt.length > 0)) {
       const n = scHit.length;
       if (n === 0) {
@@ -908,6 +924,9 @@ export default function V1DrugView({
             const qs = (form: string | null, strength: string | null) => {
               const q = new URLSearchParams();
               if (brandFocus) q.set("brand_focus", brandFocus.catId);
+              // Keep the market the page is showing (#235): without it the
+              // picker would fall back to the saved country cookie.
+              q.set("market", userCountry);
               if (form) q.set("form", form);
               if (strength) q.set("strength", strength);
               const t = q.toString();
@@ -949,10 +968,12 @@ export default function V1DrugView({
               </nav>
             );
           })()}
-          <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok"}`}>
+          <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : noData ? "med" : "ok"}`}>
             <div className="hq-head">
               <span className="hq-ic" aria-hidden>
-                {localShortage ? (
+                {noData ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+                ) : localShortage ? (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
                 ) : (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
@@ -981,7 +1002,16 @@ export default function V1DrugView({
                   )}
                 {scopeLine && <span className="hq-reason hq-scope" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{scopeLine}</span>}
                 {brandLine && <span className="hq-reason" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{brandLine}</span>}
-                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</span>
+                {noData && <span className="hq-reason">Mederti has no shortage source for {cName}, so we can&apos;t say whether it&apos;s in supply there. Check with your supplier or the national regulator.</span>}
+                {localShortage && staleDays !== null && staleDays > 7 && (
+                  // The regulator feed hasn't been read for a week+: say so
+                  // rather than present old notices as current (Health
+                  // Canada's site has blocked our reader since 13 Sep 2026).
+                  <span className="hq-reason" style={{ display: "block", color: "var(--crit, #b42318)", fontWeight: 600 }}>
+                    Out of date: we last confirmed this with {expSource} {staleDays} days ago. Check the regulator before relying on it.
+                  </span>
+                )}
+                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : noData ? "Coverage gap, not a supply status" : "Source: official regulators"}</span>
                 </div>
                 {localShortage && discontinued && (regGuidance || regStatementUrl) && (
                   <div className="sc-guid">
@@ -1026,9 +1056,9 @@ export default function V1DrugView({
                       </>
                     ) : (
                       <>
-                        <div className="hq-q-a">{!localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
+                        <div className="hq-q-a">{noData ? "No data" : !localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
                         <div className="hq-q-d">
-                          {!localShortage ? (scopeName ? `No active shortage for ${scopeName}.` : "No active shortage in this market.") : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
+                          {noData ? `No shortage source for ${cName}.` : !localShortage ? (scopeName ? `No active shortage for ${scopeName}.` : "No active shortage in this market.") : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
                         </div>
                       </>
                     )}
@@ -1047,13 +1077,13 @@ export default function V1DrugView({
                   </>
                 ) : (
                   <>
-                    <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine && localShortage ? "Ask the prescriber" : "Not needed"}</div>
+                    <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine && localShortage ? "Ask the prescriber" : noData ? "Unknown" : "Not needed"}</div>
                     <div className="hq-q-d">
                       {s19aTileDetail ?? (mine && localShortage
                         ? supplyInMarket
                           ? "No other product of this medicine in the same form and strength is clear of a shortage notice. A different medicine is a prescriber decision."
                           : "We hold no registered substitute for this market. A different medicine is a prescriber decision."
-                        : "No shortage substitution needed.")}
+                        : noData ? `We can't tell whether it's short in ${cName}.` : "No shortage substitution needed.")}
                       {topAlt && localShortage && (
                         <>
                           {" "}Same class (prescriber decision):{" "}
@@ -1104,7 +1134,9 @@ export default function V1DrugView({
                         ? "Not short in any market we track"
                         : localShortage
                           ? n === 1 ? `Only ${cName} so far` : `Short in ${n} countries`
-                          : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
+                          : noData
+                            ? `No data for ${cName}; short in ${n} other market${n === 1 ? "" : "s"}`
+                            : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
                     </strong>
                   </div>
                   {n > 0 && (
@@ -1215,8 +1247,8 @@ export default function V1DrugView({
               {
                 id: "status",
                 label: "Status",
-                badge: localShortage ? (anticipated ? "Anticipated" : discontinued ? "Market exit" : isCrit ? "Short" : "Limited") : "In supply",
-                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
+                badge: localShortage ? (anticipated ? "Anticipated" : discontinued ? "Market exit" : isCrit ? "Short" : "Limited") : noData ? "No data" : "In supply",
+                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : noData ? "med" : "ok",
                 content: (
             <>
           {/* Price-concession signal — promoted into the hero (Option B). A
@@ -1274,7 +1306,9 @@ export default function V1DrugView({
                       <Fragment key={g.form}>
                         <tr className="sim-form"><td colSpan={3}>{g.form}</td></tr>
                         {g.products.filter((p) => p.status !== "none").map((p) => (
-                          <tr key={p.name}>
+                          // data-* lets the nightly scenario suite check every
+                          // registration's status (the cell shows only two).
+                          <tr key={p.name} data-regs={p.regNos.join("|")} data-status={p.status}>
                             <td>
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>
@@ -1294,7 +1328,7 @@ export default function V1DrugView({
                           </tr>
                         ))}
                         {g.products.filter((p) => p.status === "none").map((p, pi) => (
-                          <tr key={p.name} className={pi >= SIM_CLEAR_SHOWN ? "sim-extra" : undefined}>
+                          <tr key={p.name} className={pi >= SIM_CLEAR_SHOWN ? "sim-extra" : undefined} data-regs={p.regNos.join("|")} data-status={p.status}>
                             <td>
                               <div className="sim-name">{p.name}</div>
                               <div className="alt-f">{[p.sponsor, p.regNos.slice(0, 2).join(", ") + (p.regNos.length > 2 ? ` +${p.regNos.length - 2}` : "")].filter(Boolean).join(" · ")}</div>

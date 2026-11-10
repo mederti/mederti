@@ -13,6 +13,7 @@ import SiteNav from "@/app/components/landing-nav";
 import AppShell from "@/app/components/v1/AppShell";
 import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand, extractEventMarketExit } from "@/lib/event-brand";
+import { marketHasShortageData } from "@/lib/coverage";
 import { buildSupplyInMarket, isCombo, type CatalogueRow } from "@/lib/supply-in-market";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
@@ -281,6 +282,9 @@ interface Props {
     // strength (form picker); bookmarkable and shareable.
     form?: string;
     strength?: string;
+    // market=<ISO2> is set by /search so the page shows the market the user
+    // searched in; it overrides the saved mederti-country cookie for this view.
+    market?: string;
   }>;
 }
 
@@ -649,7 +653,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // Validate the cookie: a malformed/legacy value (e.g. 3 letters) flows into
   // the arbitrage API's destination param, fails its ^[A-Z]{2}$ check → 400,
   // and used to crash the whole drug page. Fall back to AU on anything invalid.
-  const rawCountry = (cookieStore.get("mederti-country")?.value ?? "").toUpperCase();
+  const rawCountry = (sp.market || cookieStore.get("mederti-country")?.value || "").toUpperCase();
   const userCountry = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : "AU";
 
   // Anonymous free-tier meter: the proxy reports how many of the free drug
@@ -889,6 +893,9 @@ export default async function DrugPage({ params, searchParams }: Props) {
     drug.generic_name,
   );
 
+  // A market with no shortage source must not read "In supply".
+  const marketCovered = await marketHasShortageData(userCountry);
+
   const apiConcentration =
     makerCount > 0
       ? {
@@ -1066,6 +1073,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       apiConcentration={apiConcentration}
       supplyProfile={supplyProfile}
       supplyInMarket={supplyInMarket}
+      marketCovered={marketCovered}
       recalls={recalls}
       approvalFootprint={approvalFootprint}
       eligibility={eligibility}

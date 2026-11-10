@@ -81,6 +81,8 @@ export interface SearchResponse {
   /** Closest canonical drug name when the query matched nothing (typo fallback). */
   suggestion?: string | null;
   market?: string;
+  /** false when Mederti has no shortage source for the market. */
+  market_covered?: boolean | null;
   sort?: string;
   status?: string[];
   form?: string[];

@@ -45,7 +45,9 @@ SHELL=/bin/bash
 30  2 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py sukl          >> logs/cron.log 2>&1
 45  2 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py ogyei         >> logs/cron.log 2>&1
 0   3 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py swissmedic    >> logs/cron.log 2>&1
-15  3 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py noma          >> logs/cron.log 2>&1
+# noma moved 03:15 → 13:15 (2026-11-10): the 01:00–04:00 band almost never
+# fires (laptop asleep) — noma last ran 2026-11-01 and went stale on prod.
+15 13 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py noma          >> logs/cron.log 2>&1
 30  3 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py ages          >> logs/cron.log 2>&1
 
 # ─── Phase 9+: New country scrapers (daily, staggered 15 min) ───
@@ -222,3 +224,9 @@ SHELL=/bin/bash
 # from run_all_scrapers' old dispatch_pending_alerts(). Needs a verified sending
 # domain in Resend — until then sends fail and are recorded as failed.
 0  17 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.alerts.watchlist_digest >> logs/cron.log 2>&1
+
+# ─── Scenario suite (daily 18:00 local, after the scrapers, risk score and digest) ───
+# Checks the LIVE site against the regulator records for every scenario in the
+# data-accuracy plan (backend/scenarios/run_scenarios.py). Report:
+# logs/scenarios/<date>.md. Exit 1 = a scenario regressed (see cron.log).
+0  18 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 -m backend.scenarios.run_scenarios >> logs/cron.log 2>&1

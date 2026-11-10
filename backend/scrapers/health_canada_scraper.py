@@ -3,9 +3,14 @@ Health Canada Drug Shortages Scraper
 ─────────────────────────────────────
 Source:  Health Canada — Drug Shortages Database
 Site:    https://healthproductshortages.ca  (moved from drugshortagescanada.ca)
-Export:  https://healthproductshortages.ca/search/export  (POST, no auth required)
+API:     https://healthproductshortages.ca/api/v1  (login + search; needs a free
+         account in HC_DSC_EMAIL / HC_DSC_PASSWORD). Used since 2026-11-10.
+Export:  https://healthproductshortages.ca/search/export — RETIRED: behind a
+         Cloudflare bot challenge since ~2026-09-13 (403 to every client).
+         fetch() maps API records onto the export's CSV columns below, so
+         normalisation and shortage_id are unchanged.
 
-Confirmed response format (probed 2026-02-22):
+Former export response format (probed 2026-02-22):
     POST /search/export with form-encoded parameters returns a ZIP file
     containing shortage_report_export.csv.
 
@@ -56,15 +61,13 @@ Status filters fetched:
 
 from __future__ import annotations
 
-import csv
-import io
-import zipfile
+import os
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
-from backend.scrapers.base_scraper import BaseScraper
+from backend.scrapers.base_scraper import BaseScraper, ScraperError
 from backend.utils.retry import with_exponential_backoff
 
 
@@ -77,16 +80,49 @@ class HealthCanadaScraper(BaseScraper):
     COUNTRY:      str = "Canada"
     COUNTRY_CODE: str = "CA"
 
-    EXPORT_URL:   str = "https://healthproductshortages.ca/search/export"
+    # ── Fetch: the official public-access API ─────────────────────────────
+    # The site (incl. /search/export, the CSV-in-ZIP export this scraper used
+    # until Sep 2026) now sits behind a Cloudflare bot challenge that 403s
+    # every non-browser client. We do not try to get past that challenge.
+    # The documented public API under /api/v1/ is NOT behind it; it needs a
+    # free healthproductshortages.ca account (credentials in env, below).
+    # Contract (rdrugshortages client + fixtures; login verified live
+    # 2026-11-10 — it answers "Missing email or password"):
+    #   POST /api/v1/login   form email, password → response header auth-token
+    #   GET  /api/v1/search  header auth-token; params limit, offset,
+    #        filter_status, orderby, order, term, din, report_id
+    #        → {"data": [...], "total", "offset", "limit", "remaining"}
+    #   Rate limit 1000 requests/hour.
+    API_BASE:     str = "https://healthproductshortages.ca/api/v1"
+    EMAIL_ENV:    str = "HC_DSC_EMAIL"
+    PASSWORD_ENV: str = "HC_DSC_PASSWORD"
+    PAGE_SIZE:    int = 1000
+    API_TIMEOUT:  float = 120.0
 
-    # Export is a POST that generates a ZIP — give it a longer timeout.
-    EXPORT_TIMEOUT: float = 120.0
-
-    # Status filters to include in the export request (one POST per filter).
-    _EXPORT_STATUSES: list[str] = [
+    # One query per status filter — the same filters the CSV export used.
+    _API_STATUSES: list[str] = [
         "active_confirmed",
         "anticipated_shortage",
     ]
+    # API status → the CSV "Shortage status" label _normalise_record expects.
+    _API_STATUS_LABEL: dict[str, str] = {
+        "active_confirmed":     "Actual shortage",
+        "anticipated_shortage": "Anticipated shortage",
+        "avoided_shortage":     "Avoided shortage",
+        "resolved":             "Resolved",
+    }
+
+    # Health Canada publishes every current shortage, so an open row that the
+    # two status lists no longer contain has left them (resolved / avoided /
+    # re-dated) — a RECONCILE_ABSENT candidate (see BaseScraper). Left OFF
+    # until a dry run on live API data shows a plausible absent set:
+    #   s = HealthCanadaScraper(); s.run()
+    #   s.reconcile_absent(found=0, execute=False)   # → open / absent counts
+    RECONCILE_ABSENT: bool = False
+
+    # Sanity floor (≈3.5k open CA rows, Nov 2026): a far smaller feed is a
+    # broken query, never a real collapse in Canadian shortages.
+    MIN_RECORDS: int = 500
 
     # ─────────────────────────────────────────────────────────────────────────
     # Status mapping
@@ -126,88 +162,143 @@ class HealthCanadaScraper(BaseScraper):
 
     def fetch(self) -> list[dict]:
         """
-        POST to the Health Canada bulk CSV export endpoint for each status
-        filter and combine the results.
-
-        Each POST returns a ZIP file containing shortage_report_export.csv.
-        No authentication required.
+        Log in to the public API, page through each status filter, and return
+        records in the CSV-row shape _normalise_record() has always consumed,
+        so drug resolution — and therefore shortage_id — is unchanged.
         """
-        all_records: list[dict] = []
-
-        for status_filter in self._EXPORT_STATUSES:
-            records = self._fetch_export(status_filter)
-            self.log.info(
-                "Fetched HC export page",
-                extra={
-                    "status_filter": status_filter,
-                    "records":       len(records),
-                },
+        email = os.environ.get(self.EMAIL_ENV, "").strip()
+        password = os.environ.get(self.PASSWORD_ENV, "").strip()
+        if not email or not password:
+            raise ScraperError(
+                f"Health Canada API credentials missing: set {self.EMAIL_ENV} and "
+                f"{self.PASSWORD_ENV} (a free healthproductshortages.ca account). "
+                "The CSV export is behind a Cloudflare bot challenge since ~2026-09-13."
             )
-            all_records.extend(records)
 
-        self.log.info(
-            "HC fetch complete",
-            extra={"total_records": len(all_records)},
-        )
+        with httpx.Client(timeout=self.API_TIMEOUT, follow_redirects=True,
+                          headers={"User-Agent": self.DEFAULT_HEADERS["User-Agent"],
+                                   "Accept": "application/json"}) as client:
+            token = self._login(client, email, password)
+            all_records: list[dict] = []
+            for status_filter in self._API_STATUSES:
+                api_records = self._search_all(client, token, status_filter)
+                self._detect_tier3_key(api_records)
+                rows = [self._api_to_row(r) for r in api_records
+                        if ((r.get("type") or {}).get("label") or "shortage") == "shortage"]
+                self.log.info("Fetched HC API status list",
+                              extra={"status_filter": status_filter, "records": len(rows)})
+                all_records.extend(rows)
+
+        if len(all_records) < self.MIN_RECORDS:
+            raise ScraperError(
+                f"Health Canada API returned only {len(all_records)} shortage reports "
+                f"(< {self.MIN_RECORDS}); refusing to write a partial view"
+            )
+        self.log.info("HC fetch complete", extra={"total_records": len(all_records)})
         return all_records
 
     @with_exponential_backoff(
-        max_attempts=3,
-        base_delay=3.0,
-        max_delay=60.0,
+        max_attempts=3, base_delay=3.0, max_delay=60.0,
+        exceptions=(httpx.TimeoutException, httpx.NetworkError),
+    )
+    def _login(self, client: httpx.Client, email: str, password: str) -> str:
+        resp = client.post(f"{self.API_BASE}/login", data={"email": email, "password": password})
+        if resp.status_code != 200:
+            raise ScraperError(f"Health Canada API login failed: HTTP {resp.status_code} {resp.text[:200]}")
+        token = resp.headers.get("auth-token")
+        if not token:
+            raise ScraperError("Health Canada API login returned no auth-token header")
+        return token
+
+    @with_exponential_backoff(
+        max_attempts=3, base_delay=3.0, max_delay=60.0,
         exceptions=(httpx.HTTPError, httpx.TimeoutException, httpx.NetworkError),
     )
-    def _fetch_export(self, status_filter: str) -> list[dict]:
-        """
-        POST to /search/export, receive ZIP, extract CSV, parse into dicts.
-        Row 1 of the CSV is a disclaimer; row 2 is the real header row.
-        """
+    def _search_page(self, client: httpx.Client, token: str, status_filter: str, offset: int) -> dict:
         self._enforce_rate_limit()
+        resp = client.get(
+            f"{self.API_BASE}/search",
+            params={"filter_status": status_filter, "limit": self.PAGE_SIZE, "offset": offset},
+            headers={"auth-token": token},
+        )
+        resp.raise_for_status()
+        return resp.json()
 
-        form_data = {
-            "filter_types[]":         "shortages",
-            "filter_statuses[]":      status_filter,
-            "export[filter_types]":   "shortages",
-            "export[filter_statuses]": status_filter,
+    def _search_all(self, client: httpx.Client, token: str, status_filter: str) -> list[dict]:
+        out: list[dict] = []
+        offset = 0
+        for _ in range(200):  # hard cap: 200k records
+            page = self._search_page(client, token, status_filter, offset)
+            data = page.get("data")
+            if not isinstance(data, list):
+                raise ScraperError(f"Unexpected HC API response keys: {sorted(page)[:10]}")
+            out.extend(data)
+            remaining = int(page.get("remaining") or 0)
+            if remaining <= 0 or not data:
+                return out
+            offset += len(data)
+        raise ScraperError("HC API paging did not terminate")
+
+    _tier3_key: str | None = None
+
+    def _detect_tier3_key(self, api_records: list[dict]) -> None:
+        """Tier 3 drives tier_3 and 'critical' severity. The API field name is
+        not in the (2019) client fixtures, so find it — and fail loudly rather
+        than silently write every Canadian shortage as not-Tier-3."""
+        if self._tier3_key or not api_records:
+            return
+        keys = {k for r in api_records[:200] for k in r if "tier" in k.lower()}
+        if not keys:
+            raise ScraperError("HC API records carry no Tier 3 field; refusing to write tier_3=No for all")
+        self._tier3_key = "tier_3" if "tier_3" in keys else sorted(keys)[0]
+        self.log.info("HC Tier 3 field", extra={"key": self._tier3_key, "candidates": sorted(keys)})
+
+    @staticmethod
+    def _api_date(v: Any) -> str:
+        """'2019-02-08T00:00:00-0500' → '2019-02-08' (HC local date, as in the CSV)."""
+        return (v or "")[:10] if isinstance(v, str) else ""
+
+    def _api_to_row(self, r: dict) -> dict:
+        """Map one API report to the CSV export's column names."""
+        def lines(v: Any) -> str:
+            parts = [p.strip() for p in str(v or "").replace("\r", "").split("\n")]
+            return "; ".join(p for p in parts if p)
+
+        tier3 = r.get(self._tier3_key) if self._tier3_key else None
+        if isinstance(tier3, str):
+            tier3_label = "Yes" if tier3.strip().lower() in ("yes", "true", "1") else "No"
+        elif tier3 is None:
+            tier3_label = ""  # field absent: unknown, never assumed "No"
+        else:
+            tier3_label = "Yes" if tier3 else "No"
+
+        status = (r.get("status") or "").strip()
+        return {
+            "Report ID":                  str(r.get("id") or ""),
+            "Drug Identification Number": (r.get("din") or "").strip(),
+            "Report Type":                "Shortage",
+            "Brand name":                 r.get("en_drug_brand_name") or "",
+            "Company Name":               r.get("company_name") or "",
+            "Common or Proper name":      r.get("en_drug_common_name") or "",
+            "Ingredients":                lines(r.get("en_ingredients")),
+            "Strength(s)":                lines(r.get("drug_strength")),
+            "Packaging size":             r.get("drug_package_quantity") or "",
+            "Route of administration":    lines(r.get("drug_route")),
+            "Shortage status":            self._API_STATUS_LABEL.get(status, status),
+            "Dosage form(s)":             lines(r.get("drug_dosage_form")),
+            "ATC Code":                   r.get("atc_number") or "",
+            "ATC description":            r.get("atc_description") or "",
+            "Anticipated start date":     self._api_date(r.get("anticipated_start_date")),
+            "Actual start date":          self._api_date(r.get("actual_start_date")),
+            "Estimated end date":         self._api_date(r.get("estimated_end_date")),
+            "Actual end date":            self._api_date(r.get("actual_end_date")),
+            "Reason":                     ((r.get("shortage_reason") or {}).get("en_reason") or ""),
+            "Date Created":               self._api_date(r.get("created_date")),
+            "Date Updated":               self._api_date(r.get("updated_date")),
+            "Tier 3":                     tier3_label,
         }
 
-        self.log.debug(
-            "Posting to HC export endpoint",
-            extra={"url": self.EXPORT_URL, "status_filter": status_filter},
-        )
-
-        with httpx.Client(
-            headers=self.DEFAULT_HEADERS,
-            timeout=self.EXPORT_TIMEOUT,
-            follow_redirects=True,
-        ) as client:
-            response = client.post(self.EXPORT_URL, data=form_data)
-            response.raise_for_status()
-
-        self.log.debug(
-            "HC export response",
-            extra={
-                "status":       response.status_code,
-                "content_type": response.headers.get("content-type", ""),
-                "bytes":        len(response.content),
-            },
-        )
-
-        # ── Unzip ─────────────────────────────────────────────────────────
-        with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
-            csv_name = zf.namelist()[0]
-            raw_csv = zf.read(csv_name).decode("utf-8-sig")
-
-        # ── Skip disclaimer row, parse from header row onward ──────────────
-        # Row 1: '"Shortage reports","DISCLAIMER: ..."'
-        # Row 2: '"Report ID","Drug Identification Number",...'
-        # Row 3+: data
-        lines = raw_csv.splitlines()
-        csv_body = "\n".join(lines[1:])  # drop disclaimer
-
-        reader = csv.DictReader(io.StringIO(csv_body))
-        return list(reader)
-
+    # ─────────────────────────────────────────────────────────────────────────
     # ─────────────────────────────────────────────────────────────────────────
     # normalize()
     # ─────────────────────────────────────────────────────────────────────────
@@ -456,7 +547,7 @@ class HealthCanadaScraper(BaseScraper):
 #   python -m backend.scrapers.health_canada_scraper        # live run (DB writes)
 #   MEDERTI_DRY_RUN=1 python -m backend.scrapers.health_canada_scraper
 #
-# No API key or account required — uses public CSV export endpoint.
+# Needs HC_DSC_EMAIL + HC_DSC_PASSWORD (free healthproductshortages.ca account).
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

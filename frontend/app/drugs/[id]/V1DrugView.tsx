@@ -2607,11 +2607,12 @@ const CSS = `
 .v1drug .hq-just,.v1drug .hq-ai{padding-left:var(--gut);padding-right:var(--gut)}
 /* Tabs: flat row, 2px link-teal underline on the active tab. */
 .v1drug .dtabs{margin-top:0;border:0;border-radius:0;box-shadow:none;background:#fff;overflow:visible}
-.v1drug .dtabs-bar{padding:0 var(--gut);background:#fff;border-bottom:1px solid #E5E7EB}
-.v1drug .dtabs-list{gap:24px}
-.v1drug .dtab{margin-bottom:-1px;padding:12px 0;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;box-shadow:none;color:#6B7280}
+.v1drug .dtabs-bar{padding:6px var(--gut) 0;background:#fff;border-top:1px solid #E5E7EB;border-bottom:1px solid #E5E7EB}
+.v1drug .dtabs-list{gap:28px}
+.v1drug .dtab{margin-bottom:-1px;padding:14px 0 12px;border:0;border-bottom:3px solid transparent;border-radius:0;background:none;box-shadow:none;font-size:15px;letter-spacing:-.012em;color:#4B5563}
 .v1drug .dtab:hover{background:none;color:var(--navy)}
-.v1drug .dtab.on{background:none;color:var(--navy);border-bottom-color:#127A63;box-shadow:none}
+.v1drug .dtab:hover{border-bottom-color:#D1D5DB}
+.v1drug .dtab.on,.v1drug .dtab.on:hover{background:none;color:var(--navy);font-weight:700;border-bottom-color:#127A63;box-shadow:none}
 .v1drug .dtab:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 .v1drug .dtabs-panel{padding:0 var(--gut) 24px}
 /* Flat panels: no floating-card shadows inside any tab. */

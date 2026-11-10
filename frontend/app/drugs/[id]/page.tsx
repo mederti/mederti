@@ -278,6 +278,10 @@ interface Props {
     // the brand's registrations + the regulator notices that name it, inside
     // the same V1 drug template (brand chips link here).
     brand_focus?: string;
+    // form=<slug>&strength=<normalised> scope the page to one dose form /
+    // strength (form picker); bookmarkable and shareable.
+    form?: string;
+    strength?: string;
     // market=<ISO2> is set by /search so the page shows the market the user
     // searched in; it overrides the saved mederti-country cookie for this view.
     market?: string;
@@ -440,7 +444,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
         // ATC-class pairing only. Evidence grade, dose notes and availability
         // note are template/lookup values, not evidence — never selected.
         .select("alternative_drug_id, relationship_type, similarity_score, atc_match_level, drugs!drug_alternatives_alternative_drug_id_fkey(generic_name, brand_names)")
-        .eq("drug_id", id).eq("is_approved", true).order("atc_match_level", { ascending: false }),
+        // "Same class" = shared ATC level 4 (first 5 characters, e.g. N02BE).
+        // Level 3 (N02B) paired Paracetamol with Gabapentin (N02BF01) and
+        // morphine/triptans at level 2; level 5 rows are the same substance
+        // filed under another drugs row, not an alternative.
+        .eq("drug_id", id).eq("is_approved", true).eq("atc_match_level", 4),
       supabase.from("recalls")
         .select("id, recall_id, country_code, recall_class, generic_name, brand_name, manufacturer, announced_date, status, reason_category, press_release_url")
         .eq("drug_id", id).order("announced_date", { ascending: false }),
@@ -864,6 +872,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
       productName: extractEventBrand(n.data_source_id ?? null, n.raw_data).brand_name,
       doseForm: n.dose_form ?? n.ca_form ?? null,
       ingredients: typeof n.ingredients === "string" ? n.ingredients.split(";").map((x: string) => x.trim()).filter(Boolean) : undefined,
+      discontinued: String(n.reason_category ?? "").toLowerCase() === "discontinuation",
+      exitDate: extractEventMarketExit(n.data_source_id ?? null, n.raw_data).withdrawal_date,
     })).concat(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (pastNotices as any[]).map((n) => ({
@@ -876,8 +886,11 @@ export default async function DrugPage({ params, searchParams }: Props) {
         productName: null,
         doseForm: null,
         ingredients: undefined,
+        discontinued: false,
+        exitDate: null,
       })),
     ),
+    drug.generic_name,
   );
 
   // A market with no shortage source must not read "In supply".
@@ -1074,6 +1087,8 @@ export default async function DrugPage({ params, searchParams }: Props) {
       brandFocus={brandFocus}
       freeViewsUsed={freeViewsUsed}
       sourcedAlternatives={sourcedAlternatives}
+      formSel={typeof sp.form === "string" ? sp.form : null}
+      strengthSel={typeof sp.strength === "string" ? sp.strength : null}
     />
   );
 }

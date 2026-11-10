@@ -17,11 +17,12 @@ import { classifyQuery, looksLikeQuestion, type QueryIntent } from "@/lib/search
 import { ChatSignupGate, FreeViewBanner } from "@/app/components/free-tier/FreeTier";
 import { useFreeTier } from "@/app/components/free-tier/useFreeTier";
 
-function statusOf(d: DrugHit): { cls: string; label: string } {
+function statusOf(d: DrugHit, covered: boolean | null = true): { cls: string; label: string } {
   if (d.source === "catalogue") return { cls: "sp-ok", label: "Registered product" };
   const n = d.active_shortage_count ?? 0;
   if (n >= 5) return { cls: "sp-crit", label: `${n} active shortages` };
   if (n >= 1) return { cls: "sp-part", label: `${n} active shortage${n > 1 ? "s" : ""}` };
+  if (covered === false) return { cls: "sp-part", label: "No data for this market" };
   return { cls: "sp-ok", label: "In supply" };
 }
 
@@ -90,7 +91,7 @@ const fmtPrice = (amt: number, cur: string): string => `${CUR_SYM[cur] ?? cur + 
 // Country-first supply verdict: answers "available in MY market or not", with
 // the global picture demoted to a subline.
 function marketStatus(
-  d: DrugHit, market: string, isGlobal: boolean
+  d: DrugHit, market: string, isGlobal: boolean, covered: boolean | null = true
 ): { cls: string; label: string; sub: string | null; warn: boolean } {
   if (d.source === "catalogue") {
     return { cls: "sp-ok", label: isGlobal ? "Registered product" : `Registered in ${market}`, sub: d.source_name || "Registered product", warn: false };
@@ -103,6 +104,10 @@ function marketStatus(
     return { cls, label: `Short in ${market}`, sub: other > 0 ? `+ ${other} other market${other > 1 ? "s" : ""} short` : null, warn: true };
   }
   if (isGlobal) return { cls: "sp-ok", label: "In supply", sub: null, warn: false };
+  if (covered === false) {
+    // No shortage source here: no notices proves nothing.
+    return { cls: "sp-part", label: `No data for ${market}`, sub: other > 0 ? `short in ${other} other market${other > 1 ? "s" : ""}` : "no shortage source for this market", warn: other > 0 };
+  }
   return {
     cls: "sp-ok",
     label: `Available in ${market}`,
@@ -192,6 +197,7 @@ function Results() {
   const [results, setResults] = useState<DrugHit[]>([]);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState<StatusFacets | null>(null);
+  const [marketCovered, setMarketCovered] = useState<boolean | null>(null);
   const [formFacet, setFormFacet] = useState<Record<string, number>>({});
   const [strengthFacet, setStrengthFacet] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
@@ -269,6 +275,7 @@ function Results() {
         setResults(data.results);
         setTotal(data.total);
         setFacets(data.facets?.status ?? null);
+        setMarketCovered(data.market_covered ?? null);
         setFormFacet(data.facets?.form ?? {});
         setStrengthFacet(data.facets?.strength ?? {});
       })
@@ -545,7 +552,7 @@ function Results() {
             </thead>
             <tbody>
               {results.map((d) => {
-                const ms = marketStatus(d, market, isGlobalMarket);
+                const ms = marketStatus(d, market, isGlobalMarket, marketCovered);
                 const eb = monthYear(d.estimated_resolution_date);
                 // Scheme-specific plain-language copy — "Yes" only when the
                 // pathway itself authorises substitute supply.
@@ -673,7 +680,7 @@ function Results() {
       {/* ── Mobile: simple cards (table doesn't fit narrow screens) ── */}
       <div className="res-list">
         {results.map((d) => {
-          const st = statusOf(d);
+          const st = statusOf(d, marketCovered);
           const inner = (
             <div className="res-card">
               <div className="res-l">

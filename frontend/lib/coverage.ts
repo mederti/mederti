@@ -66,3 +66,33 @@ export async function liveCoverage(): Promise<LiveCoverage | null> {
     return null;
   }
 }
+
+// Per-market: does Mederti hold ANY open, non-synthetic shortage notice for
+// this country? A market with none has no working shortage source (e.g.
+// Singapore: HSA publishes no shortage list), and a page there must say "no
+// shortage data", never "In supply". Cached 6h per market.
+const cachedMarketHasData = unstable_cache(
+  async (cc: string): Promise<boolean> => {
+    const { data, error } = await getSupabaseAdmin()
+      .from("shortage_events")
+      .select("id")
+      .eq("country_code", cc)
+      .in("status", OPEN)
+      .or("synthetic.is.null,synthetic.eq.false")
+      .limit(1);
+    if (error) throw new Error(`market coverage probe failed for ${cc}: ${error.message}`);
+    return (data?.length ?? 0) > 0;
+  },
+  ["mederti-market-has-shortage-data"],
+  { revalidate: 21600 },
+);
+
+/** True/false per market; null when the probe failed (not cached). */
+export async function marketHasShortageData(cc: string): Promise<boolean | null> {
+  try {
+    return await cachedMarketHasData(cc.toUpperCase());
+  } catch (err) {
+    console.error("[coverage] market probe failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}

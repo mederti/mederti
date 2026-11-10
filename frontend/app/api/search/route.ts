@@ -1,3 +1,4 @@
+import { marketHasShortageData } from "@/lib/coverage";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ServerTimer } from "@/lib/server-timing";
@@ -822,6 +823,9 @@ export async function GET(req: NextRequest) {
       total,
       suggestion,
       market: isGlobal ? "ALL" : market,
+      // false = no shortage source for this market: rows must not read
+      // "Available" (no notices there proves nothing).
+      market_covered: isGlobal ? true : await marketHasShortageData(market),
       sort,
       status: [...statusKeys],
       form: [...formKeys],

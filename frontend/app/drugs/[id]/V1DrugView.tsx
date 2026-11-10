@@ -147,7 +147,7 @@ function expSourceFor(cc: string): string {
 const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, marketCovered = null, freeViewsUsed = null, sourcedAlternatives = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Anonymous free-tier views used (null = signed in). */
@@ -229,6 +229,8 @@ export default function V1DrugView({
   brandHint?: { brand: string; country: string; catId: string } | null;
   // Set when a brand chip was clicked: scopes the page to that brand.
   brandFocus?: BrandFocus | null;
+  /** False when Mederti holds no shortage notices at all for the user's market. */
+  marketCovered?: boolean | null;
 }) {
   // brand (lowercased) → SKU, for turning chips into links.
   const skuByBrand = new Map((brandSkus ?? []).map((s) => [s.brand.toLowerCase(), s]));
@@ -361,6 +363,8 @@ export default function V1DrugView({
     .sort((a, b) => Number(b.major) - Number(a.major) || b.sev - a.sev || a.cc.localeCompare(b.cc));
 
   const localShortage = !!mine;
+  // No shortage source for this market: absence of notices proves nothing.
+  const noData = !localShortage && marketCovered === false;
   // The regulator's own impact rating, verbatim (TGA: Low / Medium / High /
   // Critical), highest across the market's open notices.
   const IMPACT_RANK: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
@@ -799,10 +803,12 @@ export default function V1DrugView({
               questions a pharmacist asks (when's it back / what instead / what
               does it cost), then "is it just us?". "Yes" on substitution only
               when a real pathway is on file; absence is stated as absence. */}
-          <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok"}`}>
+          <div className={`hq ${localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : noData ? "med" : "ok"}`}>
             <div className="hq-head">
               <span className="hq-ic" aria-hidden>
-                {localShortage ? (
+                {noData ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+                ) : localShortage ? (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
                 ) : (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
@@ -819,7 +825,7 @@ export default function V1DrugView({
                       : supplyInMarket && supplyInMarket.shortCount > 0
                         ? `${supplyInMarket.shortCount} registered product${supplyInMarket.shortCount === 1 ? "" : "s"} short in ${cName}`
                         : `Short in ${cName}`
-                    : `In supply in ${cName}`}
+                    : noData ? `No shortage data for ${cName}` : `In supply in ${cName}`}
                 </div>
                 <div className="hq-sub">
                   {localShortage && discontinued ? (
@@ -837,7 +843,8 @@ export default function V1DrugView({
                     )
                   )}
                 {brandLine && <span className="hq-reason" style={{ display: "block", fontWeight: 600, color: "var(--text)" }}>{brandLine}</span>}
-                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : "Source: official regulators"}</span>
+                {noData && <span className="hq-reason">Mederti has no shortage source for {cName}, so we can&apos;t say whether it&apos;s in supply there. Check with your supplier or the national regulator.</span>}
+                <span className="hq-src">{localShortage ? `${expSource} notice · verified ${timeAgo(mine?.last_verified_at ?? mine?.updated_at) || "recently"}` : noData ? "Coverage gap, not a supply status" : "Source: official regulators"}</span>
                 </div>
                 {localShortage && discontinued && (regGuidance || regStatementUrl) && (
                   <div className="sc-guid">
@@ -880,9 +887,9 @@ export default function V1DrugView({
                       </>
                     ) : (
                       <>
-                        <div className="hq-q-a">{!localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
+                        <div className="hq-q-a">{noData ? "No data" : !localShortage ? "Not short here" : expected ? `Around ${expected}` : estPassed ? "Estimate passed" : "No estimate"}</div>
                         <div className="hq-q-d">
-                          {!localShortage ? "No active shortage in this market." : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
+                          {noData ? `No shortage source for ${cName}.` : !localShortage ? "No active shortage in this market." : expected ? `Earliest sponsor estimate via ${expSource}. May differ by brand.` : estPassed ? "The sponsor's date has passed and hasn't been updated." : "The sponsor hasn't published a return date."}
                         </div>
                       </>
                     )}
@@ -891,9 +898,9 @@ export default function V1DrugView({
               </div>
               <div className="hq-q">
                 <div className="hq-q-l">What can I use instead?</div>
-                <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine ? "No pathway on record" : "Not needed"}</div>
+                <div className="hq-q-a">{s19aTileDetail ? "Approved substitute available" : mine ? "No pathway on record" : noData ? "Unknown" : "Not needed"}</div>
                 <div className="hq-q-d">
-                  {s19aTileDetail ?? (mine ? "Substitution is a prescriber decision." : "No shortage substitution needed.")}
+                  {s19aTileDetail ?? (mine ? "Substitution is a prescriber decision." : noData ? `We can't tell whether it's short in ${cName}.` : "No shortage substitution needed.")}
                   {topAlt && (
                     <>
                       {" "}Same class:{" "}
@@ -941,7 +948,9 @@ export default function V1DrugView({
                         ? "Not short in any market we track"
                         : localShortage
                           ? n === 1 ? `Only ${cName} so far` : `Short in ${n} countries`
-                          : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
+                          : noData
+                            ? `No data for ${cName}; short in ${n} other market${n === 1 ? "" : "s"}`
+                            : `Not short here, but short in ${n} other market${n === 1 ? "" : "s"}`}
                     </strong>
                   </div>
                   {n > 0 && (
@@ -1052,8 +1061,8 @@ export default function V1DrugView({
               {
                 id: "status",
                 label: "Status",
-                badge: localShortage ? (anticipated ? "Anticipated" : discontinued ? "Market exit" : isCrit ? "Short" : "Limited") : "In supply",
-                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : "ok",
+                badge: localShortage ? (anticipated ? "Anticipated" : discontinued ? "Market exit" : isCrit ? "Short" : "Limited") : noData ? "No data" : "In supply",
+                badgeTone: localShortage ? (anticipated ? "med" : isCrit ? "crit" : "med") : noData ? "med" : "ok",
                 content: (
             <>
           {/* Price-concession signal — promoted into the hero (Option B). A

@@ -226,8 +226,10 @@ export async function relatedDrugs(
     .select("id, generic_name, atc_description")
     .neq("id", drug.id)
     .limit(6);
-  if (drug.atc_code && drug.atc_code.length >= 4) {
-    q = q.ilike("atc_code", `${drug.atc_code.slice(0, 4)}%`);
+  // Same class = shared ATC level 4 (first 5 characters, e.g. N02BE), not
+  // level 3 (N02B), which grouped Paracetamol with Gabapentin.
+  if (drug.atc_code && drug.atc_code.length >= 5) {
+    q = q.ilike("atc_code", `${drug.atc_code.slice(0, 5)}%`).neq("atc_code", drug.atc_code);
   } else if (drug.drug_class) {
     q = q.eq("drug_class", drug.drug_class);
   } else {

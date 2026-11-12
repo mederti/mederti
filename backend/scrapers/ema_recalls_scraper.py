@@ -150,15 +150,18 @@ class EMARecallsScraper(BaseRecallScraper):
 
         # Medicine status → recall_type
         status = str(rec.get("medicine status", "") or "").strip().lower()
-        recall_type_map = {
-            "withdrawn": "market_withdrawal",
-            "refused":   "refused",
-            "revoked":   "revoked",
-            "suspended": "suspended",
-            "lapsed":    "lapsed",
-            "expired":   "expired",
-        }
-        recall_type = recall_type_map.get(status, "market_withdrawal")
+        # Only a withdrawn authorisation is stored. The recalls table accepts
+        # recall_type batch / product_wide / market_withdrawal only
+        # (recalls_recall_type_check), so "refused", "revoked", "suspended",
+        # "lapsed" and "expired" were rejected by the database on every run
+        # (about 120 rows a day, logged as write failures) and have never been
+        # stored. They also made every batch write fail and fall back to one
+        # request per row. A refused medicine never reached the market, so it
+        # is not a recall at all; storing the others would need a new
+        # recall_type value (a migration), not a relabel as "market_withdrawal".
+        if status in ("refused", "revoked", "suspended", "lapsed", "expired"):
+            return None
+        recall_type = "market_withdrawal"
 
         # Date — try withdrawal date, then refusal date, then EC decision date
         date_raw = (

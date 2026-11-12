@@ -17,6 +17,7 @@ import type {
 } from "./types";
 import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
 import { extractEventBrand, extractEventMarketExit } from "@/lib/event-brand";
+import { isCombo } from "@/lib/supply-in-market";
 import { ALTERNATIVES_CAVEAT, ALTERNATIVES_SOURCE, atcMatchLabel } from "@/lib/alternatives";
 import { SOURCE_LABELS, fetchSourcedAlternatives } from "@/lib/alternatives-evidence";
 
@@ -733,6 +734,29 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     const { data } = await sb.from("shortage_events").select(SEL).eq("country_code", cc)
       .in(`raw_data->>${field}`, regs).or("synthetic.is.null,synthetic.eq.false").limit(500);
     regRows.push(...((data ?? []) as any[]).map(toRow));
+  }
+  // The drug's REGISTERED products can carry an open notice that is filed only
+  // under a sibling drugs row (Amoxil 250mg is registered under Amoxicillin;
+  // its TGA notice sits on Amoxicillin-Trihydrate). Seeding the lookup from
+  // this drug's own notices alone misses those, so also look up open notices
+  // by the register's numbers, as the drug page does. Combination products
+  // are left out, as on the page.
+  const { data: cat } = await sb.from("drug_catalogue")
+    .select("brand_name, active_ingredients, registration_number, source_country")
+    .eq("drug_id", args.drug_id).in("source_country", ["AU", "CA"]).limit(1000);
+  for (const [cc, field] of [["AU", "artg_numb"], ["CA", "din"]] as const) {
+    const seen = new Set(regRows.filter((r) => r.country_code === cc).map((r) => String(r.reg_no)));
+    const regs = [...new Set(((cat ?? []) as any[])
+      .filter((c) => c.source_country === cc && c.brand_name && !isCombo(c.brand_name, c.active_ingredients))
+      .map((c) => String(c.registration_number ?? "").replace(/\D/g, ""))
+      .map((d) => (cc === "AU" ? d.replace(/^0+/, "") : d))
+      .filter((d) => d && !seen.has(d)))].slice(0, 300);
+    for (let i = 0; i < regs.length; i += 100) {
+      const { data } = await sb.from("shortage_events").select(SEL).eq("country_code", cc)
+        .in("status", ["active", "anticipated"])
+        .in(`raw_data->>${field}`, regs.slice(i, i + 100)).or("synthetic.is.null,synthetic.eq.false").limit(200);
+      regRows.push(...((data ?? []) as any[]).map(toRow));
+    }
   }
   const productStatus = buildProductStatus([...rows, ...regRows]);
   const summary = shortageSummary(rows);

@@ -250,6 +250,10 @@ class FDAEnforcementScraper(BaseScraper):
             "severity":                  severity,
             "reason":                    raw_reason or None,
             "reason_category":           reason_cat,
+            # These are FDA enforcement RECALLS, not declared shortages. Flag
+            # them synthetic (migration 046) so public counts exclude them —
+            # unflagged, 228 sat in US "active shortages" (2026-10-26).
+            "synthetic":                 True,
             "start_date":                start_date,
             "end_date":                  end_date,
             "estimated_resolution_date": None,

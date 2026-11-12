@@ -746,7 +746,6 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     .eq("drug_id", args.drug_id).in("source_country", ["AU", "CA"]).limit(1000);
   for (const [cc, field] of [["AU", "artg_numb"], ["CA", "din"]] as const) {
     const seen = new Set(regRows.filter((r) => r.country_code === cc).map((r) => String(r.reg_no)));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const regs = [...new Set(((cat ?? []) as any[])
       .filter((c) => c.source_country === cc && c.brand_name && !isCombo(c.brand_name, c.active_ingredients))
       .map((c) => String(c.registration_number ?? "").replace(/\D/g, ""))
@@ -756,7 +755,6 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
       const { data } = await sb.from("shortage_events").select(SEL).eq("country_code", cc)
         .in("status", ["active", "anticipated"])
         .in(`raw_data->>${field}`, regs.slice(i, i + 100)).or("synthetic.is.null,synthetic.eq.false").limit(200);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       regRows.push(...((data ?? []) as any[]).map(toRow));
     }
   }

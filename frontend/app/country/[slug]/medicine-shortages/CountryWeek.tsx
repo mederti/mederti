@@ -1,4 +1,4 @@
-import Link from "next/link";
+import MedicineLink from "./MedicineLink";
 import type { CountryWeek as Week, WeekBucket } from "@/lib/country-profile";
 
 const d = (iso: string) =>
@@ -36,12 +36,13 @@ function Column({
         <ul style={{ listStyle: "none", margin: 0, padding: 0, fontSize: 13.5, lineHeight: 1.9 }}>
           {shown.map((i) => (
             <li key={i.medicine} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <Link
-                href={`/medicine/${i.slug}`}
+              <MedicineLink
+                slug={i.slug}
+                drugId={i.drugId}
                 style={{ color: "var(--teal, #127A63)", textDecoration: "none", fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
                 {i.medicine}
-              </Link>
+              </MedicineLink>
               <span style={{ color: "var(--app-text-3, #98a1ac)", whiteSpace: "nowrap", fontSize: 12.5 }}>
                 {i.date ? d(i.date) : ""}
               </span>

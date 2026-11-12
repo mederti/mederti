@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import MedicineLink, { SignedInLinks } from "./MedicineLink";
 
 export interface NoticeRow {
   id: string;
   medicine: string | null;
   medicineSlug: string | null;
+  drugId: string | null;
   status: string;
   severity: string | null;
   reason: string | null;
@@ -78,9 +80,9 @@ function NoticeTable({ rows, dateMode }: { rows: NoticeRow[]; dateMode: "start" 
             <tr key={r.id}>
               <td style={td}>
                 {r.medicineSlug ? (
-                  <Link href={`/medicine/${r.medicineSlug}`} style={{ color: ACCENT, textDecoration: "none", fontWeight: 500 }}>
+                  <MedicineLink slug={r.medicineSlug} drugId={r.drugId} style={{ color: ACCENT, textDecoration: "none", fontWeight: 500 }}>
                     {r.medicine}
-                  </Link>
+                  </MedicineLink>
                 ) : (
                   <span style={{ color: "var(--app-text-2, #3b434e)" }}>{r.medicine ?? "Unlinked product"}</span>
                 )}
@@ -246,7 +248,7 @@ export default function CountryNotices({ code, name, latest, upcoming, resolving
   const canShowMore = tab === "latest" && (latestTotal === null ? latestRows.length >= 50 && latestRows.length % 50 === 0 : latestRows.length < latestTotal);
 
   return (
-    <>
+    <SignedInLinks>
       {/* ── Is your medicine short here? ── */}
       <section style={{ marginTop: 18, padding: "18px 20px", border: "1px solid var(--app-border, #e8ecf0)", borderRadius: 14, background: "#fff" }}>
         <label htmlFor="country-med-search" style={{ display: "block", fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 10 }}>
@@ -384,6 +386,6 @@ export default function CountryNotices({ code, name, latest, upcoming, resolving
           </div>
         )}
       </section>
-    </>
+    </SignedInLinks>
   );
 }

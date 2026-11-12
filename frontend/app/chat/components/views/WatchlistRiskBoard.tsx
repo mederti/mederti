@@ -14,15 +14,9 @@ import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { truncateDrugName } from "@/lib/utils";
 import {
-  TIER_META, TIER_ORDER,
+  TIER_META, TIER_ORDER, readCountryCookie,
   type RiskItem, type RiskTier, type RiskBoardResponse,
 } from "@/lib/watchlist-risk";
-
-function readCountryCookie(): string {
-  if (typeof document === "undefined") return "AU";
-  const m = document.cookie.match(/(?:^|;\s*)mederti-country=([^;]+)/);
-  return (m ? decodeURIComponent(m[1]) : "AU").toUpperCase();
-}
 
 const monthYear = (iso: string | null): string | null => {
   if (!iso) return null;

@@ -58,3 +58,11 @@ export const TIER_META: Record<RiskTier, { label: string; cls: string; blurb: st
 };
 
 export const TIER_ORDER: RiskTier[] = ["short_now", "anticipated", "early_warning", "watching"];
+
+// The user's market, from the country selector cookie. Client-only; AU default
+// matches the rest of the app.
+export function readCountryCookie(): string {
+  if (typeof document === "undefined") return "AU";
+  const m = document.cookie.match(/(?:^|;\s*)mederti-country=([^;]+)/);
+  return (m ? decodeURIComponent(m[1]) : "AU").toUpperCase();
+}

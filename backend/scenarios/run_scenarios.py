@@ -223,6 +223,77 @@ def b2_stale_rows(base: str, rng: random.Random) -> Result:
     return r
 
 
+def b9_notice_one_status(base: str, rng: random.Random) -> Result:
+    """The same TGA notice (ARTG number + start date) must not be open on one
+    row and closed on another. When a notice's drug link changes, the scraper
+    writes a new row and the old one is later closed as "no longer listed", so
+    one drug record says "resolved" while another says "active". That is how
+    the chat called a closed Alphamox notice current and showed two open Amoxil
+    discontinuations as resolved (Nov 2026)."""
+    r = Result("B9", "A TGA notice has one status across drug records (no open + closed copies)")
+    def rows(flt: str) -> list[dict]:
+        out: list[dict] = []
+        off = 0
+        while True:
+            page_ = sb(f"shortage_events?select=reg:raw_data->>artg_numb,start_date,drug_id,product:raw_data->>trade_names"
+                       f"&data_source_id=eq.{SRC_TGA}&or=(synthetic.is.null,synthetic.eq.false)&raw_data->>artg_numb=not.is.null"
+                       f"&{flt}&order=id&limit=1000&offset={off}")
+            out += page_
+            if len(page_) < 1000:
+                return out
+            off += 1000
+    key = lambda x: (digits(x["reg"]), x["start_date"])
+    open_rows = {key(x): x for x in rows("status=in.(active,anticipated)") if x.get("start_date")}
+    closed = {}
+    for x in rows("status=not.in.(active,anticipated)"):
+        if x.get("start_date"):
+            closed.setdefault(key(x), x)
+    for k, o in open_rows.items():
+        c = closed.get(k)
+        if c:
+            r.fail(f"AUST R {k[0]} from {k[1]} ({(o.get('product') or '')[:40]}): open on drug {o['drug_id'][:8]}, closed on {c['drug_id'][:8]}")
+        else:
+            r.ok()
+    # Reported, not failed, until the one-off repair has been run
+    # (backend/scripts/dedupe_registration_notices.py). Flip to False after.
+    r.known_gap = True
+    r.notes.append("Repair: python3 -m backend.scripts.dedupe_registration_notices (dry run by default).")
+    return r
+
+
+def b10_chat_product_verdict(base: str, rng: random.Random) -> Result:
+    """What the chat is told about each product (get_drug_details →
+    product_status, served by /api/drug/<id>) must match the regulator record:
+    a product with an open TGA notice is never "no current notice", and a
+    product whose notices are all closed is never short or discontinued."""
+    r = Result("B10", "Chat product verdict matches the TGA record (open vs no current notice)")
+    base_q = (f"shortage_events?select=drug_id,status,reg:raw_data->>artg_numb&data_source_id=eq.{SRC_TGA}"
+              f"&or=(synthetic.is.null,synthetic.eq.false)&raw_data->>artg_numb=not.is.null&drug_id=not.is.null")
+    open_rows = sb(f"{base_q}&status=in.(active,anticipated)&limit=1000")
+    open_regs = {digits(x["reg"]) for x in open_rows}
+    closed_rows = [x for x in sb(f"{base_q}&status=eq.resolved&order=last_verified_at.desc&limit=1000") if digits(x["reg"]) not in open_regs]
+    sample = [(x, True) for x in rng.sample(open_rows, min(6, len(open_rows)))] + \
+             [(x, False) for x in rng.sample(closed_rows, min(6, len(closed_rows)))]
+    for x, expect_open in sample:
+        reg = digits(x["reg"])
+        try:
+            verdicts = (api(base, f"/api/drug/{x['drug_id']}").get("drug") or {}).get("product_status") or []
+        except Exception as e:
+            r.fail(f"AUST R {reg}: /api/drug/{x['drug_id'][:8]} failed: {type(e).__name__}")
+            continue
+        v = next((p for p in verdicts if digits(p.get("reg_no")) == reg and p.get("country_code") == "AU"), None)
+        if v is None:
+            # Closed history is capped at the 30 most recent notices per drug.
+            (r.fail if expect_open else r.notes.append)(f"AUST R {reg}: no verdict returned for drug {x['drug_id'][:8]}")
+            continue
+        is_open = v.get("status") != "no current notice"
+        if is_open == expect_open:
+            r.ok()
+        else:
+            r.fail(f"AUST R {reg} on drug {x['drug_id'][:8]}: regulator record is {'open' if expect_open else 'closed'}, chat is told '{v.get('status')}'")
+    return r
+
+
 def b3_active_first(base: str, rng: random.Random) -> Result:
     r = Result("B3", "Status card leads with an active shortage over an anticipated one")
     ant = sb(f"shortage_events?select=drug_id&country_code=eq.AU&status=eq.anticipated&or=(synthetic.is.null,synthetic.eq.false)&limit=300")
@@ -388,7 +459,7 @@ def a7_registration_search(base: str, rng: random.Random) -> Result:
 
 SCENARIOS = {
     "A1": a1_brand_search, "B1": b1_product_status, "B2": b2_stale_rows, "B3": b3_active_first,
-    "B4": b4_discontinued, "B8": b8_no_data_markets, "C2": c2_d_brand_focus, "SIG": sig_synthetic,
+    "B4": b4_discontinued, "B8": b8_no_data_markets, "B9": b9_notice_one_status, "B10": b10_chat_product_verdict, "C2": c2_d_brand_focus, "SIG": sig_synthetic,
     "SRC": src_labels, "HUB": hub_links, "E1": e1_freshness, "A7": a7_registration_search,
     "C1": c1_no_past_eta,  # last: also checks every page the others fetched
 }

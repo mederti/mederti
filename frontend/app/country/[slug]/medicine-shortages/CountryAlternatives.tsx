@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import MedicineLink from "./MedicineLink";
 import type { CountryAlternatives as Data, ShortMedicine } from "@/lib/country-profile";
 
 const ACCENT = "var(--teal, #127A63)";
@@ -19,9 +19,9 @@ function Row({ m, name }: { m: ShortMedicine; name: string }) {
   return (
     <li style={{ padding: "12px 14px", borderTop: "1px solid var(--app-border, #e8ecf0)" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <Link href={`/medicine/${m.slug}`} style={{ color: ACCENT, textDecoration: "none", fontWeight: 600, fontSize: 14.5 }}>
+        <MedicineLink slug={m.slug} drugId={m.drugId} style={{ color: ACCENT, textDecoration: "none", fontWeight: 600, fontSize: 14.5 }}>
           {m.medicine}
-        </Link>
+        </MedicineLink>
         {m.critical && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#b42318", textTransform: "uppercase", letterSpacing: ".04em" }}>Critical</span>}
         <span style={{ fontSize: 12.5, color: muted }}>
           {m.notices} active notice{m.notices === 1 ? "" : "s"}
@@ -52,7 +52,7 @@ function Row({ m, name }: { m: ShortMedicine; name: string }) {
                     ? "Other product of the same medicine:"
                     : "Different medicine cited:"}
               </span>{" "}
-              <Link href={`/medicine/${a.slug}`} style={{ color: "var(--app-text, #0c1118)" }}>{a.name}</Link>
+              <MedicineLink slug={a.slug} drugId={a.drugId} style={{ color: "var(--app-text, #0c1118)" }}>{a.name}</MedicineLink>
               <span style={{ color: muted }}>
                 {" "}· {a.publishers.join(", ") || "source"}
                 {a.status === "single_source" && !a.authorisedHere ? " (single source, not independently confirmed)" : ""}

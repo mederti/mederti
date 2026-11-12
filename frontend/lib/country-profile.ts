@@ -26,6 +26,7 @@ export function toNoticeRow(e: PseoShortageEventWithDrug): NoticeRow {
     id: e.id,
     medicine: med,
     medicineSlug: med ? slugify(med) : null,
+    drugId: e.drug_id,
     status: e.status,
     severity: e.severity,
     reason: reasonLabel(e.reason_category),
@@ -91,6 +92,7 @@ export async function countryNoticesPage(
 export interface WeekItem {
   medicine: string;
   slug: string;
+  drugId: string | null;
   /** Notices for this medicine in the bucket (strengths/packs are listed separately). */
   notices: number;
   /** The date that put it in the bucket (start, end, or upcoming start). */
@@ -126,7 +128,7 @@ function bucket(
     if (!name) continue;
     const hit = byMed.get(name);
     if (hit) hit.notices += 1;
-    else byMed.set(name, { medicine: name, slug: slugify(name), notices: 1, date: dateOf(e) });
+    else byMed.set(name, { medicine: name, slug: slugify(name), drugId: e.drug_id, notices: 1, date: dateOf(e) });
   }
   const complete = count !== null && rows.length >= count;
   return { notices: count, items: [...byMed.values()], medicines: complete ? byMed.size : null };
@@ -190,6 +192,7 @@ export async function countryWeek(code: string): Promise<CountryWeek> {
 export interface CitedAlternative {
   name: string;
   slug: string;
+  drugId: string;
   status: AlternativeStatus;
   /** Publishers stating it, e.g. ["TGA"], ["FDA", "WHO"]. */
   publishers: string[];
@@ -210,6 +213,7 @@ export interface SchemeApproval {
 export interface ShortMedicine {
   medicine: string;
   slug: string;
+  drugId: string;
   /** Active notices for this medicine in this country. */
   notices: number;
   critical: boolean;
@@ -370,6 +374,7 @@ export async function countryAlternatives(code: string): Promise<CountryAlternat
         return {
           name,
           slug: slugify(name),
+          drugId: p.alternative_drug_id,
           status: p.verification_status,
           // Only the publishers whose statements apply here or globally.
           publishers: [...new Set(ev.filter((e) => !e.country_code || e.country_code === code).map((e) => e.publisher))],
@@ -382,7 +387,7 @@ export async function countryAlternatives(code: string): Promise<CountryAlternat
       // Another country's statement about the same medicine isn't an option here.
       .filter((a) => a._applies)
       .map((a): CitedAlternative => ({
-        name: a.name, slug: a.slug, status: a.status, publishers: a.publishers,
+        name: a.name, slug: a.slug, drugId: a.drugId, status: a.status, publishers: a.publishers,
         authorisedHere: a.authorisedHere, sourceUrl: a.sourceUrl, sameMedicine: a.sameMedicine,
       }))
       .sort(
@@ -394,6 +399,7 @@ export async function countryAlternatives(code: string): Promise<CountryAlternat
     return {
       medicine: m.name,
       slug: slugify(m.name),
+      drugId: id,
       notices: m.notices,
       critical: m.critical,
       approvals: approvals.get(id) ?? [],

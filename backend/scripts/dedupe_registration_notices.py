@@ -15,8 +15,9 @@ Per (country, registration number, start_date) group of real (non-synthetic)
 rows with more than one member:
   keeper = an open row over a closed one, then the most recently verified,
            then the most recently updated: the row the scraper still maintains
-  others = rows referencing them (status log, recall links, alerts, articles)
-           are repointed to the keeper, then they are deleted
+  others = recall links and alerts that reference them are
+           repointed to the keeper, then they are deleted. Their status-log
+           entries go with them (see REFS)
 
 Scopes:
   conflicts (default)  only groups where the copies DISAGREE: one open, one
@@ -48,11 +49,13 @@ from supabase import create_client
 MARKETS = {"AU": "artg_numb", "CA": "din"}
 OPEN = {"active", "anticipated"}
 # (table, column) pairs that reference shortage_events.id
+# shortage_status_log is deliberately NOT repointed: a stale copy's history is
+# the artefact itself ("active → resolved" on the day it was closed as no
+# longer listed). Moving it would write a false resolution into the keeper's
+# history. Those entries are backed up and removed with the copy (FK cascade).
 REFS = [
-    ("shortage_status_log", "shortage_event_id"),
     ("recall_shortage_links", "shortage_id"),
     ("alert_notifications", "shortage_event_id"),
-    ("intelligence_articles", "shortage_event_id"),
 ]
 
 
@@ -143,8 +146,12 @@ def main() -> None:
     full: list[dict] = []
     for ids in chunks(touched, 200):
         full += db.table("shortage_events").select("*").in_("id", ids).execute().data or []
-    backup.write_text(json.dumps(full, default=str))
-    print(f"\nBackup of every touched row ({len(full):,}): {backup}")
+    drop_all = [r["id"] for x in plans for r in x["drop"]]
+    logs: list[dict] = []
+    for ids in chunks(drop_all, 200):
+        logs += db.table("shortage_status_log").select("*").in_("shortage_event_id", ids).execute().data or []
+    backup.write_text(json.dumps({"shortage_events": full, "shortage_status_log_of_deleted": logs}, default=str))
+    print(f"\nBackup of every touched row ({len(full):,}) and the deleted copies' status log ({len(logs):,}): {backup}")
 
     deleted = 0
     for x in plans:

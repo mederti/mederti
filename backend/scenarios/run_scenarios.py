@@ -254,9 +254,9 @@ def b9_notice_one_status(base: str, rng: random.Random) -> Result:
             r.fail(f"AUST R {k[0]} from {k[1]} ({(o.get('product') or '')[:40]}): open on drug {o['drug_id'][:8]}, closed on {c['drug_id'][:8]}")
         else:
             r.ok()
-    # Reported, not failed, until the one-off repair has been run
-    # (backend/scripts/dedupe_registration_notices.py). Flip to False after.
-    r.known_gap = True
+    # A hard failure: the one-off repair ran on 13 Nov 2026 and TGA notices
+    # have had product-level ids since 16 Nov (PR #258), so any copy that
+    # disagrees is a new fault.
     r.notes.append("Repair: python3 -m backend.scripts.dedupe_registration_notices (dry run by default).")
     return r
 
@@ -316,21 +316,32 @@ def b3_active_first(base: str, rng: random.Random) -> Result:
 
 
 def b4_discontinued(base: str, rng: random.Random) -> Result:
+    """Judged by the products the PAGE shows as affected, not by the notices
+    filed under this drugs row: pages also pick up notices by registration
+    number from sibling rows, so "only discontinuations under this drug_id"
+    no longer means the page has nothing else to report."""
     r = Result("B4", "A discontinuation reads as a market exit, not a shortage")
     rows = sb(f"shortage_events?select=drug_id&data_source_id=eq.{SRC_TGA}&{OPEN}&raw_data->>status=eq.D&limit=500")
     ids = list({x["drug_id"] for x in rows if x["drug_id"]})
     rng.shuffle(ids)
+    tried = 0
     for did in ids:
-        if r.passed + r.failed >= 6:
+        if r.passed + r.failed >= 6 or tried >= 40:
             break
-        others = sb(f"shortage_events?select=id&drug_id=eq.{did}&country_code=eq.AU&{OPEN}&raw_data->>status=neq.D&limit=1")
-        if others:
-            continue  # other live shortages: the headline is the shortage, correctly
-        t = text_of(page(base, f"/drugs/{did}", "AU"))
-        if "Discontinued in Australia" in t or "Leaving the market in Australia" in t:
+        tried += 1
+        h = page(base, f"/drugs/{did}", "AU")
+        regs = sorted({digits(x) for regs_, st in ROW_RE.findall(h) for x in regs_.split(",") if digits(x)})
+        if not regs:
+            continue
+        quoted = ",".join(regs[:150])
+        codes = {x["code"] for x in sb(f"shortage_events?select=code:raw_data->>status&data_source_id=eq.{SRC_TGA}&{OPEN}"
+                                       f"&raw_data->>artg_numb=in.({quoted})")}
+        if codes != {"D"}:
+            continue  # the page has a live shortage to report too: not this scenario
+        if re.search(r"(discontinued|leaving the market) in Australia", text_of(h), re.I):
             r.ok()
         else:
-            r.fail(f"/drugs/{did}: only TGA discontinuations open, headline not a market exit")
+            r.fail(f"/drugs/{did}: every affected product is a TGA discontinuation, headline not a market exit")
     return r
 
 

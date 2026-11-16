@@ -22,7 +22,9 @@
 
 SHELL=/bin/bash
 
-0  19 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py tga           >> logs/cron.log 2>&1
+# tga shortage scraper disabled on the Mac 2026-11-16: Railway runs it every 4h from main. Two runners on
+# different code fought over the same rows (PR #258). Do not re-enable while Railway runs it.
+# 0  19 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py tga           >> logs/cron.log 2>&1
 30 19 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py fda           >> logs/cron.log 2>&1
 0  20 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py health_canada >> logs/cron.log 2>&1
 30 20 * * *  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py mhra          >> logs/cron.log 2>&1

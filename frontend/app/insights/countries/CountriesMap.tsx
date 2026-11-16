@@ -13,15 +13,15 @@ const WORLD_TOPOLOGY_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries
 const W = 960;
 const H = 500;
 
-// Sequential single-hue ramp (light → dark) for open-notice volume. Fixed
+// Sequential ramp in the brand teal (light → dark) for open-notice volume. Fixed
 // thresholds rather than quantiles so a country's colour only changes when
 // its own count does, not when another country's does.
 const BUCKETS = [
-  { min: 1, label: "1–49", color: "#fde0c2" },
-  { min: 50, label: "50–249", color: "#f8b878" },
-  { min: 250, label: "250–999", color: "#ea8a3c" },
-  { min: 1000, label: "1,000–2,499", color: "#c25f1c" },
-  { min: 2500, label: "2,500+", color: "#86390d" },
+  { min: 1, label: "1–49", color: "#d4f3e9" },
+  { min: 50, label: "50–249", color: "#9fe3cf" },
+  { min: 250, label: "250–999", color: "#4fc3a1" },
+  { min: 1000, label: "1,000–2,499", color: "#127a63" },
+  { min: 2500, label: "2,500+", color: "#0a4a3c" },
 ] as const;
 const COLOR_ZERO = "#cfd6de"; // tracked source, no open notice held
 const COLOR_NONE = "#f0f2f5"; // no public source in Mederti
@@ -234,10 +234,10 @@ export default function CountriesMap({
       </div>
 
       <style>{`
-.cm{color:var(--app-text,#0c1118);padding:28px 32px 56px;max-width:1180px}
+.cm{color:var(--app-text,#0c1118);padding:0 0 24px}
 .cm-head h1{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:0 0 6px}
 .cm-head p{font-size:14px;line-height:1.6;color:var(--app-text-2,#3d4653);margin:0 0 18px;max-width:720px}
-.cm-map{position:relative;border:1px solid var(--app-border,#dde3e9);border-radius:14px;background:#fff;padding:10px;overflow:hidden}
+.cm-map{position:relative;border:1px solid var(--app-border,#dde3e9);border-radius:14px;background:#fff;padding:4px;overflow:hidden}
 .cm-map svg{display:block;width:100%;height:auto}
 .cm-c{stroke:#fff;stroke-width:.6;vector-effect:non-scaling-stroke;outline:none}
 .cm-link{cursor:pointer}
@@ -267,7 +267,7 @@ export default function CountriesMap({
 .cm-table .src{color:var(--app-text-3,#6a7280)}
 .cm-table a{color:inherit;font-weight:550;text-decoration:none}
 .cm-table a:hover{text-decoration:underline}
-@media (max-width:640px){.cm{padding:18px 16px 40px}.cm-head h1{font-size:22px}}
+@media (max-width:640px){.cm-head h1{font-size:22px}}
       `}</style>
     </div>
   );

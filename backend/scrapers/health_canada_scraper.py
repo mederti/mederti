@@ -120,6 +120,13 @@ class HealthCanadaScraper(BaseScraper):
     #   s.reconcile_absent(found=0, execute=False)   # → open / absent counts
     RECONCILE_ABSENT: bool = False
 
+    # One stored notice per Health Canada report (see BaseScraper.IDENTITY_KEY).
+    # Without it, reports for the same medicine with the same start date shared
+    # an id and overwrote each other: in the last successful feed (12 Sep 2026)
+    # 393 of 1,996 reports were not stored, all of them open. Report ID, not
+    # DIN: 76 of those are separate reports for one DIN (e.g. pack sizes).
+    IDENTITY_KEY = "report_id"
+
     # Sanity floor (≈3.5k open CA rows, Nov 2026): a far smaller feed is a
     # broken query, never a real collapse in Canadian shortages.
     MIN_RECORDS: int = 500

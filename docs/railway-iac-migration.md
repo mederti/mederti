@@ -79,7 +79,11 @@ Then in the dashboard:
 
 **Rollback:** `railway config migrate undo` restores the old Config File paths. The toml and nixpacks files stay in the repo until the cleanup PR, so undo brings back exactly the old behaviour.
 
-## Follow-up cleanup PR (only after step 9 passes on all 3 services)
+## Cutover log (2026-11-16)
+
+Cutover + apply ran on 2026-11-16 (plan: 3 changes, 0 destroys, variables untouched). **Lesson:** clearing the Config File field is not enough. With it empty, Railway falls back to the repo-root `railway.toml`, which was the legacy FastAPI config (`builder = "nixpacks"`, `uvicorn` start, `restartPolicyType = "on_failure"`). The first post-cutover builds therefore came out as Nixpacks with Node detection (`npm ci`, no Python). Deleting the toml files (below) is required for the IaC settings to take effect, not optional cleanup. `aware-analysis` has no services, so nothing else read the root file.
+
+## Follow-up cleanup PR (done 2026-11-16, required, see above)
 
 Delete files that are no longer read: `railway/{shortage_cron_daily,shortage_cron_frequent,recall_cron,tga_audit_cron}/{railway,nixpacks}.toml`, `railway/railway.toml`, root `railway.toml`, root `nixpacks.toml`. Any of these left in the repo is a trap, because `railway config migrate` keeps finding them. Update `cron/RAILWAY_SERVICES.md` and CLAUDE.md to point at `.railway/railway.ts`. Optionally add the `railwayapp/config` GitHub Action (plan on PR, apply on merge), which needs a project token stored as the `RAILWAY_TOKEN` secret.
 

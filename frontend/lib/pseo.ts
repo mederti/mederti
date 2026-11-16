@@ -123,7 +123,7 @@ const EVENT_COLS =
 // Deliberately does NOT filter is_upstream_signal: that column (migration
 // 010) is absent from the production DB (schema drift, verified 2026-08-01)
 // and referencing it makes PostgREST reject the whole query.
-function realEventsFilter<T extends { or: (f: string) => T }>(q: T): T {
+export function realEventsFilter<T extends { or: (f: string) => T }>(q: T): T {
   return q.or("synthetic.is.null,synthetic.eq.false");
 }
 

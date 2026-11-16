@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Search, TrendingUp, LayoutDashboard, Bookmark, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Search, TrendingUp, LayoutDashboard, Globe, Bookmark, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import V1CountryPicker from "@/app/components/v1/V1CountryPicker";
 import { truncateDrugName } from "@/lib/utils";
@@ -33,11 +33,12 @@ const COLLAPSE_KEY = "mederti-sidebar-collapsed";
 
 /** Top-level section the current route belongs to (drives the active state).
  *  Medicine pages count as Search. Sub-items (history, watchlist) never highlight. */
-function sectionFor(path: string | null): "search" | "intelligence" | "dashboard" | null {
+function sectionFor(path: string | null): "search" | "intelligence" | "dashboard" | "countries" | null {
   if (!path) return null;
   if (path === "/search" || path.startsWith("/search/") || path.startsWith("/drugs/")) return "search";
   if (path.startsWith("/insights/intelligence")) return "intelligence";
   if (path.startsWith("/insights/dashboard")) return "dashboard";
+  if (path.startsWith("/insights/countries") || path.startsWith("/country/")) return "countries";
   return null;
 }
 
@@ -195,6 +196,7 @@ export default function V1Sidebar() {
           <Link href="/search" className={`sb-item${act("search")}`} aria-current={cur("search")} title={collapsed ? "Search" : undefined}><Search size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Search</span></Link>
           <Link href="/insights/intelligence" className={`sb-item${act("intelligence")}`} aria-current={cur("intelligence")} title={collapsed ? "Intelligence" : undefined}><TrendingUp size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Intelligence</span></Link>
           <Link href="/insights/dashboard" className={`sb-item${act("dashboard")}`} aria-current={cur("dashboard")} title={collapsed ? "Dashboard" : undefined}><LayoutDashboard size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Dashboard</span></Link>
+          <Link href="/insights/countries" className={`sb-item${act("countries")}`} aria-current={cur("countries")} title={collapsed ? "Countries" : undefined}><Globe size={17} strokeWidth={1.9} className="sb-ico" /><span className="sb-label">Countries</span></Link>
           {collapsed && (
             <Link href={signedIn ? "/account#watchlist" : "/login"} className="sb-item" title="Watchlist">
               <Bookmark size={17} strokeWidth={1.9} className="sb-ico" />

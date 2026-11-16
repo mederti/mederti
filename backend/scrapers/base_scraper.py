@@ -235,6 +235,13 @@ class BaseScraper(ABC):
     # TGA had replaced with a 2 Nov record. Opt-in: only set this on sources
     # whose fetch() returns the whole list, never a page or a delta.
     RECONCILE_ABSENT: bool = False
+
+    # Key in each event's raw record that identifies the PRODUCT a notice
+    # covers (TGA: "artg_numb"). Without it a notice's id is medicine + start
+    # date only, so two products of one medicine that went short on the same
+    # day share an id and the second overwrites the first: 113 of 1,049 TGA
+    # notices were never stored (Nov 2026), 91 of them open shortages.
+    IDENTITY_KEY: str | None = None
     # Refuse to reconcile when the feed shrinks below this fraction of the
     # currently-open rows it would be compared against — a truncated or
     # half-broken fetch must never mass-close real shortages.
@@ -537,16 +544,74 @@ class BaseScraper(ABC):
     # Deterministic shortage_id
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _shortage_id(self, drug_id: str, start_date: str) -> str:
+    def _shortage_id(self, drug_id: str, start_date: str, product: str | None = None) -> str:
         """
         Replicates the Postgres trigger formula from 001_initial_schema.sql:
             md5(drug_id || '|' || data_source_id || '|' || country_code || '|' || start_date)
+
+        With `product` (sources that set IDENTITY_KEY) the regulator's own
+        product identifier is appended, so two products of one medicine with
+        the same start date are two notices, not one. The trigger only fills
+        shortage_id when it is empty, so it needs no change.
 
         WARNING: If you change this formula, update set_shortage_id() in the
         migration as well, otherwise duplicate events will be inserted.
         """
         raw = f"{drug_id}|{self.SOURCE_ID}|{self.COUNTRY_CODE}|{start_date}"
+        if product:
+            raw += f"|{product}"
         return hashlib.md5(raw.encode()).hexdigest()
+
+    def _event_product(self, ev: dict) -> str | None:
+        """The regulator's product identifier for an event (IDENTITY_KEY in its
+        raw record), or None when the source has none."""
+        if not self.IDENTITY_KEY:
+            return None
+        raw = ev.get("raw_record")
+        val = raw.get(self.IDENTITY_KEY) if isinstance(raw, dict) else None
+        val = str(val).strip() if val is not None else ""
+        return val or None
+
+    def _adopt_legacy_rows(self, pending: list[dict], existing: dict[str, dict], failed: set[str]) -> None:
+        want = {p["legacy_id"]: [] for p in pending if p.get("legacy_id") and p["shortage_id"] not in existing and p["shortage_id"] not in failed}
+        if not want:
+            return
+        for p in pending:
+            if p.get("legacy_id") in want and p["shortage_id"] not in existing:
+                want[p["legacy_id"]].append(p)
+        adopted = 0
+        for chunk in _chunks(list(want), 100):
+            try:
+                resp = (
+                    self.db.table("shortage_events")
+                    .select(f"id, shortage_id, status, severity, end_date, product:raw_data->>{self.IDENTITY_KEY}")
+                    .in_("shortage_id", chunk)
+                    .execute()
+                )
+            except Exception as exc:
+                # Unknown state: skip these events this run rather than insert
+                # a second copy of a row that may exist under its old id.
+                self.log.warning("Legacy-row fetch failed; skipping these ids this run",
+                                 extra={"error": str(exc), "chunk_size": len(chunk)})
+                for legacy in chunk:
+                    failed.update(p["shortage_id"] for p in want[legacy])
+                continue
+            for row in resp.data or []:
+                stored = str(row.get("product") or "").strip()
+                match = next((p for p in want[row["shortage_id"]] if p["product"] == stored), None)
+                if not match:
+                    continue
+                try:
+                    self.db.table("shortage_events").update({"shortage_id": match["shortage_id"]}).eq("id", row["id"]).execute()
+                except Exception as exc:
+                    self.log.warning("Could not re-key legacy row; skipping this id this run",
+                                     extra={"error": str(exc), "row_id": row["id"]})
+                    failed.add(match["shortage_id"])
+                    continue
+                existing[match["shortage_id"]] = {**row, "shortage_id": match["shortage_id"]}
+                adopted += 1
+        if adopted:
+            self.log.info("Re-keyed legacy rows to product-level ids", extra={"rows": adopted})
 
     def _open_start_dates(self, drug_ids: list[str]) -> dict[str, str]:
         """Earliest start_date of this source's open (active / anticipated /
@@ -691,11 +756,16 @@ class BaseScraper(ABC):
             raw = ev.get("raw_record")
             if isinstance(raw, dict):
                 ev["raw_record"] = {**raw, "start_date_basis": basis}
+            product = self._event_product(ev)
             pending.append({
                 "ev": ev,
                 "drug_id": drug_id,
                 "start_date": start_date,
-                "shortage_id": self._shortage_id(drug_id, start_date),
+                "shortage_id": self._shortage_id(drug_id, start_date, product),
+                "product": product,
+                # The id this notice had before IDENTITY_KEY existed; used once
+                # to re-key the stored row in place (see Phase 2).
+                "legacy_id": self._shortage_id(drug_id, start_date) if product else None,
             })
 
         if not pending:
@@ -730,6 +800,14 @@ class BaseScraper(ABC):
                 continue
             for row in resp.data or []:
                 existing_by_shortage_id[row["shortage_id"]] = row
+
+        # Rows written before IDENTITY_KEY carry the old id (no product part).
+        # Re-key each one in place to the notice it actually holds, so history,
+        # links and alerts stay on the row and nothing is duplicated. A legacy
+        # row is adopted only by the event whose product it stores; the other
+        # products that used to collide with it are inserted as new rows.
+        if self.IDENTITY_KEY:
+            self._adopt_legacy_rows(pending, existing_by_shortage_id, failed_lookup_ids)
 
         # ── Phase 3: build records + collect status-change log entries ──────
         records: list[dict[str, Any]] = []

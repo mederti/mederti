@@ -76,6 +76,8 @@ class TGAScraper(BaseScraper):
     # The MSI search API returns the full current list in one payload, so a
     # row it stops listing is no longer current (see BaseScraper docs).
     RECONCILE_ABSENT: bool = True
+    # One notice per ARTG registration (see BaseScraper.IDENTITY_KEY).
+    IDENTITY_KEY = "artg_numb"
 
     # ─────────────────────────────────────────────────────────────────────────
     # Status mapping

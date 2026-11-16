@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { truncateDrugName } from "@/lib/utils";
+import { createBrowserClient } from "@/lib/supabase/client";
+import HomeRoleRows, { type HomePersona } from "./HomeRoleRows";
 
 /**
  * Conversational "Ask" home — ported from the chat-first v1 mockup (Mockup G).
@@ -19,16 +21,38 @@ import { truncateDrugName } from "@/lib/utils";
  * host decides where they go (route into /chat, or send inline).
  */
 
-// Suggested prompts — the exact set from the mockup. Each fires verbatim into
-// `onAsk`. Kept as a module constant so both hosts share the same wording.
-export const HOME_PROMPTS: string[] = [
-  "What antibiotics are short in AU right now?",
-  "Substitute for amoxicillin 500mg in adult sinusitis",
-  "Which GLP-1s have stock in pharmacies this week?",
-  "Compare atorvastatin prices · UK vs US vs France",
-  "What's likely to be short in Q3 from India API issues?",
-  "Show me all paediatric formulations in shortage",
-];
+// Suggested prompts — three per role, on one line. Each fires verbatim into
+// `onAsk`. Only questions the data can actually answer (no stock-on-shelf or
+// forecast questions). `cc` is the user's market code.
+const PROMPTS: Record<HomePersona, (cc: string) => string[]> = {
+  pharmacist: (cc) => [
+    `Which antibiotics are short in ${cc} right now?`,
+    "What can I substitute for amoxicillin 500 mg?",
+    `Any medicine recalls in ${cc} this week?`,
+  ],
+  procurement: (cc) => [
+    `Which shortages are anticipated in ${cc} next month?`,
+    `Which ${cc} shortages are also short overseas?`,
+    "Check a formulary spreadsheet against active shortages",
+  ],
+  default: (cc) => [
+    `Which antibiotics are short in ${cc} right now?`,
+    "What can I substitute for amoxicillin 500 mg?",
+    `Which shortages are anticipated in ${cc} next month?`,
+  ],
+};
+
+/** Kept for any caller that wants the role-neutral set. */
+export const HOME_PROMPTS: string[] = PROMPTS.default("AU");
+
+// user_profiles.role → which home rows to show. Hospital pharmacists get the
+// pharmacist view (substitution is the daily job); everything unmapped falls
+// back to the shared default.
+function personaFor(role?: string | null): HomePersona {
+  if (role === "hospital_pharmacist" || role === "community_pharmacist" || role === "pharmacist") return "pharmacist";
+  if (role === "hospital_procurement" || role === "hospital") return "procurement";
+  return "default";
+}
 
 type TrendRow = {
   shortage_id: string;
@@ -60,11 +84,13 @@ function monthYear(iso?: string | null): string | null {
   const d = new Date(iso);
   return isNaN(d.getTime())
     ? null
-    : d.toLocaleDateString("en-AU", { month: "short", year: "2-digit" });
+    : d.toLocaleDateString("en-AU", { month: "short", year: "numeric" });
 }
 
 function prettyReason(r?: string | null): string | null {
-  if (!r) return null;
+  // "unknown" is the scraper's placeholder, not a cause — fall through to the
+  // "Cause under review" label instead of printing "Unknown".
+  if (!r || r === "unknown") return null;
   return r.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -79,10 +105,49 @@ export default function ConversationalHome({
   const [trending, setTrending] = useState<TrendRow[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [country, setCountry] = useState<string | null>(null);
+  const [persona, setPersona] = useState<HomePersona>("default");
+  const [watchIds, setWatchIds] = useState<string[]>([]);
+  const [whoReady, setWhoReady] = useState(false);
+
+  // Market (same cookie the sidebar country picker writes) + role + watchlist.
+  useEffect(() => {
+    // Same restore-after-mount pattern as V1CountryPicker (cookie is client-only).
+    const restore = () => {
+      const m = document.cookie.match(/(?:^|; )mederti-country=([A-Za-z]{2})/);
+      setCountry(m ? m[1].toUpperCase() : "AU");
+    };
+    restore();
+
+    let cancelled = false;
+    const supabase = createBrowserClient();
+    // `?as=pharmacist|procurement` previews another role's rows. Harmless:
+    // every row is public data, the role only picks which ones show.
+    const as = new URLSearchParams(window.location.search).get("as");
+    const override: HomePersona | null = as === "pharmacist" || as === "procurement" ? as : null;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      let role: string | null | undefined;
+      if (session) {
+        const uid = session.user.id;
+        const [prof, watch] = await Promise.all([
+          supabase.from("user_profiles").select("role").eq("user_id", uid).maybeSingle(),
+          supabase.from("user_watchlists").select("drug_id").eq("user_id", uid).eq("is_active", true).limit(100),
+        ]);
+        if (cancelled) return;
+        role = (prof.data as { role?: string | null } | null)?.role;
+        setWatchIds(((watch.data ?? []) as { drug_id: string }[]).map((r) => r.drug_id).filter(Boolean));
+      }
+      if (cancelled) return;
+      setPersona(override ?? personaFor(role));
+      setWhoReady(true);
+    }).catch(() => { if (!cancelled) setWhoReady(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
+    if (!country) return;
     let cancelled = false;
-    fetch("/api/shortages?country=AU&status=active&sort=severity&page_size=4")
+    fetch(`/api/shortages?country=${country}&status=active&sort=severity&page_size=4`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
@@ -93,7 +158,10 @@ export default function ConversationalHome({
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoaded(true); });
     return () => { cancelled = true; };
-  }, []);
+  }, [country]);
+
+  const cc = country ?? "AU";
+  const prompts = PROMPTS[persona](cc);
 
   const submit = () => {
     const q = draft.trim();
@@ -134,7 +202,7 @@ export default function ConversationalHome({
       )}
 
       <div className="chome-prompts">
-        {HOME_PROMPTS.map((p) => (
+        {prompts.map((p) => (
           <button key={p} type="button" className="chome-prompt" onClick={() => onAsk(p)}>
             <span className="chome-prompt-ic">→</span>
             {p}
@@ -145,7 +213,7 @@ export default function ConversationalHome({
       {(trending.length > 0 || !loaded) && (
         <div className="chome-trending">
           <div className="chome-trending-head">
-            <div className="chome-trending-label">Trending shortages · AU · active</div>
+            <div className="chome-trending-label">Trending shortages · {cc} · active</div>
             <Link href="/shortages" className="chome-trending-link">
               {total != null ? `See all ${total.toLocaleString()} active →` : "See all →"}
             </Link>
@@ -175,6 +243,8 @@ export default function ConversationalHome({
           </div>
         </div>
       )}
+
+      <HomeRoleRows persona={persona} country={cc} drugIds={watchIds} ready={whoReady && country != null} />
     </div>
   );
 }
@@ -208,7 +278,7 @@ const CSS = `
 .chome-send:disabled{opacity:.45;cursor:not-allowed}
 
 /* ── Suggested prompts ── */
-.chome-prompts{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:22px}
+.chome-prompts{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:22px}
 .chome-prompt{display:flex;align-items:flex-start;gap:9px;text-align:left;line-height:1.45;
   background:var(--ch-bg);border:1px solid var(--ch-border);border-radius:11px;padding:13px 15px;
   font-family:inherit;font-size:13px;color:var(--ch-text);cursor:pointer;transition:.15s}
@@ -246,6 +316,6 @@ const CSS = `
   padding-top:9px;border-top:1px solid var(--ch-border);font-size:11px;color:var(--ch-text-3)}
 .chome-card-val{font-weight:600;color:var(--ch-text)}
 
-@media(max-width:900px){.chome-trending-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){.chome-trending-grid{grid-template-columns:1fr 1fr}.chome-prompts{grid-template-columns:1fr}}
 @media(max-width:640px){.chome-prompts{grid-template-columns:1fr}.chome-trending-grid{grid-template-columns:1fr}}
 `;

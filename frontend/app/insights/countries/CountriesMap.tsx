@@ -12,6 +12,7 @@ import type { CountryOverviewRow } from "@/lib/countries-overview";
 const WORLD_TOPOLOGY_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 const W = 960;
 const H = 500;
+const MAX_ZOOM = 8;
 
 // Sequential ramp in the brand teal (light → dark) for open-notice volume. Fixed
 // thresholds rather than quantiles so a country's colour only changes when
@@ -101,9 +102,62 @@ export default function CountriesMap({
     return { tracked: rows.length, withOpen };
   }, [rows]);
 
-  const go = (row: CountryOverviewRow) => router.push(`/country/${row.slug}/medicine-shortages`);
+  // Zoom / pan, in viewBox units: the country group is drawn at
+  // translate(x,y) scale(k). Clamped so the map can't be dragged off-canvas.
+  const [view, setView] = useState({ k: 1, x: 0, y: 0 });
+  const svgRef = useRef<SVGSVGElement>(null);
+  const drag = useRef<{ px: number; py: number; x: number; y: number; moved: boolean } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const clampView = (k: number, x: number, y: number) => {
+    const kk = Math.min(MAX_ZOOM, Math.max(1, k));
+    return {
+      k: kk,
+      x: Math.min(0, Math.max(W - W * kk, x)),
+      y: Math.min(0, Math.max(H - H * kk, y)),
+    };
+  };
+  // Zoom about the centre of what's currently visible.
+  const zoomBy = (factor: number) =>
+    setView((v) => {
+      const k = Math.min(MAX_ZOOM, Math.max(1, v.k * factor));
+      const r = k / v.k;
+      return clampView(k, W / 2 - (W / 2 - v.x) * r, H / 2 - (H / 2 - v.y) * r);
+    });
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (view.k === 1 || e.button !== 0) return;
+    drag.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y, moved: false };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.px;
+    const dy = e.clientY - d.py;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    if (!d.moved) {
+      d.moved = true;
+      setDragging(true);
+      setHover(null);
+    }
+    // Screen pixels → viewBox units.
+    const scale = W / (svgRef.current?.clientWidth || W);
+    setView((v) => clampView(v.k, d.x + dx * scale, d.y + dy * scale));
+  };
+  const endDrag = () => {
+    // Keep `moved` readable by the click that follows pointerup, then clear.
+    const d = drag.current;
+    setDragging(false);
+    if (d) setTimeout(() => { if (drag.current === d) drag.current = null; }, 0);
+  };
+
+  const go = (row: CountryOverviewRow) => {
+    if (drag.current?.moved) return; // a pan, not a click
+    router.push(`/country/${row.slug}/medicine-shortages`);
+  };
 
   const move = (e: React.MouseEvent, shape: Shape) => {
+    if (drag.current?.moved) return;
     const box = wrapRef.current?.getBoundingClientRect();
     if (!box) return;
     setHover({ shape, x: e.clientX - box.left, y: e.clientY - box.top });
@@ -121,13 +175,24 @@ export default function CountriesMap({
         <p>
           Open shortage notices published by each country&apos;s official regulator.{" "}
           {totals.withOpen} of the {totals.tracked} countries with a listed source currently have open notices. Hover a country
-          for its figures; click to open its page.
+          for its figures; click to open its page. Use + and − to zoom, then drag to move around.
         </p>
       </header>
 
       <div className="cm-map" ref={wrapRef} onMouseLeave={() => setHover(null)}>
         {shapes ? (
-          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="World map of open shortage notices by country. The same figures are in the table below.">
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${W} ${H}`}
+            role="img"
+            aria-label="World map of open shortage notices by country. The same figures are in the table below."
+            className={view.k > 1 ? (dragging ? "cm-grabbing" : "cm-grab") : undefined}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerLeave={endDrag}
+          >
+            <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
             {shapes.map((s) => {
               const row = s.code ? byCode.get(s.code) : undefined;
               const active = hover?.shape.id === s.id;
@@ -142,9 +207,18 @@ export default function CountriesMap({
                 />
               );
             })}
+            </g>
           </svg>
         ) : (
           <div className="cm-ph">{mapError ? "The map couldn't load. The table below has the same figures." : "Loading map…"}</div>
+        )}
+
+        {shapes && (
+          <div className="cm-zoom" role="group" aria-label="Map zoom">
+            <button type="button" onClick={() => zoomBy(1.6)} disabled={view.k >= MAX_ZOOM} aria-label="Zoom in" title="Zoom in">+</button>
+            <button type="button" onClick={() => zoomBy(1 / 1.6)} disabled={view.k <= 1} aria-label="Zoom out" title="Zoom out">−</button>
+            <button type="button" className="cm-zoom-reset" onClick={() => setView({ k: 1, x: 0, y: 0 })} disabled={view.k === 1} aria-label="Reset zoom" title="Reset zoom">Reset</button>
+          </div>
         )}
 
         {hover && (
@@ -241,6 +315,14 @@ export default function CountriesMap({
 .cm-map svg{display:block;width:100%;height:auto}
 .cm-c{stroke:#fff;stroke-width:.6;vector-effect:non-scaling-stroke;outline:none}
 .cm-link{cursor:pointer}
+.cm-map svg.cm-grab{cursor:grab}
+.cm-map svg.cm-grabbing,.cm-map svg.cm-grabbing .cm-link{cursor:grabbing}
+.cm-map svg{touch-action:pan-y;user-select:none}
+.cm-zoom{position:absolute;top:12px;right:12px;z-index:4;display:flex;flex-direction:column;gap:4px}
+.cm-zoom button{width:32px;height:32px;border:1px solid var(--app-border,#dde3e9);border-radius:8px;background:#fff;color:var(--app-text,#0c1118);font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(11,16,48,.06)}
+.cm-zoom button:hover:not(:disabled){background:#f3f6f8}
+.cm-zoom button:disabled{opacity:.4;cursor:default}
+.cm-zoom .cm-zoom-reset{font-size:10px;font-weight:600;letter-spacing:.02em}
 .cm-on{stroke:#0b1030;stroke-width:1.4}
 .cm-ph{aspect-ratio:${W}/${H};display:flex;align-items:center;justify-content:center;font-size:13.5px;color:var(--app-text-3,#6a7280)}
 .cm-tip{position:absolute;z-index:5;width:222px;pointer-events:none;background:#0b1030;color:#fff;border-radius:10px;padding:10px 12px;font-size:12.5px;box-shadow:0 8px 24px rgba(11,16,48,.25)}

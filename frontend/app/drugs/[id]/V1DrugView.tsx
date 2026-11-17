@@ -721,7 +721,19 @@ export default function V1DrugView({
     if (scTotal > 0 && (scHit.length > 0 || scAnt.length > 0)) {
       const n = scHit.length;
       if (n === 0) {
-        return scAnt.length === scTotal ? `Anticipated shortage ${inWhere}` : `Shortage anticipated for ${scAnt.length} of ${plural(scTotal, "product")} ${inWhere}`;
+        // Nothing is short yet. A future-dated discontinuation is a market
+        // exit ahead, never an "anticipated shortage" (which reads temporary).
+        const k = scAnt.length;
+        const leaving = scAnt.filter((x) => x.p.discontinued).length;
+        if (leaving === k) {
+          const brands = new Set(scAnt.map((x) => x.p.label.split(/\s+/)[0]));
+          const brand = brands.size === 1 ? [...brands][0] : null;
+          return k === scTotal ? `Leaving the market ${inWhere}`
+            : brand ? `${plural(k, `${brand} product`)} leaving the market ${inWhere}`
+            : `${k} of ${plural(scTotal, "product")} leaving the market ${inWhere}`;
+        }
+        if (leaving > 0) return `Shortage or discontinuation ahead for ${k} of ${plural(scTotal, "product")} ${inWhere}`;
+        return k === scTotal ? `Anticipated shortage ${inWhere}` : `Shortage anticipated for ${k} of ${plural(scTotal, "product")} ${inWhere}`;
       }
       if (n === scTotal) {
         if (scDiscAll) return scExitFuture ? `Leaving the market ${inWhere}` : `Discontinued ${inWhere}`;
@@ -735,7 +747,9 @@ export default function V1DrugView({
     }
     // No register to scope against (or only unmatched notices): notice wording.
     return anticipated ? `Anticipated shortage ${inWhere}`
-      : discontinued ? (withdrawalFuture ? `Leaving the market ${inWhere}` : `Discontinued ${inWhere}`)
+      // A discontinuation that hasn't started yet is "leaving", even when the
+      // regulator gives no registration end date.
+      : discontinued ? (withdrawalFuture || (mine?.status || "").toLowerCase() === "anticipated" ? `Leaving the market ${inWhere}` : `Discontinued ${inWhere}`)
       : `Short ${inWhere}`;
   })();
   const formWord = (form: string) =>
@@ -2697,6 +2711,11 @@ function SupplyPill({ status, since, history, discontinued = false }: {
   // A discontinuation is a permanent market exit, not a temporary shortage.
   if (status === "short" && discontinued) {
     return <span className="status-pill sp-crit"><span className="d" />Discontinued</span>;
+  }
+  if (status === "anticipated" && discontinued) {
+    const d0 = since ? new Date(since + "T00:00:00Z") : null;
+    const from = d0 ? d0.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null;
+    return <span className="status-pill sp-part"><span className="d" />Leaving the market{from ? ` from ${from}` : ""}</span>;
   }
   if (status === "none") {
     // A clean pill alone hid a product that had been short on and off — say

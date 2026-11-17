@@ -244,7 +244,11 @@ function summarise(groups: SupplyGroup[]): string {
       const names = hit.slice(0, 3).map((p) => p.label).join(", ") + (hit.length > 3 ? ` +${hit.length - 3} more` : "");
       parts.push(`${g.form}: ${hit.length} of ${prods.length} product${prods.length === 1 ? "" : "s"} ${word(hit)} (${names})`);
     } else if (ant.length > 0) {
-      parts.push(`${g.form}: shortage anticipated for ${ant.length} of ${prods.length} product${prods.length === 1 ? "" : "s"}`);
+      const leaving = ant.every((p) => p.discontinued);
+      const names = ant.slice(0, 3).map((p) => p.label).join(", ") + (ant.length > 3 ? ` +${ant.length - 3} more` : "");
+      parts.push(leaving
+        ? `${g.form}: ${ant.length} of ${prods.length} product${prods.length === 1 ? "" : "s"} leaving the market (${names})`
+        : `${g.form}: shortage anticipated for ${ant.length} of ${prods.length} product${prods.length === 1 ? "" : "s"}`);
     } else if (openNotices.length > 0) {
       parts.push(`${g.form}: ${openNotices.length} shortage notice${openNotices.length === 1 ? "" : "s"} not matched to a registered product`);
     } else {
@@ -407,7 +411,9 @@ export function buildSupplyInMarket(
     const ant = ns.filter((n) => n.status === "anticipated");
     const status: SupplyStatus = active.length ? "short" : ant.length ? "anticipated" : "none";
     const use = active.length ? active : ant;
-    const disc = active.length > 0 && active.every((n) => n.discontinued);
+    // Also for a notice that has not started yet: a future-dated
+    // discontinuation is a market exit ahead, not an anticipated shortage.
+    const disc = use.length > 0 && use.every((n) => n.discontinued);
     const brand = brandOf(p.name, ingWord);
     group(p.form).products.push({
       name: p.name,
@@ -415,7 +421,7 @@ export function buildSupplyInMarket(
       label: [brand, p.strength && !brand.includes(p.strength.match(/^[\d.]+/)?.[0] ?? "\u0000") ? p.strength : null].filter(Boolean).join(" "),
       strength: p.strength,
       discontinued: disc,
-      exitDate: disc ? ((active.map((n) => n.exitDate).filter(Boolean) as string[]).sort().pop() ?? null) : null,
+      exitDate: disc ? ((use.map((n) => n.exitDate).filter(Boolean) as string[]).sort().pop() ?? null) : null,
       sponsor: p.sponsor,
       regNos: [...p.regNos].sort(),
       status,
@@ -430,7 +436,7 @@ export function buildSupplyInMarket(
     group(formOf(n.doseForm, n.productName)).notices.push({
       label: n.productName ? displayName(n.productName) : "Ingredient-level notice: no product named",
       status: n.status === "active" ? "short" : "anticipated",
-      discontinued: n.status === "active" && !!n.discontinued,
+      discontinued: !!n.discontinued,
       since: n.status === "active" ? n.start_date : n.anticipated_start_date ?? n.start_date,
       ...backFields(n.estimated_resolution_date),
       sourceUrl: n.source_url,

@@ -139,8 +139,9 @@ def product_status(h: str, reg: str) -> str | None:
         if any(digits(x) == want for x in regs.split("|")):
             return status
     for regs, label in VISIBLE_RE.findall(payload_of(h)):
-        if any(digits(x) == want for x in regs.split(",")):
-            return "short" if label.startswith("Short") else "anticipated" if label.startswith("Anticipated") else "none"
+        if any(digits(x) == want for x in re.split(r"[|,]", regs)):
+            return ("short" if label.startswith(("Short", "Discontinued"))
+                    else "anticipated" if label.startswith(("Anticipated", "Leaving the market")) else "none")
     t = text_of(h)
     for m in re.finditer(r"(?:AUST R |\b)0*" + re.escape(want) + r"\b", t):
         tail = t[m.end():m.end() + 90]
@@ -330,7 +331,8 @@ def b4_discontinued(base: str, rng: random.Random) -> Result:
             break
         tried += 1
         h = page(base, f"/drugs/{did}", "AU")
-        regs = sorted({digits(x) for regs_, st in ROW_RE.findall(h) for x in regs_.split(",") if digits(x)})
+        # A row can carry several registrations, joined with "|" or ",".
+        regs = sorted({digits(x) for regs_, st in ROW_RE.findall(h) for x in re.split(r"[|,]", regs_) if digits(x)})
         if not regs:
             continue
         quoted = ",".join(regs[:150])

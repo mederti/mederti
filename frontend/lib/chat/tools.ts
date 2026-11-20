@@ -3043,13 +3043,73 @@ async function getEligibilityStatus(args: { drug_id?: string; generic_name?: str
     rows = [];
   }
 
+  // drug_id only covers rows the resolver could map (~60% of TGA s19A titles).
+  // Before saying "nothing on the register", also match the free-text title.
+  if (rows.length === 0 && args.drug_id) {
+    try {
+      const { data: d } = await sb.from("drugs").select("generic_name").eq("id", args.drug_id).maybeSingle();
+      const name = (d?.generic_name ?? "").replace(/[%_,()]/g, "").trim();
+      if (name.length >= 4) {
+        let q2 = sb.from("regulatory_eligibility")
+          .select("id,drug_id,generic_name,brand_name,scheme,status,scheme_reference,description,listed_at,expires_at,withdrawn_at,source_url,source_name,last_verified_at")
+          .eq("country_code", country)
+          .or(`generic_name.ilike.%${name}%,brand_name.ilike.%${name}%`)
+          .order("listed_at", { ascending: false, nullsFirst: false })
+          .limit(20);
+        if (args.scheme) q2 = q2.eq("scheme", args.scheme);
+        const { data: r2 } = await q2;
+        rows = (r2 ?? []) as any[];
+      }
+    } catch { /* fall through to the no-row path */ }
+  }
+
   if (rows.length === 0) {
+    // Registers Mederti harvests in full. For these, "no row" is a real answer
+    // (the product is not on the regulator's list) as long as the harvest is
+    // fresh. Saying "Mederti doesn't index this" here was false and invited the
+    // model to improvise (2026-11-20: it told a user Tomudex/raltitrexed had a
+    // s19A approval; it has none).
+    const INDEXED: Record<string, { scheme: string; label: string; url: string }> = {
+      AU: { scheme: "tga_s19a", label: "TGA Section 19A approvals register", url: "https://www.tga.gov.au/resources/section-19a-approvals" },
+      GB: { scheme: "mhra_ssp", label: "MHRA Serious Shortage Protocols list", url: "https://www.cpe.org.uk/dispensing-and-supply/supply-chain/serious-shortage-protocols-ssps/" },
+      US: { scheme: "fda_shortage", label: "FDA Drug Shortage list", url: "https://www.accessdata.fda.gov/scripts/drugshortages/" },
+    };
+    const reg = INDEXED[country === "UK" ? "GB" : country];
+    if (reg && (!args.scheme || args.scheme === reg.scheme)) {
+      let lastHarvest: string | null = null;
+      try {
+        const { data } = await sb.from("regulatory_eligibility")
+          .select("last_verified_at")
+          .eq("scheme", reg.scheme)
+          .order("last_verified_at", { ascending: false, nullsFirst: false })
+          .limit(1);
+        lastHarvest = (data?.[0] as any)?.last_verified_at ?? null;
+      } catch { /* treat as unknown freshness */ }
+      const ageDays = lastHarvest ? (Date.now() - new Date(lastHarvest).getTime()) / 86400_000 : Infinity;
+      if (ageDays <= 3) {
+        return {
+          status: "not_on_register",
+          scheme: reg.scheme, country, drug_id: args.drug_id ?? null, generic_name: args.generic_name ?? null,
+          register_checked_at: lastHarvest,
+          source_url: reg.url,
+          hint: `This medicine has NO entry on the ${reg.label} (Mederti harvests the full register daily; last checked ${lastHarvest?.slice(0, 10)}). State that plainly: there is no current ${reg.label.replace(/ register| list/, "")} entry for it. Do NOT say an approval exists or is "already approved", and do not infer one from web_search, the shortage notice, or other countries. If the regulator's shortage notice names a different pathway (e.g. the Special Access Scheme), report that pathway as written.`,
+          confidence: { level: "high", score: 0.9, basis: `Full ${reg.label} harvested ${lastHarvest?.slice(0, 10)}; no matching entry.` } satisfies Confidence,
+        };
+      }
+      return {
+        status: "unanswerable",
+        reason: "register_stale",
+        hint: `Mederti's copy of the ${reg.label} was last refreshed ${lastHarvest ? lastHarvest.slice(0, 10) : "never"}, so it can't confirm either way. Say that, and point the user to ${reg.url}. Do NOT claim an approval exists.`,
+        country, drug_id: args.drug_id ?? null, generic_name: args.generic_name ?? null, scheme: reg.scheme,
+        confidence: { level: "low", score: 0, basis: `${reg.label} harvest is stale (last ${lastHarvest ?? "never"}).` } satisfies Confidence,
+      };
+    }
     return {
       status: "unanswerable",
       reason: "no_eligibility_on_file",
-      hint: `Eligibility for ${args.scheme ?? "this scheme"} is determined per-application by the regulator. Mederti doesn't currently index the live eligibility list for ${country}. Canonical sources: TGA s19A (tga.gov.au/resources/section-19a-approvals), MHRA SSP (cpe.org.uk/dispensing-and-supply/supply-chain/ssps/), FDA Drug Shortage (accessdata.fda.gov/scripts/drugshortages/). I can tell you whether the drug is in a declared shortage — that gates eligibility for most pathways.`,
+      hint: `Eligibility for ${args.scheme ?? "this scheme"} in ${country} is not a register Mederti harvests. Say so and point the user at the regulator. Do NOT claim an approval exists. Registers Mederti does harvest: TGA s19A (AU), MHRA SSP (GB), FDA Drug Shortage (US).`,
       country, drug_id: args.drug_id ?? null, generic_name: args.generic_name ?? null, scheme: args.scheme ?? null,
-      confidence: { level: "low", score: 0, basis: "No eligibility entries on file. Pilot coverage AU/UK/US/EU when scrapers populate regulatory_eligibility." } satisfies Confidence,
+      confidence: { level: "low", score: 0, basis: "No eligibility register indexed for this country/scheme." } satisfies Confidence,
     };
   }
 

@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import ProfileSettings from "./ProfileSettings";
+import { cleanBrandNames } from "@/lib/brand";
+import { readCountryCookie, type RiskItem, type RiskBoardResponse } from "@/lib/watchlist-risk";
 
 const ROLE_OPTIONS = [
   { value: "default",     label: "Default" },
@@ -22,8 +24,49 @@ interface WatchlistRow {
   is_active: boolean;
   notification_channels: { email: boolean; sms: boolean; webhook: string | null };
   created_at: string;
-  drugs: { generic_name: string; brand_names: string[] }[] | null;
+  // PostgREST embeds a many-to-one join (user_watchlists.drug_id → drugs) as a
+  // single OBJECT, not an array. Reading it as `drugs[0]` is what rendered every
+  // row as "Unknown drug". Typed as either so `drugOf` covers both shapes.
+  drugs: WatchedDrug | WatchedDrug[] | null;
 }
+
+interface WatchedDrug { generic_name: string | null; brand_names: string[] | null }
+
+function drugOf(row: WatchlistRow): WatchedDrug | null {
+  return (Array.isArray(row.drugs) ? row.drugs[0] : row.drugs) ?? null;
+}
+
+const monthYear = (iso: string | null): string | null => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+};
+
+// One status line per watched medicine, scoped to the user's market. Worded as
+// what the regulator data says — never "available" (absence of a notice ≠ stock).
+function statusFor(it: RiskItem, country: string): { label: string; detail: string | null; tone: "crit" | "warn" | "info" | "quiet" } {
+  switch (it.tier) {
+    case "short_now": {
+      const back = monthYear(it.est_return);
+      return { label: `Shortage in ${country}`, detail: back ? `est. resolution ${back}` : "no resolution date published", tone: "crit" };
+    }
+    case "anticipated": {
+      const start = monthYear(it.anticipated_start);
+      return { label: `Anticipated in ${country}`, detail: start ? `from ${start}` : "start date not published", tone: "warn" };
+    }
+    case "early_warning":
+      return { label: "Short in peer markets", detail: it.peers.slice(0, 5).join(", "), tone: "info" };
+    default:
+      return { label: `No shortage reported in ${country}`, detail: null, tone: "quiet" };
+  }
+}
+
+const TONE: Record<"crit" | "warn" | "info" | "quiet", { fg: string; bg: string; dot: string }> = {
+  crit:  { fg: "#b42318", bg: "#fdeef1", dot: "#dc2647" },
+  warn:  { fg: "#8a5a06", bg: "#fdf6e3", dot: "#b46708" },
+  info:  { fg: "#1d4ed8", bg: "#eaf1fe", dot: "#2563eb" },
+  quiet: { fg: "var(--app-text-4)", bg: "transparent", dot: "#9aa3ad" },
+};
 
 interface EnquiryRow {
   id: string;
@@ -83,6 +126,10 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [watchlist, setWatchlist] = useState<WatchlistRow[]>([]);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
+  // Per-drug shortage status in the user's market (risk-board API). Optional:
+  // the list renders without it, rows just omit the status line.
+  const [riskById, setRiskById] = useState<Map<string, RiskItem>>(new Map());
+  const [riskCountry, setRiskCountry] = useState("AU");
   // Row id with a watchlist write in flight (remove or email toggle) — one at a
   // time per row, so a double-click can't fire two writes from a stale row.
   const [busyRowId, setBusyRowId] = useState<string | null>(null);
@@ -109,8 +156,28 @@ export default function AccountPage() {
       .order("created_at", { ascending: false });
     // A failed load must not read as "you aren't watching anything".
     if (error) setWatchlistError("Couldn't load your watchlist just now. Refresh to try again.");
-    setWatchlist((data ?? []) as WatchlistRow[]);
+    const rows = (data ?? []) as WatchlistRow[];
+    setWatchlist(rows);
     setWatchlistLoading(false);
+    fetchRisk(rows.map(r => r.drug_id));
+  }
+
+  async function fetchRisk(ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return;
+    try {
+      const res = await fetch("/api/watchlist/risk-board", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ drug_ids: unique, country: readCountryCookie() }),
+      });
+      if (!res.ok) return;
+      const json = (await res.json()) as RiskBoardResponse;
+      setRiskCountry(json.country);
+      setRiskById(new Map(json.items.map(i => [i.drug_id, i])));
+    } catch {
+      // Status is supplementary — a failure leaves rows without a status line.
+    }
   }
 
   async function fetchEnquiries(uid: string) {
@@ -362,7 +429,15 @@ export default function AccountPage() {
 
                 {!watchlistLoading && watchlist.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {watchlist.map(row => (
+                    {watchlist.map(row => {
+                      const drug = drugOf(row);
+                      const name = drug?.generic_name?.trim() || "Unnamed medicine";
+                      const brands = cleanBrandNames(drug?.brand_names, drug?.generic_name)
+                        .filter(b => b.toLowerCase() !== name.toLowerCase());
+                      const risk = riskById.get(row.drug_id);
+                      const st = risk ? statusFor(risk, riskCountry) : null;
+                      const tone = st ? TONE[st.tone] : null;
+                      return (
                       <div key={row.id} style={{
                         background: "#fff", border: "1px solid var(--app-border)", borderRadius: 10,
                         padding: "16px 18px", display: "flex", alignItems: "center", gap: 16,
@@ -370,12 +445,23 @@ export default function AccountPage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <Link href={`/drugs/${row.drug_id}`} style={{ textDecoration: "none" }}>
                             <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", marginBottom: 2 }}>
-                              {row.drugs?.[0]?.generic_name ?? "Unknown drug"}
+                              {name}
                             </div>
                           </Link>
-                          {row.drugs?.[0]?.brand_names?.[0] && (
-                            <div style={{ fontSize: 11, color: "var(--app-text-4)" }}>
-                              {row.drugs[0].brand_names.slice(0, 2).join(", ")}
+                          {brands.length > 0 && (
+                            <div style={{ fontSize: 11, color: "var(--app-text-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {brands.slice(0, 3).join(" · ")}
+                            </div>
+                          )}
+                          {st && tone && (
+                            <div style={{
+                              display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6,
+                              fontSize: 11.5, fontWeight: 500, color: tone.fg, background: tone.bg,
+                              padding: tone.bg === "transparent" ? 0 : "2px 8px", borderRadius: 999,
+                            }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: tone.dot, flexShrink: 0 }} />
+                              {st.label}
+                              {st.detail && <span style={{ fontWeight: 400, opacity: 0.85 }}>· {st.detail}</span>}
                             </div>
                           )}
                         </div>
@@ -387,7 +473,7 @@ export default function AccountPage() {
                             onClick={() => toggleEmailAlert(row)}
                             disabled={busyRowId === row.id}
                             aria-pressed={row.notification_channels.email}
-                            aria-label={`Email alerts for ${row.drugs?.[0]?.generic_name ?? "this medicine"}`}
+                            aria-label={`Email alerts for ${name}`}
                             style={{
                               width: 36, height: 20, borderRadius: 10,
                               background: row.notification_channels.email ? "var(--teal)" : "var(--app-border-2)",
@@ -416,7 +502,8 @@ export default function AccountPage() {
                           {busyRowId === row.id ? "…" : "Remove"}
                         </button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -26,7 +26,7 @@ async function generateQuestion(): Promise<{ question: string; fallback: boolean
         {
           type: "web_search_20250305",
           name: "web_search",
-        } as any,
+        },
       ],
       system: `You are generating a single topical question for a pharmaceutical supply chain intelligence platform called Mederti.
 
@@ -53,7 +53,7 @@ Search for current pharmaceutical supply chain news, then generate ONE question.
 
     const question = response.content
       .filter((b) => b.type === "text")
-      .map((b) => (b as any).text)
+      .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim()
       .replace(/^["']|["']$/g, "");

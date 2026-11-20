@@ -60,6 +60,7 @@ export function ErrorBoundary({
           >
             Try again
           </button>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- error boundary: a hard navigation deliberately discards the crashed client tree instead of a soft <Link> transition */}
           <a
             href="/"
             style={{

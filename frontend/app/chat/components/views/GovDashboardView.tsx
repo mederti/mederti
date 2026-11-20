@@ -143,7 +143,7 @@ export function GovDashboardView() {
      Was a Tailwind/zinc default palette from the original HTML mockup. */
   --bg:#fff; --bg-2:#fafbfc; --bg-3:#eef2f5; --card:#fff; --border:#e8ecf0; --border-2:#dde3e9;
   --text:#0c1118; --text-2:#3b434e; --text-3:#6a7280; --text-4:#98a1ac;
-  --teal:#0fa676; --teal-l:#0c8a62; --teal-bg:#e8f6f0; --teal-b:#bce4d4;
+  --teal:var(--brand-teal); --teal-l:var(--brand-teal-d); --teal-bg:var(--brand-tint); --teal-b:#C6F3E6;
   --crit:#dc2647; --crit-bg:#fdeef1; --crit-b:#f8cdd6;
   --med:#b46708; --med-bg:#fdf6e9; --med-b:#f3dcae;
   --ok:#0fa676; --ok-bg:#e8f6f0; --ok-b:#bce4d4;

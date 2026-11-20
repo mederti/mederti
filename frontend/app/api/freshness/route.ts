@@ -61,7 +61,7 @@ export async function GET() {
   const STALE_HOURS = 168; // matches frontend/lib/chat/tools.ts
   const now = Date.now();
 
-  const regulators = (data ?? []).map((r: any) => {
+  const regulators = (data ?? []).map((r) => {
     let hours_since_scrape: number | null = null;
     let freshness_label = "freshness unknown";
     let is_stale = true;

@@ -184,18 +184,18 @@ export default function GlobeSection() {
         ctx.stroke();
 
         // Covered countries pulsing teal — colour deepens and outline
-        // thickens with intensity (#2dd4bf → #0d9488 fill, → #0f766e stroke).
+        // thickens with intensity (aqua #44EABC → link teal #127A63 fill, → #0B5A49 stroke).
         for (let i = 0; i < highlights.length; i++) {
           const k = intensity(i, t);
           if (k < 0.02) continue;
-          const cr = Math.round(lerp(45, 13, k));
-          const cg = Math.round(lerp(212, 148, k));
-          const cb = Math.round(lerp(191, 136, k));
+          const cr = Math.round(lerp(68, 18, k));
+          const cg = Math.round(lerp(234, 122, k));
+          const cb = Math.round(lerp(188, 99, k));
           ctx.beginPath();
           path(highlights[i]);
           ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.12 + 0.38 * k})`;
           ctx.fill();
-          ctx.strokeStyle = `rgba(${Math.round(lerp(45, 15, k))},${Math.round(lerp(180, 118, k))},${Math.round(lerp(165, 110, k))},${0.25 + 0.6 * k})`;
+          ctx.strokeStyle = `rgba(${Math.round(lerp(40, 11, k))},${Math.round(lerp(190, 90, k))},${Math.round(lerp(150, 73, k))},${0.25 + 0.6 * k})`;
           ctx.lineWidth = 0.5 + 0.9 * k;
           ctx.stroke();
         }
@@ -225,11 +225,11 @@ export default function GlobeSection() {
             const pulse = 0.5 + 0.5 * Math.sin(t * 2 + i * GOLDEN_ANGLE);
             ctx.beginPath();
             ctx.arc(p[0], p[1], 3.5 + 3.5 * pulse, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(13,148,136,${0.04 + 0.18 * (1 - pulse)})`;
+            ctx.fillStyle = `rgba(18,122,99,${0.04 + 0.18 * (1 - pulse)})`;
             ctx.fill();
             ctx.beginPath();
             ctx.arc(p[0], p[1], 2, 0, Math.PI * 2);
-            ctx.fillStyle = "#0d9488";
+            ctx.fillStyle = "#127A63";
             ctx.fill();
           }
         }

@@ -61,6 +61,7 @@ export function PriceTrendChart({
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setState("loading");
     fetch(`/api/insights/price-trends?drug_id=${encodeURIComponent(drugId)}&country=${encodeURIComponent(country)}&months=${months}&forward=${forward}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -137,7 +138,7 @@ export function PriceTrendChart({
   return (
     <div className="ptrend">
       <style>{`
-        .ptrend{--t:#0f9e73;--t-l:#0c8a62;--band:rgba(15,158,115,.16);--line:#0f9e73;
+        .ptrend{--t:var(--teal);--t-l:var(--teal-l);--band:rgba(18,122,99,.16);--line:var(--teal);
           --ax:#98a1ac;--grid:#eef2f5;--now:#0f9e73;--conc:#BA7517;}
         .ptrend .pt-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
         .ptrend .pt-title{font-size:15px;font-weight:500;color:#0c1118}
@@ -166,7 +167,7 @@ export function PriceTrendChart({
         .ptrend .pt-dot{fill:#fff;stroke:var(--line);stroke-width:2}
         .ptrend .pt-skel{height:200px;border-radius:8px;background:linear-gradient(90deg,#eef2f5 25%,#f6f8fa 50%,#eef2f5 75%);background-size:200% 100%;animation:ptsk 1.3s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#6a7280;font-size:12.5px;font-weight:500}
         .ptrend .pt-skel-bars{display:flex;align-items:flex-end;gap:5px;height:28px}
-        .ptrend .pt-skel-bars i{width:6px;border-radius:2px;background:#0fa676;opacity:.75;animation:ptbar 1s ease-in-out infinite}
+        .ptrend .pt-skel-bars i{width:6px;border-radius:2px;background:var(--t);opacity:.75;animation:ptbar 1s ease-in-out infinite}
         .ptrend .pt-skel-bars i:nth-child(2){animation-delay:.15s}
         .ptrend .pt-skel-bars i:nth-child(3){animation-delay:.3s}
         .ptrend .pt-skel-bars i:nth-child(4){animation-delay:.45s}

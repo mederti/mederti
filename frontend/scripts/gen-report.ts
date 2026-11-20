@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- one-off dev script reading untyped REST / tool-result JSON; not shipped. */
 /* Standalone drug-report HTML generator — data-driven from Supabase, using the
  * same template as the live V1 product page. Run: npx tsx scripts/gen-report.ts */
 import fs from "fs";

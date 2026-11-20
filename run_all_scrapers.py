@@ -82,6 +82,7 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "hpra":            ("backend.scrapers.hpra_scraper",                 "HpraScraper"),
     "lakemedelsverket":("backend.scrapers.lakemedelsverket_scraper",     "LakemedelsverketScraper"),
     "sukl":            ("backend.scrapers.sukl_scraper",                 "SuklScraper"),
+    "slovakia_sukl":   ("backend.scrapers.slovakia_sukl_scraper",        "SlovakiaSuklScraper"),
     "ogyei":           ("backend.scrapers.ogyei_scraper",                "OgyeiScraper"),
     "swissmedic":      ("backend.scrapers.swissmedic_scraper",           "SwissmedicScraper"),
     "noma":            ("backend.scrapers.noma_scraper",                 "NoMAScraper"),

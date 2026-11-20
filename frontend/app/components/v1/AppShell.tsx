@@ -31,6 +31,7 @@ export default function AppShell({
   chat,
   chatPanel,
   chatScope = "page",
+  chatTop,
   fill = false,
   mobileTabs = true,
 }: {
@@ -61,6 +62,12 @@ export default function AppShell({
    * for pages whose own class names would collide with chat.css (drug, search).
    */
   chatScope?: "page" | "panel";
+  /**
+   * A fixed strip at the top of the middle chat column, above the chat — the
+   * drug page puts its search bar here. Hidden with the column below 1080px,
+   * so pages should keep a fallback in their content for narrow screens.
+   */
+  chatTop?: ReactNode;
   /**
    * Viewport-locked content column; children own their scrolling. The chat-first
    * surfaces (/chat, /insights) use this: chat.css's scope and tokens cover the
@@ -93,7 +100,7 @@ export default function AppShell({
       <div className={shellClass}>
         <V1Sidebar />
         {hasChat ? (
-          <ChatColumn className={`chat-col${panelScope ? " mederti-chat-root" : ""}`}>{middle}</ChatColumn>
+          <ChatColumn className={`chat-col${panelScope ? " mederti-chat-root" : ""}`} top={chatTop}>{middle}</ChatColumn>
         ) : null}
         <div className={mainClass}>
           {fill ? children : <div className={`dg-main ${contentClassName}`.trim()}>{children}</div>}

@@ -79,7 +79,7 @@ export default function CookieConsent() {
         We&apos;d like to use optional analytics cookies (PostHog, EU-hosted) to understand how
         the product is used, and Google Ads cookies to measure our advertising. Essential
         cookies — login and your country preference — are always on. See our{" "}
-        <Link href="/privacy" style={{ color: "var(--teal, #0fa676)", textDecoration: "none" }}>
+        <Link href="/privacy" style={{ color: "var(--teal, #127A63)", textDecoration: "none" }}>
           Privacy Policy
         </Link>
         .
@@ -100,8 +100,8 @@ export default function CookieConsent() {
           onClick={() => choose("granted")}
           style={{
             ...buttonBase,
-            background: "var(--teal, #0fa676)",
-            border: "1px solid var(--teal, #0fa676)",
+            background: "var(--navy, #090E2C)",
+            border: "1px solid var(--navy, #090E2C)",
             color: "#fff",
           }}
         >

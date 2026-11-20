@@ -205,7 +205,7 @@ export default function SignupClient({ stats }: { stats: SignupStats }) {
           {reasonCopy && (
             <p style={{
               margin: "14px 0 0", padding: "10px 14px", borderRadius: 8,
-              background: "var(--green-bg, #e8f6f0)", border: "1px solid #bce4d4",
+              background: "var(--acc-soft, #E6FBF5)", border: "1px solid #C6F3E6",
               fontSize: 13, lineHeight: 1.5, color: "var(--app-text)",
             }}>
               {reasonCopy}
@@ -293,7 +293,7 @@ export default function SignupClient({ stats }: { stats: SignupStats }) {
             disabled={loading}
             style={{
               width: "100%", padding: "12px", borderRadius: 8,
-              background: loading ? "var(--app-bg-2)" : "var(--teal)",
+              background: loading ? "var(--app-bg-2)" : "var(--navy)",
               color: loading ? "var(--app-text-4)" : "#fff",
               border: "none", fontSize: 14, fontWeight: 600,
               cursor: loading ? "not-allowed" : "pointer",

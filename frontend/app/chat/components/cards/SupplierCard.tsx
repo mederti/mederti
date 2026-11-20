@@ -34,6 +34,7 @@ export function SupplierCard({
     .map((s) => new Date(s.start_date as string).getTime())
     .sort((a, b) => a - b)[0];
   const monthsRunning = oldestActive
+    // eslint-disable-next-line react-hooks/purity -- display-only relative/fallback time; recomputing on re-render is the intended behaviour
     ? Math.max(1, Math.round((Date.now() - oldestActive) / (1000 * 60 * 60 * 24 * 30)))
     : null;
   const sinceLabel = oldestActive

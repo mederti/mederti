@@ -77,6 +77,11 @@ axis in the source — instead the axis is temporary-vs-permanent:
         (still within its discontinuation window; a resolution/return is
         anticipated per Fecha estimada de fin, so this is functionally an
         active shortage from the market's perspective)
+    Tipo "Temporal" whose Fecha estimada de fin passed > 30 days ago
+                                          -> status = "resolved"
+        (the register is cumulative and keeps lapsed windows listed; with no
+        "Ampliado" extension the temporary discontinuation is over by
+        DIGEMID's own dates. end_date = Fecha estimada de fin.)
     Tipo de discontinuación = "Definitiva" -> status = "resolved"
         (no return is coming; treating this as an ongoing "active" shortage
         would be misleading — it is a permanent market withdrawal, closer in
@@ -99,7 +104,7 @@ crontab_fixed.txt. This file only implements the scraper class.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 
 from backend.scrapers.base_scraper import BaseScraper, ScraperError
 from backend.utils.reason_mapper import map_reason_category
@@ -230,6 +235,14 @@ class PeruDIGEMIDScraper(BaseScraper):
         )
         return normalised
 
+    # Days after a Temporal window's "fecha fin" before the notice is treated
+    # as over (see _normalise_record). DIGEMID can post an extension late.
+    WINDOW_GRACE_DAYS: int = 30
+
+    @classmethod
+    def _window_lapse_cutoff(cls) -> str:
+        return (date.today() - timedelta(days=cls.WINDOW_GRACE_DAYS)).isoformat()
+
     def _normalise_record(self, rec: dict) -> dict | None:
         """Convert a single DIGEMID record to a normalised shortage event dict."""
         # Prefer the active ingredient (IFA) for drug matching — brand names
@@ -250,7 +263,16 @@ class PeruDIGEMIDScraper(BaseScraper):
         # "Definitiva" -> resolved (permanent market withdrawal)
         # See module docstring "Status mapping rationale" for justification.
         tipo_discontinuacion = str(rec.get("tipo_discontinuacion") or "").strip().lower()
+        fecha_fin = self._parse_date(rec.get("fecha_fin"))
         if tipo_discontinuacion == "definitiva":
+            status = "resolved"
+        elif fecha_fin and fecha_fin < self._window_lapse_cutoff():
+            # DIGEMID's register is cumulative: a Temporal notice stays listed
+            # long after its window closes (rows end as far back as 2019). A
+            # window that ended more than WINDOW_GRACE_DAYS ago with no
+            # extension ("Ampliado") filed is over by DIGEMID's own record —
+            # counting it as a live shortage overstated PE by ~1,000 rows.
+            # The grace period lets a late extension land before we close it.
             status = "resolved"
         else:
             # "temporal" (default) — including all "Ampliado(N)" extensions,
@@ -263,12 +285,27 @@ class PeruDIGEMIDScraper(BaseScraper):
             or self._parse_date(rec.get("fecha_reporte"))
             or date.today().isoformat()
         )
-        end_date = self._parse_date(rec.get("fecha_fin"))
+        end_date = fecha_fin
         estimated_resolution_date = end_date if status == "active" else None
         if status == "resolved" and not end_date:
             # Definitiva rows publish no "fecha fin" (no return expected) —
             # use the report date as the effective resolution/closure date.
             end_date = self._parse_date(rec.get("fecha_reporte"))
+            if end_date and end_date < start_date:
+                # Reported before the withdrawal took effect (271 rows, Nov
+                # 2026). The market exit happens on fecha_inicio, so close it
+                # there; the report date would break chk_dates and the row
+                # would never be written.
+                end_date = start_date
+        if end_date and end_date < start_date:
+            # A Temporal window that "ends" before it starts is a source typo
+            # (1 row, Nov 2026). chk_dates rejects it and we don't invent
+            # either date: skip it visibly.
+            self.log.warning(
+                "DIGEMID: window ends before it starts; skipped",
+                extra={"codigo": rec.get("codigo"), "from": start_date, "to": end_date},
+            )
+            return None
 
         # ── Reason ────────────────────────────────────────────────────────
         raw_reason = str(rec.get("motivos") or "").strip().strip(",")

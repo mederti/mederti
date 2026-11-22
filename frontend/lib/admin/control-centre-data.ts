@@ -62,6 +62,7 @@ interface ProfileRow {
   role: string | null;
   created_at: string | null;
   countries: string[] | null;
+  is_admin: boolean | null;
 }
 
 async function fetchAllProfiles(admin: ReturnType<typeof getSupabaseAdmin>) {
@@ -70,7 +71,7 @@ async function fetchAllProfiles(admin: ReturnType<typeof getSupabaseAdmin>) {
   for (let page = 0; page <= 50; page++) {
     const { data, error } = await admin
       .from("user_profiles")
-      .select("user_id, role, created_at, countries")
+      .select("user_id, role, created_at, countries, is_admin")
       .range(page * pageSize, page * pageSize + pageSize - 1);
     if (error) throw new Error(error.message);
     profiles.push(...((data ?? []) as ProfileRow[]));
@@ -245,6 +246,197 @@ async function fetchPostHogTraffic(): Promise<TrafficData> {
 
 export async function fetchTraffic(): Promise<TrafficData> {
   return (await fetchVercelTraffic()) ?? (await fetchPostHogTraffic());
+}
+
+/* ─── Product usage (migrations 041 demand_signals + 042 ai_request_log) ── */
+
+const USAGE_WINDOW_DAYS = 30;
+const INTERNAL_DOMAIN = "@mederti.com";
+
+type SignalRow = { signal_type: string; drug_id: string | null; session_hash: string | null; occurred_at: string };
+type AiRow = { route: string; user_id: string | null; status: string; input_tokens: number | null; output_tokens: number | null; occurred_at: string };
+
+/** Page past PostgREST's 1,000-row cap. Returns null if the table is missing. */
+async function fetchSince<T>(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  table: string,
+  cols: string,
+  sinceIso: string,
+): Promise<T[] | null> {
+  const out: T[] = [];
+  const pageSize = 1000;
+  for (let page = 0; page < 50; page++) {
+    const { data, error } = await admin
+      .from(table)
+      .select(cols)
+      .gte("occurred_at", sinceIso)
+      .order("occurred_at", { ascending: true })
+      .range(page * pageSize, page * pageSize + pageSize - 1);
+    if (error) {
+      if (error.code === "PGRST205" || error.code === "42P01") return null;
+      throw new Error(`${table}: ${error.message}`);
+    }
+    out.push(...((data ?? []) as T[]));
+    if (!data || data.length < pageSize) break;
+  }
+  return out;
+}
+
+export type UsageData =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      window_days: number;
+      tracking_since: string | null;
+      daily: { date: string; searches: number; drug_views: number; sessions: number; chats: number }[];
+      totals: {
+        searches: number;
+        drug_views: number;
+        chat_drug_mentions: number;
+        watchlist_adds: number;
+        enquiries: number;
+        visitor_days: number;
+        chats: number;
+        chat_users_external: number;
+        chat_users_internal: number;
+        chats_anonymous: number;
+        ai_calls: number;
+        ai_errors: number;
+        tokens_in: number;
+        tokens_out: number;
+      };
+      top_drugs: { name: string; value: number }[];
+      chat_users: { masked_email: string; internal: boolean; chats: number; last_at: string }[];
+      ai_by_route: { name: string; value: number }[];
+    };
+
+async function fetchUsage(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  authUsers: AuthUserLite[],
+  profiles: ProfileRow[],
+  now: number,
+): Promise<UsageData> {
+  const DAY = 86_400_000;
+  const sinceIso = new Date(now - USAGE_WINDOW_DAYS * DAY).toISOString();
+  const [signals, ai, firstSignal, firstAi] = await Promise.all([
+    fetchSince<SignalRow>(admin, "demand_signals", "signal_type, drug_id, session_hash, occurred_at", sinceIso),
+    fetchSince<AiRow>(admin, "ai_request_log", "route, user_id, status, input_tokens, output_tokens, occurred_at", sinceIso),
+    admin.from("demand_signals").select("occurred_at").order("occurred_at", { ascending: true }).limit(1),
+    admin.from("ai_request_log").select("occurred_at").order("occurred_at", { ascending: true }).limit(1),
+  ]);
+  if (signals === null || ai === null) {
+    return {
+      available: false,
+      reason: `Table ${signals === null ? "demand_signals (migration 041)" : "ai_request_log (migration 042)"} is missing in this database.`,
+    };
+  }
+
+  const firsts = [firstSignal.data?.[0]?.occurred_at, firstAi.data?.[0]?.occurred_at].filter(Boolean) as string[];
+  const tracking_since = firsts.length ? firsts.sort()[0] : null;
+
+  // Daily series. session_hash uses a salt that rotates daily, so distinct
+  // hashes are only meaningful within one UTC day ("visitor-days").
+  const days = new Map<string, { searches: number; drug_views: number; sessions: Set<string>; chats: number }>();
+  for (let i = USAGE_WINDOW_DAYS - 1; i >= 0; i--) {
+    days.set(dayKey(new Date(now - i * DAY)), { searches: 0, drug_views: 0, sessions: new Set(), chats: 0 });
+  }
+  const typeCounts = new Map<string, number>();
+  const drugSessions = new Map<string, Set<string>>();
+  for (const r of signals) {
+    typeCounts.set(r.signal_type, (typeCounts.get(r.signal_type) ?? 0) + 1);
+    const d = days.get(r.occurred_at.slice(0, 10));
+    if (d) {
+      if (r.signal_type === "search") d.searches++;
+      if (r.signal_type === "drug_view") d.drug_views++;
+      if (r.session_hash) d.sessions.add(r.session_hash);
+    }
+    if (r.drug_id && (r.signal_type === "drug_view" || r.signal_type === "search")) {
+      const key = r.drug_id;
+      if (!drugSessions.has(key)) drugSessions.set(key, new Set());
+      drugSessions.get(key)!.add(`${r.occurred_at.slice(0, 10)}|${r.session_hash ?? "none"}`);
+    }
+  }
+
+  // AI calls: /api/chat is user-initiated; everything else (briefings, cron,
+  // chips) is reported by route only.
+  const emailOf = new Map(authUsers.map((u) => [u.id, u.email]));
+  const adminIds = new Set(profiles.filter((p) => p.is_admin).map((p) => p.user_id));
+  const isInternal = (id: string) =>
+    adminIds.has(id) || (emailOf.get(id) ?? "").toLowerCase().endsWith(INTERNAL_DOMAIN);
+  const routeCounts = new Map<string, number>();
+  const chatByUser = new Map<string, { chats: number; last_at: string }>();
+  let chats = 0, chats_anonymous = 0, ai_errors = 0, tokens_in = 0, tokens_out = 0;
+  for (const r of ai) {
+    routeCounts.set(r.route, (routeCounts.get(r.route) ?? 0) + 1);
+    if (r.status !== "success") ai_errors++;
+    tokens_in += r.input_tokens ?? 0;
+    tokens_out += r.output_tokens ?? 0;
+    if (r.route !== "/api/chat") continue;
+    chats++;
+    const d = days.get(r.occurred_at.slice(0, 10));
+    if (d) d.chats++;
+    if (!r.user_id) { chats_anonymous++; continue; }
+    const cur = chatByUser.get(r.user_id) ?? { chats: 0, last_at: r.occurred_at };
+    cur.chats++;
+    if (r.occurred_at > cur.last_at) cur.last_at = r.occurred_at;
+    chatByUser.set(r.user_id, cur);
+  }
+  const chatUserIds = [...chatByUser.keys()];
+
+  // Resolve names for the most-viewed drugs (distinct visitor-days, not raw hits).
+  const topDrugIds = [...drugSessions.entries()]
+    .sort((a, b) => b[1].size - a[1].size)
+    .slice(0, 8);
+  let nameOf = new Map<string, string>();
+  if (topDrugIds.length) {
+    const { data } = await admin
+      .from("drugs")
+      .select("id, generic_name")
+      .in("id", topDrugIds.map(([id]) => id));
+    nameOf = new Map(((data ?? []) as { id: string; generic_name: string }[]).map((d) => [d.id, d.generic_name]));
+  }
+
+  return {
+    available: true,
+    window_days: USAGE_WINDOW_DAYS,
+    tracking_since,
+    daily: [...days.entries()].map(([date, d]) => ({
+      date,
+      searches: d.searches,
+      drug_views: d.drug_views,
+      sessions: d.sessions.size,
+      chats: d.chats,
+    })),
+    totals: {
+      searches: typeCounts.get("search") ?? 0,
+      drug_views: typeCounts.get("drug_view") ?? 0,
+      chat_drug_mentions: typeCounts.get("chip_click") ?? 0,
+      watchlist_adds: typeCounts.get("watchlist_add") ?? 0,
+      enquiries: typeCounts.get("enquiry") ?? 0,
+      visitor_days: [...days.values()].reduce((a, d) => a + d.sessions.size, 0),
+      chats,
+      chat_users_external: chatUserIds.filter((id) => !isInternal(id)).length,
+      chat_users_internal: chatUserIds.filter(isInternal).length,
+      chats_anonymous,
+      ai_calls: ai.length,
+      ai_errors,
+      tokens_in,
+      tokens_out,
+    },
+    top_drugs: topDrugIds.map(([id, s]) => ({ name: nameOf.get(id) ?? "Unknown drug", value: s.size })),
+    chat_users: chatUserIds
+      .map((id) => ({
+        masked_email: maskEmail(emailOf.get(id) ?? null),
+        internal: isInternal(id),
+        chats: chatByUser.get(id)!.chats,
+        last_at: chatByUser.get(id)!.last_at,
+      }))
+      .sort((a, b) => b.chats - a.chats)
+      .slice(0, 8),
+    ai_by_route: [...routeCounts.entries()]
+      .map(([name, value]) => ({ name: name.replace(/^\/api\//, ""), value }))
+      .sort((a, b) => b.value - a.value),
+  };
 }
 
 export async function getControlCentreData() {
@@ -437,6 +629,8 @@ export async function getControlCentreData() {
       created_at: u.created_at,
     }));
 
+  const usage = await fetchUsage(admin, authUsers, profiles, now);
+
   // ── Derived system + alert signals (honest: presence/reachability, not pings) ──
   const last24 = ingestCounts[ingestCounts.length - 1];
   const ingested24h = last24 ? last24.new_events + last24.verified : 0;
@@ -510,6 +704,7 @@ export async function getControlCentreData() {
     signups_daily,
     latest_signups,
     traffic,
+    usage,
     revenue: {
       available: false as const,
       reason: "Billing is not live. Wire Stripe here at launch.",

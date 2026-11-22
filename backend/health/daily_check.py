@@ -140,6 +140,22 @@ def run_scenario_suite() -> tuple[Finding, dict | None]:
         ],
     }
     metrics = {"scenarios": len(results), "failed": len(failed), "known_gaps": len(gaps)}
+    # A check that crashed on HTTP 429/403 never looked at the data: the
+    # site's firewall refused the monitor. Say that, don't call it a mismatch.
+    blocked = [r for r in failed
+               if any(("HTTP Error 429" in x or "HTTP Error 403" in x) for x in (r.get("failures") or []))]
+    if blocked:
+        metrics["blocked_by_site"] = len(blocked)
+    if blocked and len(blocked) == len(failed):
+        return Finding(
+            name, SEV_ERROR,
+            f"Scenario suite BLOCKED by the live site's firewall: {len(blocked)} check(s) could not run",
+            detail="www.mederti.com answered HTTP 429/403, so these scenarios checked nothing. "
+                   "Add a Vercel firewall Bypass rule for header x-mederti-monitor = MEDERTI_MONITOR_TOKEN "
+                   "and set that env var on the runner.",
+            metrics=metrics,
+            samples=[r["id"] for r in blocked],
+        ), summary
     if not failed:
         return Finding(name, SEV_OK, f"All {len(results) - len(gaps)} scenarios pass on the live site",
                        metrics=metrics), summary

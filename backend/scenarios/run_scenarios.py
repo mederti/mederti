@@ -68,12 +68,41 @@ def sb_count(path: str) -> int:
 _page_cache: dict[tuple, str] = {}
 
 
+# Optional shared secret sent on every live-site request so the Vercel
+# firewall can exempt this monitor (a WAF custom rule: header
+# x-mederti-monitor equals MEDERTI_MONITOR_TOKEN → Bypass). Without it the
+# 2026-11-20 rate-limit/challenge rules answer the suite with 429.
+MONITOR_TOKEN = os.environ.get("MEDERTI_MONITOR_TOKEN", "").strip()
+SITE_GAP_S = float(os.environ.get("MEDERTI_SCENARIO_GAP_S", "1.0"))  # politeness gap between site requests
+_last_site_hit = [0.0]
+
+
+def _site_get(url: str, headers: dict) -> bytes:
+    """GET the live site: paced, monitor header attached, 429/503 retried
+    with Retry-After backoff. A persistent 429 still raises (→ failed check)."""
+    if MONITOR_TOKEN:
+        headers = {**headers, "x-mederti-monitor": MONITOR_TOKEN}
+    for attempt in range(4):
+        wait = SITE_GAP_S - (time.time() - _last_site_hit[0])
+        if wait > 0:
+            time.sleep(wait)
+        _last_site_hit[0] = time.time()
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=180) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 503) or attempt == 3:
+                raise
+            retry_after = e.headers.get("Retry-After", "")
+            time.sleep(min(float(retry_after) if retry_after.isdigit() else 10 * (attempt + 1), 60))
+    raise RuntimeError("unreachable")
+
+
 def page(base: str, path: str, country: str) -> str:
     key = (path, country)
     if key not in _page_cache:
-        req = urllib.request.Request(base + path, headers={"Cookie": f"mederti-country={country}", "User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=180) as r:
-            _page_cache[key] = r.read().decode("utf-8", "replace")
+        body = _site_get(base + path, {"Cookie": f"mederti-country={country}", "User-Agent": UA})
+        _page_cache[key] = body.decode("utf-8", "replace")
     return _page_cache[key]
 
 
@@ -89,9 +118,7 @@ def payload_of(h: str) -> str:
 
 
 def api(base: str, path: str) -> dict:
-    req = urllib.request.Request(base + path, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=180) as r:
-        return json.load(r)
+    return json.loads(_site_get(base + path, {"User-Agent": UA}))
 
 
 def digits(s: str | None) -> str:

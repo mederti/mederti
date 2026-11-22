@@ -15,6 +15,39 @@ interface SourceFreshness {
   last_scraped_at: string | null;
   hours_since_scrape: number | null;
   status: "ok" | "stale" | "never";
+  last_error?: { error: string; at: string } | null;
+}
+
+type Severity = "ok" | "info" | "warn" | "error";
+
+interface HealthFinding {
+  detector: string;
+  severity: Severity;
+  headline: string;
+  detail?: string;
+  metrics?: Record<string, unknown>;
+  samples?: unknown[];
+}
+
+interface ScenarioResult {
+  id: string;
+  title: string | null;
+  status: string;
+  passed: number | null;
+  failed: number | null;
+  failures: string[];
+}
+
+interface HealthRun {
+  id: string;
+  run_at: string;
+  runner: string;
+  overall: "ok" | "warn" | "error";
+  errors: number;
+  warnings: number;
+  findings?: HealthFinding[];
+  scenarios?: { date?: string; base?: string; results?: ScenarioResult[] } | null;
+  duration_s?: number | null;
 }
 
 interface FreshnessResponse {
@@ -28,7 +61,15 @@ interface FreshnessResponse {
     recent_shortages_48h: number;
   };
   sources: SourceFreshness[];
+  health?: { available: boolean; latest: HealthRun | null; history: HealthRun[] };
 }
+
+const SEV_COLOR: Record<Severity, { fg: string; bg: string; label: string }> = {
+  ok:    { fg: "#0fa676", bg: "#e8f6f0", label: "ok" },
+  info:  { fg: "#475569", bg: "#f1f5f9", label: "info" },
+  warn:  { fg: "#b45309", bg: "#fef3c7", label: "warn" },
+  error: { fg: "#dc2626", bg: "#fee2e2", label: "error" },
+};
 
 const STATUS_COLOR: Record<SourceFreshness["status"], { fg: string; bg: string; label: string }> = {
   ok:    { fg: "#0fa676", bg: "#e8f6f0", label: "ok" },
@@ -203,6 +244,8 @@ export default function AdminFreshnessPage() {
               />
             </div>
 
+            <HealthPanel health={data.health} generatedAt={data.generated_at} />
+
             <div
               style={{
                 background: "#fff",
@@ -231,7 +274,26 @@ export default function AdminFreshnessPage() {
                     })
                     .map((s) => (
                       <tr key={s.abbreviation} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <Td bold>{s.abbreviation}</Td>
+                        <Td bold>
+                          {s.abbreviation}
+                          {s.last_error && (
+                            <div
+                              title={s.last_error.error}
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 400,
+                                color: "#dc2626",
+                                maxWidth: 360,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                marginTop: 2,
+                              }}
+                            >
+                              Last run failed: {s.last_error.error}
+                            </div>
+                          )}
+                        </Td>
                         <Td mono>{s.country_code}</Td>
                         <Td muted>{s.region ?? "—"}</Td>
                         <Td align="right" mono>
@@ -378,5 +440,145 @@ function Td({
     >
       {children}
     </td>
+  );
+}
+
+function HealthPanel({ health, generatedAt }: { health?: FreshnessResponse["health"]; generatedAt: string }) {
+  const box: React.CSSProperties = {
+    background: "#fff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 12,
+    padding: "18px 20px",
+    marginBottom: 28,
+  };
+  if (!health || !health.available) {
+    return (
+      <div style={box}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Daily data-quality check</h2>
+        <p style={{ fontSize: 13, color: "#b45309", margin: "6px 0 0" }}>
+          Not available yet: the data_health_runs table (migration 079) hasn&apos;t been applied to this database.
+        </p>
+      </div>
+    );
+  }
+  const run = health.latest;
+  if (!run) {
+    return (
+      <div style={box}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Daily data-quality check</h2>
+        <p style={{ fontSize: 13, color: "#64748b", margin: "6px 0 0" }}>
+          No run recorded yet. It runs daily after the 02:00 UTC Railway scrape.
+        </p>
+      </div>
+    );
+  }
+  // Age relative to the API response time (keeps render pure).
+  const ageH = (Date.parse(generatedAt) - Date.parse(run.run_at)) / 3_600_000;
+  const overdue = ageH > 30;
+  const findings = (run.findings ?? [])
+    .slice()
+    .sort((a, b) => {
+      const o: Record<Severity, number> = { error: 0, warn: 1, info: 2, ok: 3 };
+      return o[a.severity] - o[b.severity];
+    });
+  const scenarios = run.scenarios?.results ?? [];
+
+  return (
+    <div style={box}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Daily data-quality check</h2>
+        <span style={{ fontSize: 12, color: overdue ? "#dc2626" : "#64748b" }}>
+          Last run {formatHours(ageH)} ago · {new Date(run.run_at).toLocaleString()} · {run.runner}
+          {run.duration_s ? ` · ${Math.round(run.duration_s / 60)} min` : ""}
+          {overdue ? " · OVERDUE (expected daily)" : ""}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, margin: "12px 0 14px", flexWrap: "wrap" }}>
+        <SevPill sev={run.overall} text={`${run.overall} · ${run.errors} error(s), ${run.warnings} warning(s)`} />
+        {health.history.length > 1 && (
+          <span style={{ display: "inline-flex", gap: 3, alignItems: "center", marginLeft: 8 }} title="Last 14 runs, newest first">
+            {health.history.map((h) => (
+              <span
+                key={h.id}
+                title={`${new Date(h.run_at).toLocaleString()}: ${h.overall} (${h.errors}E/${h.warnings}W)`}
+                style={{ width: 10, height: 10, borderRadius: 2, background: SEV_COLOR[h.overall].fg }}
+              />
+            ))}
+          </span>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gap: 8 }}>
+        {findings.map((f) => (
+          <details key={f.detector} style={{ borderTop: "1px solid #f1f5f9", paddingTop: 8 }}>
+            <summary style={{ cursor: "pointer", fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
+              <SevPill sev={f.severity} text={f.severity} />
+              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: "#64748b" }}>{f.detector}</span>
+              <span>{f.headline}</span>
+            </summary>
+            <div style={{ fontSize: 12, color: "#475569", padding: "8px 0 4px 4px" }}>
+              {f.detail && <p style={{ margin: "0 0 6px" }}>{f.detail.split("\n")[0]}</p>}
+              {f.samples && f.samples.length > 0 && (
+                <ul style={{ margin: 0, paddingLeft: 18, fontFamily: "ui-monospace, monospace", fontSize: 11 }}>
+                  {f.samples.slice(0, 20).map((x, i) => (
+                    <li key={i} style={{ wordBreak: "break-word" }}>{typeof x === "string" ? x : JSON.stringify(x)}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </details>
+        ))}
+      </div>
+
+      {scenarios.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8", marginBottom: 6 }}>
+            Live-site scenarios ({run.scenarios?.base})
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <tbody>
+              {scenarios.map((r) => (
+                <tr key={r.id} style={{ borderTop: "1px solid #f1f5f9" }} title={r.failures.join("\n")}>
+                  <td style={{ padding: "5px 8px 5px 0", fontFamily: "ui-monospace, monospace", width: 70 }}>{r.id}</td>
+                  <td style={{ padding: "5px 8px", width: 90 }}>
+                    <SevPill
+                      sev={r.status === "PASS" ? "ok" : r.status === "FAIL" ? "error" : "info"}
+                      text={r.status.toLowerCase()}
+                    />
+                  </td>
+                  <td style={{ padding: "5px 8px", color: "#64748b", fontFamily: "ui-monospace, monospace", width: 70 }}>
+                    {r.passed ?? 0}/{(r.passed ?? 0) + (r.failed ?? 0)}
+                  </td>
+                  <td style={{ padding: "5px 0" }}>{r.title}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SevPill({ sev, text }: { sev: Severity; text: string }) {
+  const c = SEV_COLOR[sev];
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "1px 8px",
+        borderRadius: 999,
+        background: c.bg,
+        color: c.fg,
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </span>
   );
 }

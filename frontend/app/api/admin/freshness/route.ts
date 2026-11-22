@@ -46,6 +46,33 @@ type SourceFreshness = {
   status: "ok" | "stale" | "never";
 };
 
+type HealthFinding = {
+  detector: string;
+  severity: "ok" | "info" | "warn" | "error";
+  headline: string;
+  detail?: string;
+  metrics?: Record<string, unknown>;
+  samples?: unknown[];
+};
+
+type HealthRun = {
+  id: string;
+  run_at: string;
+  runner: string;
+  overall: "ok" | "warn" | "error";
+  errors: number;
+  warnings: number;
+  findings: HealthFinding[];
+  scenarios: unknown;
+  duration_s: number | null;
+};
+
+type HealthBlock = {
+  available: boolean;
+  latest: HealthRun | null;
+  history: Array<Pick<HealthRun, "id" | "run_at" | "runner" | "overall" | "errors" | "warnings">>;
+};
+
 const STALE_GRACE_HOURS = 12;
 
 export async function GET() {
@@ -126,6 +153,35 @@ export async function GET() {
     .select("id", { count: "exact", head: true })
     .gte("last_verified_at", cutoff);
 
+  // ── 4. Daily data-quality check (backend.health.daily_check --persist) ────
+  // Latest full run + a short history. Table arrives with migration 079;
+  // until it exists the page says so instead of erroring.
+  let health: HealthBlock = { available: false, latest: null, history: [] };
+  const { data: runs, error: runsErr } = await admin
+    .from("data_health_runs")
+    .select("id, run_at, runner, overall, errors, warnings, findings, scenarios, duration_s")
+    .order("run_at", { ascending: false })
+    .limit(14);
+  if (!runsErr) {
+    const list = (runs ?? []) as HealthRun[];
+    health = {
+      available: true,
+      latest: list[0] ?? null,
+      history: list.map(({ id, run_at, runner, overall, errors, warnings }) => ({
+        id, run_at, runner, overall, errors, warnings,
+      })),
+    };
+  }
+
+  // Annotate each source with its latest-run error from that check, so a
+  // stale row says *why* (404 / Cloudflare / timeout) rather than just "stale".
+  const failedByAbbr = new Map<string, { error: string; at: string }>();
+  const failedFinding = health.latest?.findings?.find((f) => f.detector === "failed_last_run");
+  for (const s of (failedFinding?.samples ?? []) as Array<{ abbr: string; error: string; at: string }>) {
+    failedByAbbr.set(s.abbr, { error: s.error, at: s.at });
+  }
+  const sourcesOut = enriched.map((s) => ({ ...s, last_error: failedByAbbr.get(s.abbreviation) ?? null }));
+
   return NextResponse.json({
     generated_at: new Date().toISOString(),
     summary: {
@@ -133,6 +189,7 @@ export async function GET() {
       polluted_drug_count,
       recent_shortages_48h: recent_shortages_48h ?? 0,
     },
-    sources: enriched,
+    sources: sourcesOut,
+    health,
   });
 }

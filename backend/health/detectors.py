@@ -9,6 +9,7 @@ Detectors NEVER mutate the database. They only read.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -24,6 +25,14 @@ SEV_OK       = "ok"        # nothing to report
 SEV_INFO     = "info"      # worth knowing, no action
 SEV_WARN     = "warn"      # degraded, action recommended
 SEV_ERROR    = "error"     # broken, action required
+
+
+def _parse_ts(ts: Any) -> datetime:
+    """Parse a PostgREST timestamp. Python <3.11 rejects fractional seconds
+    that aren't 3 or 6 digits (Postgres trims trailing zeros, e.g. .33635)."""
+    t = str(ts).replace("Z", "+00:00")
+    t = re.sub(r"\.(\d+)", lambda m: "." + m.group(1).ljust(6, "0")[:6], t)
+    return datetime.fromisoformat(t)
 
 
 @dataclass
@@ -143,7 +152,7 @@ def detect_stale_sources(db: Any | None = None, max_hours: int = 36) -> Finding:
             never.append(r)
             continue
         try:
-            scraped_at = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            scraped_at = _parse_ts(ts)
         except ValueError:
             continue
         threshold_h = max(int(r.get("scrape_frequency_hours") or 24), 24) + 12
@@ -290,7 +299,7 @@ def detect_silent_failure_scrapers(
         if not cc or not last:
             continue
         try:
-            ts = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+            ts = _parse_ts(last)
         except ValueError:
             continue
         if ts < scrape_cutoff:
@@ -357,13 +366,269 @@ def detect_silent_failure_scrapers(
     )
 
 
+# Open, real (non-synthetic) shortage rows — the rows a user is shown.
+_OPEN_STATUSES = ("active", "anticipated")
+_NOT_SYNTHETIC = "synthetic.is.null,synthetic.eq.false"
+
+
+def _exec(query: Any, attempts: int = 3) -> Any:
+    """Execute with a short retry — PostgREST occasionally drops a connection
+    ("Server disconnected") mid-run, which must not read as a finding."""
+    for i in range(attempts):
+        try:
+            return query.execute()
+        except Exception:
+            if i == attempts - 1:
+                raise
+            time.sleep(1.5 * (i + 1))
+
+
+def _count(query: Any) -> int:
+    """Run a PostgREST head-count query; returns the exact count."""
+    resp = _exec(query.limit(1))
+    return int(getattr(resp, "count", None) or 0)
+
+
+def _active_sources(db: Any) -> list[dict[str, Any]]:
+    return (
+        db.table("data_sources")
+        .select("id, abbreviation, country_code, last_scraped_at")
+        .eq("is_active", True)
+        .execute()
+    ).data or []
+
+
+# ── Detector 6: last scrape attempt failed ──────────────────────────────────
+# Stale-source detection only fires a day or more after a scraper starts
+# failing (and never for a source whose failures still bump last_scraped_at).
+# raw_scrapes records every attempt, so the newest row per source says
+# whether the LAST run worked — and carries the upstream error message.
+def detect_failed_last_run(db: Any | None = None) -> Finding:
+    db = db or get_supabase_client()
+    name = "failed_last_run"
+    try:
+        sources = _active_sources(db)
+    except Exception as exc:
+        return Finding(name, SEV_WARN, "Could not query data_sources", detail=str(exc))
+
+    failed: list[dict[str, Any]] = []
+    never: list[str] = []
+    for s in sources:
+        try:
+            rows = _exec(
+                db.table("raw_scrapes")
+                .select("status, error_message, scraped_at")
+                .eq("data_source_id", s["id"])
+                .order("scraped_at", desc=True)
+                .limit(1)
+            ).data or []
+        except Exception as exc:
+            log.warning("raw_scrapes lookup failed", extra={"source": s["abbreviation"], "error": str(exc)})
+            continue
+        if not rows:
+            never.append(s["abbreviation"])
+            continue
+        if rows[0]["status"] == "failed":
+            failed.append({
+                "abbr": s["abbreviation"],
+                "country": s["country_code"],
+                "at": rows[0]["scraped_at"],
+                "error": (rows[0].get("error_message") or "")[:200],
+            })
+
+    if not failed:
+        return Finding(name, SEV_OK, "Latest attempt succeeded for every active source",
+                       metrics={"active_sources": len(sources), "no_raw_scrapes": len(never)})
+    return Finding(
+        name, SEV_ERROR,
+        f"{len(failed)} source(s) failed on their latest run",
+        detail="Newest raw_scrapes row per active source has status=failed. "
+               "The error is the upstream reason (404 = URL moved, 403/Cloudflare = blocked).",
+        metrics={"active_sources": len(sources), "failed": len(failed), "no_raw_scrapes": len(never)},
+        samples=failed[:20],
+    )
+
+
+# ── Detector 7: open-row integrity ──────────────────────────────────────────
+# Rules every open shortage row must satisfy for what we display to be true.
+# Each is a single head-count.
+def detect_open_row_integrity(db: Any | None = None) -> Finding:
+    db = db or get_supabase_client()
+    name = "open_row_integrity"
+    today = datetime.now(timezone.utc).date().isoformat()
+    week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+
+    def open_q() -> Any:
+        return (
+            db.table("shortage_events")
+            .select("id", count="exact")
+            .in_("status", list(_OPEN_STATUSES))
+            .or_(_NOT_SYNTHETIC)
+        )
+
+    checks: dict[str, tuple[str, Any]] = {
+        # status says it's happening now, but the regulator's start date is in the future
+        "active_future_start": ("error", open_q().eq("status", "active").gt("start_date", today)),
+        # row is closed (end_date in the past) but still shown as open
+        "open_with_past_end_date": ("error", open_q().lt("end_date", today)),
+        # "expected back" date more than a week in the past, still open
+        "open_past_eta_7d": ("warn", open_q().lt("estimated_resolution_date", week_ago)),
+        # can't be placed on a market
+        "open_no_country": ("error", open_q().is_("country_code", "null")),
+    }
+
+    counts: dict[str, int] = {}
+    worst = SEV_OK
+    errors: list[str] = []
+    for key, (sev, q) in checks.items():
+        try:
+            n = _count(q)
+        except Exception as exc:
+            errors.append(f"{key}: {exc}")
+            continue
+        counts[key] = n
+        if n:
+            if sev == "error":
+                worst = SEV_ERROR
+            elif worst == SEV_OK:
+                worst = SEV_WARN
+
+    try:
+        counts["open_total"] = _count(open_q())
+    except Exception:
+        pass
+
+    if errors and len(counts) <= 1:
+        return Finding(name, SEV_WARN, "Integrity queries failed", detail="; ".join(errors))
+
+    bad = {k: v for k, v in counts.items() if v and k != "open_total"}
+    if worst == SEV_OK:
+        return Finding(name, SEV_WARN if errors else SEV_OK,
+                       "Open shortage rows pass all integrity rules" + (" (some checks errored)" if errors else ""),
+                       metrics=counts, detail="; ".join(errors))
+    return Finding(
+        name, worst,
+        "Open shortage rows break integrity rules: " + ", ".join(f"{k}={v}" for k, v in bad.items()),
+        detail="Open = status active/anticipated, non-synthetic. active_future_start should be "
+               "'anticipated'; past end_date should be closed (mark_stale / reconcile); past ETAs "
+               "must never display as 'expected back'." + (f" Query errors: {'; '.join(errors)}" if errors else ""),
+        metrics=counts,
+    )
+
+
+# ── Detector 8: per-source volume drift ─────────────────────────────────────
+# Compares each source's open-row count with the previous persisted run
+# (data_health_runs.source_counts). Catches what the other detectors miss:
+# a parser that silently drops most rows (count collapses) and snapshot
+# scrapers minting duplicate rows (the JP/CH phantom growth).
+DRIFT_DROP_PCT = 0.30   # flag a fall of ≥30% …
+DRIFT_DROP_MIN = 20     # … of at least 20 rows
+DRIFT_GROW_PCT = 0.50   # flag growth of ≥50% …
+DRIFT_GROW_MIN = 50     # … of at least 50 rows
+
+
+def source_open_counts(db: Any) -> dict[str, dict[str, Any]]:
+    """{data_source_id: {abbr, country, open}} for every active source."""
+    out: dict[str, dict[str, Any]] = {}
+    for s in _active_sources(db):
+        try:
+            n = _count(
+                db.table("shortage_events")
+                .select("id", count="exact")
+                .eq("data_source_id", s["id"])
+                .in_("status", list(_OPEN_STATUSES))
+                .or_(_NOT_SYNTHETIC)
+            )
+        except Exception as exc:
+            log.warning("open count failed", extra={"source": s["abbreviation"], "error": str(exc)})
+            continue
+        out[s["id"]] = {"abbr": s["abbreviation"], "country": s["country_code"], "open": n}
+    return out
+
+
+def detect_source_volume_drift(db: Any | None = None) -> Finding:
+    db = db or get_supabase_client()
+    name = "source_volume_drift"
+    current = source_open_counts(db)
+
+    try:
+        prev_rows = (
+            db.table("data_health_runs")
+            .select("run_at, source_counts")
+            .not_.is_("source_counts", "null")
+            .order("run_at", desc=True)
+            .limit(1)
+            .execute()
+        ).data or []
+    except Exception as exc:
+        return Finding(name, SEV_INFO, "No previous run to compare against (data_health_runs unavailable)",
+                       detail=str(exc)[:200], metrics={"source_counts": current})
+    if not prev_rows:
+        return Finding(name, SEV_INFO, "Baseline recorded; drift is checked from the next run",
+                       metrics={"source_counts": current})
+
+    prev = prev_rows[0]["source_counts"] or {}
+    moves: list[dict[str, Any]] = []
+    for sid, cur in current.items():
+        before = (prev.get(sid) or {}).get("open")
+        if before is None:
+            continue
+        delta = cur["open"] - before
+        if before and delta < 0 and -delta >= DRIFT_DROP_MIN and -delta / before >= DRIFT_DROP_PCT:
+            moves.append({**cur, "before": before, "change": delta, "kind": "drop"})
+        elif delta >= DRIFT_GROW_MIN and (before == 0 or delta / before >= DRIFT_GROW_PCT):
+            moves.append({**cur, "before": before, "change": delta, "kind": "spike"})
+
+    metrics = {"source_counts": current, "compared_to": prev_rows[0]["run_at"]}
+    if not moves:
+        return Finding(name, SEV_OK, "No source changed its open-row count abnormally since the last run",
+                       metrics=metrics)
+    moves.sort(key=lambda m: abs(m["change"]), reverse=True)
+    return Finding(
+        name, SEV_WARN,
+        f"{len(moves)} source(s) with abnormal open-row change since last run",
+        detail=f"Drop ≥{int(DRIFT_DROP_PCT * 100)}% (≥{DRIFT_DROP_MIN} rows) suggests a parser losing rows; "
+               f"spike ≥{int(DRIFT_GROW_PCT * 100)}% (≥{DRIFT_GROW_MIN} rows) suggests duplicate rows. "
+               "Real regulator changes happen too — check the source before acting.",
+        metrics=metrics,
+        samples=moves[:15],
+    )
+
+
+# ── Detector 9: the quality check itself is overdue ─────────────────────────
+# If the daily run stops (runner crash, deploy break), nothing else notices.
+def detect_health_run_overdue(db: Any | None = None, max_hours: int = 30) -> Finding:
+    db = db or get_supabase_client()
+    name = "health_run_overdue"
+    try:
+        rows = (
+            db.table("data_health_runs").select("run_at, runner")
+            .order("run_at", desc=True).limit(1).execute()
+        ).data or []
+    except Exception as exc:
+        return Finding(name, SEV_WARN, "data_health_runs not readable (migration 079 applied?)",
+                       detail=str(exc)[:200])
+    if not rows:
+        return Finding(name, SEV_INFO, "First persisted data-quality run")
+    last = _parse_ts(rows[0]["run_at"])
+    age_h = (datetime.now(timezone.utc) - last).total_seconds() / 3600
+    m = {"hours_since_last_run": round(age_h, 1), "last_runner": rows[0]["runner"]}
+    if age_h > max_hours:
+        return Finding(name, SEV_WARN, f"Previous data-quality run was {age_h:.0f}h ago (expected daily)", metrics=m)
+    return Finding(name, SEV_OK, f"Previous data-quality run {age_h:.0f}h ago", metrics=m)
+
+
 # ── Aggregator ──────────────────────────────────────────────────────────────
 ALL_DETECTORS = (
+    detect_health_run_overdue,
     detect_drug_pollution,
     detect_stale_sources,
+    detect_failed_last_run,
     detect_hc_canary,
     detect_no_recent_shortages,
     detect_silent_failure_scrapers,
+    detect_open_row_integrity,
+    detect_source_volume_drift,
 )
 
 

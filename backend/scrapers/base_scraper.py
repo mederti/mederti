@@ -1082,10 +1082,13 @@ class BaseScraper(ABC):
         *,
         statuses: list[str],
         patch: dict[str, Any],
+        start_after: str | None = None,
+        start_on_or_before: str | None = None,
     ) -> int:
         """
         Apply `patch` to this source's rows in the given statuses, in id-keyed
-        chunks, and return how many rows were updated.
+        chunks, and return how many rows were updated. `start_after` /
+        `start_on_or_before` (ISO dates) restrict by start_date.
 
         A single UPDATE filtered only by data_source_id exceeds the statement
         timeout on large sources (AIFA 5,385 rows; PMDA 37,138), and PostgREST
@@ -1104,14 +1107,17 @@ class BaseScraper(ABC):
         max_iterations = 400
         for _ in range(max_iterations):
             try:
-                page = (
+                q = (
                     self.db.table("shortage_events")
                     .select("id")
                     .eq("data_source_id", self.SOURCE_ID)
                     .in_("status", statuses)
-                    .range(offset, offset + self._VERIFY_PAGE - 1)
-                    .execute()
                 )
+                if start_after:
+                    q = q.gt("start_date", start_after)
+                if start_on_or_before:
+                    q = q.lte("start_date", start_on_or_before)
+                page = q.range(offset, offset + self._VERIFY_PAGE - 1).execute()
             except Exception as exc:
                 self.log.warning(
                     "Could not page rows for last_verified_at refresh",
@@ -1242,9 +1248,21 @@ class BaseScraper(ABC):
                         statuses=["active", "anticipated"],
                         patch={"last_verified_at": now_iso},
                     )
+                    # A re-confirmed stale row goes back to what it was: a
+                    # shortage that hasn't started yet is anticipated, not
+                    # active. Flipping every stale row to "active" put 86
+                    # future-onset TGA notices (raw status A) on the live
+                    # count on 2026-11-23 — same rule as upsert() applies.
+                    today_iso = date.today().isoformat()
                     reactivated = self._refresh_verified_chunked(
                         statuses=["stale"],
                         patch={"status": "active", "last_verified_at": now_iso},
+                        start_on_or_before=today_iso,
+                    )
+                    reactivated += self._refresh_verified_chunked(
+                        statuses=["stale"],
+                        patch={"status": "anticipated", "last_verified_at": now_iso},
+                        start_after=today_iso,
                     )
                     self.log.info(
                         "Refreshed last_verified_at and re-activated stale records (duplicate payload)",

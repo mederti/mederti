@@ -19,6 +19,7 @@ const SRC_FDA = "10000000-0000-0000-0000-000000000001";
 const SRC_HEALTH_CANADA = "10000000-0000-0000-0000-000000000002";
 const SRC_TGA = "10000000-0000-0000-0000-000000000003";
 const SRC_EMA = "10000000-0000-0000-0000-000000000005";
+const SRC_PEI = "10000000-0000-0000-0000-000000000119"; // Paul-Ehrlich-Institut (DE vaccines)
 
 const EMA_BRAND_KEYS = ["medicine_affected", "medicine affected", "medicine name"];
 const EMA_MAH_KEYS = [
@@ -60,6 +61,8 @@ export function extractEventBrand(
       return { brand_name: null, sponsor: clean(raw.company_name) };
     case SRC_EMA:
       return { brand_name: probe(raw, EMA_BRAND_KEYS), sponsor: probe(raw, EMA_MAH_KEYS) };
+    case SRC_PEI:
+      return { brand_name: clean(raw.brand), sponsor: clean(raw.mah) };
     default:
       return { brand_name: null, sponsor: null };
   }

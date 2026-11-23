@@ -5,6 +5,7 @@ import { recordAiUsage } from "@/lib/ai/usage-log";
 import { cleanBrandNames } from "@/lib/brand";
 import { requireAdmin } from "@/lib/admin-auth";
 import { extractEventMarketExit } from "@/lib/event-brand";
+import { scopeShortages, vaccineKeyFor } from "@/lib/vaccine-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -64,9 +65,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const safe = <T,>(p: PromiseLike<{ data: T | null }>, empty: T) =>
     Promise.resolve(p).catch(() => ({ data: empty }));
 
+  const vaccineKey = await vaccineKeyFor(sb, drugId);
+  const { data: vxName } = vaccineKey
+    ? await sb.from("drugs").select("vaccine_type_name").eq("id", drugId).maybeSingle()
+    : { data: null };
+  const vaccineTypeName = (vxName?.vaccine_type_name as string | null) ?? null;
+
   const [drugRes, shortagesRes, regEventsRes, trialsRes, approvalsRes, alternativesRes] = await Promise.all([
     sb.from("drugs").select("id, generic_name, brand_names, atc_code_full, drug_class, who_essential_medicine, critical_medicine_eu").eq("id", drugId).maybeSingle(),
-    sb.from("shortage_events").select("country_code, status, severity, reason, reason_category, start_date, end_date, notes, data_source_id, raw_data").eq("drug_id", drugId),
+    // Same notices as the drug page (typed vaccines read by vaccine type —
+    // see lib/vaccine-scope.ts), so the summary never contradicts the page.
+    scopeShortages(sb.from("shortage_events").select("country_code, status, severity, reason, reason_category, start_date, end_date, notes, data_source_id, raw_data").not("synthetic", "is", true), drugId, vaccineKey),
     sb.from("regulatory_events").select("event_type, event_date, source_country, sponsor, description, outcome").eq("drug_id", drugId).gte("event_date", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)).limit(10),
     sb.from("clinical_trials").select("phase, overall_status, primary_completion_date, sponsor").eq("drug_id", drugId).in("phase", ["Phase 3", "Phase 4"]).limit(15),
     sb.from("drug_approvals").select("authority, te_code").eq("drug_id", drugId).limit(20),
@@ -119,7 +128,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 DRUG
 ====
 Name: ${drug.generic_name}
-Brands: ${cleanBrandNames(drug.brand_names, drug.generic_name).slice(0, 3).join(", ") || "none on file"}
+${vaccineTypeName ? `Vaccine type: ${vaccineTypeName}. IMPORTANT: the shortage figures below cover EVERY product of this vaccine type (all brands, all regulators), not only ${drug.generic_name}. Write about "${vaccineTypeName}" as the subject and never attribute these counts to ${drug.generic_name} alone.
+` : ""}Brands: ${cleanBrandNames(drug.brand_names, drug.generic_name).slice(0, 3).join(", ") || "none on file"}
 Class: ${drug.drug_class ?? "n/a"}
 ATC: ${drug.atc_code_full ?? "n/a"}
 WHO Essential Medicine: ${drug.who_essential_medicine ? "yes" : "no"}

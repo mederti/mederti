@@ -166,7 +166,7 @@ function expSourceFor(cc: string): string {
 const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket: supplyAll = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null, marketCovered = null, formSel = null, strengthSel = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket: supplyAll = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, vaccineGroup = null, freeViewsUsed = null, sourcedAlternatives = null, marketCovered = null, formSel = null, strengthSel = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Form picker: dose-form slug and normalised strength from the URL. */
@@ -177,6 +177,8 @@ export default function V1DrugView({
   id: string;
   drug: any;
   shortages: any[];
+  /** Set when this record is a typed vaccine with sibling records (migration 081). */
+  vaccineGroup?: { name: string; records: number } | null;
   statusLog: any[];
   alternatives: any[];
   userCountry: string;
@@ -330,7 +332,7 @@ export default function V1DrugView({
       (a.estimated_resolution_date || "9999").localeCompare(b.estimated_resolution_date || "9999"),
     )
     .filter((s) => {
-      const k = [s.brand_name, s.sponsor, s.status, s.severity, s.estimated_resolution_date]
+      const k = [s.brand_name, s.filed_under, s.sponsor, s.status, s.severity, s.estimated_resolution_date]
         .map((v) => (v || "").toString().toLowerCase()).join("|");
       if (mineSeen.has(k)) return false;
       mineSeen.add(k);
@@ -861,6 +863,23 @@ export default function V1DrugView({
               >
                 View {brandHint.brand} registrations {"→"}
               </a>
+            </div>
+          )}
+
+          {vaccineGroup && (
+            <div
+              className="d-vaccinegroup"
+              style={{
+                padding: "10px 14px", marginBottom: 14, borderRadius: 10,
+                background: "var(--ind-bg, rgba(99,102,241,0.08))",
+                border: "1px solid var(--ind-b, rgba(99,102,241,0.25))",
+                fontSize: 13, color: "var(--app-text-2)",
+              }}
+            >
+              Vaccine type: <strong>{vaccineGroup.name}</strong>. Regulators file vaccines under many
+              names, so this page shows every notice whose own regulator record names this vaccine
+              {vaccineGroup.records > 1 ? <>, from {vaccineGroup.records} records</> : null}. Notices filed on
+              another record say which name they were filed as.
             </div>
           )}
 
@@ -1458,7 +1477,8 @@ export default function V1DrugView({
                               : "Ingredient-level notice — brand not published"}
                           </div>
                           <div className="alt-f">
-                            {[s.sponsor, abbr(s.data_sources?.name, s.data_sources?.abbreviation)]
+                            {[s.sponsor, abbr(s.data_sources?.name, s.data_sources?.abbreviation),
+                              s.filed_under ? `filed as ${s.filed_under}` : null]
                               .filter(Boolean).join(" · ") || "—"}
                           </div>
                         </div>

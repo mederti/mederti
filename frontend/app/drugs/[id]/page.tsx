@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { scopeShortages, vaccineKeyFor } from "@/lib/vaccine-scope";
 import { fetchSourcedAlternatives, type SourcedAlternativesResult } from "@/lib/alternatives-evidence";
 import type { Metadata } from "next";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
@@ -293,6 +294,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
   const supabase = getSupabaseAdmin();
+  const vaccineKey = await vaccineKeyFor(supabase, id);
 
   const [drugRes, shortagesRes, catalogueCountryRes] = await Promise.all([
     supabase
@@ -301,10 +303,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
       .eq("id", id)
       .single(),
     // All active shortages, severity-sorted, so we can summarise across markets
-    supabase
+    scopeShortages(supabase
       .from("shortage_events")
       .select("status, severity, country_code, start_date")
-      .eq("drug_id", id)
+      .not("synthetic", "is", true), id, vaccineKey)
       .eq("status", "active")
       .order("severity", { ascending: true })
       .limit(20),
@@ -424,6 +426,22 @@ export default async function DrugPage({ params, searchParams }: Props) {
   } catch { /* anonymous */ }
   const supabase = getSupabaseAdmin();
 
+  /* ── Vaccine type (drugs.vaccine_type 081, shortage_events.vaccine_type 082) ── */
+  // Vaccine notices are often filed on the WRONG drugs row: the scrapers'
+  // first-word fallback put Italian "Vaccino…" notices for Vaxigrip, Fluenz,
+  // Nimenrix … on the Hib record. Each notice is typed from its own regulator
+  // record, so a typed vaccine's page reads notices by that type — wherever
+  // they were filed — plus this record's untyped notices. Notices on this
+  // record that name a different vaccine are left to that vaccine's page.
+  // Any failure (columns not migrated) falls back to this record's notices.
+  let vaccineType: { key: string; name: string } | null = null;
+  try {
+    const { data: self } = await supabase
+      .from("drugs").select("vaccine_type, vaccine_type_name").eq("id", id).maybeSingle();
+    if (self?.vaccine_type) vaccineType = { key: self.vaccine_type, name: self.vaccine_type_name ?? self.vaccine_type };
+  } catch { /* not typed */ }
+  const SHORTAGE_COLS = "shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, raw_data, data_source_id, data_sources(name, abbreviation, country_code)";
+
   /* ── Parallel data fetching ── */
   const [drugRes, shortagesRes, logRes, alternativesRes, recallsRes] =
     await Promise.allSettled([
@@ -431,7 +449,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         .select("id, generic_name, brand_names, atc_code, atc_description, drug_class, dosage_forms, strengths, routes_of_administration, therapeutic_category, is_controlled_substance, who_essential_medicine, who_eml_section, who_eml_year")
         .eq("id", id).single(),
       supabase.from("shortage_events")
-        .select("shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, raw_data, data_source_id, data_sources(name, abbreviation, country_code)")
+        .select(SHORTAGE_COLS)
         // Synthetic rows (recalls the MedWatch/enforcement scrapers wrote
         // into shortage_events) are not shortages: every other surface drops
         // them, and here a 2014 FDA recall headlined propofol in the US as an
@@ -457,7 +475,27 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const drug = drugRes.status === "fulfilled" ? (drugRes.value as any).data : null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const shortagesRaw = shortagesRes.status === "fulfilled" ? ((shortagesRes.value as any).data ?? []) : [];
+  let shortagesRaw = shortagesRes.status === "fulfilled" ? ((shortagesRes.value as any).data ?? []) : [];
+  let filedUnder = new Map<string, string>();
+  let vaccineGroup: { name: string; records: number } | null = null;
+  // id goes into a PostgREST filter string below: only ever a bare UUID.
+  if (vaccineType && /^[0-9a-f-]{36}$/i.test(id)) {
+    const { data: vxEvents, error: vxErr } = await supabase
+      .from("shortage_events").select(SHORTAGE_COLS)
+      .or(`vaccine_type.eq.${vaccineType.key},and(drug_id.eq.${id},vaccine_type.is.null)`)
+      .not("synthetic", "is", true)
+      .order("updated_at", { ascending: false })
+      .limit(1000);
+    if (!vxErr && vxEvents) {
+      shortagesRaw = vxEvents;
+      const others = [...new Set(vxEvents.map((e) => e.drug_id).filter((d) => d && d !== id))] as string[];
+      if (others.length) {
+        const { data: names } = await supabase.from("drugs").select("id, generic_name").in("id", others);
+        filedUnder = new Map((names ?? []).map((n) => [n.id, n.generic_name]));
+      }
+      vaccineGroup = { name: vaccineType.name, records: others.length + 1 };
+    }
+  }
   // Per-event product identity (brand/sponsor) from the regulator record —
   // extracted here so heavy raw_data never reaches the client components.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -466,11 +504,23 @@ export default async function DrugPage({ params, searchParams }: Props) {
     // registration the regulator names (TGA ARTG / Health Canada DIN), so a
     // brand view can tie notices to its own registrations exactly
     reg_no: raw_data?.artg_numb ?? raw_data?.din ?? null,
+    // Notice stored on another record of the same vaccine type: the name
+    // that record carries, so the row says where it came from.
+    filed_under: ev.drug_id && ev.drug_id !== id ? (filedUnder.get(ev.drug_id) ?? null) : null,
     ...extractEventBrand(ev.data_source_id ?? null, raw_data),
     ...extractEventMarketExit(ev.data_source_id ?? null, raw_data),
   }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const statusLog = logRes.status === "fulfilled" ? ((logRes.value as any).data ?? []) : [];
+  let statusLog = logRes.status === "fulfilled" ? ((logRes.value as any).data ?? []) : [];
+  if (vaccineGroup) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const evIds = shortages.map((e: any) => e.id).slice(0, 300);
+    const { data: vxLog } = await supabase
+      .from("shortage_status_log")
+      .select("id, shortage_event_id, drug_id, old_status, new_status, old_severity, new_severity, changed_at")
+      .in("shortage_event_id", evIds).order("changed_at", { ascending: false });
+    statusLog = vxLog ?? [];
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const alternativesRaw = alternativesRes.status === "fulfilled" ? ((alternativesRes.value as any).data ?? []) : [];
   // Live shortage status for each same-class drug (any market). "No shortage
@@ -1085,6 +1135,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       brandSkus={brandSkus}
       brandHint={brandHint}
       brandFocus={brandFocus}
+      vaccineGroup={vaccineGroup}
       freeViewsUsed={freeViewsUsed}
       sourcedAlternatives={sourcedAlternatives}
       formSel={typeof sp.form === "string" ? sp.form : null}

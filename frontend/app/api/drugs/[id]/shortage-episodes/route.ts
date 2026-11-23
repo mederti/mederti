@@ -38,23 +38,40 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const sb = getSupabaseAdmin();
-  const rows: Row[] = [];
-  const PAGE = 1000;
-  for (let page = 0; page < 10; page++) {
-    const { data, error } = await sb
-      .from("shortage_events")
-      .select("country_code, status, start_date, end_date, anticipated_start_date, estimated_resolution_date, source_url, raw_data")
-      .eq("drug_id", id)
-      .eq("synthetic", false)
-      .order("id", { ascending: true })
-      .range(page * PAGE, page * PAGE + PAGE - 1);
-    if (error) {
-      if (rows.length === 0) return NextResponse.json({ degraded: true, episodes: [] });
-      break;
+
+  // Typed vaccines read notices by the vaccine each notice itself names
+  // (shortage_events.vaccine_type, migration 082), not by the drugs row they
+  // were filed on — the same rule as the drug page, so the timeline and the
+  // status section agree. Falls back to drug_id if the columns are missing.
+  let vaccineKey: string | null = null;
+  try {
+    const { data: self } = await sb.from("drugs").select("vaccine_type").eq("id", id).maybeSingle();
+    vaccineKey = (self?.vaccine_type as string | null) ?? null;
+  } catch { /* not typed */ }
+
+  const fetchRows = async (byVaccine: boolean): Promise<{ rows: Row[]; failed: boolean }> => {
+    const rows: Row[] = [];
+    const PAGE = 1000;
+    for (let page = 0; page < 10; page++) {
+      let q = sb
+        .from("shortage_events")
+        .select("country_code, status, start_date, end_date, anticipated_start_date, estimated_resolution_date, source_url, raw_data")
+        .eq("synthetic", false);
+      q = byVaccine
+        ? q.or(`vaccine_type.eq.${vaccineKey},and(drug_id.eq.${id},vaccine_type.is.null)`)
+        : q.eq("drug_id", id);
+      const { data, error } = await q.order("id", { ascending: true }).range(page * PAGE, page * PAGE + PAGE - 1);
+      if (error) return { rows, failed: rows.length === 0 };
+      rows.push(...((data ?? []) as Row[]));
+      if (!data || data.length < PAGE) break;
     }
-    rows.push(...((data ?? []) as Row[]));
-    if (!data || data.length < PAGE) break;
-  }
+    return { rows, failed: false };
+  };
+
+  let got = await fetchRows(!!vaccineKey);
+  if (got.failed && vaccineKey) got = await fetchRows(false);
+  if (got.failed) return NextResponse.json({ degraded: true, episodes: [] });
+  const rows = got.rows;
 
   const seen = new Set<string>();
   const episodes = rows

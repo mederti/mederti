@@ -85,6 +85,8 @@ SHORTAGE_KEYS = [
     # Daily pricing feeds, moved from Mac 2026-11-22
     "nadac",
     "nhs_drug_tariff",
+    # Vaccines (2026-11-23): Germany's vaccine regulator; BfArM excludes vaccines
+    "pei_vaccines",
 ]
 
 # Weekly jobs keyed by UTC weekday (Mon=0). Same days the Mac ran them
@@ -118,6 +120,16 @@ if __name__ == "__main__":
     today = dt.datetime.now(dt.timezone.utc).date()
 
     scrape = subprocess.run([sys.executable, "run_all_scrapers.py"] + keys_for(today))
+
+    # Flag vaccine records (drugs.is_vaccine, migration 080) — including any
+    # drug rows the scrapers just auto-created. Failure here must not mask
+    # the scraper result.
+    classify = subprocess.run(
+        [sys.executable, "-m", "backend.scripts.classify_vaccines",
+         "--execute", "--manifest-dir", "/tmp"],
+    )
+    if classify.returncode != 0:
+        print(f"classify_vaccines exited {classify.returncode}", file=sys.stderr)
 
     quality = subprocess.run([
         sys.executable, "-m", "backend.health.daily_check",

@@ -127,6 +127,8 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "senegal_arp":       ("backend.scrapers.senegal_arp_scraper",         "SenegalARPScraper"),
     "taiwan_tfda":       ("backend.scrapers.taiwan_tfda_scraper",         "TaiwanTFDAScraper"),
     "srilanka_nmra":     ("backend.scrapers.srilanka_nmra_scraper",       "SriLankaNMRAScraper"),
+    # Vaccine-specific national source (2026-11-23) — Railway daily, not Mac cron
+    "pei_vaccines":      ("backend.scrapers.pei_vaccines_scraper",        "PEIVaccinesScraper"),
     # Licensed supplement scrapers (require API keys)
     "ashp":            ("backend.scrapers.ashp_scraper",                 "ASHPScraper"),
     "tga_recalls":     ("backend.scrapers.tga_recalls_scraper",          "TgaRecallsScraper"),

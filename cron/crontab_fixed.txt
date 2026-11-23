@@ -213,7 +213,7 @@ SHELL=/bin/bash
 # AIFA: transparency lists refresh ~monthly → weekly Wednesday.
 45  6 * * 3  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py aifa_pricing   >> logs/cron.log 2>&1
 # Nomenclator ES: Sanidad refreshes monthly (~25th) → weekly Thursday.
-55  6 * * 4  set -a && source .env && set +a && python3 run_all_scrapers.py spain_nomenclator >> logs/cron.log 2>&1
+55  6 * * 4  cd /Users/findlaysingapore/mederti && set -a && source .env && set +a && python3 run_all_scrapers.py spain_nomenclator >> logs/cron.log 2>&1
 
 # ─── Data hygiene: mark stale shortages (daily 07:00 UTC, after scraper window) ───
 # Calls mark_stale_shortages() so a shortage the regulator has *removed* flips

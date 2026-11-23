@@ -15,6 +15,11 @@
 --
 -- Numbering: 076 is taken by PR #201, 079 by PR #272.
 -- Additive and idempotent; safe to re-run.
+--
+-- APPLIED TO PRODUCTION 2026-11-23 via `supabase db query --linked -f`
+-- (columns, index and PEI data_sources row verified after apply).
+-- classify_vaccines --execute run the same day: 179 drugs flagged
+-- (brand 89, name 86, atc_j07 2, who_eml_19_3 2); re-run = 0 changes.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE drugs ADD COLUMN IF NOT EXISTS is_vaccine boolean NOT NULL DEFAULT false;

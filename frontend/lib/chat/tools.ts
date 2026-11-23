@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- 165 sites over untyped Supabase rows (getSupabase() has no generated DB types) and dynamic tool-input JSON. Typing them needs a db.ts-backed client; tracked as follow-up, not a lint-cleanup change. */
 import { type ConcentrationTier, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getSupabase } from "./supabase";
@@ -15,6 +16,8 @@ import type {
   SupplierPriceRow,
 } from "./types";
 import { computeConfidence, confidenceFromSources, levelFromScore } from "./confidence";
+import { extractEventBrand, extractEventMarketExit } from "@/lib/event-brand";
+import { isCombo } from "@/lib/supply-in-market";
 import { ALTERNATIVES_CAVEAT, ALTERNATIVES_SOURCE, atcMatchLabel } from "@/lib/alternatives";
 import { SOURCE_LABELS, fetchSourcedAlternatives } from "@/lib/alternatives-evidence";
 import { resolveSubstitution } from "@/lib/substitution/resolve";
@@ -443,7 +446,7 @@ export const TOOL_DEFINITIONS: Anthropic.ToolUnion[] = [
       type: "object",
       properties: {
         country: { type: "string", description: "Optional ISO-2 country of the facility." },
-        drug_id: { type: "string", description: "Optional drug UUID to scope to facilities supplying this drug." },
+        drug_id: { type: "string", description: "Not supported: facilities are not linked to the drugs they make. Passing a drug_id returns no facilities rather than an unrelated list." },
         limit: { type: "number", description: "Max results (default 25)." },
       },
     },
@@ -571,12 +574,51 @@ function worstSeverity(rows: ShortageRow[]): string | null {
   return best;
 }
 
+/** One verdict per product (country + registration number, else product name):
+ *  discontinued / short / anticipated when it has an open notice, otherwise
+ *  "no current notice" with the date its last notice closed. */
+function buildProductStatus(rows: ShortageRow[]) {
+  const by = new Map<string, ShortageRow[]>();
+  for (const r of rows) {
+    if (!r.product && !r.reg_no) continue;
+    const k = `${r.country_code ?? ""}|${r.reg_no ?? (r.product ?? "").toLowerCase()}`;
+    by.set(k, [...(by.get(k) ?? []), r]);
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const out = [...by.values()].map((all) => {
+    // Most recently verified scrape day wins: an older duplicate left
+    // "resolved" on another drug row must not override today's open notice.
+    const lastDay = (all.map((r) => r.last_verified_at ?? "").sort().pop() ?? "").slice(0, 10);
+    const rs = lastDay ? all.filter((r) => (r.last_verified_at ?? "").slice(0, 10) === lastDay) : all;
+    const open = rs.filter((r) => r.notice_state === "open");
+    const latest = (xs: (string | null | undefined)[]) => (xs.filter(Boolean) as string[]).sort().pop() ?? null;
+    const base = { country_code: rs[0].country_code, product: rs[0].product ?? null, reg_no: rs[0].reg_no ?? null,
+      verified_at: latest(rs.map((r) => r.last_verified_at))?.slice(0, 10) ?? null };
+    if (open.length) {
+      const disc = open.every((r) => (r.reason_category ?? "").toLowerCase() === "discontinuation");
+      const exit = latest(open.map((r) => r.market_exit_date));
+      const ant = open.every((r) => r.status === "anticipated");
+      return { ...base,
+        status: disc ? (exit && exit > today ? "leaving the market (discontinuation)" : "discontinued (permanent market exit)")
+          : ant ? "shortage anticipated" : "short",
+        market_exit_date: disc ? exit : null,
+        since: latest(open.map((r) => r.start_date)),
+        expected_back: disc ? null : latest(open.map((r) => r.estimated_resolution_date)) };
+    }
+    return { ...base, status: "no current notice", last_notice_closed: latest(rs.map((r) => r.end_date)) };
+  });
+  const rank = (s: string) => (s === "no current notice" ? 1 : 0);
+  return out.sort((a, b) => rank(a.status) - rank(b.status)).slice(0, 40);
+}
+
 function shortageSummary(rows: ShortageRow[]) {
   const active = rows.filter((r) => r.status === "active");
   const countries = Array.from(new Set(active.map((r) => r.country_code).filter(Boolean) as string[]));
   return {
     active_shortage_count: active.length,
-    worst_severity: worstSeverity(rows),
+    // Severity of what is open now — a resolved critical notice from last
+    // year is not today's severity.
+    worst_severity: worstSeverity(rows.filter((r) => r.status === "active" || r.status === "anticipated")),
     countries_affected: countries,
   };
 }
@@ -667,14 +709,71 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
   }
   const d: any = drug.data;
 
-  const shortages = await sb
-    .from("shortage_events")
-    .select("country,country_code,status,severity,reason,start_date,estimated_resolution_date,source_url")
-    .eq("drug_id", args.drug_id)
-    .order("start_date", { ascending: false })
-    .limit(50);
+  // Open notices are fetched in full (a 50-row cap ordered by date could drop
+  // an old, still-open notice); closed ones only as recent history.
+  const SEL = "country,country_code,status,severity,reason,reason_category,start_date,end_date,estimated_resolution_date,source_url,last_verified_at,data_source_id,raw_data";
+  const [openRes, closedRes] = await Promise.all([
+    sb.from("shortage_events").select(SEL).eq("drug_id", args.drug_id)
+      .in("status", ["active", "anticipated"]).or("synthetic.is.null,synthetic.eq.false")
+      .order("start_date", { ascending: false }).limit(200),
+    sb.from("shortage_events").select(SEL).eq("drug_id", args.drug_id)
+      .not("status", "in", "(active,anticipated)").or("synthetic.is.null,synthetic.eq.false")
+      .order("start_date", { ascending: false }).limit(30),
+  ]);
+  const shortages = { data: [...(openRes.data ?? []), ...(closedRes.data ?? [])] };
 
-  const rows: ShortageRow[] = (shortages.data ?? []) as ShortageRow[];
+  // Each row says which product it covers and whether it is open today. A
+  // closed (resolved) notice is history: the product has no current notice.
+  const toRow = ({ raw_data, data_source_id, ...r }: any): ShortageRow => {
+    const brand = extractEventBrand(data_source_id ?? null, raw_data);
+    const st = String(r.status || "").toLowerCase();
+    return {
+      ...r,
+      product: brand.brand_name ?? null,
+      sponsor: brand.sponsor ?? null,
+      reg_no: raw_data?.artg_numb ?? raw_data?.din ?? null,
+      market_exit_date: extractEventMarketExit(data_source_id ?? null, raw_data).withdrawal_date,
+      notice_state: st === "active" || st === "anticipated" ? "open" : "closed",
+    } as ShortageRow;
+  };
+  const rows: ShortageRow[] = ((shortages.data ?? []) as any[]).map(toRow);
+  // The same product's notice can be filed under several drugs rows (salt /
+  // spelling variants). The canonical Amoxicillin row held older, resolved
+  // duplicates of notices that are open on Amoxicillin-Trihydrate. So the
+  // per-product verdict reads every notice for each registration number,
+  // across drug rows, and trusts the most recently verified one.
+  const regRows: ShortageRow[] = [];
+  for (const [cc, field] of [["AU", "artg_numb"], ["CA", "din"]] as const) {
+    const regs = [...new Set(rows.filter((r) => r.country_code === cc && r.reg_no).map((r) => String(r.reg_no)))].slice(0, 100);
+    if (!regs.length) continue;
+    const { data } = await sb.from("shortage_events").select(SEL).eq("country_code", cc)
+      .in(`raw_data->>${field}`, regs).or("synthetic.is.null,synthetic.eq.false").limit(500);
+    regRows.push(...((data ?? []) as any[]).map(toRow));
+  }
+  // The drug's REGISTERED products can carry an open notice that is filed only
+  // under a sibling drugs row (Amoxil 250mg is registered under Amoxicillin;
+  // its TGA notice sits on Amoxicillin-Trihydrate). Seeding the lookup from
+  // this drug's own notices alone misses those, so also look up open notices
+  // by the register's numbers, as the drug page does. Combination products
+  // are left out, as on the page.
+  const { data: cat } = await sb.from("drug_catalogue")
+    .select("brand_name, active_ingredients, registration_number, source_country")
+    .eq("drug_id", args.drug_id).in("source_country", ["AU", "CA"]).limit(1000);
+  for (const [cc, field] of [["AU", "artg_numb"], ["CA", "din"]] as const) {
+    const seen = new Set(regRows.filter((r) => r.country_code === cc).map((r) => String(r.reg_no)));
+    const regs = [...new Set(((cat ?? []) as any[])
+      .filter((c) => c.source_country === cc && c.brand_name && !isCombo(c.brand_name, c.active_ingredients))
+      .map((c) => String(c.registration_number ?? "").replace(/\D/g, ""))
+      .map((d) => (cc === "AU" ? d.replace(/^0+/, "") : d))
+      .filter((d) => d && !seen.has(d)))].slice(0, 300);
+    for (let i = 0; i < regs.length; i += 100) {
+      const { data } = await sb.from("shortage_events").select(SEL).eq("country_code", cc)
+        .in("status", ["active", "anticipated"])
+        .in(`raw_data->>${field}`, regs.slice(i, i + 100)).or("synthetic.is.null,synthetic.eq.false").limit(200);
+      regRows.push(...((data ?? []) as any[]).map(toRow));
+    }
+  }
+  const productStatus = buildProductStatus([...rows, ...regRows]);
   const summary = shortageSummary(rows);
 
   // Per-drug provenance — only attribute regulators where this drug has an
@@ -716,6 +815,10 @@ async function getDrugDetails(args: { drug_id: string }, ctx: ToolContext): Prom
     who_essential_medicine: !!d.who_essential_medicine,
     critical_medicine_eu: !!d.critical_medicine_eu,
     shortages: rows,
+    product_status: productStatus,
+    product_status_note: productStatus.length
+      ? "Per-product verdict from the regulator's own shortage register, re-checked by Mederti daily (see verified_at). It is the current status: it overrides web pages, news and search snippets, which often describe an earlier state. A product marked 'no current notice' is not short today."
+      : undefined,
     ...summary,
     sources_consulted: sourcesConsulted,
     external_identifiers: Object.keys(externalIdentifiers).length > 0
@@ -2132,8 +2235,8 @@ async function getClassSummary(
     string,
     { drug_id: string; name: string; atc_code: string | null; countries: Set<string>; events: number; who_essential: boolean }
   >();
-  let whoEssentialDrugs = new Set<string>();
-  let euCriticalDrugs = new Set<string>();
+  const whoEssentialDrugs = new Set<string>();
+  const euCriticalDrugs = new Set<string>();
 
   for (const r of rows) {
     const sev = r.severity || "untagged";
@@ -2386,7 +2489,7 @@ async function getSoleSourceEssentials(args: {
     }
   }
 
-  let sponsorNameById = new Map<string, string>();
+  const sponsorNameById = new Map<string, string>();
   if (sponsorIdsToResolve.size > 0) {
     const { data: sps } = await sb
       .from("sponsors")
@@ -2529,7 +2632,7 @@ async function compareShortageBurden(args: { country: string; peer_set?: string[
 
   // Hydrate the top drug names for unique_to_focal + short_in_peers_not_focal (cap 10 each).
   const idsToName = [...unique_to_focal.slice(0, 10), ...short_in_peers_not_focal.slice(0, 10)];
-  let drugNames = new Map<string, string>();
+  const drugNames = new Map<string, string>();
   if (idsToName.length > 0) {
     const { data: drugRows } = await sb.from("drugs").select("id,generic_name").in("id", idsToName);
     for (const r of drugRows ?? []) drugNames.set((r as any).id, (r as any).generic_name);
@@ -2974,13 +3077,73 @@ async function getEligibilityStatus(args: { drug_id?: string; generic_name?: str
     rows = [];
   }
 
+  // drug_id only covers rows the resolver could map (~60% of TGA s19A titles).
+  // Before saying "nothing on the register", also match the free-text title.
+  if (rows.length === 0 && args.drug_id) {
+    try {
+      const { data: d } = await sb.from("drugs").select("generic_name").eq("id", args.drug_id).maybeSingle();
+      const name = (d?.generic_name ?? "").replace(/[%_,()]/g, "").trim();
+      if (name.length >= 4) {
+        let q2 = sb.from("regulatory_eligibility")
+          .select("id,drug_id,generic_name,brand_name,scheme,status,scheme_reference,description,listed_at,expires_at,withdrawn_at,source_url,source_name,last_verified_at")
+          .eq("country_code", country)
+          .or(`generic_name.ilike.%${name}%,brand_name.ilike.%${name}%`)
+          .order("listed_at", { ascending: false, nullsFirst: false })
+          .limit(20);
+        if (args.scheme) q2 = q2.eq("scheme", args.scheme);
+        const { data: r2 } = await q2;
+        rows = (r2 ?? []) as any[];
+      }
+    } catch { /* fall through to the no-row path */ }
+  }
+
   if (rows.length === 0) {
+    // Registers Mederti harvests in full. For these, "no row" is a real answer
+    // (the product is not on the regulator's list) as long as the harvest is
+    // fresh. Saying "Mederti doesn't index this" here was false and invited the
+    // model to improvise (2026-11-20: it told a user Tomudex/raltitrexed had a
+    // s19A approval; it has none).
+    const INDEXED: Record<string, { scheme: string; label: string; url: string }> = {
+      AU: { scheme: "tga_s19a", label: "TGA Section 19A approvals register", url: "https://www.tga.gov.au/resources/section-19a-approvals" },
+      GB: { scheme: "mhra_ssp", label: "MHRA Serious Shortage Protocols list", url: "https://www.cpe.org.uk/dispensing-and-supply/supply-chain/serious-shortage-protocols-ssps/" },
+      US: { scheme: "fda_shortage", label: "FDA Drug Shortage list", url: "https://www.accessdata.fda.gov/scripts/drugshortages/" },
+    };
+    const reg = INDEXED[country === "UK" ? "GB" : country];
+    if (reg && (!args.scheme || args.scheme === reg.scheme)) {
+      let lastHarvest: string | null = null;
+      try {
+        const { data } = await sb.from("regulatory_eligibility")
+          .select("last_verified_at")
+          .eq("scheme", reg.scheme)
+          .order("last_verified_at", { ascending: false, nullsFirst: false })
+          .limit(1);
+        lastHarvest = (data?.[0] as any)?.last_verified_at ?? null;
+      } catch { /* treat as unknown freshness */ }
+      const ageDays = lastHarvest ? (Date.now() - new Date(lastHarvest).getTime()) / 86400_000 : Infinity;
+      if (ageDays <= 3) {
+        return {
+          status: "not_on_register",
+          scheme: reg.scheme, country, drug_id: args.drug_id ?? null, generic_name: args.generic_name ?? null,
+          register_checked_at: lastHarvest,
+          source_url: reg.url,
+          hint: `This medicine has NO entry on the ${reg.label} (Mederti harvests the full register daily; last checked ${lastHarvest?.slice(0, 10)}). State that plainly: there is no current ${reg.label.replace(/ register| list/, "")} entry for it. Do NOT say an approval exists or is "already approved", and do not infer one from web_search, the shortage notice, or other countries. If the regulator's shortage notice names a different pathway (e.g. the Special Access Scheme), report that pathway as written.`,
+          confidence: { level: "high", score: 0.9, basis: `Full ${reg.label} harvested ${lastHarvest?.slice(0, 10)}; no matching entry.` } satisfies Confidence,
+        };
+      }
+      return {
+        status: "unanswerable",
+        reason: "register_stale",
+        hint: `Mederti's copy of the ${reg.label} was last refreshed ${lastHarvest ? lastHarvest.slice(0, 10) : "never"}, so it can't confirm either way. Say that, and point the user to ${reg.url}. Do NOT claim an approval exists.`,
+        country, drug_id: args.drug_id ?? null, generic_name: args.generic_name ?? null, scheme: reg.scheme,
+        confidence: { level: "low", score: 0, basis: `${reg.label} harvest is stale (last ${lastHarvest ?? "never"}).` } satisfies Confidence,
+      };
+    }
     return {
       status: "unanswerable",
       reason: "no_eligibility_on_file",
-      hint: `Eligibility for ${args.scheme ?? "this scheme"} is determined per-application by the regulator. Mederti doesn't currently index the live eligibility list for ${country}. Canonical sources: TGA s19A (tga.gov.au/resources/section-19a-approvals), MHRA SSP (cpe.org.uk/dispensing-and-supply/supply-chain/ssps/), FDA Drug Shortage (accessdata.fda.gov/scripts/drugshortages/). I can tell you whether the drug is in a declared shortage — that gates eligibility for most pathways.`,
+      hint: `Eligibility for ${args.scheme ?? "this scheme"} in ${country} is not a register Mederti harvests. Say so and point the user at the regulator. Do NOT claim an approval exists. Registers Mederti does harvest: TGA s19A (AU), MHRA SSP (GB), FDA Drug Shortage (US).`,
       country, drug_id: args.drug_id ?? null, generic_name: args.generic_name ?? null, scheme: args.scheme ?? null,
-      confidence: { level: "low", score: 0, basis: "No eligibility entries on file. Pilot coverage AU/UK/US/EU when scrapers populate regulatory_eligibility." } satisfies Confidence,
+      confidence: { level: "low", score: 0, basis: "No eligibility register indexed for this country/scheme." } satisfies Confidence,
     };
   }
 
@@ -3323,6 +3486,15 @@ async function getSupplierShortageRecord(args: { manufacturer_or_sponsor: string
 }
 
 async function getFacilityDistressSignals(args: { country?: string; drug_id?: string; limit?: number }) {
+  // manufacturing_facilities has no drug link, so a drug-scoped call used to
+  // return the same unrelated global list for every drug — which then got
+  // narrated as "this drug's facilities". Refuse the scope instead.
+  if (args.drug_id) {
+    return {
+      country: args.country?.toUpperCase() ?? null, drug_id: args.drug_id, items: [],
+      confidence: { level: "low", score: 0, basis: "Facility inspection data is not mapped to the drugs each site makes; Mederti cannot say which facilities supply this drug. Do not attribute any facility or inspection finding to it." } satisfies Confidence,
+    };
+  }
   const sb = getSupabase();
   const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
   let q = sb.from("manufacturing_facilities")

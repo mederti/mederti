@@ -18,10 +18,10 @@
   --text-2:    #334155;
   --text-3:    #64748b;
   --text-4:    #94a3b8;
-  --teal:      #0d9488;
-  --teal-l:    #14b8a6;
-  --teal-bg:   #f0fdfa;
-  --teal-b:    #ccfbf1;
+  --teal:      var(--brand-teal);
+  --teal-l:    var(--brand-teal-d);
+  --teal-bg:   var(--brand-tint);
+  --teal-b:    #C6F3E6;
   --indigo:    #4f46e5;
   --ind-bg:    #eef2ff;
   --ind-b:     #c7d2fe;

@@ -136,7 +136,7 @@ async function tier1RunTool(
   name: string,
   input: Record<string, unknown>,
   ctx: ReturnType<typeof newContext>,
-  write: (event: any) => Promise<void>
+  write: (event: StreamEvent) => Promise<void>
 ): Promise<{ id: string; result: unknown }> {
   // Synthetic ID. Anthropic tool_use_ids look like `toolu_...`; matching
   // that shape keeps the synthetic history believable when we feed it
@@ -225,7 +225,7 @@ async function runTier1({
 }: {
   question: string;
   ctx: ReturnType<typeof newContext>;
-  write: (event: any) => Promise<void>;
+  write: (event: StreamEvent) => Promise<void>;
 }): Promise<Tier1Result | null> {
   const q = question.trim();
   if (!q || q.length > 240) return null;
@@ -533,7 +533,7 @@ export async function POST(req: NextRequest) {
               input: (tu.input ?? {}) as Record<string, unknown>,
             });
             try {
-              const result = await executeTool(tu.name, tu.input as Record<string, any>, ctx);
+              const result = await executeTool(tu.name, tu.input as Record<string, unknown>, ctx);
               await write({
                 type: "tool_done",
                 name: tu.name,

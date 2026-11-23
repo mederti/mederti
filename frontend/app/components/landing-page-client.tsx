@@ -122,7 +122,7 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
 
   const hasChat = messages.length > 0;
 
-  const ac = useAutocomplete({
+  const { containerRef: acContainerRef, ...ac } = useAutocomplete({
     minChars: 2,
     debounceMs: 200,
     limit: 8,
@@ -244,7 +244,7 @@ export default function LandingPageClient({ totalActive, countryCount, sourceCou
           </div>
 
           {/* ── Input bar ──────────────────────────────────────── */}
-          <div ref={ac.containerRef} style={{ maxWidth: 860, width: "100%", position: "relative" }}>
+          <div ref={acContainerRef} style={{ maxWidth: 860, width: "100%", position: "relative" }}>
           <form
             onSubmit={handleSubmit}
             style={{ width: "100%", padding: "0" }}

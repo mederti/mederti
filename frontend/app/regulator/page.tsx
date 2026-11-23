@@ -45,8 +45,8 @@ export default async function RegulatorHubPage() {
           and linked back to the original notice. These are the sources we check.
         </p>
         <p style={{ fontSize: 13, color: "var(--app-text-3)", margin: "0 0 28px" }}>
-          Browse by <Link href="/medicine" style={{ color: "var(--teal, #0fa676)" }}>medicine</Link> or{" "}
-          <Link href="/country" style={{ color: "var(--teal, #0fa676)" }}>country</Link>.
+          Browse by <Link href="/medicine" style={{ color: "var(--teal, #127A63)" }}>medicine</Link> or{" "}
+          <Link href="/country" style={{ color: "var(--teal, #127A63)" }}>country</Link>.
         </p>
 
         {regs.length > 0 ? (

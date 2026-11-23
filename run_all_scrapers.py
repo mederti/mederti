@@ -82,6 +82,7 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "hpra":            ("backend.scrapers.hpra_scraper",                 "HpraScraper"),
     "lakemedelsverket":("backend.scrapers.lakemedelsverket_scraper",     "LakemedelsverketScraper"),
     "sukl":            ("backend.scrapers.sukl_scraper",                 "SuklScraper"),
+    "slovakia_sukl":   ("backend.scrapers.slovakia_sukl_scraper",        "SlovakiaSuklScraper"),
     "ogyei":           ("backend.scrapers.ogyei_scraper",                "OgyeiScraper"),
     "swissmedic":      ("backend.scrapers.swissmedic_scraper",           "SwissmedicScraper"),
     "noma":            ("backend.scrapers.noma_scraper",                 "NoMAScraper"),
@@ -126,6 +127,8 @@ SCRAPERS: dict[str, tuple[str, str]] = {
     "senegal_arp":       ("backend.scrapers.senegal_arp_scraper",         "SenegalARPScraper"),
     "taiwan_tfda":       ("backend.scrapers.taiwan_tfda_scraper",         "TaiwanTFDAScraper"),
     "srilanka_nmra":     ("backend.scrapers.srilanka_nmra_scraper",       "SriLankaNMRAScraper"),
+    # Vaccine-specific national source (2026-11-23) — Railway daily, not Mac cron
+    "pei_vaccines":      ("backend.scrapers.pei_vaccines_scraper",        "PEIVaccinesScraper"),
     # Licensed supplement scrapers (require API keys)
     "ashp":            ("backend.scrapers.ashp_scraper",                 "ASHPScraper"),
     "tga_recalls":     ("backend.scrapers.tga_recalls_scraper",          "TgaRecallsScraper"),

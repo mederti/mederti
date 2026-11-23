@@ -71,7 +71,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ drug_id: string
       .from("api_suppliers")
       .select("manufacturer_name, country, capabilities, cep_holder, dmf_holder, who_pq, source_url")
       .or(idOrName)
-      .limit(20),
+      .limit(200),
     admin
       .from("manufacturing_facilities")
       .select("facility_name, country, last_inspection_classification, last_inspection_date, oai_count_5y, warning_letter_count_5y, source_url"),
@@ -89,7 +89,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ drug_id: string
   ]);
 
   const approvals = approvalsRes.data ?? [];
-  const apiSuppliers = suppliersRes.data ?? [];
+  // One manufacturer can appear once per register (FDA DMF, EDQM CEP, WHO
+  // PQ). Merge rows by normalised company name so the supplier count is a
+  // count of companies, not of filings.
+  const apiSuppliers = mergeSuppliers((suppliersRes.data ?? []) as SupplierRow[]);
   const pricing = pricingRes.data ?? [];
   const equivalents = equivRes.data ?? [];
 
@@ -134,4 +137,45 @@ export async function GET(req: Request, ctx: { params: Promise<{ drug_id: string
       eu_critical: (drug as { critical_medicine_eu: boolean }).critical_medicine_eu,
     },
   });
+}
+
+type SupplierRow = {
+  manufacturer_name: string;
+  country: string | null;
+  capabilities: string[] | null;
+  cep_holder: boolean | null;
+  dmf_holder: boolean | null;
+  who_pq: boolean | null;
+  source_url: string | null;
+};
+
+function normaliseCompany(name: string): string {
+  return (name ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\bltd\b/g, "limited")
+    .replace(/\bpvt\b/g, "private")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function mergeSuppliers(rows: SupplierRow[]): SupplierRow[] {
+  const byName = new Map<string, SupplierRow>();
+  for (const r of rows) {
+    const key = normaliseCompany(r.manufacturer_name);
+    if (!key) continue;
+    const prev = byName.get(key);
+    if (!prev) {
+      byName.set(key, { ...r, capabilities: [...(r.capabilities ?? [])] });
+      continue;
+    }
+    prev.cep_holder = !!(prev.cep_holder || r.cep_holder);
+    prev.dmf_holder = !!(prev.dmf_holder || r.dmf_holder);
+    prev.who_pq = !!(prev.who_pq || r.who_pq);
+    prev.country = prev.country ?? r.country;
+    for (const c of r.capabilities ?? []) {
+      if (!prev.capabilities!.includes(c)) prev.capabilities!.push(c);
+    }
+  }
+  return Array.from(byName.values());
 }

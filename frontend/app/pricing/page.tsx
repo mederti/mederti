@@ -135,7 +135,7 @@ export default function PricingPage() {
             <div style={{
               position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)",
               fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
-              background: "var(--teal)", color: "#fff", padding: "4px 14px", borderRadius: "0 0 8px 8px",
+              background: "var(--navy)", color: "#fff", padding: "4px 14px", borderRadius: "0 0 8px 8px",
               whiteSpace: "nowrap",
             }}>
               Most popular
@@ -157,7 +157,7 @@ export default function PricingPage() {
             <Link href="/contact?subject=Pro+trial" style={{
               display: "block", width: "100%", padding: "12px",
               borderRadius: 8, fontSize: 14, fontWeight: 600, textAlign: "center",
-              background: "var(--teal)", border: "none", color: "#fff",
+              background: "var(--navy)", border: "none", color: "#fff",
               textDecoration: "none", boxSizing: "border-box",
             }}>
               Start 14-day free trial
@@ -223,7 +223,7 @@ export default function PricingPage() {
         </h2>
         <Link href="/contact" style={{
           display: "inline-block", fontSize: 14, fontWeight: 600, padding: "13px 32px",
-          background: "var(--teal)", color: "#fff", borderRadius: 8, textDecoration: "none",
+          background: "var(--navy)", color: "#fff", borderRadius: 8, textDecoration: "none",
         }}>
           Contact us →
         </Link>

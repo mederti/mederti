@@ -129,6 +129,7 @@ export default function MarketSidebar() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     fetchData();
     const id = setInterval(fetchData, 5 * 60 * 1000); // 5 min
     return () => clearInterval(id);

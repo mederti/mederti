@@ -1,0 +1,42 @@
+name: scenario-suite
+
+# Nightly data-accuracy scenario suite against production
+# (backend/scenarios/run_scenarios.py). Expectations are derived from the
+# regulator records in Supabase, so the job needs read access to it.
+#
+# REQUIRED secrets (job is skipped until both are set):
+#   SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY
+# The same suite also runs from the Mac cron (cron/crontab_fixed.txt, 18:00).
+
+on:
+  schedule:
+    - cron: "30 8 * * *"   # 08:30 UTC, after the AU-evening scraper window
+  workflow_dispatch:
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+      - uses: actions/setup-python@v5
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        with:
+          python-version: "3.11"
+      - name: Run scenarios against production
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: python3 -m backend.scenarios.run_scenarios --out scenario-report
+      - name: Upload report
+        if: ${{ always() && env.SUPABASE_URL != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-report
+          path: scenario-report/
+      - name: Secrets not set
+        if: ${{ env.SUPABASE_URL == '' || env.SUPABASE_SERVICE_ROLE_KEY == '' }}
+        run: echo "::warning::SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set; scenario suite skipped."

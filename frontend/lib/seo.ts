@@ -100,6 +100,16 @@ export function drugJsonLd(
   activeShortages: ShortageForJsonLd[],
   countriesCount: number,
   pagePath?: string,
+  page?: {
+    /** Overrides the /drugs-style generated title/description. */
+    name?: string;
+    description?: string;
+    /** ISO timestamp of the most recent source verification shown on the page. */
+    dateModified?: string | null;
+    /** Official regulator notice/register URLs the page's facts come from. */
+    isBasedOn?: string[];
+    /** Extra BreadcrumbList / Place nodes etc. are added by the caller. */
+  },
 ): Record<string, unknown> {
   const url = canonicalUrl(pagePath ?? `/drugs/${drug.id}`);
 
@@ -123,47 +133,39 @@ export function drugJsonLd(
       ? { "alternateName": drug.brand_names.slice(0, 5) }
       : {}),
     ...(drug.atc_code ? { "code": { "@type": "MedicalCode", "codingSystem": "ATC", "codeValue": drug.atc_code } } : {}),
-    ...(drug.is_controlled_substance ? { "isProprietary": false } : {}),
     ...(sameAs.length > 0 ? { "sameAs": sameAs } : {}),
   };
 
-  // The page itself (WebPage describing the drug)
+  // The page itself (WebPage describing the drug). Mederti is the publisher;
+  // the regulators are cited via isBasedOn — never as author or endorser.
   const pageNode: Record<string, unknown> = {
     "@type": "WebPage",
     "@id": url,
     "url": url,
-    "name": pageTitle(drug, activeShortages[0]),
-    "description": pageDescription(drug, activeShortages, countriesCount),
-    "isPartOf": {
-      "@type": "WebSite",
-      "@id": `${siteUrl()}/#website`,
-      "name": "Mederti",
-      "url": siteUrl(),
-    },
+    "name": page?.name ?? pageTitle(drug, activeShortages[0]),
+    "description": page?.description ?? pageDescription(drug, activeShortages, countriesCount),
+    "isPartOf": { "@id": `${siteUrl()}/#website` },
+    "publisher": { "@id": `${siteUrl()}/#organization` },
+    "inLanguage": "en",
+    ...(page?.dateModified ? { "dateModified": page.dateModified } : {}),
+    ...(page?.isBasedOn && page.isBasedOn.length > 0
+      ? { "isBasedOn": page.isBasedOn.slice(0, 10) }
+      : {}),
     "primaryImageOfPage": {
       "@type": "ImageObject",
       "url": `${siteUrl()}/api/og/drug/${drug.id}`,
     },
+    "about": { "@id": `${url}#drug` },
     "mainEntity": { "@id": `${url}#drug` },
   };
 
-  // Optional MedicalCondition graph nodes (the shortages themselves)
-  const shortageNodes = activeShortages.slice(0, 5).map((s, i) => ({
-    "@type": "MedicalCondition",
-    "@id": `${url}#shortage-${i}`,
-    "name": `${drug.generic_name} shortage in ${s.country}`,
-    "associatedAnatomy": null,
-    "status": s.status,
-    "severity": s.severity,
-  }));
-
+  // Shortages are NOT modelled as schema.org nodes: there is no shortage type,
+  // and the previous MedicalCondition nodes (with invented status/severity
+  // properties) misrepresented a supply event as a disease. The status lives
+  // in the visible page text and the WebPage description instead.
   return {
     "@context": "https://schema.org",
-    "@graph": [
-      drugNode,
-      pageNode,
-      ...shortageNodes,
-    ],
+    "@graph": [drugNode, pageNode],
   };
 }
 

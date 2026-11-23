@@ -1,3 +1,4 @@
+import { marketHasShortageData } from "@/lib/coverage";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ServerTimer } from "@/lib/server-timing";
@@ -45,6 +46,13 @@ interface SearchHit {
   // ── Brand provenance (set only on rows promoted from a catalogue brand hit) ──
   matched_brand?: string | null;             // the brand the user typed (e.g. "Fresofol")
   matched_catalogue_id?: string | null;      // catalogue row id → brand SKU view
+  // Status of the matched brand itself in the market (AU/CA only — TGA and
+  // Health Canada publish per registration number). Without it a brand
+  // search showed the molecule's earliest ETA, i.e. another brand's date.
+  brand_status?: {
+    brand: string; regs: number; short: number; anticipated: number;
+    back: string | null; past: number; last: string | null; regulator: string;
+  } | null;
 }
 
 // PostgrestSingleResponse-shaped value we can ignore the full type of.
@@ -333,7 +341,12 @@ export async function GET(req: NextRequest) {
               a.active++;
               if (row.estimated_resolution_date) {
                 const t = Date.parse(row.estimated_resolution_date);
-                if (!Number.isNaN(t) && (a.minRes === null || t < a.minRes)) a.minRes = t;
+                // A sponsor estimate already in the past is not an "expected
+                // back" date — the drug page labels it "Estimate passed, not
+                // updated"; showing it here as the ETA misled (Propofol showed
+                // "Apr 2026" in Nov 2026). Only future estimates qualify.
+                const startOfToday = new Date().setUTCHours(0, 0, 0, 0);
+                if (!Number.isNaN(t) && t >= startOfToday && (a.minRes === null || t < a.minRes)) a.minRes = t;
               }
               const sev = SEV[(row.severity ?? "").toLowerCase()] ?? 0;
               if (sev > a.maxSev) a.maxSev = sev;
@@ -589,6 +602,42 @@ export async function GET(req: NextRequest) {
 
   // Market-scoped molecule pool (before the status filter) — used both for the
   // status facet counts and as the basis for the displayed drug results.
+  // ── Matched-brand status (AU/CA, registration-number exact) ────────────
+  const brandStatus = new Map<string, NonNullable<SearchHit["brand_status"]>>();
+  const regField = market === "AU" ? "artg_numb" : market === "CA" ? "din" : null;
+  if (regField && promoteMeta.size > 0) {
+    const histSince = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    await timer.track("db_brand_status", () => Promise.all([...promoteMeta.entries()].slice(0, 5).map(async ([did, meta]) => {
+      const generic = String(drugRows.find((r) => r.id === did)?.generic_name ?? "").toLowerCase();
+      const word = (meta.brand.toLowerCase().split(/\s+/)[0] ?? "").replace(/[^a-z\-]/g, "");
+      if (word.length < 4 || generic.split(/[^a-z]+/).includes(word)) return;
+      const { data: cat } = await sb.from("drug_catalogue").select("registration_number")
+        .eq("drug_id", did).eq("source_country", market).eq("registration_status", "active")
+        .ilike("brand_name", `${word}%`).limit(100);
+      const regs = [...new Set((cat ?? []).map((r) => String(r.registration_number ?? ""))
+        .map((r) => (market === "AU" ? r.replace(/\D/g, "").replace(/^0+/, "") : r.replace(/\D/g, "")))
+        .filter(Boolean))];
+      if (!regs.length) return;
+      const { data: ev } = await sb.from("shortage_events")
+        .select("status, start_date, estimated_resolution_date")
+        .eq("country_code", market).in(`raw_data->>${regField}`, regs)
+        .or("synthetic.is.null,synthetic.eq.false").limit(300);
+      const rows = (ev ?? []) as { status: string; start_date: string | null; estimated_resolution_date: string | null }[];
+      const open = rows.filter((r) => r.status === "active");
+      const ant = rows.filter((r) => r.status === "anticipated");
+      const past = new Set(rows.filter((r) => r.status === "resolved" && r.start_date && r.start_date >= histSince).map((r) => r.start_date!));
+      const backs = open.map((r) => r.estimated_resolution_date).filter((d): d is string => !!d && d >= today).sort();
+      brandStatus.set(did, {
+        brand: word.charAt(0).toUpperCase() + word.slice(1),
+        regs: regs.length, short: open.length, anticipated: ant.length,
+        back: backs.length && backs.length === open.length ? backs[backs.length - 1] : null,
+        past: past.size, last: [...past].sort().pop() ?? null,
+        regulator: market === "AU" ? "TGA" : "Health Canada",
+      });
+    })).then(() => undefined));
+  }
+
   const marketDrugs: Ranked[] = drugRows
     .map((r): Ranked => {
       const id = r.id as string;
@@ -612,6 +661,7 @@ export async function GET(req: NextRequest) {
         // catalogue brand the user typed (e.g. "Fresofol" → Propofol).
         matched_brand: promoteMeta.get(id)?.brand || null,
         matched_catalogue_id: promoteMeta.get(id)?.catId || null,
+        brand_status: brandStatus.get(id) ?? null,
         _res: a?.minRes ?? null,
         _sev: a?.maxSev ?? 0,
       };
@@ -773,6 +823,9 @@ export async function GET(req: NextRequest) {
       total,
       suggestion,
       market: isGlobal ? "ALL" : market,
+      // false = no shortage source for this market: rows must not read
+      // "Available" (no notices there proves nothing).
+      market_covered: isGlobal ? true : await marketHasShortageData(market),
       sort,
       status: [...statusKeys],
       form: [...formKeys],

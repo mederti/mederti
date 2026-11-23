@@ -253,7 +253,7 @@ class MfdsScraper(BaseScraper):
         if any(w in low for w in ["제조", "생산", "manufactur", "production"]):
             return "manufacturing_issue"
         if any(w in low for w in ["원료", "raw material"]):
-            return "raw_material_shortage"
+            return "raw_material"
         if any(w in low for w in ["수입", "import", "supply", "공급"]):
             return "supply_chain"
         if any(w in low for w in ["수요", "demand"]):

@@ -78,14 +78,7 @@ class TgaSection19A(EligibilityScraper):
         would wrongly mark every un-fetched approval as lapsed. Skipping the day
         is the safe failure mode.
         """
-        first = self._get_with_retry(self.SOURCE_URL)
-        if "node--s19aa node--summary" not in first:
-            # Since ~2026-10-28 tga.gov.au answers with an Akamai bot-check
-            # interstitial (bm-verify) instead of the register. That parsed to
-            # 0 rows and logged as a clean run; fail loudly instead so the
-            # staleness is visible. Data stays at its last verified state.
-            why = "bot-check interstitial (bm-verify)" if "bm-verify" in first else "no approval cards on page 1"
-            raise RuntimeError(f"TGA s19A register not returned: {why}; last verified data kept unchanged")
+        first = self._get_listing_page(self.SOURCE_URL)
         pages = [first]
         # The pager exposes the highest page index; fall back to "until empty".
         page_nums = [int(n) for n in _PAGE_PARAM_RE.findall(first)]
@@ -103,6 +96,37 @@ class TgaSection19A(EligibilityScraper):
             pages.append(html)
         self.log(f"fetched {len(pages)} result page(s) (pager reported last={last})")
         return pages
+
+    def _get_listing_page(self, url: str, attempts: int = 4) -> str:
+        """Fetch page 0 and insist it is a real results listing.
+
+        Between 2026-10-27 and 2026-11-20 every cron run got an HTTP 200 back
+        from TGA that contained NO approval cards and NO pager. The scraper
+        parsed it as "0 approvals" and logged success, so the s19A register
+        silently went stale for ~3 weeks. An empty register is never true
+        (the register holds ~880 approvals), so a card-less first page is a
+        fetch failure: retry with backoff, then raise. run() turns that into
+        errors=1, the day is skipped, and nothing is lapsed.
+        """
+        snippet = ""
+        for i in range(attempts):
+            html = self._get_with_retry(url)
+            if "node--s19aa node--summary" in html:
+                return html
+            title = re.search(r"<title>(.*?)</title>", html, re.S)
+            snippet = (title.group(1).strip() if title else html[:200]).replace("\n", " ")
+            self.log(
+                f"page 0 had no approval cards (attempt {i + 1}/{attempts}, "
+                f"{len(html)} bytes, title={snippet!r})",
+                level="warning",
+            )
+            if i + 1 < attempts:
+                time.sleep(15 * (i + 1))
+        raise RuntimeError(
+            f"TGA s19A listing returned no approval cards after {attempts} attempts "
+            f"(last title={snippet!r}). The register is never empty, so this is "
+            f"treated as a fetch failure, not '0 approvals'."
+        )
 
     def _get_with_retry(self, url: str, attempts: int = 3) -> str:
         last_err: Exception | None = None

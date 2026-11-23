@@ -121,14 +121,14 @@ export function LeadCaptureModal({
         {done ? (
           <div className="modal-success">
             <div className="modal-success-icon">✓</div>
-            <h2 id="lead-title" className="modal-title">You're on the list.</h2>
+            <h2 id="lead-title" className="modal-title">You&apos;re on the list.</h2>
             <p className="modal-sub">
-              Mederti has your request{intent.drug_name ? ` for ${intent.drug_name}` : ""}. We'll reach out at <strong>{email}</strong>{" "}
+              Mederti has your request{intent.drug_name ? ` for ${intent.drug_name}` : ""}. We&apos;ll reach out at <strong>{email}</strong>{" "}
               within one business day.
             </p>
             {!done.persisted ? (
               <p className="modal-warn">
-                (Note for the operator: the leads table isn't migrated yet — your request was logged but not saved to the DB. Paste{" "}
+                (Note for the operator: the leads table isn&apos;t migrated yet — your request was logged but not saved to the DB. Paste{" "}
                 <code>supabase/migrations/0001_leads.sql</code> into the Supabase SQL editor.)
               </p>
             ) : null}
@@ -218,7 +218,7 @@ export function LeadCaptureModal({
               </button>
             </div>
             <p className="modal-foot">
-              No commitment. Mederti will introduce you — we don't share your email with suppliers without confirmation.
+              No commitment. Mederti will introduce you — we don&apos;t share your email with suppliers without confirmation.
             </p>
           </form>
         )}

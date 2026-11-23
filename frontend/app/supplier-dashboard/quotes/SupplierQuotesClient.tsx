@@ -108,7 +108,7 @@ export default function SupplierQuotesClient() {
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Quotes Pipeline</h1>
         <p style={{ fontSize: 14, color: "var(--app-text-4)" }}>
-          Track every quote you've submitted from submitted to won.
+          Track every quote you&apos;ve submitted from submitted to won.
         </p>
       </div>
 

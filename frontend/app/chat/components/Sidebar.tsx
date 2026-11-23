@@ -53,6 +53,7 @@ function useExpandedSet(key: string, defaultOpen: string[]) {
       const raw = localStorage.getItem(key);
       if (raw) {
         const arr = JSON.parse(raw) as string[];
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
         setOpen(new Set(arr));
       }
     } catch {}
@@ -680,7 +681,7 @@ export function Sidebar({
                   {isOpen && w.items.length > 0 ? (
                     <div className="pl-[18px] mt-px">
                       {w.items.map((it) => {
-                        const itemId = it.drug_id ?? (it as any).drug_slug ?? "";
+                        const itemId = it.drug_id ?? (it as { drug_slug?: string }).drug_slug ?? "";
                         return (
                           <WatchlistDrugRow
                             key={itemId}

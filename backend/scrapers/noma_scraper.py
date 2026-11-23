@@ -230,6 +230,18 @@ class NoMAScraper(BaseScraper):
                 status_raw = col(status_col) if status_col else ""
                 status = self._map_status(status_raw)
 
+                # NoMA occasionally publishes a resolved period that ends
+                # before it starts (7 of 1,649 rows, Nov 2026). The DB's
+                # chk_dates rejects those, and we don't invent either date —
+                # skip them visibly instead of 400-ing the write.
+                if status == "resolved" and end_date and end_date < start_date:
+                    skipped += 1
+                    self.log.warning(
+                        "NoMA: resolved row ends before it starts; skipped",
+                        extra={"drug": generic_name, "from": start_date, "to": end_date},
+                    )
+                    continue
+
                 # Reason
                 aarsak = col("Årsak")  # Norwegian: reason
                 reason_cat = self._map_reason_category(aarsak)
@@ -253,7 +265,8 @@ class NoMAScraper(BaseScraper):
                     "reason_category":           reason_cat,
                     "start_date":                start_date,
                     "end_date":                  end_date if status == "resolved" else None,
-                    "estimated_resolution_date": end_date if status == "active" else None,
+                    "estimated_resolution_date": end_date if status in ("active", "anticipated") else None,
+                    "anticipated_start_date":    start_date if status == "anticipated" else None,
                     "source_url":                self.BASE_URL,
                     "notes":                     notes,
                     "raw_record": {
@@ -302,6 +315,11 @@ class NoMAScraper(BaseScraper):
     def _map_status(status_raw: str) -> str:
         """Map Norwegian status text to internal status enum."""
         low = status_raw.lower()
+        # "Kommende" = upcoming: NoMA's notice of a shortage that has not
+        # started. It must not count as live (it defaulted to active, and 34
+        # future-dated NO rows read as current shortages, Nov 2026).
+        if "kommende" in low:
+            return "anticipated"
         if any(w in low for w in ["mangel", "shortage", "utilgjengelig", "ikke"]):
             return "active"
         if any(w in low for w in ["forventet", "planlagt", "expect"]):
@@ -317,11 +335,11 @@ class NoMAScraper(BaseScraper):
         if any(w in low for w in ["produksjon", "production", "manufactur"]):
             return "manufacturing_issue"
         if any(w in low for w in ["råvare", "raw material", "ingredients"]):
-            return "raw_material_shortage"
+            return "raw_material"
         if any(w in low for w in ["distribusjon", "distribution", "transport", "logistics"]):
-            return "distribution_issue"
+            return "distribution"
         if any(w in low for w in ["regulatorisk", "godkjenning", "regulatory"]):
-            return "regulatory"
+            return "regulatory_action"
         if any(w in low for w in ["etterspørsel", "demand"]):
             return "demand_surge"
         return "supply_chain"

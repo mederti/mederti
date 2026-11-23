@@ -135,6 +135,16 @@ _SL_REASON_MAP: dict[str, str] = {
 }
 
 
+
+def _iso_cell(v: Any) -> Any:
+    """Workbook date cells arrive as datetime/date objects, which the raw_scrapes
+    insert can't JSON-serialise (every run failed with "Object of type datetime
+    is not JSON serializable" and wrote zero rows). Store them as ISO strings;
+    _parse_date already accepts strings downstream."""
+    if isinstance(v, (datetime, date)):
+        return v.isoformat()
+    return v
+
 class SloveniaJAZMPScraper(BaseScraper):
     SOURCE_ID: str    = "10000000-0000-0000-0000-000000000104"
     SOURCE_NAME: str  = "JAZMP — Marketed Medicinal Products (Slovenia)"
@@ -300,10 +310,10 @@ class SloveniaJAZMPScraper(BaseScraper):
                 "product":         str(product).strip(),
                 "reporter":        str(reporter).strip() if reporter else "",
                 "reporter_status": str(reporter_status).strip() if reporter_status else "",
-                "notice_date":     notice_date,
+                "notice_date":     _iso_cell(notice_date),
                 "notice_type":     str(notice_type).strip(),
-                "start_date":      start_date,
-                "end_date":        end_date,
+                "start_date":      _iso_cell(start_date),
+                "end_date":        _iso_cell(end_date),
                 "notes":           str(notes).strip() if notes else "",
                 "sheet":           sheet_name,
             })
@@ -366,6 +376,16 @@ class SloveniaJAZMPScraper(BaseScraper):
         event_end = self._parse_date(rec.get("end_date"))
 
         status = self._determine_status(notice_class, event_start, today)
+
+        # A re-arrival dated in the future hasn't happened: the medicine is
+        # still short, and the preceding disruption notice carries that. Writing
+        # it as "resolved" would need an end_date before its own start_date.
+        if notice_class == "ARRIVAL" and status == "resolved" and event_start:
+            try:
+                if datetime.fromisoformat(event_start).date() > today:
+                    return None
+            except ValueError:
+                pass
 
         # Filter out ancient, already-closed events -- see module docstring.
         # Keep everything currently active/anticipated regardless of age
@@ -495,6 +515,12 @@ class SloveniaJAZMPScraper(BaseScraper):
 
         if notice_class in ("DISRUPTION", "TEMPORARY_STOP"):
             return "anticipated" if is_future else "active"
+        # A permanent stop announced for a future date is a known, upcoming
+        # loss of supply -- not a closed chapter yet. Marking it resolved
+        # stamped end_date=today < start_date and Postgres rejected the row
+        # (chk_dates), silently dropping ~28 pre-announced withdrawals a run.
+        if notice_class == "PERMANENT_STOP" and is_future:
+            return "anticipated"
         # PERMANENT_STOP and ARRIVAL/RETURN both represent a closed chapter
         # from JAZMP's perspective -- the medicine either left the market
         # for good, or came back. Either way there's nothing "ongoing".
@@ -580,6 +606,12 @@ class SloveniaJAZMPScraper(BaseScraper):
         raw_str = str(raw).strip()
         if not raw_str or raw_str in ("-", "N/A", "null", "None"):
             return None
+        # ISO strings (from _iso_cell) must be read exactly -- dateutil with
+        # dayfirst=True swaps month/day on "2025-03-04" -> 3 April.
+        try:
+            return datetime.fromisoformat(raw_str).date().isoformat()
+        except ValueError:
+            pass
         try:
             from dateutil import parser as dtparser
             dt = dtparser.parse(raw_str, dayfirst=True)

@@ -46,7 +46,7 @@ export default async function ComingSoonPage({ searchParams }: PageProps) {
             lineHeight: 1.6, margin: "0 0 22px",
             fontFamily: "var(--font-inter), sans-serif",
           }}>
-            This part of Mederti isn't open to the public yet. We're rolling features out gradually — sign up and we'll let you know when this section is ready.
+            This part of Mederti isn&apos;t open to the public yet. We&apos;re rolling features out gradually — sign up and we&apos;ll let you know when this section is ready.
           </p>
 
           {from && from !== "/" && (

@@ -396,7 +396,7 @@ function PortfolioRiskMonitor() {
 
   useEffect(() => { fetchPortfolio(); }, [fetchPortfolio]);
 
-  const autocomplete = useAutocomplete({
+  const { containerRef: autocompleteContainerRef, ...autocomplete } = useAutocomplete({
     onSelect: async (item) => {
       setAdding(true);
       try {
@@ -434,7 +434,7 @@ function PortfolioRiskMonitor() {
       <SectionHeader icon={<Shield {...ICON_SIZE} />}>Portfolio Risk Monitor</SectionHeader>
 
       {/* Drug search */}
-      <div ref={autocomplete.containerRef} style={{ position: "relative", marginBottom: 24 }}>
+      <div ref={autocompleteContainerRef} style={{ position: "relative", marginBottom: 24 }}>
         <div style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "10px 16px", borderRadius: 8,

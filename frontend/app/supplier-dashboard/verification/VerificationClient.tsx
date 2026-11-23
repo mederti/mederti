@@ -180,7 +180,7 @@ export default function VerificationClient() {
         <div style={{ background: "white", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24 }}>
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Request verification</div>
           <p style={{ fontSize: 13, color: "var(--app-text-4)", marginBottom: 18 }}>
-            Declare which documents you can provide. We'll email <strong>verification@mederti.com</strong> within 24h to request copies.
+            Declare which documents you can provide. We&apos;ll email <strong>verification@mederti.com</strong> within 24h to request copies.
           </p>
 
           {drafts.map((d, i) => (

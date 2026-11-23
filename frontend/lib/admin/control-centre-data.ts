@@ -50,6 +50,20 @@ async function batched<T>(tasks: (() => Promise<T>)[], limit = 6): Promise<T[]> 
   return results;
 }
 
+/** Seed/test accounts (mederti.test) and staff (mederti.com). These are real
+ *  auth rows but not customers — every user-facing metric excludes them and
+ *  reports them separately, so "users" always means external people. */
+const INTERNAL_EMAIL_DOMAINS = ["mederti.test", "mederti.com"];
+export function isInternalEmail(email: string | null): boolean {
+  const domain = (email ?? "").split("@")[1]?.toLowerCase() ?? "";
+  return INTERNAL_EMAIL_DOMAINS.includes(domain);
+}
+
+/** shortage_events.synthetic marks rows that are not regulator shortage
+ *  notices (e.g. FDA MedWatch recalls stored as events). The public site
+ *  excludes them everywhere, so the control centre must too. */
+const NOT_SYNTHETIC = "synthetic.is.null,synthetic.eq.false";
+
 function maskEmail(email: string | null): string {
   if (!email) return "unknown";
   const [local, domain] = email.split("@");
@@ -91,7 +105,8 @@ async function fetchAllAuthUsers(admin: ReturnType<typeof getSupabaseAdmin>) {
   const users: AuthUserLite[] = [];
   for (let p = 1; p <= 20; p++) {
     const { data, error } = await admin.auth.admin.listUsers({ page: p, perPage: 1000 });
-    if (error) break;
+    // Never return a partial list — user counts would silently under-report.
+    if (error) throw new Error(`auth.admin.listUsers failed: ${error.message}`);
     users.push(
       ...data.users.map((u) => ({
         id: u.id,
@@ -105,7 +120,12 @@ async function fetchAllAuthUsers(admin: ReturnType<typeof getSupabaseAdmin>) {
   return users;
 }
 
-type NamedCount = { name: string; value: number };
+export type NamedCount = { name: string; value: number; code?: string };
+
+/** Countries behind the Nov 2026 crawler spike (thousands of visits, zero
+ *  signups). Vercel Web Analytics cannot separate bots from people, so we
+ *  never subtract these — we report their share next to the total. */
+export const CRAWLER_HEAVY_COUNTRIES = ["SG", "CN", "HK"];
 
 export type TrafficData =
   | { available: false; reason: string }
@@ -120,6 +140,8 @@ export type TrafficData =
       top_pages: NamedCount[];
       top_referrers: NamedCount[];
       top_countries: NamedCount[];
+      /** Visitors from CRAWLER_HEAVY_COUNTRIES that appear in top_countries. */
+      crawler_heavy_visitors: number;
     };
 
 const TRAFFIC_WINDOW_DAYS = 90;
@@ -160,7 +182,7 @@ async function fetchVercelTraffic(): Promise<TrafficData | null> {
     ((await get("aggregate", { by, since: dayKey(since), until: dayKey(today), limit: "9" })) as Row[])
       .filter((r) => r[by] && r[by] !== "Others")
       .slice(0, 8)
-      .map((r) => ({ name: label(String(r[by])), value: Number(r.visitors ?? 0) }));
+      .map((r) => ({ name: label(String(r[by])), value: Number(r.visitors ?? 0), code: String(r[by]) }));
 
   try {
     const [totals, firstHalf, secondHalf, top_pages, top_referrers, top_countries] = await Promise.all([
@@ -191,6 +213,85 @@ async function fetchVercelTraffic(): Promise<TrafficData | null> {
       top_pages,
       top_referrers,
       top_countries,
+      crawler_heavy_visitors: crawlerHeavy(top_countries),
+    };
+  } catch (e) {
+    return { available: false, reason: `Vercel Analytics query failed: ${(e as Error).message}.` };
+  }
+}
+
+const crawlerHeavy = (countries: NamedCount[]) =>
+  countries
+    .filter((c) => c.code && CRAWLER_HEAVY_COUNTRIES.includes(c.code))
+    .reduce((a, c) => a + c.value, 0);
+
+export type TrafficWindow = {
+  since: string;
+  until: string;
+  /** De-duplicated across the window by Vercel (not a sum of daily uniques). */
+  visitors: number;
+  views: number;
+};
+export type WeeklyTraffic =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      week: TrafficWindow;
+      previous: TrafficWindow;
+      top_pages: NamedCount[];
+      top_referrers: NamedCount[];
+      top_countries: NamedCount[];
+      crawler_heavy_visitors: number;
+    };
+
+/**
+ * Traffic for an exact inclusive UTC date window and the equal-length window
+ * before it — used by the weekly report. Same Vercel Web Analytics query API
+ * (and therefore the same definitions) as the dashboard panel.
+ */
+export async function fetchWeeklyTraffic(since: string, until: string): Promise<WeeklyTraffic> {
+  const token = process.env.VERCEL_ANALYTICS_TOKEN;
+  if (!token) return { available: false, reason: "VERCEL_ANALYTICS_TOKEN is not set." };
+  const projectId = process.env.VERCEL_ANALYTICS_PROJECT_ID || "prj_YEn45c67WshFBA6D6jP6NwkYBwk5";
+  const teamId = process.env.VERCEL_ANALYTICS_TEAM_ID || "team_fwNsQpnIDnvi9VPRfxPf03QH";
+  const base = "https://api.vercel.com/v1/query/web-analytics/visits";
+  const DAY = 86_400_000;
+  const days = Math.round((Date.parse(until) - Date.parse(since)) / DAY) + 1;
+  const prevUntil = dayKey(new Date(Date.parse(since) - DAY));
+  const prevSince = dayKey(new Date(Date.parse(since) - days * DAY));
+
+  type Row = Record<string, string | number | null>;
+  const get = async (endpoint: "count" | "aggregate", params: Record<string, string>) => {
+    const qs = new URLSearchParams({ projectId, teamId, ...params });
+    const res = await fetch(`${base}/${endpoint}?${qs}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Vercel Analytics HTTP ${res.status}`);
+    return ((await res.json()) as { data: unknown }).data;
+  };
+  const window = async (s: string, u: string): Promise<TrafficWindow> => {
+    const r = (await get("count", { since: s, until: u })) as Row;
+    return { since: s, until: u, visitors: Number(r.visitors ?? 0), views: Number(r.pageviews ?? 0) };
+  };
+  const top = async (by: string, label: (v: string) => string = (v) => v) =>
+    ((await get("aggregate", { by, since, until, limit: "9" })) as Row[])
+      .filter((r) => r[by] && r[by] !== "Others")
+      .slice(0, 8)
+      .map((r) => ({ name: label(String(r[by])), value: Number(r.visitors ?? 0), code: String(r[by]) }));
+
+  try {
+    const [week, previous, top_pages, top_referrers, top_countries] = await Promise.all([
+      window(since, until),
+      window(prevSince, prevUntil),
+      top("requestPath"),
+      top("referrerHostname"),
+      top("country", (c) => COUNTRY_NAMES[c] ?? c),
+    ]);
+    return {
+      available: true, week, previous, top_pages, top_referrers, top_countries,
+      crawler_heavy_visitors: crawlerHeavy(top_countries),
     };
   } catch (e) {
     return { available: false, reason: `Vercel Analytics query failed: ${(e as Error).message}.` };
@@ -238,6 +339,7 @@ async function fetchPostHogTraffic(): Promise<TrafficData> {
       top_pages: [],
       top_referrers: [],
       top_countries: [],
+      crawler_heavy_visitors: 0,
     };
   } catch {
     return { available: false, reason: "PostHog query timed out or errored." };
@@ -450,7 +552,9 @@ export async function getControlCentreData() {
     totalEventsRes,
     activeCountRes,
     anticipatedRes,
+    syntheticActiveRes,
     newWeekRes,
+    newWeekOpenRes,
     recallsRes,
     drugsRes,
     watchlistRes,
@@ -463,15 +567,28 @@ export async function getControlCentreData() {
     admin
       .from("shortage_events")
       .select("id", { count: "exact", head: true })
-      .eq("status", "active"),
+      .eq("status", "active")
+      .or(NOT_SYNTHETIC),
     admin
       .from("shortage_events")
       .select("id", { count: "exact", head: true })
-      .eq("status", "anticipated"),
+      .eq("status", "anticipated")
+      .or(NOT_SYNTHETIC),
+    admin
+      .from("shortage_events")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active")
+      .eq("synthetic", true),
     admin
       .from("shortage_events")
       .select("id", { count: "exact", head: true })
       .gte("created_at", iso(7 * DAY)),
+    admin
+      .from("shortage_events")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", iso(7 * DAY))
+      .in("status", ["active", "anticipated"])
+      .or(NOT_SYNTHETIC),
     admin.from("recalls").select("id", { count: "exact", head: true }),
     admin.from("drugs").select("id", { count: "exact", head: true }),
     admin.from("user_watchlists").select("id", { count: "exact", head: true }),
@@ -484,6 +601,10 @@ export async function getControlCentreData() {
   ]);
 
   if (sourcesRes.error) throw new Error(sourcesRes.error.message);
+  // A failed count must never render as 0 — fail the whole page loudly.
+  for (const r of [totalEventsRes, activeCountRes, anticipatedRes, syntheticActiveRes, newWeekRes, newWeekOpenRes, recallsRes, drugsRes, watchlistRes]) {
+    if (r.error) throw new Error(`count query failed: ${r.error.message}`);
+  }
 
   // ── Batch 2 (bounded concurrency): ingest per day + active count per country ──
   // PostgREST aggregates are disabled on this project (PGRST123) and the
@@ -505,7 +626,7 @@ export async function getControlCentreData() {
     const from = new Date(now - (days - i) * DAY);
     const to = new Date(now - (days - 1 - i) * DAY);
     return async () => {
-      const [created, verified] = await Promise.all([
+      const [created, verified, both] = await Promise.all([
         admin
           .from("shortage_events")
           .select("id", { count: "exact", head: true })
@@ -516,21 +637,34 @@ export async function getControlCentreData() {
           .select("id", { count: "exact", head: true })
           .gte("last_verified_at", from.toISOString())
           .lt("last_verified_at", to.toISOString()),
+        admin
+          .from("shortage_events")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", from.toISOString())
+          .lt("created_at", to.toISOString())
+          .gte("last_verified_at", from.toISOString())
+          .lt("last_verified_at", to.toISOString()),
       ]);
+      const err = created.error ?? verified.error ?? both.error;
+      if (err) throw new Error(`ingest count failed: ${err.message}`);
+      // A row created and verified in the same window is ONE write: count it
+      // under new_events only, so new_events + verified = distinct rows.
       return {
         date: dayKey(to),
         new_events: created.count ?? 0,
-        verified: verified.count ?? 0,
+        verified: (verified.count ?? 0) - (both.count ?? 0),
       };
     };
   });
 
   const countryTasks = countryCodes.map((code) => async () => {
-    const { count } = await admin
+    const { count, error } = await admin
       .from("shortage_events")
       .select("id", { count: "exact", head: true })
       .eq("status", "active")
-      .eq("country_code", code);
+      .eq("country_code", code)
+      .or(NOT_SYNTHETIC);
+    if (error) throw new Error(`country count failed (${code}): ${error.message}`);
     return { code, count: count ?? 0 };
   });
 
@@ -565,6 +699,9 @@ export async function getControlCentreData() {
       abbreviation: s.abbreviation,
       country_code: s.country_code,
       hours_since: hours === null ? null : Number(hours.toFixed(1)),
+      // How many expected cycles have been missed — a daily source 64 d dark
+      // outranks a monthly one 200 d dark.
+      overdue_ratio: hours === null ? null : hours / threshold,
       status,
     };
   });
@@ -587,15 +724,21 @@ export async function getControlCentreData() {
     },
     worst: freshnessDetail
       .filter((s) => s.status !== "ok")
-      .sort((a, b) => (b.hours_since ?? Infinity) - (a.hours_since ?? Infinity))
+      .sort((a, b) => (b.overdue_ratio ?? -1) - (a.overdue_ratio ?? -1))
       .slice(0, 8),
   };
 
   // ── Users & growth ──
+  // auth.users is the source of truth for accounts. If it could not be read
+  // we cannot tell internal from external, so fail rather than guess.
+  if (authUsers.length === 0) throw new Error("auth users could not be listed");
+  const externalUsers = authUsers.filter((u) => !isInternalEmail(u.email));
+  const internalUsers = authUsers.length - externalUsers.length;
+
   const roleOf = new Map(profiles.map((p) => [p.user_id, p.role]));
   const personaCounts = new Map<string, number>();
-  for (const p of profiles) {
-    const role = p.role ?? "no role set";
+  for (const u of externalUsers) {
+    const role = roleOf.has(u.id) ? roleOf.get(u.id) ?? "no role set" : "no profile yet";
     personaCounts.set(role, (personaCounts.get(role) ?? 0) + 1);
   }
   const personas = [...personaCounts.entries()]
@@ -603,7 +746,7 @@ export async function getControlCentreData() {
     .sort((a, b) => b.count - a.count);
 
   const signupsByDay = new Map<string, number>();
-  for (const u of authUsers) {
+  for (const u of externalUsers) {
     const key = u.created_at?.slice(0, 10);
     if (key) signupsByDay.set(key, (signupsByDay.get(key) ?? 0) + 1);
   }
@@ -614,13 +757,14 @@ export async function getControlCentreData() {
   });
 
   const weekAgoIso = iso(7 * DAY);
-  const users_total = authUsers.length || profiles.length;
-  const signups_7d = authUsers.filter((u) => u.created_at >= weekAgoIso).length;
-  const wau = authUsers.filter(
+  const users_total = externalUsers.length;
+  const signups_7d = externalUsers.filter((u) => u.created_at >= weekAgoIso).length;
+  const wau = externalUsers.filter(
     (u) => u.last_sign_in_at && u.last_sign_in_at >= weekAgoIso,
   ).length;
+  const never_signed_in = externalUsers.filter((u) => !u.last_sign_in_at).length;
 
-  const latest_signups = [...authUsers]
+  const latest_signups = [...externalUsers]
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 6)
     .map((u) => ({
@@ -633,6 +777,7 @@ export async function getControlCentreData() {
 
   // ── Derived system + alert signals (honest: presence/reachability, not pings) ──
   const last24 = ingestCounts[ingestCounts.length - 1];
+  // new_events and verified are disjoint (see ingestTasks), so this is distinct rows.
   const ingested24h = last24 ? last24.new_events + last24.verified : 0;
   const systems = [
     { name: "Supabase (Postgres + auth)", status: "ok" as const, note: "Queried live for this page" },
@@ -641,7 +786,7 @@ export async function getControlCentreData() {
       status: ingested24h > 0 ? ("ok" as const) : ("down" as const),
       note:
         ingested24h > 0
-          ? `${ingested24h.toLocaleString()} writes in the last 24 h`
+          ? `${ingested24h.toLocaleString()} rows written in the last 24 h`
           : "No writes in the last 24 h",
     },
     {
@@ -671,7 +816,7 @@ export async function getControlCentreData() {
       detail: "No shortage_events rows created or re-verified in the last day — check cron hosts.",
     });
   }
-  for (const s of freshness.worst.slice(0, 5)) {
+  for (const s of freshness.worst.slice(0, 6)) {
     alerts.push({
       severity: s.status === "never" ? "warning" : "serious",
       title: `${s.abbreviation} (${s.country_code}) ${s.status === "never" ? "has never reported" : "is stale"}`,
@@ -688,11 +833,15 @@ export async function getControlCentreData() {
       active_shortages: activeCountRes.count ?? 0,
       anticipated: anticipatedRes.count ?? 0,
       total_events: totalEventsRes.count ?? 0,
+      synthetic_active_excluded: syntheticActiveRes.count ?? 0,
       events_added_7d: newWeekRes.count ?? 0,
+      events_added_7d_open: newWeekOpenRes.count ?? 0,
       countries_live: reporting.length,
       users_total,
+      users_internal: internalUsers,
       signups_7d,
       wau,
+      never_signed_in,
       recalls_total: recallsRes.count ?? 0,
       drugs_total: drugsRes.count ?? 0,
       watchlist_items: watchlistRes.count ?? 0,

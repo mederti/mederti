@@ -196,16 +196,16 @@ export default function ControlCentreDashboard({
   const u = data.usage;
 
   const kpis = [
-    { label: "Active shortages", value: fmt(k.active_shortages), sub: `${fmt(k.anticipated)} anticipated · ${fmt(k.total_events)} all-time` },
-    { label: "Countries reporting", value: fmt(k.countries_live), sub: "with ≥1 active shortage" },
-    { label: "Events added · 7d", value: fmt(k.events_added_7d), sub: "new shortage records" },
-    { label: "Registered users", value: fmt(k.users_total), sub: `+${fmt(k.signups_7d)} last 7 days` },
-    { label: "Weekly active users", value: fmt(k.wau), sub: "signed in within 7 days" },
+    { label: "Active shortages", value: fmt(k.active_shortages), sub: `regulator notices · ${fmt(k.anticipated)} anticipated · excludes ${fmt(k.synthetic_active_excluded)} recall-derived rows` },
+    { label: "Countries reporting", value: fmt(k.countries_live), sub: "with ≥1 active regulator notice" },
+    { label: "Events added · 7d", value: fmt(k.events_added_7d), sub: `records created, any status · ${fmt(k.events_added_7d_open)} still open (includes scraper backfills)` },
+    { label: "Registered users", value: fmt(k.users_total), sub: `external accounts · +${fmt(k.signups_7d)} last 7 days · excludes ${fmt(k.users_internal)} test/staff` },
+    { label: "Weekly active users", value: fmt(k.wau), sub: `external users whose last sign-in was within 7 days · ${fmt(k.never_signed_in)} never signed in` },
     ...(t.available
       ? [{
           label: `Site visitors · ${t.window_days}d`,
           value: fmt(t.visitors_total),
-          sub: t.views_total != null ? `${fmt(t.views_total)} page views` : "unique visitors",
+          sub: `${t.views_total != null ? `${fmt(t.views_total)} page views` : "unique visitors"} · includes bots${t.crawler_heavy_visitors ? ` (${fmt(t.crawler_heavy_visitors)} from SG/CN/HK)` : ""}`,
         }]
       : []),
     { label: "Watchlist items", value: fmt(k.watchlist_items), sub: `${fmt(k.recalls_total)} recalls · ${fmt(k.drugs_total)} drugs` },
@@ -244,7 +244,7 @@ export default function ControlCentreDashboard({
             <div className="cc-card-head">
               <div>
                 <h3>Pipeline writes per day</h3>
-                <p className="cc-cap">New shortage events + re-verified records, last 14 days</p>
+                <p className="cc-cap">Distinct shortage rows written per rolling 24 h, last 14 days — new rows vs existing rows re-verified</p>
               </div>
               <div className="cc-legend">
                 <span><i style={{ background: "#2a78d6" }} /> New events</span>
@@ -257,7 +257,7 @@ export default function ControlCentreDashboard({
           <div className="cc-row">
             <div className="cc-card">
               <h3>Top countries by active shortages</h3>
-              <p className="cc-cap">Open records right now</p>
+              <p className="cc-cap">Open regulator notices right now (recall-derived rows excluded) — notices, not distinct medicines</p>
               <HBars color="#2a78d6"
                 rows={data.active_by_country.map((c) => ({ name: c.country, value: c.count }))} />
             </div>
@@ -287,7 +287,7 @@ export default function ControlCentreDashboard({
             <div className="cc-card-head">
               <div>
                 <h3>New signups per day</h3>
-                <p className="cc-cap">Auth accounts created (email + Google OAuth)</p>
+                <p className="cc-cap">External auth accounts created per UTC day (email + Google OAuth) — test/staff excluded</p>
               </div>
               <div className="cc-chips" role="group" aria-label="Signup range">
                 {RANGE_OPTIONS.map((r) => (
@@ -336,6 +336,14 @@ export default function ControlCentreDashboard({
                     date: p.date,
                     value: trafficMetric === "views" ? p.views ?? 0 : p.visitors,
                   }))} />
+                {t.crawler_heavy_visitors > 0 && (
+                  <p className="cc-note">
+                    Caveat: Vercel Web Analytics does not separate bots from people.{" "}
+                    {fmt(t.crawler_heavy_visitors)} of the {fmt(t.visitors_total)} visitors are from
+                    Singapore, China and Hong Kong, where a crawler spike began on 9 Nov 2026 and
+                    produced no signups — treat the total as an upper bound on human visitors.
+                  </p>
+                )}
                 {(t.top_pages.length > 0 || t.top_referrers.length > 0 || t.top_countries.length > 0) && (
                   <div className="cc-row cc-traffic-tops">
                     <div>
@@ -452,13 +460,13 @@ export default function ControlCentreDashboard({
           <div className="cc-row">
             <div className="cc-card">
               <h3>Users by persona</h3>
-              <p className="cc-cap">From user_profiles.role — {fmt(k.users_total)} accounts</p>
+              <p className="cc-cap">user_profiles.role for the {fmt(k.users_total)} external accounts — test/staff excluded</p>
               <HBars color="#2a78d6"
                 rows={data.personas.map((p) => ({ name: p.role.replace(/_/g, " "), value: p.count }))} />
             </div>
             <div className="cc-card">
               <h3>Latest signups</h3>
-              <p className="cc-cap">Most recent accounts, emails masked</p>
+              <p className="cc-cap">Most recent external accounts, emails masked</p>
               <div className="cc-list">
                 {data.latest_signups.map((s, i) => (
                   <div className="cc-list-item" key={i}>
@@ -524,8 +532,9 @@ export default function ControlCentreDashboard({
             <h3>Database at a glance</h3>
             <table className="cc-table">
               <tbody>
-                <tr><td>Shortage events</td><td>{fmt(k.total_events)}</td></tr>
-                <tr><td>· active</td><td>{fmt(k.active_shortages)}</td></tr>
+                <tr><td>Shortage events (all rows, all statuses)</td><td>{fmt(k.total_events)}</td></tr>
+                <tr><td>· active notices</td><td>{fmt(k.active_shortages)}</td></tr>
+                <tr><td>· active recall-derived (excluded)</td><td>{fmt(k.synthetic_active_excluded)}</td></tr>
                 <tr><td>· anticipated</td><td>{fmt(k.anticipated)}</td></tr>
                 <tr><td>Recalls</td><td>{fmt(k.recalls_total)}</td></tr>
                 <tr><td>Drugs (canonical)</td><td>{fmt(k.drugs_total)}</td></tr>

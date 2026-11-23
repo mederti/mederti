@@ -44,11 +44,12 @@ export default function robots(): MetadataRoute.Robots {
   //     the page): OAI-SearchBot, ChatGPT-User, Claude-SearchBot, Claude-User,
   //     PerplexityBot, Perplexity-User, Bingbot (also feeds Copilot), Applebot.
   //     These are the discoverability goal — welcome on public pages.
-  //   - Training crawlers: GPTBot, ClaudeBot, Google-Extended, CCBot. Already
-  //     allowed (named or via "*") since the Aug 2026 SEO layer; unchanged
-  //     here. Whether public pages should feed model training is an open
-  //     business decision — to opt out, give this group `disallow: ["/"]`.
-  //     Gated product data is unreachable to every crawler either way.
+  //   - Training crawlers: opted OUT 2026-11-20 (CEO decision — the data is
+  //     public but the compiled database is ours). Disallowed site-wide here,
+  //     and enforced by the Vercel Firewall custom rule "Block AI training
+  //     crawlers" (user-agent deny). Keep this list and that rule's regex in
+  //     sync. Google-Extended / Applebot-Extended are robots-only tokens (no
+  //     UA of their own), so robots.txt is the only lever for them.
   const aiSearchAgents = [
     "OAI-SearchBot",
     "ChatGPT-User",
@@ -61,13 +62,31 @@ export default function robots(): MetadataRoute.Robots {
     "Applebot",
     "GoogleOther",
   ];
-  const aiTrainingCrawlers = ["GPTBot", "ClaudeBot", "Google-Extended", "CCBot"];
+  const aiTrainingCrawlers = [
+    "GPTBot",
+    "ClaudeBot",
+    "anthropic-ai",
+    "Google-Extended",
+    "Applebot-Extended",
+    "CCBot",
+    "meta-externalagent",
+    "FacebookBot",
+    "Bytespider",
+    "Amazonbot",
+    "Diffbot",
+    "cohere-ai",
+    "cohere-training-data-crawler",
+    "AI2Bot",
+    "ImagesiftBot",
+    "omgili",
+    "Timpibot",
+  ];
 
   return {
     rules: [
       { userAgent: "*", allow: publicAllow, disallow: gatedOrPrivate },
       { userAgent: aiSearchAgents, allow: publicAllow, disallow: gatedOrPrivate },
-      { userAgent: aiTrainingCrawlers, allow: publicAllow, disallow: gatedOrPrivate },
+      { userAgent: aiTrainingCrawlers, disallow: ["/"] },
     ],
     sitemap: `${base}/sitemap.xml`,
     host: base,

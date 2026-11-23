@@ -48,10 +48,21 @@ SHORTAGE_KEYS = [
     "malaysia_npra",        # 168 records — safety alerts
     "portugal_infarmed",    # 30 records — shortage monitoring + Excel
     "uae_mohap",            # 11 records — EDE (ede.gov.ae)
+    # Vaccines (2026-11-23): Germany's vaccine regulator; BfArM excludes vaccines
+    "pei_vaccines",         # PEI human-vaccine shortages, current list + archive
 ]
 
 if __name__ == "__main__":
     result = subprocess.run(
         [sys.executable, "run_all_scrapers.py"] + SHORTAGE_KEYS,
     )
+    # Flag vaccine records (drugs.is_vaccine, migration 080) — including any
+    # drug rows the scrapers just auto-created. Failure here must not mask
+    # the scraper result.
+    classify = subprocess.run(
+        [sys.executable, "-m", "backend.scripts.classify_vaccines",
+         "--execute", "--manifest-dir", "/tmp"],
+    )
+    if classify.returncode != 0:
+        print(f"classify_vaccines exited {classify.returncode}", file=sys.stderr)
     sys.exit(result.returncode)

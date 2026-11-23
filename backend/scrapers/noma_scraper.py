@@ -265,7 +265,8 @@ class NoMAScraper(BaseScraper):
                     "reason_category":           reason_cat,
                     "start_date":                start_date,
                     "end_date":                  end_date if status == "resolved" else None,
-                    "estimated_resolution_date": end_date if status == "active" else None,
+                    "estimated_resolution_date": end_date if status in ("active", "anticipated") else None,
+                    "anticipated_start_date":    start_date if status == "anticipated" else None,
                     "source_url":                self.BASE_URL,
                     "notes":                     notes,
                     "raw_record": {
@@ -314,6 +315,11 @@ class NoMAScraper(BaseScraper):
     def _map_status(status_raw: str) -> str:
         """Map Norwegian status text to internal status enum."""
         low = status_raw.lower()
+        # "Kommende" = upcoming: NoMA's notice of a shortage that has not
+        # started. It must not count as live (it defaulted to active, and 34
+        # future-dated NO rows read as current shortages, Nov 2026).
+        if "kommende" in low:
+            return "anticipated"
         if any(w in low for w in ["mangel", "shortage", "utilgjengelig", "ikke"]):
             return "active"
         if any(w in low for w in ["forventet", "planlagt", "expect"]):

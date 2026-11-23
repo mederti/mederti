@@ -174,6 +174,14 @@ function HBars({ rows, color, max }: { rows: { name: string; value: number }[]; 
 
 const RANGE_OPTIONS = [7, 30, 90] as const;
 
+type UsageMetric = "searches" | "drug_views" | "chats" | "sessions";
+const USAGE_METRICS: { key: UsageMetric; label: string }[] = [
+  { key: "searches", label: "Searches" },
+  { key: "drug_views", label: "Drug views" },
+  { key: "chats", label: "Chats" },
+  { key: "sessions", label: "Visitors" },
+];
+
 export default function ControlCentreDashboard({
   data, loading, onRefresh,
 }: {
@@ -182,8 +190,10 @@ export default function ControlCentreDashboard({
   const [signupRange, setSignupRange] = useState<(typeof RANGE_OPTIONS)[number]>(30);
   const [trafficRange, setTrafficRange] = useState<(typeof RANGE_OPTIONS)[number]>(30);
   const [trafficMetric, setTrafficMetric] = useState<"visitors" | "views">("visitors");
+  const [usageMetric, setUsageMetric] = useState<UsageMetric>("searches");
   const k = data.kpis;
   const t = data.traffic;
+  const u = data.usage;
 
   const kpis = [
     { label: "Active shortages", value: fmt(k.active_shortages), sub: `${fmt(k.anticipated)} anticipated · ${fmt(k.total_events)} all-time` },
@@ -350,6 +360,95 @@ export default function ControlCentreDashboard({
             )}
           </div>
 
+
+          <div className="cc-card">
+            <div className="cc-card-head">
+              <div>
+                <h3>Product usage</h3>
+                <p className="cc-cap">
+                  {u.available
+                    ? `What people do once on the site · last ${u.window_days} days${u.tracking_since ? ` · tracking since ${dayLabel(u.tracking_since.slice(0, 10))}` : " · nothing recorded yet"}`
+                    : "Searches, drug views and chat"}
+                </p>
+              </div>
+              {u.available && (
+                <div className="cc-chips" role="group" aria-label="Usage metric">
+                  {USAGE_METRICS.map((m) => (
+                    <button key={m.key} aria-pressed={usageMetric === m.key} onClick={() => setUsageMetric(m.key)}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {u.available ? (
+              <>
+                <div className="cc-usage-stats">
+                  <div><span className="cc-us-v">{fmt(u.totals.searches)}</span><span className="cc-us-l">searches</span></div>
+                  <div><span className="cc-us-v">{fmt(u.totals.drug_views)}</span><span className="cc-us-l">drug views</span></div>
+                  <div><span className="cc-us-v">{fmt(u.totals.visitor_days)}</span><span className="cc-us-l">visitor-days</span></div>
+                  <div><span className="cc-us-v">{fmt(u.totals.chats)}</span><span className="cc-us-l">chat questions</span></div>
+                  <div>
+                    <span className="cc-us-v">{fmt(u.totals.chat_users_external)}</span>
+                    <span className="cc-us-l">external chat users{u.totals.chat_users_internal ? ` (+${fmt(u.totals.chat_users_internal)} internal)` : ""}</span>
+                  </div>
+                  <div><span className="cc-us-v">{fmt(u.totals.watchlist_adds)}</span><span className="cc-us-l">watchlist adds</span></div>
+                  <div><span className="cc-us-v">{fmt(u.totals.enquiries)}</span><span className="cc-us-l">supplier enquiries</span></div>
+                </div>
+                <AreaChart color="#7a4fd0"
+                  data={u.daily
+                    // Days before tracking began are unknown, not zero — don't plot them.
+                    .filter((p) => !u.tracking_since || p.date >= u.tracking_since.slice(0, 10))
+                    .map((p) => ({ date: p.date, value: p[usageMetric] }))} />
+                <div className="cc-row cc-traffic-tops">
+                  <div>
+                    <p className="cc-mini">Most-viewed drugs · visitor-days</p>
+                    {u.top_drugs.length ? <HBars color="#7a4fd0" rows={u.top_drugs} /> : <p className="cc-cap">No drug views yet</p>}
+                  </div>
+                  <div>
+                    <p className="cc-mini">Chat users · questions</p>
+                    {u.chat_users.length ? (
+                      <div className="cc-list">
+                        {u.chat_users.map((c, i) => (
+                          <div className="cc-list-item" key={i}>
+                            <div className="cc-grow">
+                              <div className="cc-t">{c.masked_email}{c.internal && <span className="cc-tag">internal</span>}</div>
+                              <div className="cc-d">{fmt(c.chats)} question{c.chats === 1 ? "" : "s"}</div>
+                            </div>
+                            <span className="cc-when">{ago(c.last_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="cc-cap">No signed-in chat questions yet</p>
+                    )}
+                    {u.totals.chats_anonymous > 0 && (
+                      <p className="cc-cap">+ {fmt(u.totals.chats_anonymous)} without a signed-in user</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="cc-mini">Claude calls by route</p>
+                    {u.ai_by_route.length ? <HBars color="#7a4fd0" rows={u.ai_by_route} /> : <p className="cc-cap">No Claude calls yet</p>}
+                    {u.totals.ai_calls > 0 && (
+                      <p className="cc-cap" style={{ marginTop: 8 }}>
+                        {fmt(u.totals.ai_errors)} non-success · {fmt(u.totals.tokens_in)} in / {fmt(u.totals.tokens_out)} out tokens
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <p className="cc-note">
+                  Visitors are anonymised with a hash that changes every day, so they&rsquo;re counted per day
+                  (&ldquo;visitor-days&rdquo;): one person on 3 days counts 3 times. Signed-out visitors and
+                  crawlers that get past bot protection are included. Internal = @mederti.com or admin accounts.
+                </p>
+              </>
+            ) : (
+              <div className="cc-unwired">
+                <b>Not wired yet.</b> {u.reason}
+              </div>
+            )}
+          </div>
+
           <div className="cc-row">
             <div className="cc-card">
               <h3>Users by persona</h3>
@@ -505,6 +604,11 @@ const CSS = `
 .cc-mini { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #86908b; margin: 0 0 8px; }
 .cc-unwired { background: rgba(122,79,208,0.08); border: 1px dashed rgba(122,79,208,0.4); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #4d5652; line-height: 1.5; }
 .cc-unwired b { color: #0e1512; }
+.cc-usage-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px 16px; margin: 4px 0 14px; }
+.cc-usage-stats > div { display: flex; flex-direction: column; }
+.cc-us-v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.cc-us-l { font-size: 11.5px; color: #4d5652; }
+.cc-tag { margin-left: 6px; font-size: 10.5px; font-weight: 600; color: #7a4fd0; background: rgba(122,79,208,0.1); border-radius: 4px; padding: 1px 5px; }
 .cc-table { border-collapse: collapse; width: 100%; font-size: 13px; }
 .cc-table td { padding: 6px 0; border-bottom: 1px solid #e2e6e4; }
 .cc-table tr:last-child td { border-bottom: 0; }

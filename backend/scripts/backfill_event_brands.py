@@ -47,6 +47,7 @@ SOURCE_LABELS: dict[str, str] = {
     "10000000-0000-0000-0000-000000000002": "health_canada",
     "10000000-0000-0000-0000-000000000003": "tga",
     "10000000-0000-0000-0000-000000000005": "ema",
+    "10000000-0000-0000-0000-000000000119": "pei",
 }
 
 _EMA_BRAND_KEYS = ["medicine_affected", "medicine affected", "medicine name"]
@@ -83,6 +84,7 @@ EXTRACTORS: dict[str, Callable[[dict], tuple[str | None, str | None]]] = {
     "health_canada": lambda r: (_clean(r.get("brand_name")), _clean(r.get("company_name"))),
     "tga":           lambda r: (_clean(r.get("trade_names")), _clean(r.get("sponsor"))),
     "ema":           lambda r: (_probe(r, _EMA_BRAND_KEYS), _probe(r, _EMA_MAH_KEYS)),
+    "pei":           lambda r: (_clean(r.get("brand")), _clean(r.get("mah"))),
 }
 
 PAGE = 1000

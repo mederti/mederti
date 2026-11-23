@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { atcMatchLabel } from "@/lib/alternatives";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { scopeShortages, vaccineKeyFor } from "@/lib/vaccine-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ interface AlternativeRow {
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const sb = getSupabaseAdmin();
+  const vaccineKey = await vaccineKeyFor(sb, id);
 
   const [drugRes, shortagesRes, shortageCountRes, altsRes] = await Promise.all([
     sb
@@ -32,17 +34,17 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       .select("id, generic_name, brand_names, atc_code, atc_description, drug_class")
       .eq("id", id)
       .single(),
-    sb
+    scopeShortages(sb
       .from("shortage_events")
       .select("shortage_id, country_code, severity, status, start_date, reason_category, data_sources(name)")
-      .eq("drug_id", id)
+      .not("synthetic", "is", true), id, vaccineKey)
       .in("status", ["active", "anticipated"])
       .order("start_date", { ascending: false })
       .limit(8),
-    sb
+    scopeShortages(sb
       .from("shortage_events")
       .select("severity, country_code", { count: "exact" })
-      .eq("drug_id", id)
+      .not("synthetic", "is", true), id, vaccineKey)
       .in("status", ["active", "anticipated"]),
     sb
       .from("drug_alternatives")

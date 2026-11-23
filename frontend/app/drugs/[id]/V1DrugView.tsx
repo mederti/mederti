@@ -1,6 +1,8 @@
 import { Fragment } from "react";
 import { type ConcentrationTier, PEER_GROUPS, TIER_LABEL, tierFor } from "@/lib/insights/dashboard-data-shared";
 import { scopeSupply, sameIngredientOptions, type SupplyInMarket, type SupplyProduct, type SupplyStatus } from "@/lib/supply-in-market";
+import type { SubstitutionAnswer } from "@/lib/substitution/rank";
+import { SubstitutionSection } from "./SubstitutionSection";
 import Link from "next/link";
 import { SOURCE_LABELS, type AlternativeCitation, type SourcedAlternative, type SourcedAlternativesResult } from "@/lib/alternatives-sources";
 import ClinicalDisclaimer from "@/app/components/ClinicalDisclaimer";
@@ -166,7 +168,7 @@ function expSourceFor(cc: string): string {
 const brandHref = (id: string, catId: string) => `/drugs/${id}?brand_focus=${catId}`;
 
 export default function V1DrugView({
-  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket: supplyAll = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null, marketCovered = null, formSel = null, strengthSel = null,
+  id, drug, shortages, statusLog, alternatives, userCountry, apiConcentration, supplyProfile = null, supplyInMarket: supplyAll = null, recalls, approvalFootprint, eligibility, pricing, concession, priceMarkets, altPricing, products, brandSkus, brandHint, brandFocus = null, freeViewsUsed = null, sourcedAlternatives = null, substitution = null, marketCovered = null, formSel = null, strengthSel = null,
 }: {
   sourcedAlternatives?: SourcedAlternativesResult | null;
   /** Form picker: dose-form slug and normalised strength from the URL. */
@@ -201,6 +203,7 @@ export default function V1DrugView({
   } | null;
   // Registered products × open notices in the user's market (lib/supply-in-market.ts).
   supplyInMarket?: SupplyInMarket | null;
+  substitution?: SubstitutionAnswer | null;
   recalls?: any[];
   approvalFootprint?: {
     total: number;
@@ -525,6 +528,8 @@ export default function V1DrugView({
   const s19aNotesText = s19aEvt ? getS19AText(s19aEvt.notes) : null;
 
   // Short detail line for the "Can I substitute?" tile.
+  const engineRec = substitution?.recommendation ?? null;
+  const engineQ = engineRec && (engineRec.tier !== "same_medicine" || engineRec.quote) ? substitutionTile(substitution) : null;
   const s19aTileDetail = s19aStructured
     // The product's name, not the scheme_reference (a URL slug such as
     // "diazepam-injection-10mg-2ml-ampoules-hameln-uk").
@@ -1055,7 +1060,16 @@ export default function V1DrugView({
               </div>
               <div className="hq-q">
                 <div className="hq-q-l">What can I use instead?</div>
-                {sameLabels.length > 0 ? (
+                {/* The substitution engine's answer leads when it holds a
+                    regulator-backed option (instrument, notice guidance,
+                    import approval); a register-only match defers to the
+                    form/strength-scoped list below. */}
+                {engineQ ? (
+                  <>
+                    <div className="hq-q-a">{engineQ.value}</div>
+                    <div className="hq-q-d">{engineQ.detail}</div>
+                  </>
+                ) : sameLabels.length > 0 ? (
                   <>
                     <div className="hq-q-a">{plural(sameOpts.length, "other product")} not short</div>
                     <div className="hq-q-d">
@@ -1082,7 +1096,7 @@ export default function V1DrugView({
                     </div>
                   </>
                 )}
-                <a href="#alternatives" className="hq-more">See alternatives →</a>
+                <a href={substitution ? "#instead" : "#alternatives"} className="hq-more">See alternatives →</a>
               </div>
               <div className="hq-q">
                 <div className="hq-q-l">What does it cost?</div>
@@ -1402,7 +1416,7 @@ export default function V1DrugView({
                   ) : null;
                 })()}
                 <div className="sim-acts">
-                  <a href="#alternatives" className="sim-btn primary">What to use instead</a>
+                  <a href={substitution ? "#instead" : "#alternatives"} className="sim-btn primary">What to use instead</a>
                   <FindSupplier drugId={id} drugName={drug.generic_name} userCountry={userCountry} severity={sev} />
                   <WatchButton drugId={id} />
                 </div>
@@ -1437,6 +1451,8 @@ export default function V1DrugView({
               </div>
             </div>
           )}
+
+          {substitution && <SubstitutionSection answer={substitution} countryName={cName} />}
 
           {!supplyInMarket && mineAll.length > 0 && (
             <div className="sec">
@@ -2057,6 +2073,22 @@ function groupByStatement(cites: AlternativeCitation[]): { statement: string; re
 
 // Source-backed alternatives: status first, then every supporting statement,
 // verbatim and linked. single_source is labelled as exactly that.
+// The "What can I use instead?" answer, from the engine's top option.
+function substitutionTile(a: SubstitutionAnswer | null): { ok: boolean; value: string; detail: string } {
+  const r = a?.recommendation;
+  if (!a || !r) return { ok: false, value: "No substitute on file", detail: a?.refusal ? `check ${a.refusal.references[0]?.name ?? "your formulary"}` : "" };
+  switch (r.tier) {
+    case "authorised_swap":
+      return { ok: true, value: "Authorised swap", detail: `${r.headline}. ${r.legal_basis}` };
+    case "same_medicine":
+      return { ok: true, value: "Another brand", detail: r.quote ? `${r.source.publisher}: “${r.quote.split(" | ")[0]}” Your usual dispensing rules apply.` : "Registered, no shortage notice on file; that isn't proof of stock." };
+    case "import_pathway":
+      return { ok: true, value: "Overseas product approved", detail: `${r.headline}. ${r.legal_basis}` };
+    default:
+      return { ok: false, value: "Prescriber decision", detail: "different medicine only" };
+  }
+}
+
 function SourcedAlternativesSection({ alts, country }: { alts: SourcedAlternative[]; country: string }) {
   return (
     <div className="sec" id="alternatives">

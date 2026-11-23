@@ -15,6 +15,8 @@ import { cleanBrandNames } from "@/lib/brand";
 import { extractEventBrand, extractEventMarketExit } from "@/lib/event-brand";
 import { marketHasShortageData } from "@/lib/coverage";
 import { buildSupplyInMarket, isCombo, type CatalogueRow } from "@/lib/supply-in-market";
+import { resolveSubstitution, strictSiblingIds } from "@/lib/substitution/resolve";
+import { searchableMolecule } from "@/lib/substitution/molecule";
 import { buildPriceComparison, type CompareResult, type PriceRow } from "@/lib/pricing-compare";
 import V1DrugView, { type BrandFocus } from "./V1DrugView";
 
@@ -424,6 +426,16 @@ export default async function DrugPage({ params, searchParams }: Props) {
   } catch { /* anonymous */ }
   const supabase = getSupabaseAdmin();
 
+  // Shortage notices are read for every drugs row that is exactly this
+  // molecule in another salt form, so the hero agrees with "What to dispense
+  // instead": TGA files diltiazem's notices under "Diltiazem-Hydrochloride".
+  // Strict name equality only (lib/substitution/molecule.ts) — never combos.
+  const { data: nameRow } = await supabase.from("drugs").select("generic_name").eq("id", id).maybeSingle();
+  const shortageDrugIds = [
+    id,
+    ...(await strictSiblingIds(searchableMolecule(nameRow?.generic_name ?? null)).catch(() => [] as string[])),
+  ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 100);
+
   /* ── Parallel data fetching ── */
   const [drugRes, shortagesRes, logRes, alternativesRes, recallsRes] =
     await Promise.allSettled([
@@ -436,7 +448,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
         // into shortage_events) are not shortages: every other surface drops
         // them, and here a 2014 FDA recall headlined propofol in the US as an
         // "Anticipated shortage".
-        .eq("drug_id", id).or("synthetic.is.null,synthetic.eq.false").order("updated_at", { ascending: false }),
+        .in("drug_id", shortageDrugIds).or("synthetic.is.null,synthetic.eq.false").order("updated_at", { ascending: false }),
       supabase.from("shortage_status_log")
         .select("id, shortage_event_id, drug_id, old_status, new_status, old_severity, new_severity, changed_at")
         .eq("drug_id", id).order("changed_at", { ascending: false }),
@@ -765,7 +777,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
   // supply table are built from the same notices (they disagreed: hero "In
   // supply" over a table row "Short since 2 Oct").
   const NOTICE_SELECT = "shortage_id, id, drug_id, country, country_code, status, severity, reason, reason_category, start_date, end_date, anticipated_start_date, estimated_resolution_date, source_url, last_verified_at, updated_at, created_at, notes, data_source_id, data_sources(name, abbreviation, country_code), artg:raw_data->>artg_numb, din:raw_data->>din, dose_form:raw_data->>dose_form, ca_form:raw_data->>dosage_form, ingredients:raw_data->>ingredients, raw_data";
-  const [catRes, noticeRes, pastRes] = await Promise.all([
+  const [catRes, noticeRes, pastRes, substitution] = await Promise.all([
     supabase
       .from("drug_catalogue")
       .select("brand_name, strength, dosage_form, sponsor, registration_number, active_ingredients")
@@ -790,6 +802,12 @@ export default async function DrugPage({ params, searchParams }: Props) {
       .gte("start_date", histSince)
       .or("synthetic.is.null,synthetic.eq.false")
       .limit(500),
+    // "What to dispense instead" (lib/substitution). A failure hides the
+    // section rather than the page; it never renders as "nothing on file".
+    resolveSubstitution(id, userCountry).catch((e) => {
+      console.error("[drug page] substitution engine failed", id, userCountry, e);
+      return null;
+    }),
   ]);
   // Notices for this page's registered products that were filed under a
   // different drugs row (salt/spelling variant, brand-named row, wrong
@@ -1073,6 +1091,7 @@ export default async function DrugPage({ params, searchParams }: Props) {
       apiConcentration={apiConcentration}
       supplyProfile={supplyProfile}
       supplyInMarket={supplyInMarket}
+      substitution={substitution}
       marketCovered={marketCovered}
       recalls={recalls}
       approvalFootprint={approvalFootprint}

@@ -2,7 +2,7 @@
 // Reads everything rank.ts needs for one medicine in one market, then ranks.
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { extractEventBrand } from "@/lib/event-brand";
-import { buildSupplyInMarket, type CatalogueRow } from "@/lib/supply-in-market";
+import { buildSupplyInMarket, isCombo, type CatalogueRow } from "@/lib/supply-in-market";
 import {
   rankSubstitution,
   type EligibilityRow,
@@ -30,6 +30,17 @@ export function guidanceFromNotes(notes: string | null): string | null {
   return m ? m[1].trim() : null;
 }
 
+// drugs rows that are exactly this molecule in another salt / hydrate form
+// (molecule.ts). Shared with the drug page hero so both read the same
+// notices: TGA files diltiazem under "Diltiazem-Hydrochloride".
+export async function strictSiblingIds(molecule: string | null): Promise<string[]> {
+  if (!molecule) return [];
+  const { data, error } = await getSupabaseAdmin()
+    .from("drugs").select("id, generic_name").ilike("generic_name", `${molecule}%`).limit(300);
+  if (error) throw error;
+  return (data ?? []).filter((d) => sameMolecule(d.generic_name as string, molecule)).map((d) => d.id as string);
+}
+
 export async function resolveSubstitution(
   drugId: string,
   country: string,
@@ -51,12 +62,7 @@ export async function resolveSubstitution(
   // Sibling rows that are the same molecule by strict salt-form name match
   // (molecule.ts) — the profile covers only ~560 molecules.
   const molecule = searchableMolecule(prof?.display_name ?? (drug.generic_name as string));
-  let siblings: string[] = [];
-  if (molecule) {
-    const { data, error } = await sb.from("drugs").select("id, generic_name").ilike("generic_name", `${molecule}%`).limit(300);
-    if (error) throw error;
-    siblings = (data ?? []).filter((d) => sameMolecule(d.generic_name as string, molecule)).map((d) => d.id as string);
-  }
+  const siblings = await strictSiblingIds(molecule);
   const ids = [...new Set([drugId, ...(prof?.drug_ids ?? []), ...siblings])].slice(0, 150);
 
   const [catRes, noticeRes, evRes, eligRes, recallRes, unlinkedRes] = await Promise.all([
@@ -110,7 +116,15 @@ export async function resolveSubstitution(
     })),
   );
   const publisher = NOTICE_PUBLISHER[market] ?? "The regulator";
-  const notices: NoticeRow[] = rawNotices.map((n) => ({
+  // Combination products (amoxicillin + clavulanic acid) are linked to the
+  // single molecule in some feeds; their guidance is about a different
+  // medicine, so they're left out here as they are in the supply table.
+  const notices: NoticeRow[] = rawNotices
+    .filter((n) => !isCombo(
+      extractEventBrand(n.data_source_id ?? null, n.raw_data).brand_name,
+      typeof n.ingredients === "string" ? n.ingredients.split(";").map((x: string) => x.trim()).filter(Boolean) : undefined,
+    ))
+    .map((n) => ({
     product: extractEventBrand(n.data_source_id ?? null, n.raw_data).brand_name,
     status: n.status,
     start_date: n.status === "anticipated" ? n.anticipated_start_date ?? n.start_date : n.start_date,

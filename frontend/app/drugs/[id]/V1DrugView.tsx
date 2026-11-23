@@ -721,6 +721,14 @@ export default function V1DrugView({
     if (scTotal > 0 && (scHit.length > 0 || scAnt.length > 0)) {
       const n = scHit.length;
       if (n === 0) {
+        // An active notice for a product that isn't on our register
+        // (unmatched) is still a shortage now: it leads, ahead of anything
+        // merely anticipated. Remifentanil read "Anticipated shortage" while
+        // TGA listed Remifentanil-AFT as short.
+        if (scUnmatched > 0) {
+          const um = (supplyInMarket?.groups ?? []).flatMap((g) => g.notices).filter((x) => x.status === "short");
+          return `${plural(scUnmatched, "product")} ${um.every((x) => x.discontinued) ? "discontinued" : "short"} ${inWhere}`;
+        }
         // Nothing is short yet. A future-dated discontinuation is a market
         // exit ahead, never an "anticipated shortage" (which reads temporary).
         const k = scAnt.length;

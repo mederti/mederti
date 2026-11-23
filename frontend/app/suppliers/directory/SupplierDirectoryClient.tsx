@@ -48,6 +48,7 @@ export default function SupplierDirectoryClient() {
       .finally(() => setLoading(false));
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
   useEffect(() => { load(); }, []);
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [country, search]);
 

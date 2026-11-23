@@ -210,7 +210,7 @@ export default function OnboardingClient() {
           <>
             <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Which countries do you supply?</h1>
             <p style={{ fontSize: 14, color: "var(--app-text-4)", marginBottom: 24 }}>
-              You'll receive enquiries from buyers in these countries. Select at least one.
+              You&apos;ll receive enquiries from buyers in these countries. Select at least one.
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {COUNTRIES.map(c => {
@@ -236,7 +236,7 @@ export default function OnboardingClient() {
             </div>
             {countries.length > 0 && (
               <div style={{ marginTop: 16, padding: 12, background: "var(--app-bg)", borderRadius: 8, fontSize: 13, color: "var(--app-text-3)" }}>
-                You've selected <strong style={{ color: "var(--app-text)" }}>{countries.length}</strong> countr{countries.length === 1 ? "y" : "ies"}. We'll notify you when buyers in {countries.length === 1 ? "this market" : "these markets"} submit enquiries.
+                You&apos;ve selected <strong style={{ color: "var(--app-text)" }}>{countries.length}</strong> countr{countries.length === 1 ? "y" : "ies"}. We&apos;ll notify you when buyers in {countries.length === 1 ? "this market" : "these markets"} submit enquiries.
               </div>
             )}
           </>
@@ -296,9 +296,9 @@ export default function OnboardingClient() {
         {step === 4 && (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
             <CheckCircle2 size={56} color="var(--low)" style={{ margin: "0 auto 16px" }} />
-            <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 10 }}>You're set up.</h1>
+            <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 10 }}>You&apos;re set up.</h1>
             <p style={{ fontSize: 15, color: "var(--app-text-4)", maxWidth: 480, margin: "0 auto 28px", lineHeight: 1.6 }}>
-              Buyer enquiries from {countries.length === 0 ? "global markets" : countries.length === 1 ? countries[0] : `${countries.length} countries`} will land in your inbox in real time. We'll email you when a new one arrives.
+              Buyer enquiries from {countries.length === 0 ? "global markets" : countries.length === 1 ? countries[0] : `${countries.length} countries`} will land in your inbox in real time. We&apos;ll email you when a new one arrives.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 360, margin: "0 auto" }}>
               <Link href="/supplier-dashboard/inbox" style={{ padding: "12px 24px", background: "var(--teal)", color: "white", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>

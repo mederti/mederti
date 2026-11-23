@@ -56,12 +56,13 @@ export default function IntelligenceBriefing() {
       .finally(() => { setLoading(false); setRefreshing(false); });
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
   useEffect(() => { load(false); }, []);
 
   if (loading) {
     return (
       <section style={{ marginBottom: 56, padding: "32px 0", borderTop: "3px solid #0F172A", borderBottom: "1px solid var(--app-border)" }}>
-        <div style={{ fontSize: 13, color: "var(--app-text-4)", fontStyle: "italic" }}>Composing today's brief…</div>
+        <div style={{ fontSize: 13, color: "var(--app-text-4)", fontStyle: "italic" }}>Composing today&apos;s brief…</div>
       </section>
     );
   }
@@ -196,7 +197,7 @@ export default function IntelligenceBriefing() {
         display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
       }}>
         <div style={{ fontSize: 11, color: "#94A3B8", fontStyle: "italic" }}>
-          Composed by Mederti's analyst AI · refreshed every 6 hours · {formatTime(generatedAt)}
+          Composed by Mederti&apos;s analyst AI · refreshed every 6 hours · {formatTime(generatedAt)}
         </div>
         <a href="#shortage-reports" style={{
           fontSize: 12, fontWeight: 600, color: "#0D9488",

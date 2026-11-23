@@ -15,7 +15,7 @@ const btn: React.CSSProperties = {
   padding: "7px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
   textDecoration: "none", whiteSpace: "nowrap",
 };
-const primary: React.CSSProperties = { ...btn, background: "#0fa676", color: "#fff" };
+const primary: React.CSSProperties = { ...btn, background: "var(--navy, #090E2C)", color: "#fff" };
 const secondary: React.CSSProperties = {
   ...btn, background: "#fff", color: "#3b434e", border: "1px solid #dde3e9",
 };

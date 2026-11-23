@@ -84,7 +84,7 @@ export async function POST(req: Request) {
 
   const results: Array<{ row: number; status: string; drug?: string; message?: string }> = [];
   let created = 0;
-  let updated = 0;
+  const updated = 0;
   let errors = 0;
 
   for (let i = 0; i < rows.length; i++) {

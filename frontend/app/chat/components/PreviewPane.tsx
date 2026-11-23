@@ -310,6 +310,7 @@ export function PreviewPane({
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading/error reset at the start of a fetch keyed on this effect's deps; moving to a data-fetching hook/Suspense is a behaviour change, out of scope for lint cleanup
     setLoading(true);
     setErr(null);
     setBundle(null);
@@ -317,7 +318,7 @@ export function PreviewPane({
       .then((r) => r.json())
       .then((data: DrugDetailBundle) => {
         if (cancelled) return;
-        if ((data as any).error) setErr((data as any).error);
+        if ((data as { error?: string }).error) setErr((data as { error: string }).error);
         else setBundle(data);
       })
       .catch((e) => {

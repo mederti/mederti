@@ -1,26 +1,37 @@
 # Mederti — Global Medicine Shortage Intelligence
 
-Mederti is a real-time medicine shortage intelligence platform. It aggregates, normalises and monitors drug shortage and recall notices published by official national medicines regulators across 50+ countries, updated daily, with every record linked back to its official source.
+Mederti is a real-time medicine shortage intelligence platform. It aggregates, normalises and monitors drug shortage and recall notices published by official national medicines regulators across 35+ countries plus the EU (EMA), checked daily, with every record linked back to its official source. Mederti is an independent aggregator: it is not a regulator and is not endorsed by any regulator.
 
 ## What this site contains
 
-- Live drug shortage status aggregated from 40+ official regulators across 50+ countries and territories, including Australia, the United States, Canada, the United Kingdom, the EU (EMA), Japan, Germany, France, Italy, Spain, Switzerland, the Netherlands, the Nordics, South Korea, Brazil, Mexico, South Africa and more
-- 55,000+ shortage events tracked (40,000+ currently active), with severity, cause category, start dates and regulator-estimated resolution dates
-- 24,000+ drug recall records
-- 17,000+ canonical medicines (molecules/INNs) and 160,000+ national product registrations
+- Live drug shortage status aggregated from 40+ official regulator feeds across 35+ countries and territories, including Australia, the United States, Canada, the United Kingdom, the EU (EMA), Japan, Germany, France, Italy, Spain, Switzerland, the Netherlands, the Nordics, South Korea, Brazil, Mexico, South Africa and more
+- Shortage notices with status, severity, cause category, start dates and regulator-estimated resolution dates (counts are notices: regulators list each strength/pack separately)
+- Drug recall records from major regulators
+- 18,000+ canonical medicines (molecules/INNs) and 160,000+ national product registrations
 - WHO Essential Medicines flags, ATC codes, brand-name mappings and therapeutic alternatives
 - Regulatory substitution pathways (e.g. TGA Section 19A, MHRA SSPs)
 
 ## Publicly crawlable pages (no login required)
 
 - /medicine — medicines with the most active shortages right now
-- /medicine/{generic-name} — live shortage status for one medicine: countries affected, severity, causes, history, alternatives, FAQs, regulator citations (e.g. /medicine/amoxicillin)
+- /medicine/{generic-name} — global shortage status for one medicine: a factual summary, countries with active / anticipated / resolved notices, countries with no notice on record vs. no data, causes, history, same-class drugs, FAQs, regulator citations (e.g. /medicine/amoxicillin)
+- /medicine/{generic-name}/{country} — one medicine in one country: each regulator notice with product/formulation, status, start date, expected resolution date, last-verified date and a link to the official notice (e.g. /medicine/amoxicillin/australia, /medicine/semaglutide/united-kingdom)
 - /country — all tracked countries
 - /country/{country}/medicine-shortages — a country's live shortage register (e.g. /country/australia/medicine-shortages)
 - /regulator — the official sources Mederti scrapes
 - /regulator/{abbr-cc} — profile of one regulator and its latest notices (e.g. /regulator/tga-au)
 
 Search, watchlists, per-product detail, pricing history and the AI analyst require a free account (see /signup).
+
+## Status definitions (used consistently on every page)
+
+- Active shortage — a national regulator currently lists an ongoing shortage or supply disruption for at least one product of the medicine.
+- Anticipated shortage — announced by the regulator/manufacturer but not started yet. Not a Mederti prediction.
+- Resolved — the regulator has closed the notice. Does not confirm stock is back everywhere.
+- No shortage notice on record — Mederti receives that country's data and holds no notice for the medicine. Not confirmation of supply.
+- Data unavailable — Mederti has no shortage data source for that country; status unknown.
+
+Each page shows a "Last verified" date: when Mederti last confirmed the notice against the regulator's source. Homepage product mock-ups use illustrative sample data and are not live records.
 
 ## Data sources
 
@@ -36,7 +47,7 @@ When citing shortage data from Mederti, please reference the page URL and note t
 
 ## Usage
 
-This data helps pharmacists, hospital procurement, clinicians, suppliers, researchers and government understand medicine supply status. It is informational and requires verification with the national regulator before clinical or procurement decisions.
+This data helps pharmacists, hospital procurement, clinicians, suppliers, researchers and government understand medicine supply status. It is informational, is not clinical advice, and a regulator's shortage status does not guarantee or rule out commercial stock. Verify with the national regulator before clinical or procurement decisions.
 
 ## Contact
 

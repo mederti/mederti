@@ -32,7 +32,7 @@ export default function AskHomePage() {
 
 // Page tokens + the ask hero; the shell/sidebar come from AppShell.
 const CSS = `
-.v1home{--ink:#0c1118;--green:#0fa676;--green-d:#0c8a62;--green-bg:#e8f6f0;
+.v1home{--ink:var(--navy);--green:var(--teal);--green-d:var(--teal-l);--green-bg:var(--acc-soft);
   --bg:#ffffff;--bg-2:#fafbfc;--border:#e8ecf0;--border-2:#dde3e9;
   --text:#0c1118;--text-2:#3b434e;--text-3:#6a7280;--text-4:#98a1ac;--ok:#0fa676;
   background:var(--bg-2);color:var(--text);font-family:var(--font-geist-sans),system-ui,sans-serif;

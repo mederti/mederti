@@ -48,12 +48,14 @@ export function SupplierDrawer({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only state (localStorage / cookie / URL / mount flag) after hydration to avoid an SSR mismatch
   useEffect(() => setMounted(true), []);
   // Re-sync prefills on open. The session loads asynchronously in the parent,
   // so userEmail/userOrganisation may arrive after first mount — only fill
   // fields the buyer hasn't already typed into.
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when the dep changes; a key-based remount would also drop other state
       setSubmitted(false);
       setError("");
       setEmail(prev => prev || userEmail || "");

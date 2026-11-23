@@ -101,7 +101,7 @@
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
+  --primary: #090E2C;
   --primary-foreground: oklch(0.984 0.003 247.858);
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: oklch(0.208 0.042 265.755);
@@ -188,10 +188,21 @@
    ============================================================ */
 :root {
   /* brand */
-  --teal:         #0fa676;
-  --teal-2:       #10b981;
-  --teal-3:       #34d399;
-  --teal-l:       #0c8a62;  /* darker teal — hover/active (legacy --teal-l) */
+  /* Navy/aqua palette (2026-11). Aqua is an accent ON NAVY ONLY — never text
+     on white (contrast too low). Link teal is the on-white text accent. */
+  --navy:         #090E2C;  /* sidebar, primary text, the one filled button */
+  --navy-2:       #141A3A;  /* sidebar hover / control fill */
+  --navy-line:    #1F2648;  /* dividers on navy */
+  --aqua:         #44EABC;  /* active sidebar item (on navy only) */
+  --teal:         #127A63;  /* links, active tab underline, accents on white */
+  --teal-2:       #127A63;
+  --teal-3:       #44EABC;  /* aqua — on navy only */
+  --teal-l:       #0B5A49;  /* link hover */
+  /* Un-shadowed aliases: scopes that redefine --teal locally (chat.css,
+     the insights views) point at these to avoid a self-referencing var. */
+  --brand-teal:   #127A63;
+  --brand-teal-d: #0B5A49;
+  --brand-tint:   #E6FBF5;
 
   /* surfaces & neutrals */
   --bg:           #fafbfc;
@@ -201,10 +212,10 @@
   --border:       #e8ecf0;
   --border-2:     #dde3e9;
   --hair:         #eef1f4;
-  --ring:         rgba(15,166,118,.18);
+  --ring:         rgba(18,122,99,.18);
 
   /* text ramp */
-  --tx:           #0c1118;
+  --tx:           #090E2C;
   --tx-2:         #3b434e;
   --tx-3:         #6a7280;
   --tx-4:         #98a1ac;
@@ -212,7 +223,7 @@
 
   /* accent */
   --acc:          var(--teal);
-  --acc-soft:     #e8f6f0;
+  --acc-soft:     #E6FBF5;
   --tint:         #f1f5f4;
   --tint-b:       #dcebe6;
 

@@ -73,7 +73,7 @@ export function StatusPanel({
   const available = variant === "available" || isDrugAvailable(drug, country);
   const primary = pickPrimary(drug.shortages);
   if (available) {
-    const supplierCount = (drug as any).supplier_count ?? null;
+    const supplierCount = (drug as { supplier_count?: number | null }).supplier_count ?? null;
     return (
       <div className="card-a-status available">
         <div className="card-a-status-headline">

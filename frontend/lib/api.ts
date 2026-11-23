@@ -61,6 +61,11 @@ export interface DrugHit {
   // (/drugs/{matched_catalogue_id}?brand=1).
   matched_brand?: string | null;
   matched_catalogue_id?: string | null;
+  /** Matched brand's own status in the market (AU/CA, by registration number). */
+  brand_status?: {
+    brand: string; regs: number; short: number; anticipated: number;
+    back: string | null; past: number; last: string | null; regulator: string;
+  } | null;
 }
 
 export interface StatusFacets {
@@ -76,6 +81,8 @@ export interface SearchResponse {
   /** Closest canonical drug name when the query matched nothing (typo fallback). */
   suggestion?: string | null;
   market?: string;
+  /** false when Mederti has no shortage source for the market. */
+  market_covered?: boolean | null;
   sort?: string;
   status?: string[];
   form?: string[];
